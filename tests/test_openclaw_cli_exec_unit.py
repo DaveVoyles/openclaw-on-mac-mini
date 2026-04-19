@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_exec helpers."""
+
 from __future__ import annotations
 
 from openclaw_cli_exec import (
@@ -14,6 +15,7 @@ from openclaw_cli_exec import (
 # ---------------------------------------------------------------------------
 # _separator_fill
 # ---------------------------------------------------------------------------
+
 
 def test_separator_fill_default_char():
     result = _separator_fill(10)
@@ -40,6 +42,7 @@ def test_separator_fill_min_width_one():
 # _motion_pause  (just verify it doesn't error and returns None)
 # ---------------------------------------------------------------------------
 
+
 def test_motion_pause_noop_when_not_tty():
     # plain_mode=True → should skip sleep entirely
     result = _motion_pause("banner", is_tty=False, plain_mode=False, reduced_motion=False)
@@ -58,6 +61,7 @@ def test_motion_pause_unknown_stage_no_error():
 # ---------------------------------------------------------------------------
 # _spinner_progress_snapshot / _spinner_phase_label
 # ---------------------------------------------------------------------------
+
 
 def test_spinner_snapshot_warming_up():
     snap = _spinner_progress_snapshot(0.5)
@@ -85,6 +89,7 @@ def test_spinner_phase_label_matches_snapshot():
 # ---------------------------------------------------------------------------
 # _response_footer_lines
 # ---------------------------------------------------------------------------
+
 
 def test_footer_lines_with_elapsed():
     headline, detail = _response_footer_lines(elapsed=3.7)
@@ -119,6 +124,7 @@ def test_footer_lines_all_fields():
 # _progress_bar
 # ---------------------------------------------------------------------------
 
+
 def test_progress_bar_zero_total():
     assert _progress_bar(5, 0) == ""
 
@@ -147,6 +153,7 @@ def test_progress_bar_does_not_exceed_width():
 # ---------------------------------------------------------------------------
 # _analyze_exec_error
 # ---------------------------------------------------------------------------
+
 
 def test_analyze_exec_error_returncode_0_empty():
     assert _analyze_exec_error("ls", "", 0) == []

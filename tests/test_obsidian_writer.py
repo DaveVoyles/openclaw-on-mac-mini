@@ -1,4 +1,5 @@
 """Tests for obsidian_writer.py — slugify, frontmatter, and vault I/O."""
+
 from __future__ import annotations
 
 import pytest
@@ -8,6 +9,7 @@ from obsidian_writer import _build_frontmatter, _slugify
 # ===========================================================================
 # _slugify
 # ===========================================================================
+
 
 class TestSlugify:
     def test_basic(self):
@@ -52,6 +54,7 @@ class TestSlugify:
 # _build_frontmatter
 # ===========================================================================
 
+
 class TestBuildFrontmatter:
     def test_contains_title(self):
         fm = _build_frontmatter("My Note")
@@ -65,6 +68,7 @@ class TestBuildFrontmatter:
 
     def test_includes_date(self):
         import datetime
+
         fm = _build_frontmatter("Test")
         assert datetime.date.today().isoformat() in fm
 
@@ -111,10 +115,12 @@ class TestBuildFrontmatter:
 # save_to_vault (async, filesystem-backed)
 # ===========================================================================
 
+
 class TestSaveToVault:
     @pytest.mark.asyncio
     async def test_saves_file_and_returns_success(self, tmp_path, monkeypatch):
         import obsidian_writer as mod
+
         monkeypatch.setattr(mod, "VAULT_DIR", tmp_path)
         result = await mod.save_to_vault("Test Note", "Some content")
         assert "✅" in result
@@ -123,6 +129,7 @@ class TestSaveToVault:
     @pytest.mark.asyncio
     async def test_file_contains_frontmatter_and_body(self, tmp_path, monkeypatch):
         import obsidian_writer as mod
+
         monkeypatch.setattr(mod, "VAULT_DIR", tmp_path)
         await mod.save_to_vault("My Note", "Body text here", content_type="note")
         # Find the written file
@@ -136,6 +143,7 @@ class TestSaveToVault:
     @pytest.mark.asyncio
     async def test_no_overwrite_on_duplicate(self, tmp_path, monkeypatch):
         import obsidian_writer as mod
+
         monkeypatch.setattr(mod, "VAULT_DIR", tmp_path)
         await mod.save_to_vault("Same Title", "Content 1")
         await mod.save_to_vault("Same Title", "Content 2")
@@ -145,6 +153,7 @@ class TestSaveToVault:
     @pytest.mark.asyncio
     async def test_content_type_routes_to_subfolder(self, tmp_path, monkeypatch):
         import obsidian_writer as mod
+
         monkeypatch.setattr(mod, "VAULT_DIR", tmp_path)
         await mod.save_to_vault("Research Note", "Research content", content_type="research")
         # File should be in the Research subfolder

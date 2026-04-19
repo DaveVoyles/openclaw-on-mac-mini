@@ -32,12 +32,12 @@ def extract_json_block(text: str) -> Optional[str]:
     - Raw JSON objects/arrays
     """
     # Try markdown-fenced JSON
-    match = re.search(r'```(?:json)?\s*\n?([\s\S]*?)\n?```', text)
+    match = re.search(r"```(?:json)?\s*\n?([\s\S]*?)\n?```", text)
     if match:
         return match.group(1).strip()
 
     # Try to find raw JSON object or array
-    for start_char, end_char in [('{', '}'), ('[', ']')]:
+    for start_char, end_char in [("{", "}"), ("[", "]")]:
         start = text.find(start_char)
         if start == -1:
             continue
@@ -49,7 +49,7 @@ def extract_json_block(text: str) -> Optional[str]:
             if escape_next:
                 escape_next = False
                 continue
-            if c == '\\' and in_string:
+            if c == "\\" and in_string:
                 escape_next = True
                 continue
             if c == '"' and not escape_next:
@@ -62,7 +62,7 @@ def extract_json_block(text: str) -> Optional[str]:
             elif c == end_char:
                 depth -= 1
                 if depth == 0:
-                    return text[start:i + 1]
+                    return text[start : i + 1]
 
     return None
 
@@ -97,23 +97,23 @@ def repair_json(text: str) -> Optional[dict | list]:
     repaired = text
 
     # Remove comments
-    repaired = re.sub(r'//[^\n]*', '', repaired)
-    repaired = re.sub(r'/\*[\s\S]*?\*/', '', repaired)
+    repaired = re.sub(r"//[^\n]*", "", repaired)
+    repaired = re.sub(r"/\*[\s\S]*?\*/", "", repaired)
 
     # Replace single quotes with double quotes (only when no double quotes exist)
     if '"' not in repaired and "'" in repaired:
         repaired = repaired.replace("'", '"')
 
     # Remove trailing commas before } or ]
-    repaired = re.sub(r',\s*([}\]])', r'\1', repaired)
+    repaired = re.sub(r",\s*([}\]])", r"\1", repaired)
 
     # Try to add missing closing brackets
-    open_braces = repaired.count('{') - repaired.count('}')
-    open_brackets = repaired.count('[') - repaired.count(']')
+    open_braces = repaired.count("{") - repaired.count("}")
+    open_brackets = repaired.count("[") - repaired.count("]")
     if open_braces > 0:
-        repaired += '}' * open_braces
+        repaired += "}" * open_braces
     if open_brackets > 0:
-        repaired += ']' * open_brackets
+        repaired += "]" * open_brackets
 
     result = try_parse_json(repaired)
     if result is not None:
@@ -122,7 +122,7 @@ def repair_json(text: str) -> Optional[dict | list]:
 
     # Try quoting unquoted keys
     try:
-        repaired = re.sub(r'(?<=[{,\n])\s*([a-zA-Z_]\w*)\s*:', r' "\1":', repaired)
+        repaired = re.sub(r"(?<=[{,\n])\s*([a-zA-Z_]\w*)\s*:", r' "\1":', repaired)
         result = try_parse_json(repaired)
         if result is not None:
             log.debug("Repaired JSON (quoted keys)")

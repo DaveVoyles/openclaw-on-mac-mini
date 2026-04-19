@@ -25,6 +25,7 @@ from tool_router import (
 # _tokenize
 # ---------------------------------------------------------------------------
 
+
 class TestTokenize:
     def test_basic_tokenize(self):
         tokens = _tokenize("hello world")
@@ -52,6 +53,7 @@ class TestTokenize:
 # ---------------------------------------------------------------------------
 # _iter_metadata_values
 # ---------------------------------------------------------------------------
+
 
 class TestIterMetadataValues:
     def test_basic_fields(self):
@@ -82,6 +84,7 @@ class TestIterMetadataValues:
 # _declaration_domains
 # ---------------------------------------------------------------------------
 
+
 class TestDeclarationDomains:
     def test_sports_via_domains_list(self):
         decl = {"name": "t", "domains": ["sports"]}
@@ -107,6 +110,7 @@ class TestDeclarationDomains:
 # _infer_message_domains
 # ---------------------------------------------------------------------------
 
+
 class TestInferMessageDomains:
     def test_sports_terms_detected(self):
         msg = "who won the lacrosse game last week in ncaa"
@@ -130,6 +134,7 @@ class TestInferMessageDomains:
 # ---------------------------------------------------------------------------
 # _extract_pack_directive
 # ---------------------------------------------------------------------------
+
 
 class TestExtractPackDirective:
     def test_use_colon_directive(self):
@@ -165,6 +170,7 @@ class TestExtractPackDirective:
 # _declaration_matches_pack
 # ---------------------------------------------------------------------------
 
+
 class TestDeclarationMatchesPack:
     def test_always_available_matches_any_pack(self):
         decl = {"name": "search_web", "always_available": True}
@@ -192,6 +198,7 @@ class TestDeclarationMatchesPack:
 # ---------------------------------------------------------------------------
 # _score_declaration
 # ---------------------------------------------------------------------------
+
 
 class TestScoreDeclaration:
     def test_higher_score_for_relevant_tool(self):
@@ -221,6 +228,7 @@ class TestScoreDeclaration:
 # ---------------------------------------------------------------------------
 # _matching_workflow_bundles
 # ---------------------------------------------------------------------------
+
 
 class TestMatchingWorkflowBundles:
     def test_media_health_phrase(self):
@@ -258,6 +266,7 @@ class TestMatchingWorkflowBundles:
 # _extract_requested_item_count
 # ---------------------------------------------------------------------------
 
+
 class TestExtractRequestedItemCountRouter:
     def test_tool_router_internal_top_n_stories(self):
         assert _extract_requested_item_count("give me top 5 stories") == 5
@@ -278,6 +287,7 @@ class TestExtractRequestedItemCountRouter:
 # ---------------------------------------------------------------------------
 # _extract_request_hints
 # ---------------------------------------------------------------------------
+
 
 class TestExtractRequestHints:
     def test_timeframe_today(self):
@@ -331,6 +341,7 @@ class TestExtractRequestHints:
 # ---------------------------------------------------------------------------
 # route_tool_declarations — edge cases not covered by existing tests
 # ---------------------------------------------------------------------------
+
 
 class TestRouteToolDeclarationsEdgeCases:
     def test_empty_declarations_returns_empty(self):

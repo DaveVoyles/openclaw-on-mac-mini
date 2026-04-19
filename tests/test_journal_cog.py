@@ -1,4 +1,5 @@
 """Tests for cogs/journal_cog.py."""
+
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -61,12 +62,14 @@ def _make_cog():
 
 # ── __init__ ──────────────────────────────────────────────────────────────────
 
+
 def test_journal_cog_init():
     cog = _make_cog()
     assert cog.bot is not None
 
 
 # ── journal_write ─────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_journal_write_no_entry_sends_modal():
@@ -104,6 +107,7 @@ async def test_journal_write_with_entry_error():
 
 
 # ── journal_read ──────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_journal_read_no_file():
@@ -146,6 +150,7 @@ async def test_journal_read_invalid_date():
 
 # ── journal_streak ────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_journal_streak_no_entries():
     cog = _make_cog()
@@ -184,6 +189,7 @@ async def test_journal_streak_consecutive(tmp_path):
 
 
 # ── journal_prompt ────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_journal_prompt_success():

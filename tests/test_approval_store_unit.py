@@ -175,15 +175,18 @@ class TestIsAuthorizedApprover:
 
     def test_unknown_user_not_authorized_when_list_configured(self, monkeypatch):
         import approval_store as mod
+
         monkeypatch.setattr(mod, "ALLOWED_APPROVER_IDS", {999})
         assert is_authorized_approver(1) is False
 
     def test_known_user_is_authorized(self, monkeypatch):
         import approval_store as mod
+
         monkeypatch.setattr(mod, "ALLOWED_APPROVER_IDS", {42})
         assert is_authorized_approver(42) is True
 
     def test_empty_allowed_list_returns_false(self, monkeypatch):
         import approval_store as mod
+
         monkeypatch.setattr(mod, "ALLOWED_APPROVER_IDS", set())
         assert is_authorized_approver(42) is False

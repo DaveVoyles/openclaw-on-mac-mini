@@ -255,6 +255,7 @@ class TestEmergencyStop:
 class TestApprovalAuthorization:
     def test_is_authorized_approver_true_when_in_allowlist(self, monkeypatch):
         import approvals as _approvals_mod
+
         monkeypatch.setattr(_approvals_mod, "ALLOWED_APPROVER_IDS", {1234, 5678})
         assert _approvals_mod.is_authorized_approver(1234)
 

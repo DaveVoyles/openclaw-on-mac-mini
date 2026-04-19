@@ -354,7 +354,7 @@ def valid_plugin_dir(tmp_path):
         yaml.dump(manifest, f)
 
     # Create main.py
-    main_content = '''
+    main_content = """
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
@@ -368,7 +368,7 @@ class TestPlugin(Plugin):
 
     async def test_skill(self):
         return "test result"
-'''
+"""
     (plugin_dir / "main.py").write_text(main_content)
 
     return plugin_dir

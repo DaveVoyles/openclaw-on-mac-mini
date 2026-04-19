@@ -1,4 +1,5 @@
 """Unit tests for discord_error module."""
+
 import types
 from unittest.mock import MagicMock
 
@@ -36,6 +37,7 @@ def _make_discord_stub():
 @pytest.fixture(autouse=True)
 def patch_discord(monkeypatch):
     import discord_error
+
     monkeypatch.setattr(discord_error, "discord", _make_discord_stub())
 
 
@@ -88,4 +90,3 @@ def test_all_categories_have_emoji_and_desc():
     for key, (emoji, desc) in ERROR_CATEGORIES.items():
         assert emoji
         assert desc
-

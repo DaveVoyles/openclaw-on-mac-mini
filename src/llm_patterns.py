@@ -141,6 +141,7 @@ def _gemma_response_seems_valid(reply: str) -> bool:
     Delegates to the centralized answer policy.
     """
     from answer_policy import response_seems_valid
+
     return response_seems_valid(reply, provider="gemma")
 
 
@@ -150,6 +151,7 @@ def _provider_response_seems_valid(reply: str, *, provider: str) -> bool:
     Delegates to the centralized answer policy.
     """
     from answer_policy import response_seems_valid
+
     return response_seems_valid(reply, provider=provider)
 
 
@@ -229,7 +231,8 @@ async def _reflect_on_response(
             response = await loop.run_in_executor(
                 None,
                 lambda: _client.models.generate_content(
-                    model=MODEL_NAME, contents=reflection_prompt,
+                    model=MODEL_NAME,
+                    contents=reflection_prompt,
                     config=reflection_config,
                 ),
             )
@@ -245,11 +248,12 @@ async def _reflect_on_response(
 
         # Safeguard: if reflection is much shorter, it over-summarized — keep original
         if len(reflection) < len(text) * 0.5 and len(text) > 100:
-            log.info("Reflection: discarded (%.0f%% shorter than original — likely over-summarized)",
-                     (1 - len(reflection) / len(text)) * 100)
+            log.info(
+                "Reflection: discarded (%.0f%% shorter than original — likely over-summarized)",
+                (1 - len(reflection) / len(text)) * 100,
+            )
             return text
-        log.info("Reflection: response was refined (original %d chars → refined %d chars)",
-                 len(text), len(reflection))
+        log.info("Reflection: response was refined (original %d chars → refined %d chars)", len(text), len(reflection))
         return reflection
 
     except Exception:  # broad: intentional

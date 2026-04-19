@@ -20,9 +20,7 @@ from model_routing_policy import select_summarization_route
 
 log = logging.getLogger(__name__)
 
-_CROSS_CHANNEL_OPT_IN_RE = re.compile(
-    r"(?i)(--cross-channel\b|#cross-channel\b|\[cross-channel\])"
-)
+_CROSS_CHANNEL_OPT_IN_RE = re.compile(r"(?i)(--cross-channel\b|#cross-channel\b|\[cross-channel\])")
 _RESET_CONTEXT_RE = re.compile(r"(?i)(--reset-context\b|#reset-context\b|\[reset-context\])")
 _USE_PRIOR_REPORT_RE = re.compile(r"(?i)(--use-prior-report\b|#use-prior-report\b|\[use-prior-report\])")
 _NO_ANCHOR_RE = re.compile(r"(?i)(--no-anchor\b|#no-anchor\b|\[no-anchor\])")
@@ -196,9 +194,7 @@ def _build_context_quality_meta(
     ratio = (after_chars / before_chars) if before_chars else 1.0
 
     original_topics = _extract_topics_from_messages(compressed_slice)
-    retained_topics = _extract_topics_from_messages(
-        [{"role": "model", "parts": [line]} for line in salient_lines]
-    )
+    retained_topics = _extract_topics_from_messages([{"role": "model", "parts": [line]} for line in salient_lines])
     retained_topic_set = set(retained_topics)
     retained_count = sum(1 for topic in original_topics if topic in retained_topic_set)
     topic_total = len(original_topics)
@@ -246,7 +242,7 @@ def _compress_history_with_salience(
     preserve_head = history[:2]
     recent_keep = max(1, max_turns - len(preserve_head) - 1)
     recent_slice = history[-recent_keep:]
-    compressed_slice = history[len(preserve_head):-recent_keep] if recent_keep < len(history) else []
+    compressed_slice = history[len(preserve_head) : -recent_keep] if recent_keep < len(history) else []
     salient_lines = _build_salience_lines(compressed_slice)
     if not salient_lines:
         trimmed = preserve_head + recent_slice
@@ -365,7 +361,9 @@ async def _generate_context_summary(turns: list[dict]) -> str:
     response = await loop.run_in_executor(
         None,
         lambda: _client.models.generate_content(
-            model=MODEL_NAME, contents=prompt, config=summary_config,
+            model=MODEL_NAME,
+            contents=prompt,
+            config=summary_config,
         ),
     )
     return response.text.strip()
@@ -424,12 +422,7 @@ def _build_context_explainability(
         anchor_id = str(resolved_anchor_override)
     elif disable_anchor:
         ignored.append("anchor:disabled")
-    elif (
-        not disable_anchor
-        and (effective_use_prior_report or followup)
-        and anchor
-        and channel_id is not None
-    ):
+    elif not disable_anchor and (effective_use_prior_report or followup) and anchor and channel_id is not None:
         raw_anchor = anchor.get("anchor_id")
         anchor_id = str(raw_anchor) if raw_anchor else None
     elif (effective_use_prior_report or followup) and anchor_state_reason:
@@ -532,6 +525,7 @@ async def _auto_recall_context(
 
     try:
         import vector_store
+
         context = await vector_store.recall_for_context(
             user_message,
             channel_id=channel_id,
@@ -565,6 +559,7 @@ async def _auto_recall_context(
 
     try:
         from user_profile import get_profile_prompt
+
         profile = get_profile_prompt()
         if profile and profile.strip():
             parts.append(profile)
@@ -573,6 +568,7 @@ async def _auto_recall_context(
 
     try:
         from rules_engine import get_relevant_rules
+
         rules = await get_relevant_rules(user_message, top_k=3)
         if rules:
             rules_block = "[Active Rules]\n" + "\n".join(f"- {r}" for r in rules)
@@ -697,8 +693,6 @@ def _strip_recalled_prefix(history: list[dict], original: str, augmented: str) -
         return history
     for entry in reversed(history):
         if entry.get("role") == "user":
-            entry["parts"] = [
-                original if p == augmented else p for p in entry["parts"]
-            ]
+            entry["parts"] = [original if p == augmented else p for p in entry["parts"]]
             break
     return history

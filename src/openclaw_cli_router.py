@@ -9,6 +9,7 @@ Imports from:
   - openclaw_cli_ui_core (ANSI constants, for confidence badge / announcement)
 Does NOT import from openclaw_cli.py.
 """
+
 from __future__ import annotations
 
 import json
@@ -119,11 +120,7 @@ class ReplRouteDecision:
 
     def should_auto_execute_plan(self, *, threshold: float = REPL_ROUTE_AUTO_THRESHOLD) -> bool:
         """Return whether this decision is a high-confidence multi-step plan."""
-        return (
-            self.kind == ReplRouteKind.PLAN
-            and self.confidence >= threshold
-            and len(self.steps) >= 2
-        )
+        return self.kind == ReplRouteKind.PLAN and self.confidence >= threshold and len(self.steps) >= 2
 
     def to_slash_command(self) -> str:
         """Render this decision as an equivalent slash command."""
@@ -331,11 +328,7 @@ def _load_task_record(task_id: str, *, cwd: str | None = None) -> dict[str, Any]
     if not isinstance(tasks, list):
         return None
     return next(
-        (
-            item
-            for item in tasks
-            if isinstance(item, dict) and str(item.get("id") or "").strip() == normalized
-        ),
+        (item for item in tasks if isinstance(item, dict) and str(item.get("id") or "").strip() == normalized),
         None,
     )
 
@@ -561,7 +554,7 @@ def _strip_request_lead(text: str) -> str:
         "would you ",
     ):
         if lowered.startswith(prefix):
-            return stripped[len(prefix):].strip()
+            return stripped[len(prefix) :].strip()
     return stripped
 
 
@@ -570,7 +563,7 @@ def _extract_after_prefix(text: str, prefixes: tuple[str, ...]) -> str:
     lowered = stripped.lower()
     for prefix in prefixes:
         if lowered.startswith(prefix):
-            return stripped[len(prefix):].strip()
+            return stripped[len(prefix) :].strip()
     return ""
 
 
@@ -582,7 +575,7 @@ def _strip_route_prefixes(text: str, prefixes: tuple[str, ...]) -> str:
         changed = False
         for prefix in prefixes:
             if lowered.startswith(prefix):
-                candidate = candidate[len(prefix):].strip(" ,;:")
+                candidate = candidate[len(prefix) :].strip(" ,;:")
                 lowered = candidate.lower()
                 changed = True
                 break
@@ -623,7 +616,7 @@ def _extract_append_content(prompt: str, path: str) -> str:
         return quoted
     span = _find_route_path_span(prompt, path)
     before = prompt[: span[0]] if span else prompt
-    after = prompt[span[1]:] if span else ""
+    after = prompt[span[1] :] if span else ""
 
     after_candidate = _strip_route_prefixes(
         after,
@@ -716,7 +709,9 @@ def _extract_structured_edit_route(prompt: str) -> tuple[str, str, float, str] |
 
 
 def _extract_write_payload(prompt: str) -> tuple[str, str]:
-    args = _extract_after_prefix(prompt, ("write ", "draft ", "compose ", "summarize ", "summarise ")) or _normalize_prompt_text(prompt)
+    args = _extract_after_prefix(
+        prompt, ("write ", "draft ", "compose ", "summarize ", "summarise ")
+    ) or _normalize_prompt_text(prompt)
     args = _clean_route_fragment(args) or _normalize_prompt_text(prompt)
     target = ""
     patterns = (
@@ -846,7 +841,10 @@ def _grounding_intent(prompt: str) -> tuple[ReplRouteKind | None, bool]:
     lowered = normalized.lower()
     for pattern, kind in (
         (r"^(?:analyze|inspect|review|audit|take a look at|look into|dig into)\b", ReplRouteKind.ANALYZE),
-        (r"^(?:research|investigate|look up|search for|find information on|gather sources on)\b", ReplRouteKind.RESEARCH),
+        (
+            r"^(?:research|investigate|look up|search for|find information on|gather sources on)\b",
+            ReplRouteKind.RESEARCH,
+        ),
         (r"^(?:write|draft|compose|summarize|summarise)\b", ReplRouteKind.WRITE),
         (r"^(?:run|execute|exec)\b", ReplRouteKind.EXEC),
         (r"^(?:edit|modify|update|change|append|replace|tweak)\b", ReplRouteKind.EDIT),
@@ -1096,7 +1094,10 @@ def _deterministic_repl_route(prompt: str) -> ReplRouteDecision | None:
         )
 
     soft_analyze_args = _extract_after_prefix(normalized, ("inspect ", "review ", "audit "))
-    if soft_analyze_args and (_extract_first_path(soft_analyze_args) or any(hint in soft_analyze_args.lower() for hint in _ROUTE_ANALYZE_HINTS)):
+    if soft_analyze_args and (
+        _extract_first_path(soft_analyze_args)
+        or any(hint in soft_analyze_args.lower() for hint in _ROUTE_ANALYZE_HINTS)
+    ):
         return _build_route_decision(
             ReplRouteKind.ANALYZE,
             args_text=soft_analyze_args,
@@ -1161,7 +1162,9 @@ def _extract_route_payload(kind: ReplRouteKind, prompt: str) -> tuple[str, str]:
         path = _extract_first_path(normalized)
         return (_shell_quote_route_arg(path), path) if path else (normalized, "")
     if kind == ReplRouteKind.ANALYZE:
-        args = _extract_after_prefix(normalized, ("analyze ", "inspect ", "review ", "audit ", "take a look at ", "look into ", "dig into "))
+        args = _extract_after_prefix(
+            normalized, ("analyze ", "inspect ", "review ", "audit ", "take a look at ", "look into ", "dig into ")
+        )
         return (args or normalized, _extract_first_path(args or normalized))
     if kind == ReplRouteKind.RESEARCH:
         args = _extract_after_prefix(
@@ -1389,8 +1392,7 @@ def _format_route_announcement(decision: ReplRouteDecision) -> str:
         limit=REPL_ROUTE_ANNOUNCEMENT_REASON_LIMIT,
     )
     return (
-        f"{_BYE}⚡ auto-route{_R} {_CY}→ {slash_command}{_R}  "
-        f"{badge} {_DM}{decision.confidence:.2f} · {rationale}{_R}"
+        f"{_BYE}⚡ auto-route{_R} {_CY}→ {slash_command}{_R}  {badge} {_DM}{decision.confidence:.2f} · {rationale}{_R}"
     )
 
 

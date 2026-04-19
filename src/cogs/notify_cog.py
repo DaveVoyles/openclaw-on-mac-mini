@@ -25,9 +25,21 @@ DURATION_MULTIPLIERS = {"m": 60, "min": 60, "minutes": 60, "h": 3600, "hr": 3600
 
 # Common service names for autocomplete
 COMMON_SERVICES = [
-    "sonarr", "radarr", "sabnzbd", "overseerr", "plex",
-    "tautulli", "prowlarr", "lidarr", "readarr", "transmission",
-    "qbittorrent", "jackett", "nzbget", "jellyfin", "emby"
+    "sonarr",
+    "radarr",
+    "sabnzbd",
+    "overseerr",
+    "plex",
+    "tautulli",
+    "prowlarr",
+    "lidarr",
+    "readarr",
+    "transmission",
+    "qbittorrent",
+    "jackett",
+    "nzbget",
+    "jellyfin",
+    "emby",
 ]
 
 
@@ -39,11 +51,7 @@ async def _service_autocomplete(
     prefs = notif_prefs.get(interaction.user.id)
     all_services = set(COMMON_SERVICES + prefs.blocked_services)
 
-    return [
-        app_commands.Choice(name=s, value=s)
-        for s in sorted(all_services)
-        if current.lower() in s.lower()
-    ][:25]
+    return [app_commands.Choice(name=s, value=s) for s in sorted(all_services) if current.lower() in s.lower()][:25]
 
 
 def _parse_duration(text: str) -> int | None:
@@ -70,11 +78,7 @@ class NotifyCog(commands.GroupCog, group_name="notify"):
     async def show(self, interaction: discord.Interaction) -> None:
         prefs = notif_prefs.get(interaction.user.id)
         muted = prefs.muted_until > time.time()
-        mute_info = (
-            f"🔇 Muted until <t:{int(prefs.muted_until)}:R>"
-            if muted
-            else "🔔 Not muted"
-        )
+        mute_info = f"🔇 Muted until <t:{int(prefs.muted_until)}:R>" if muted else "🔔 Not muted"
         blocked = ", ".join(prefs.blocked_services) or "None"
         embed = discord.Embed(
             title="🔔 Notification Preferences",
@@ -94,9 +98,7 @@ class NotifyCog(commands.GroupCog, group_name="notify"):
     async def mute(self, interaction: discord.Interaction, duration: str) -> None:
         seconds = _parse_duration(duration)
         if seconds is None:
-            await interaction.response.send_message(
-                "❌ Invalid duration. Use e.g. `30m`, `1h`, `8h`.", ephemeral=True
-            )
+            await interaction.response.send_message("❌ Invalid duration. Use e.g. `30m`, `1h`, `8h`.", ephemeral=True)
             return
         prefs = notif_prefs.get(interaction.user.id)
         prefs.muted_until = time.time() + seconds
@@ -119,18 +121,18 @@ class NotifyCog(commands.GroupCog, group_name="notify"):
 
     @app_commands.command(name="filter", description="Set severity filter (all / warning / critical)")
     @app_commands.describe(level="Minimum severity to receive: all, warning, or critical")
-    @app_commands.choices(level=[
-        app_commands.Choice(name="all", value="all"),
-        app_commands.Choice(name="warning", value="warning"),
-        app_commands.Choice(name="critical", value="critical"),
-    ])
+    @app_commands.choices(
+        level=[
+            app_commands.Choice(name="all", value="all"),
+            app_commands.Choice(name="warning", value="warning"),
+            app_commands.Choice(name="critical", value="critical"),
+        ]
+    )
     async def filter_cmd(self, interaction: discord.Interaction, level: app_commands.Choice[str]) -> None:
         prefs = notif_prefs.get(interaction.user.id)
         prefs.severity_filter = level.value
         await notif_prefs.update(prefs)
-        await interaction.response.send_message(
-            f"✅ Severity filter set to **{level.value}**.", ephemeral=True
-        )
+        await interaction.response.send_message(f"✅ Severity filter set to **{level.value}**.", ephemeral=True)
 
     # -- /notify block -------------------------------------------------------
 
@@ -141,15 +143,11 @@ class NotifyCog(commands.GroupCog, group_name="notify"):
         prefs = notif_prefs.get(interaction.user.id)
         svc = service.strip().lower()
         if svc in [s.lower() for s in prefs.blocked_services]:
-            await interaction.response.send_message(
-                f"ℹ️ **{svc}** is already blocked.", ephemeral=True
-            )
+            await interaction.response.send_message(f"ℹ️ **{svc}** is already blocked.", ephemeral=True)
             return
         prefs.blocked_services.append(svc)
         await notif_prefs.update(prefs)
-        await interaction.response.send_message(
-            f"🚫 Blocked alerts from **{svc}**.", ephemeral=True
-        )
+        await interaction.response.send_message(f"🚫 Blocked alerts from **{svc}**.", ephemeral=True)
 
     # -- /notify unblock -----------------------------------------------------
 
@@ -161,33 +159,29 @@ class NotifyCog(commands.GroupCog, group_name="notify"):
         svc = service.strip().lower()
         lower_list = [s.lower() for s in prefs.blocked_services]
         if svc not in lower_list:
-            await interaction.response.send_message(
-                f"ℹ️ **{svc}** is not blocked.", ephemeral=True
-            )
+            await interaction.response.send_message(f"ℹ️ **{svc}** is not blocked.", ephemeral=True)
             return
         idx = lower_list.index(svc)
         prefs.blocked_services.pop(idx)
         await notif_prefs.update(prefs)
-        await interaction.response.send_message(
-            f"✅ Unblocked alerts from **{svc}**.", ephemeral=True
-        )
+        await interaction.response.send_message(f"✅ Unblocked alerts from **{svc}**.", ephemeral=True)
 
     # -- /notify dm ----------------------------------------------------------
 
     @app_commands.command(name="dm", description="Toggle DM alert delivery")
     @app_commands.describe(enabled="on or off")
-    @app_commands.choices(enabled=[
-        app_commands.Choice(name="on", value="on"),
-        app_commands.Choice(name="off", value="off"),
-    ])
+    @app_commands.choices(
+        enabled=[
+            app_commands.Choice(name="on", value="on"),
+            app_commands.Choice(name="off", value="off"),
+        ]
+    )
     async def dm_toggle(self, interaction: discord.Interaction, enabled: app_commands.Choice[str]) -> None:
         prefs = notif_prefs.get(interaction.user.id)
         prefs.dm_alerts = enabled.value == "on"
         await notif_prefs.update(prefs)
         state = "enabled" if prefs.dm_alerts else "disabled"
-        await interaction.response.send_message(
-            f"✅ DM alerts **{state}**.", ephemeral=True
-        )
+        await interaction.response.send_message(f"✅ DM alerts **{state}**.", ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:

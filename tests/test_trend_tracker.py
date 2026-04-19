@@ -347,9 +347,7 @@ def test_cleanup_old_data(temp_db):
 
 def test_enable_tracking(temp_db):
     """Test enabling topic tracking."""
-    success = temp_db.enable_tracking(
-        "Bitcoin", "Finance", user_id="user123", spike_threshold=5.0
-    )
+    success = temp_db.enable_tracking("Bitcoin", "Finance", user_id="user123", spike_threshold=5.0)
 
     assert success is True
 
@@ -408,9 +406,7 @@ def test_record_alert(temp_db):
 
     # Verify timestamp was updated
     db = temp_db._get_db()
-    cursor = db.execute(
-        "SELECT last_alert FROM trend_config WHERE topic = ?", ("Bitcoin",)
-    )
+    cursor = db.execute("SELECT last_alert FROM trend_config WHERE topic = ?", ("Bitcoin",))
     row = cursor.fetchone()
 
     assert row is not None
@@ -422,6 +418,7 @@ def test_get_tracker_singleton():
     # This test would fail in CI due to /memory path
     # Just test that we can create tracker instances
     import tempfile
+
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = Path(f.name)
 

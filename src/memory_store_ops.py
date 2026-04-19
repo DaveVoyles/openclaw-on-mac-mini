@@ -104,29 +104,41 @@ async def recall_memories(
 
     try:
         import vector_store
+
         vs_results = await vector_store.search_all(
-            query, top_k=top_k, channel_id=channel_id, thread_id=thread_id,
+            query,
+            top_k=top_k,
+            channel_id=channel_id,
+            thread_id=thread_id,
         )
         for r in vs_results:
-            results.append({
-                "text": r["text"],
-                "source": r.get("metadata", {}).get("source", "unknown"),
-                "similarity": r.get("similarity", 0),
-                "type": r.get("collection", "memory"),
-                "id": r.get("id", ""),
-            })
+            results.append(
+                {
+                    "text": r["text"],
+                    "source": r.get("metadata", {}).get("source", "unknown"),
+                    "similarity": r.get("similarity", 0),
+                    "type": r.get("collection", "memory"),
+                    "id": r.get("id", ""),
+                }
+            )
     except (ImportError, RuntimeError, ValueError, OSError, AttributeError) as exc:
         _mem_log.debug("Vector recall failed: %s", exc)
 
     if include_rules:
         try:
             from rules_engine import get_relevant_rules
+
             for rule in await get_relevant_rules(query, top_k=3):
                 if isinstance(rule, str):
-                    results.append({
-                        "text": rule, "source": "rule",
-                        "similarity": 0.8, "type": "rule", "id": "",
-                    })
+                    results.append(
+                        {
+                            "text": rule,
+                            "source": "rule",
+                            "similarity": 0.8,
+                            "type": "rule",
+                            "id": "",
+                        }
+                    )
         except (ImportError, RuntimeError, ValueError, OSError, AttributeError) as exc:
             _mem_log.debug("Rules recall failed: %s", exc)
 
@@ -139,6 +151,7 @@ async def forget_memory(memory_id: str) -> bool:
     removed = False
     try:
         import vector_store
+
         for collection in [
             vector_store.MEMORIES_COLLECTION,
             vector_store.CONVERSATIONS_COLLECTION,
@@ -148,9 +161,7 @@ async def forget_memory(memory_id: str) -> bool:
                 await vector_store.delete_document(collection, memory_id)
                 removed = True
             except (RuntimeError, ValueError, OSError, KeyError) as exc:
-                _mem_log.debug(
-                    "Vector delete from %s failed for %s: %s", collection, memory_id, exc
-                )
+                _mem_log.debug("Vector delete from %s failed for %s: %s", collection, memory_id, exc)
     except (ImportError, RuntimeError, OSError) as exc:
         _mem_log.debug("Vector forget failed: %s", exc)
     return removed
@@ -166,12 +177,14 @@ async def memory_stats() -> dict:
     }
     try:
         import vector_store
+
         result["vector_store"] = await vector_store.get_stats()
     except (ImportError, RuntimeError, ValueError, OSError, TypeError) as exc:
         _mem_log.debug("Vector store stats failed: %s", exc)
 
     try:
         from qmd import list_memories
+
         memories = await list_memories()
         if memories and memories != "Memory is empty.":
             result["qmd"]["count"] = memories.count("\n") + 1
@@ -180,12 +193,14 @@ async def memory_stats() -> dict:
 
     try:
         from rules_engine import get_all_rules
+
         result["rules"]["count"] = len(await get_all_rules())
     except (ImportError, RuntimeError, ValueError, OSError, TypeError) as exc:
         _mem_log.debug("Rules stats failed: %s", exc)
 
     try:
         from user_profile import load_profile
+
         result["profile"]["exists"] = bool(load_profile())
     except (ImportError, OSError, ValueError, AttributeError, KeyError) as exc:
         _mem_log.debug("Profile stats failed: %s", exc)

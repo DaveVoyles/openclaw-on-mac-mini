@@ -1,4 +1,5 @@
 """Tests for cogs/imdb_cog.py."""
+
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -97,12 +98,14 @@ _SAMPLE_SERIES = {
 
 # ── __init__ ──────────────────────────────────────────────────────────────────
 
+
 def test_imdb_cog_init():
     cog = _make_cog()
     assert cog.bot is not None
 
 
 # ── movie ─────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_movie_no_key():
@@ -121,8 +124,10 @@ async def test_movie_success():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.imdb_cog.cfg", _mock_cfg()), \
-         patch("cogs.imdb_cog._omdb_get", new=AsyncMock(return_value=_SAMPLE_MOVIE)):
+    with (
+        patch("cogs.imdb_cog.cfg", _mock_cfg()),
+        patch("cogs.imdb_cog._omdb_get", new=AsyncMock(return_value=_SAMPLE_MOVIE)),
+    ):
         await cog.movie.callback(cog, inter, title="The Matrix")
 
     inter.followup.send.assert_awaited_once()
@@ -133,8 +138,12 @@ async def test_movie_not_found():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.imdb_cog.cfg", _mock_cfg()), \
-         patch("cogs.imdb_cog._omdb_get", new=AsyncMock(return_value={"Response": "False", "Error": "Movie not found!"})):
+    with (
+        patch("cogs.imdb_cog.cfg", _mock_cfg()),
+        patch(
+            "cogs.imdb_cog._omdb_get", new=AsyncMock(return_value={"Response": "False", "Error": "Movie not found!"})
+        ),
+    ):
         await cog.movie.callback(cog, inter, title="NoSuchFilm12345")
 
     inter.followup.send.assert_awaited_once()
@@ -146,8 +155,10 @@ async def test_movie_error():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.imdb_cog.cfg", _mock_cfg()), \
-         patch("cogs.imdb_cog._omdb_get", new=AsyncMock(side_effect=Exception("Network error"))):
+    with (
+        patch("cogs.imdb_cog.cfg", _mock_cfg()),
+        patch("cogs.imdb_cog._omdb_get", new=AsyncMock(side_effect=Exception("Network error"))),
+    ):
         await cog.movie.callback(cog, inter, title="The Matrix")
 
     inter.followup.send.assert_awaited_once()
@@ -155,6 +166,7 @@ async def test_movie_error():
 
 
 # ── tv ────────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_tv_no_key():
@@ -173,8 +185,10 @@ async def test_tv_success():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.imdb_cog.cfg", _mock_cfg()), \
-         patch("cogs.imdb_cog._omdb_get", new=AsyncMock(return_value=_SAMPLE_SERIES)):
+    with (
+        patch("cogs.imdb_cog.cfg", _mock_cfg()),
+        patch("cogs.imdb_cog._omdb_get", new=AsyncMock(return_value=_SAMPLE_SERIES)),
+    ):
         await cog.tv.callback(cog, inter, title="Breaking Bad")
 
     inter.followup.send.assert_awaited_once()
@@ -185,8 +199,10 @@ async def test_tv_not_found():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.imdb_cog.cfg", _mock_cfg()), \
-         patch("cogs.imdb_cog._omdb_get", new=AsyncMock(return_value={"Response": "False"})):
+    with (
+        patch("cogs.imdb_cog.cfg", _mock_cfg()),
+        patch("cogs.imdb_cog._omdb_get", new=AsyncMock(return_value={"Response": "False"})),
+    ):
         await cog.tv.callback(cog, inter, title="NoSuchShow99999")
 
     inter.followup.send.assert_awaited_once()
@@ -194,6 +210,7 @@ async def test_tv_not_found():
 
 
 # ── search ────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_search_no_key():
@@ -218,8 +235,10 @@ async def test_search_success():
         ]
     }
 
-    with patch("cogs.imdb_cog.cfg", _mock_cfg()), \
-         patch("cogs.imdb_cog._search_both", new=AsyncMock(return_value=(search_results, {"Search": []}))):
+    with (
+        patch("cogs.imdb_cog.cfg", _mock_cfg()),
+        patch("cogs.imdb_cog._search_both", new=AsyncMock(return_value=(search_results, {"Search": []}))),
+    ):
         await cog.search.callback(cog, inter, query="matrix")
 
     inter.followup.send.assert_awaited_once()
@@ -230,8 +249,10 @@ async def test_search_no_results():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.imdb_cog.cfg", _mock_cfg()), \
-         patch("cogs.imdb_cog._search_both", new=AsyncMock(return_value=({"Search": []}, {"Search": []}))):
+    with (
+        patch("cogs.imdb_cog.cfg", _mock_cfg()),
+        patch("cogs.imdb_cog._search_both", new=AsyncMock(return_value=({"Search": []}, {"Search": []}))),
+    ):
         await cog.search.callback(cog, inter, query="xyznonexistent999")
 
     inter.followup.send.assert_awaited_once()
@@ -243,8 +264,10 @@ async def test_search_error():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.imdb_cog.cfg", _mock_cfg()), \
-         patch("cogs.imdb_cog._search_both", new=AsyncMock(side_effect=Exception("API down"))):
+    with (
+        patch("cogs.imdb_cog.cfg", _mock_cfg()),
+        patch("cogs.imdb_cog._search_both", new=AsyncMock(side_effect=Exception("API down"))),
+    ):
         await cog.search.callback(cog, inter, query="matrix")
 
     inter.followup.send.assert_awaited_once()

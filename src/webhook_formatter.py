@@ -14,24 +14,14 @@ def format_arr(payload: dict) -> tuple[str, str, discord.Color]:
     event = payload.get("eventType", "Event")
     series = payload.get("series", {})
     movie = payload.get("movie", {})
-    name = (
-        series.get("title")
-        or movie.get("title")
-        or payload.get("artist", {}).get("name", "Unknown")
-    )
+    name = series.get("title") or movie.get("title") or payload.get("artist", {}).get("name", "Unknown")
     ep = payload.get("episodes", [{}])[0] if payload.get("episodes") else {}
     ep_title = ep.get("title", "")
-    ep_num = (
-        f"S{ep.get('seasonNumber', 0):02d}E{ep.get('episodeNumber', 0):02d}"
-        if ep
-        else ""
-    )
+    ep_num = f"S{ep.get('seasonNumber', 0):02d}E{ep.get('episodeNumber', 0):02d}" if ep else ""
 
     lines: list[str] = []
     lines.append(f"**Event**: {event}")
-    lines.append(
-        f"**Title**: {name}" + (f" — {ep_num} {ep_title}" if ep_title else "")
-    )
+    lines.append(f"**Title**: {name}" + (f" — {ep_num} {ep_title}" if ep_title else ""))
     if payload.get("isUpgrade"):
         lines.append("⬆️ Quality upgrade")
 
@@ -113,9 +103,7 @@ def format_plex(payload: dict) -> tuple[str, str, discord.Color]:
 
     lines: list[str] = []
     lines.append(f"**Event**: {event}")
-    lines.append(
-        f"**{'Episode' if p_type == 'episode' else 'Title'}**: {p_title}"
-    )
+    lines.append(f"**{'Episode' if p_type == 'episode' else 'Title'}**: {p_title}")
     if user:
         lines.append(f"**User**: {user}")
 

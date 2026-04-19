@@ -18,6 +18,7 @@ from response_actions import _generate_follow_ups, _resolve_channel_thread_scope
 # _resolve_channel_thread_scope
 # ---------------------------------------------------------------------------
 
+
 class TestResolveChannelThreadScope:
     def _no_lock(self, *args, **kwargs):
         return None, None
@@ -77,6 +78,7 @@ class TestResolveChannelThreadScope:
 # _generate_follow_ups
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_generate_follow_ups_returns_two_questions():
     mock_chat = AsyncMock(return_value=("What about overtime?\nWho scored the most?", [], "gemini"))
@@ -106,6 +108,7 @@ async def test_generate_follow_ups_returns_empty_on_runtime_error():
 # ResponseActions — construction and interaction_check
 # ---------------------------------------------------------------------------
 
+
 class TestResponseActionsConstruction:
     def _make_view(self, **kwargs):
         defaults = dict(
@@ -125,10 +128,7 @@ class TestResponseActionsConstruction:
     def test_follow_up_buttons_added(self):
         view = self._make_view(follow_ups=["What else?", "Can you expand?"])
         # Follow-up buttons + go_deeper + the 5 persistent buttons
-        item_names = [
-            getattr(item, "label", None)
-            for item in view.children
-        ]
+        item_names = [getattr(item, "label", None) for item in view.children]
         assert "What else?" in item_names
         assert "Can you expand?" in item_names
 
@@ -192,6 +192,7 @@ async def test_interaction_check_allows_original_user():
 # ResponseActions._record_feedback — guardrail integration
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_record_feedback_accepted_saves_and_acks():
     view = mod.ResponseActions(
@@ -217,10 +218,13 @@ async def test_record_feedback_accepted_saves_and_acks():
     with (
         patch.object(mod, "_apply_feedback_guardrails", return_value=(True, "accepted")),
         patch.object(mod, "_record_quality_metric", MagicMock()),
-        patch("aiofiles.open", return_value=AsyncMock(
-            __aenter__=AsyncMock(return_value=fake_file),
-            __aexit__=AsyncMock(return_value=False),
-        )),
+        patch(
+            "aiofiles.open",
+            return_value=AsyncMock(
+                __aenter__=AsyncMock(return_value=fake_file),
+                __aexit__=AsyncMock(return_value=False),
+            ),
+        ),
     ):
         await view._record_feedback(interaction, "helpful")
 

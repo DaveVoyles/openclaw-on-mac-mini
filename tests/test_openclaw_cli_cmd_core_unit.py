@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_cmd_core.py — core system and AI command handlers."""
+
 from __future__ import annotations
 
 import sys
@@ -59,6 +60,7 @@ def _mock_cli(**kwargs) -> MagicMock:
 # _cmd_help
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_help_no_args_calls_print_chat_help():
     cli = _mock_cli()
     with patch.object(mod, "_get_cli_mod", return_value=cli):
@@ -87,22 +89,27 @@ def test_cmd_help_non_search_token_calls_default():
 # _cmd_version
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_version_returns_continue(capsys):
     cli = _mock_cli()
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "cli_version", return_value="1.2.3"), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_IS_TTY", False):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "cli_version", return_value="1.2.3"),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_IS_TTY", False),
+    ):
         result = mod._cmd_version(_ctx())
     assert result == _CMD_CONTINUE
 
 
 def test_cmd_version_prints_version_string(capsys):
     cli = _mock_cli()
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "cli_version", return_value="9.9.9"), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_IS_TTY", False):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "cli_version", return_value="9.9.9"),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_IS_TTY", False),
+    ):
         mod._cmd_version(_ctx())
     captured = capsys.readouterr()
     assert "9.9.9" in captured.out
@@ -111,6 +118,7 @@ def test_cmd_version_prints_version_string(capsys):
 # ---------------------------------------------------------------------------
 # _cmd_clear
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_clear_empties_history():
     history = [{"role": "user", "content": "hello"}, {"role": "assistant", "content": "hi"}]
@@ -157,7 +165,9 @@ def test_cmd_exec_passes_review_and_recovery_cues_to_approval():
 
 def test_cmd_edit_passes_preview_review_and_recovery_cues_to_approval():
     session = _mock_session(cwd="/project")
-    preview = MagicMock(changed=True, summary="Previewed file write.", diff="--- a\n+++ b\n+hello", path="/project/file.txt")
+    preview = MagicMock(
+        changed=True, summary="Previewed file write.", diff="--- a\n+++ b\n+hello", path="/project/file.txt"
+    )
     cli = _mock_cli(_session=session)
     cli._preview_file_edit = MagicMock(return_value=preview)
     cli._print_file_edit_preview = MagicMock()
@@ -176,6 +186,7 @@ def test_cmd_edit_passes_preview_review_and_recovery_cues_to_approval():
 # ---------------------------------------------------------------------------
 # _cmd_context
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_context_no_session_returns_continue():
     cli = _mock_cli()
@@ -250,12 +261,15 @@ def test_cmd_context_adds_pressure_and_recovery_cues():
 # _cmd_cwd
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_cwd_no_args_shows_current(capsys):
     session = _mock_session(cwd="/the/current/dir")
     cli = _mock_cli(_session=session)
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_IS_TTY", False):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_IS_TTY", False),
+    ):
         result = mod._cmd_cwd(_ctx(""))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -274,8 +288,7 @@ def test_cmd_cwd_no_session_returns_continue():
 def test_cmd_cwd_invalid_path_prints_error():
     session = _mock_session()
     cli = _mock_cli(_session=session)
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False):
+    with patch.object(mod, "_get_cli_mod", return_value=cli), patch.object(mod, "_RICH_AVAILABLE", False):
         result = mod._cmd_cwd(_ctx("/this/path/does/not/exist/at/all"))
     assert result == _CMD_CONTINUE
     cli._print_error.assert_called_once()
@@ -285,10 +298,12 @@ def test_cmd_cwd_invalid_path_prints_error():
 def test_cmd_cwd_valid_path_updates_session(tmp_path):
     session = _mock_session()
     cli = _mock_cli(_session=session)
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_IS_TTY", False), \
-         patch("openclaw_cli_cmd_core.update_session") as mock_update:
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_IS_TTY", False),
+        patch("openclaw_cli_cmd_core.update_session") as mock_update,
+    ):
         result = mod._cmd_cwd(_ctx(str(tmp_path)))
     assert result == _CMD_CONTINUE
     mock_update.assert_called_once()
@@ -300,12 +315,15 @@ def test_cmd_cwd_valid_path_updates_session(tmp_path):
 # _cmd_autoroute
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_autoroute_no_args_shows_status(capsys):
     session = _mock_session(repl_auto_route=True)
     cli = _mock_cli(_session=session)
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_IS_TTY", False):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_IS_TTY", False),
+    ):
         result = mod._cmd_autoroute(_ctx(""))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -315,6 +333,7 @@ def test_cmd_autoroute_no_args_shows_status(capsys):
 # ---------------------------------------------------------------------------
 # _cmd_tokeninfo
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_tokeninfo_includes_hidden_context_extras(capsys):
     cli = _mock_cli(_PREFS={"system_prompt": "Always explain the diff briefly."})
@@ -361,10 +380,12 @@ def test_cmd_tokeninfo_uses_model_aware_overflow_guidance(capsys):
 def test_cmd_autoroute_off_disables(capsys):
     session = _mock_session(repl_auto_route=True)
     cli = _mock_cli(_session=session)
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_IS_TTY", False), \
-         patch("openclaw_cli_cmd_core.update_session") as mock_update:
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_IS_TTY", False),
+        patch("openclaw_cli_cmd_core.update_session") as mock_update,
+    ):
         result = mod._cmd_autoroute(_ctx("off"))
     assert result == _CMD_CONTINUE
     mock_update.assert_called_once()
@@ -375,10 +396,12 @@ def test_cmd_autoroute_off_disables(capsys):
 def test_cmd_autoroute_on_enables(capsys):
     session = _mock_session(repl_auto_route=False)
     cli = _mock_cli(_session=session)
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_IS_TTY", False), \
-         patch("openclaw_cli_cmd_core.update_session") as mock_update:
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_IS_TTY", False),
+        patch("openclaw_cli_cmd_core.update_session") as mock_update,
+    ):
         result = mod._cmd_autoroute(_ctx("on"))
     assert result == _CMD_CONTINUE
     mock_update.assert_called_once()
@@ -407,11 +430,14 @@ def test_cmd_autoroute_no_session_returns_continue():
 # _cmd_rollback
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_rollback_list_no_snapshots(capsys):
     cli = _mock_cli(_PREFS={"snapshots": {}})
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_get_is_tty", return_value=False):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_get_is_tty", return_value=False),
+    ):
         result = mod._cmd_rollback(_ctx("list"))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -421,9 +447,11 @@ def test_cmd_rollback_list_no_snapshots(capsys):
 def test_cmd_rollback_list_shows_snapshots(capsys):
     snapshots = {"backup": {"sha": "abc123", "ts": "2024-01-01T00:00:00Z"}}
     cli = _mock_cli(_PREFS={"snapshots": snapshots})
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_get_is_tty", return_value=False):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_get_is_tty", return_value=False),
+    ):
         result = mod._cmd_rollback(_ctx("list"))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -434,9 +462,11 @@ def test_cmd_rollback_list_shows_snapshots(capsys):
 def test_cmd_rollback_empty_arg_shows_snapshots(capsys):
     snapshots = {"mysnap": {"sha": "def456", "ts": "2024-06-01T00:00:00Z"}}
     cli = _mock_cli(_PREFS={"snapshots": snapshots})
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_get_is_tty", return_value=False):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_get_is_tty", return_value=False),
+    ):
         result = mod._cmd_rollback(_ctx(""))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -445,9 +475,11 @@ def test_cmd_rollback_empty_arg_shows_snapshots(capsys):
 
 def test_cmd_rollback_unknown_snapshot_name(capsys):
     cli = _mock_cli(_PREFS={"snapshots": {}})
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_get_is_tty", return_value=False):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_get_is_tty", return_value=False),
+    ):
         result = mod._cmd_rollback(_ctx("nonexistent"))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -457,13 +489,19 @@ def test_cmd_rollback_unknown_snapshot_name(capsys):
 def test_cmd_rollback_last_no_checkpoint(capsys):
     session = _mock_session()
     cli = _mock_cli(_session=session)
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_IS_TTY", False), \
-         patch("openclaw_cli_cmd_core.restore_last_routed_action_checkpoint", return_value=None):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_IS_TTY", False),
+        patch("openclaw_cli_cmd_core.restore_last_routed_action_checkpoint", return_value=None),
+    ):
         result = mod._cmd_rollback(_ctx("last"))
     assert result == _CMD_CONTINUE
-    cli._set_command_result.assert_called_once_with(cli._require_session_or_warn.return_value.__class__.__instancecheck__.__self__ if False else MagicMock(), ok=False, summary="no routed checkpoints") if False else None
+    cli._set_command_result.assert_called_once_with(
+        cli._require_session_or_warn.return_value.__class__.__instancecheck__.__self__ if False else MagicMock(),
+        ok=False,
+        summary="no routed checkpoints",
+    ) if False else None
     # just verify we got continue and the error was surfaced
     captured = capsys.readouterr()
     assert "no routed action checkpoints" in captured.out.lower() or "No routed action" in captured.out
@@ -478,10 +516,12 @@ def test_cmd_rollback_last_restored_success(capsys):
         "restored_files": ["/foo/bar.py"],
         "reason": "",
     }
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_IS_TTY", False), \
-         patch("openclaw_cli_cmd_core.restore_last_routed_action_checkpoint", return_value=outcome):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_IS_TTY", False),
+        patch("openclaw_cli_cmd_core.restore_last_routed_action_checkpoint", return_value=outcome),
+    ):
         result = mod._cmd_rollback(_ctx("last"))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -492,12 +532,15 @@ def test_cmd_rollback_last_restored_success(capsys):
 # _cmd_files
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_files_no_args_empty_list(capsys):
     session = _mock_session(files=[])
     cli = _mock_cli(_session=session)
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_IS_TTY", False):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_IS_TTY", False),
+    ):
         result = mod._cmd_files(_ctx(""))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -507,9 +550,11 @@ def test_cmd_files_no_args_empty_list(capsys):
 def test_cmd_files_no_args_shows_list(capsys):
     session = _mock_session(files=["/some/file.py", "/other/file.txt"])
     cli = _mock_cli(_session=session)
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_IS_TTY", False):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_IS_TTY", False),
+    ):
         result = mod._cmd_files(_ctx(""))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -519,8 +564,7 @@ def test_cmd_files_no_args_shows_list(capsys):
 def test_cmd_files_add_missing_path(capsys):
     session = _mock_session(files=[])
     cli = _mock_cli(_session=session)
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False):
+    with patch.object(mod, "_get_cli_mod", return_value=cli), patch.object(mod, "_RICH_AVAILABLE", False):
         result = mod._cmd_files(_ctx("add"))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -530,8 +574,7 @@ def test_cmd_files_add_missing_path(capsys):
 def test_cmd_files_rm_missing_target(capsys):
     session = _mock_session(files=[])
     cli = _mock_cli(_session=session)
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False):
+    with patch.object(mod, "_get_cli_mod", return_value=cli), patch.object(mod, "_RICH_AVAILABLE", False):
         result = mod._cmd_files(_ctx("rm"))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -541,8 +584,7 @@ def test_cmd_files_rm_missing_target(capsys):
 def test_cmd_files_invalid_subcmd(capsys):
     session = _mock_session(files=[])
     cli = _mock_cli(_session=session)
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False):
+    with patch.object(mod, "_get_cli_mod", return_value=cli), patch.object(mod, "_RICH_AVAILABLE", False):
         result = mod._cmd_files(_ctx("purge"))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -561,11 +603,14 @@ def test_cmd_files_no_session_returns_continue():
 # _cmd_inject
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_inject_no_args_shows_usage(capsys):
     cli = _mock_cli()
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_get_is_tty", return_value=False):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_get_is_tty", return_value=False),
+    ):
         result = mod._cmd_inject(_ctx(""))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -575,9 +620,11 @@ def test_cmd_inject_no_args_shows_usage(capsys):
 def test_cmd_inject_clear_resets_inject(capsys):
     cli = _mock_cli()
     cli._next_inject = "some pending content"
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_get_is_tty", return_value=False):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_get_is_tty", return_value=False),
+    ):
         result = mod._cmd_inject(_ctx("clear"))
     assert result == _CMD_CONTINUE
     assert cli._next_inject == ""
@@ -588,9 +635,11 @@ def test_cmd_inject_clear_resets_inject(capsys):
 def test_cmd_inject_status_no_inject(capsys):
     cli = _mock_cli()
     cli._next_inject = ""
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_get_is_tty", return_value=False):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_get_is_tty", return_value=False),
+    ):
         result = mod._cmd_inject(_ctx("status"))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -599,9 +648,11 @@ def test_cmd_inject_status_no_inject(capsys):
 
 def test_cmd_inject_file_not_found(capsys):
     cli = _mock_cli()
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_get_is_tty", return_value=False):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_get_is_tty", return_value=False),
+    ):
         result = mod._cmd_inject(_ctx("/nonexistent/path/file.txt"))
     assert result == _CMD_CONTINUE
     cli._print_error.assert_called_once()
@@ -612,11 +663,14 @@ def test_cmd_inject_file_not_found(capsys):
 # _cmd_template
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_template_list_empty(capsys):
     cli = _mock_cli(_PREFS={"templates": {}})
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_IS_TTY", False):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_IS_TTY", False),
+    ):
         result = mod._cmd_template(_ctx(""))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -626,9 +680,11 @@ def test_cmd_template_list_empty(capsys):
 def test_cmd_template_save_stores_template(capsys):
     prefs = {}
     cli = _mock_cli(_PREFS=prefs)
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_IS_TTY", False):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_IS_TTY", False),
+    ):
         result = mod._cmd_template(_ctx("save my-tmpl Fix the bug in {{file}}"))
     assert result == _CMD_CONTINUE
     assert prefs.get("templates", {}).get("my-tmpl") == "Fix the bug in {{file}}"
@@ -638,8 +694,7 @@ def test_cmd_template_save_stores_template(capsys):
 def test_cmd_template_save_invalid_name_errors():
     cli = _mock_cli(_PREFS={})
     # Name "bad!name" contains '!' which fails [A-Za-z0-9\-]+ validation
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False):
+    with patch.object(mod, "_get_cli_mod", return_value=cli), patch.object(mod, "_RICH_AVAILABLE", False):
         result = mod._cmd_template(_ctx("save bad!name some text"))
     assert result == _CMD_CONTINUE
     cli._print_error.assert_called_once()
@@ -648,9 +703,11 @@ def test_cmd_template_save_invalid_name_errors():
 def test_cmd_template_delete_existing(capsys):
     prefs = {"templates": {"del-me": "old text"}}
     cli = _mock_cli(_PREFS=prefs)
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch.object(mod, "_IS_TTY", False):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch.object(mod, "_IS_TTY", False),
+    ):
         result = mod._cmd_template(_ctx("delete del-me"))
     assert result == _CMD_CONTINUE
     assert "del-me" not in prefs.get("templates", {})
@@ -659,8 +716,7 @@ def test_cmd_template_delete_existing(capsys):
 
 def test_cmd_template_delete_missing_errors():
     cli = _mock_cli(_PREFS={"templates": {}})
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False):
+    with patch.object(mod, "_get_cli_mod", return_value=cli), patch.object(mod, "_RICH_AVAILABLE", False):
         result = mod._cmd_template(_ctx("delete ghost"))
     assert result == _CMD_CONTINUE
     cli._print_error.assert_called_once()
@@ -668,8 +724,7 @@ def test_cmd_template_delete_missing_errors():
 
 def test_cmd_template_use_not_found_errors():
     cli = _mock_cli(_PREFS={"templates": {}})
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False):
+    with patch.object(mod, "_get_cli_mod", return_value=cli), patch.object(mod, "_RICH_AVAILABLE", False):
         result = mod._cmd_template(_ctx("use missing-tmpl"))
     assert result == _CMD_CONTINUE
     cli._print_error.assert_called_once()
@@ -678,6 +733,7 @@ def test_cmd_template_use_not_found_errors():
 # ---------------------------------------------------------------------------
 # _cmd_routing
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_routing_no_history(capsys):
     cli = _mock_cli()

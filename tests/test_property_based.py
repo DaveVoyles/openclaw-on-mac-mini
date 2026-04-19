@@ -73,6 +73,7 @@ class TestWebhookFormatter:
     def test_format_sonarr_never_crashes(self, payload: dict):
         """Sonarr webhook parser should handle any dict without crashing."""
         from webhook_formatter import format_sonarr
+
         try:
             result = format_sonarr(payload)
             # Should return tuple of (title, desc, color)
@@ -86,6 +87,7 @@ class TestWebhookFormatter:
     def test_format_plex_never_crashes(self, payload: dict):
         """Plex webhook parser should handle any dict without crashing."""
         from webhook_formatter import format_plex
+
         try:
             result = format_plex(payload)
             assert isinstance(result, tuple)

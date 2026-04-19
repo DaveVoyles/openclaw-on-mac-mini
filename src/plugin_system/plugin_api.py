@@ -206,9 +206,7 @@ class PluginAPI:
             f"plugins.{self.plugin_name}.allowed_permissions",
             [],
         )
-        return self._normalize_permissions(allowed_permissions) | self._normalize_permissions(
-            configured_permissions
-        )
+        return self._normalize_permissions(allowed_permissions) | self._normalize_permissions(configured_permissions)
 
     def get_config(self, key: str, default: Any = None) -> Any:
         """

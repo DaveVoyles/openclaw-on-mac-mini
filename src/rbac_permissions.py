@@ -29,6 +29,7 @@ DB_PATH = Path("/memory/permissions.db")
 
 class Permission(Enum):
     """Fine-grained permissions"""
+
     # Command execution
     EXECUTE_COMMANDS = "execute_commands"
     EXECUTE_ADMIN_COMMANDS = "execute_admin_commands"
@@ -99,6 +100,7 @@ DEFAULT_PERMISSIONS: dict[UserRole, set[Permission]] = {
 # Database schema
 # ---------------------------------------------------------------------------
 
+
 def _init_db(conn: sqlite3.Connection) -> None:
     """Initialize permissions database"""
     # User-specific permission overrides
@@ -150,6 +152,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
 # ---------------------------------------------------------------------------
 # Permission Manager
 # ---------------------------------------------------------------------------
+
 
 class PermissionManager:
     """Manages fine-grained permissions for users and workspaces"""
@@ -277,13 +280,14 @@ class PermissionManager:
             "grant_permission",
             permission.value,
             user_id,
-            f"Granted {permission.value} to user {user_id}" +
-            (f" in workspace {workspace_id}" if workspace_id else ""),
+            f"Granted {permission.value} to user {user_id}" + (f" in workspace {workspace_id}" if workspace_id else ""),
         )
 
         log.info(
             "Granted permission %s to user %d by user %d%s",
-            permission.value, user_id, granted_by,
+            permission.value,
+            user_id,
+            granted_by,
             f" in workspace {workspace_id}" if workspace_id else "",
         )
 
@@ -330,13 +334,15 @@ class PermissionManager:
             "revoke_permission",
             permission.value,
             user_id,
-            f"Revoked {permission.value} from user {user_id}" +
-            (f" in workspace {workspace_id}" if workspace_id else ""),
+            f"Revoked {permission.value} from user {user_id}"
+            + (f" in workspace {workspace_id}" if workspace_id else ""),
         )
 
         log.info(
             "Revoked permission %s from user %d by user %d%s",
-            permission.value, user_id, revoked_by,
+            permission.value,
+            user_id,
+            revoked_by,
             f" in workspace {workspace_id}" if workspace_id else "",
         )
 
@@ -440,6 +446,7 @@ class PermissionManager:
 # Permission decorators
 # ---------------------------------------------------------------------------
 
+
 def require_permission(permission: Permission, workspace_aware: bool = False):
     """Decorator to enforce permission checks on Discord commands
 
@@ -452,6 +459,7 @@ def require_permission(permission: Permission, workspace_aware: bool = False):
         async def schedule_command(interaction: discord.Interaction):
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def wrapper(interaction: discord.Interaction, *args, **kwargs):
@@ -495,6 +503,7 @@ def require_permission(permission: Permission, workspace_aware: bool = False):
             return await func(interaction, *args, **kwargs)
 
         return wrapper
+
     return decorator
 
 
@@ -509,6 +518,7 @@ def require_role(min_role: UserRole):
         async def admin_command(interaction: discord.Interaction):
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def wrapper(interaction: discord.Interaction, *args, **kwargs):
@@ -533,6 +543,7 @@ def require_role(min_role: UserRole):
             return await func(interaction, *args, **kwargs)
 
         return wrapper
+
     return decorator
 
 

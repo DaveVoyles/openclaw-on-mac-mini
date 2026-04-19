@@ -20,10 +20,7 @@ from config import cfg
 
 log = logging.getLogger("openclaw")
 
-_NO_KEY_MSG = (
-    "❌ OMDb not configured. Get a free key at "
-    "https://www.omdbapi.com/apikey.aspx and set OMDB_API_KEY"
-)
+_NO_KEY_MSG = "❌ OMDb not configured. Get a free key at https://www.omdbapi.com/apikey.aspx and set OMDB_API_KEY"
 
 
 async def _omdb_get(params: dict) -> dict:
@@ -53,9 +50,7 @@ class ImdbCog(commands.Cog):
             data = await _omdb_get({"t": title, "type": "movie", "plot": "full"})
 
             if data.get("Response") == "False":
-                await interaction.followup.send(
-                    f"❌ No movie found for '{title}'", ephemeral=True
-                )
+                await interaction.followup.send(f"❌ No movie found for '{title}'", ephemeral=True)
                 return
 
             embed = _build_media_embed(data, discord.Color.gold())
@@ -78,9 +73,7 @@ class ImdbCog(commands.Cog):
             data = await _omdb_get({"t": title, "type": "series", "plot": "full"})
 
             if data.get("Response") == "False":
-                await interaction.followup.send(
-                    f"❌ No TV series found for '{title}'", ephemeral=True
-                )
+                await interaction.followup.send(f"❌ No TV series found for '{title}'", ephemeral=True)
                 return
 
             embed = _build_media_embed(data, discord.Color.gold())
@@ -116,9 +109,9 @@ class ImdbCog(commands.Cog):
             movie_data, tv_data = await _search_both(query)
 
             results: list[dict] = []
-            for item in (movie_data.get("Search") or []):
+            for item in movie_data.get("Search") or []:
                 results.append(item)
-            for item in (tv_data.get("Search") or []):
+            for item in tv_data.get("Search") or []:
                 # Avoid duplicates by imdbID
                 if not any(r["imdbID"] == item["imdbID"] for r in results):
                     results.append(item)
@@ -126,9 +119,7 @@ class ImdbCog(commands.Cog):
             results = results[:5]
 
             if not results:
-                await interaction.followup.send(
-                    f"❌ No results found for '{query}'", ephemeral=True
-                )
+                await interaction.followup.send(f"❌ No results found for '{query}'", ephemeral=True)
                 return
 
             lines = []
@@ -143,7 +134,7 @@ class ImdbCog(commands.Cog):
                 lines.append(label)
 
             embed = discord.Embed(
-                title=f"🎬 IMDb Search: \"{query}\"",
+                title=f'🎬 IMDb Search: "{query}"',
                 description=truncate_for_embed("\n\n".join(lines)),
                 color=discord.Color.gold(),
             )
@@ -155,6 +146,7 @@ class ImdbCog(commands.Cog):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 async def _search_both(query: str) -> tuple[dict, dict]:
     """Run OMDb search for movies and series concurrently."""

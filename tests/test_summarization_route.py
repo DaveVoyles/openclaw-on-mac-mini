@@ -10,6 +10,7 @@ from model_routing_policy import SummarizationRouteDecision, select_summarizatio
 # select_summarization_route policy
 # ---------------------------------------------------------------------------
 
+
 class TestSelectSummarizationRoute:
     def test_summarization_route_prefers_copilot_when_available(self):
         result = select_summarization_route(copilot_available=True)
@@ -32,6 +33,7 @@ class TestSelectSummarizationRoute:
 # summarize_conversation wiring (llm/chat.py)
 # ---------------------------------------------------------------------------
 
+
 class TestSummarizeConversationRouting:
     _history = [
         {"role": "user", "parts": ["What's the weather like?"]},
@@ -48,6 +50,7 @@ class TestSummarizeConversationRouting:
             patch("llm.providers.chat_openai", AsyncMock(return_value="  Copilot summary.  ")),
         ):
             from model_routing_policy import SummarizationRouteDecision
+
             mock_route.return_value = SummarizationRouteDecision(provider="copilot", reason="test")
             result = await summarize_conversation(self._history)
 
@@ -70,6 +73,7 @@ class TestSummarizeConversationRouting:
         ):
             mock_asyncio.to_thread = AsyncMock(return_value=fake_response)
             from model_routing_policy import SummarizationRouteDecision
+
             mock_route.return_value = SummarizationRouteDecision(provider="copilot", reason="test")
             result = await summarize_conversation(self._history)
 
@@ -78,5 +82,6 @@ class TestSummarizeConversationRouting:
     @pytest.mark.asyncio
     async def test_returns_empty_for_empty_history(self):
         from llm.chat import summarize_conversation
+
         result = await summarize_conversation([])
         assert result == ""

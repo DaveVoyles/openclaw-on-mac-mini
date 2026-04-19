@@ -4,6 +4,7 @@ Extracted from openclaw_cli.py.  Handlers delegate to helpers that live in the
 session sub-modules; anything that still lives only in openclaw_cli is reached
 via the lazy _get_cli_mod() accessor to avoid circular imports.
 """
+
 from __future__ import annotations
 
 import shlex
@@ -53,12 +54,14 @@ _CMD_QUIT: str = "quit"
 def _get_cli_mod():
     """Lazy accessor for openclaw_cli to avoid circular imports."""
     import openclaw_cli as _m
+
     return _m
 
 
 # ---------------------------------------------------------------------------
 # _cmd_session
 # ---------------------------------------------------------------------------
+
 
 def _cmd_session(ctx: ChatCommandContext) -> str:
     """/session — show a compact summary of the current session."""
@@ -73,6 +76,7 @@ def _cmd_session(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_events
 # ---------------------------------------------------------------------------
+
 
 def _cmd_events(ctx: ChatCommandContext) -> str:
     """/events [n|decisions [n]] — show the last n events; 'decisions' filters to routing/decision kinds."""
@@ -89,7 +93,7 @@ def _cmd_events(ctx: ChatCommandContext) -> str:
 
     if args.startswith("decisions"):
         decisions_only = True
-        remainder = args[len("decisions"):].strip()
+        remainder = args[len("decisions") :].strip()
         if remainder:
             try:
                 n = int(remainder)
@@ -112,16 +116,19 @@ def _cmd_events(ctx: ChatCommandContext) -> str:
 
     if not events:
         if m._RICH_AVAILABLE and m._IS_TTY:
-            m._RICH_CONSOLE.print("[dim]No events recorded yet.[/]  [dim]Events appear after /analyze, /write, /exec, /edit, or chat turns.[/]")
+            m._RICH_CONSOLE.print(
+                "[dim]No events recorded yet.[/]  [dim]Events appear after /analyze, /write, /exec, /edit, or chat turns.[/]"
+            )
         else:
             print("No events recorded yet. Events appear after /analyze, /write, /exec, /edit, or chat turns.")
         return _CMD_CONTINUE
 
     latest_event = events[0]
     latest_kind = str(latest_event.get("kind") or "event").strip() or "event"
-    latest_ts = str(
-        latest_event.get("timestamp") or latest_event.get("at") or latest_event.get("created_at") or "—"
-    ).strip() or "—"
+    latest_ts = (
+        str(latest_event.get("timestamp") or latest_event.get("at") or latest_event.get("created_at") or "—").strip()
+        or "—"
+    )
     summary_lines = [
         f"showing {len(events)} recent event{'s' if len(events) != 1 else ''}",
         f"latest kind: {latest_kind}",
@@ -156,10 +163,19 @@ def _cmd_events(ctx: ChatCommandContext) -> str:
                 print(f"  - {line}")
 
     _KIND_COLORS = {
-        "chat": "dim", "prompt": "white", "analyze": "cyan", "research": "blue",
-        "write": "yellow", "exec": "bold yellow", "assistant": "green",
-        "edit": "magenta", "error": "red", "watch": "cyan",
-        "route": "bold cyan", "plan": "bold blue", "approval": "bold yellow",
+        "chat": "dim",
+        "prompt": "white",
+        "analyze": "cyan",
+        "research": "blue",
+        "write": "yellow",
+        "exec": "bold yellow",
+        "assistant": "green",
+        "edit": "magenta",
+        "error": "red",
+        "watch": "cyan",
+        "route": "bold cyan",
+        "plan": "bold blue",
+        "approval": "bold yellow",
         "checkpoint": "bold green",
     }
     if m._RICH_AVAILABLE and m._IS_TTY:
@@ -191,6 +207,7 @@ def _cmd_events(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_sessions
 # ---------------------------------------------------------------------------
+
 
 def _cmd_sessions(ctx: ChatCommandContext) -> str:
     """/sessions [search QUERY | related] — browse recent sessions."""
@@ -267,7 +284,8 @@ def _cmd_sessions(ctx: ChatCommandContext) -> str:
     sessions = list_sessions(limit=50)
     if query:
         sessions = [
-            s for s in sessions
+            s
+            for s in sessions
             if query in s.title.lower()
             or query in s.last_summary.lower()
             or query in s.session_id.lower()
@@ -287,8 +305,7 @@ def _cmd_sessions(ctx: ChatCommandContext) -> str:
             title="Session overlay",
             items=sessions,
             label_fn=lambda s: (
-                f"{s.session_id[:8]}…  {s.title or '—'}  "
-                f"{(s.updated_at or '—')[:19]}  {m._session_badges(s)}".strip()
+                f"{s.session_id[:8]}…  {s.title or '—'}  {(s.updated_at or '—')[:19]}  {m._session_badges(s)}".strip()
             ),
             detail_fn=lambda s: m._session_preview_lines(s),
             on_select=lambda s: (
@@ -320,7 +337,9 @@ def _cmd_sessions(ctx: ChatCommandContext) -> str:
 
     title_str = "Recent sessions" + (f" matching '{query}'" if query else "")
     fresh_count = sum(1 for s in sessions if not m._session_is_stale(s))
-    active_count = sum(1 for s in sessions if m._status_family(s.status or "active") in {"active", "complete", "retry", "waiting"})
+    active_count = sum(
+        1 for s in sessions if m._status_family(s.status or "active") in {"active", "complete", "retry", "waiting"}
+    )
     operator_ready_count = 0
     for session in sessions:
         operator_snapshot = m._session_operator_snapshot(session)
@@ -332,7 +351,9 @@ def _cmd_sessions(ctx: ChatCommandContext) -> str:
             m._progress_cell("shown", str(len(sessions)), status="active"),
             m._progress_cell("fresh", str(fresh_count), status="info" if fresh_count else "idle"),
             m._progress_cell("active-ish", str(active_count), status="active" if active_count else "idle"),
-            m._progress_cell("operator-ready", str(operator_ready_count), status="complete" if operator_ready_count else "idle"),
+            m._progress_cell(
+                "operator-ready", str(operator_ready_count), status="complete" if operator_ready_count else "idle"
+            ),
         ],
         detail_lines=[
             f"query: {query}" if query else "query: recent sessions",
@@ -365,7 +386,7 @@ def _cmd_sessions(ctx: ChatCommandContext) -> str:
     else:
         print(f"\n  {title_str}:\n")
         print(f"  {'ID':<10}  {'Title':<36}  {'Cmds':>4}  {'Updated':<10}  Badges")
-        print(f"  {'─'*10}  {'─'*36}  {'─'*4}  {'─'*10}  ──────")
+        print(f"  {'─' * 10}  {'─' * 36}  {'─' * 4}  {'─' * 10}  ──────")
         for s in sessions:
             short_id = (s.session_id[:8] + "…")[:10]
             title = (s.title[:34] + "…") if len(s.title) > 34 else s.title
@@ -380,9 +401,11 @@ def _cmd_sessions(ctx: ChatCommandContext) -> str:
 # _cmd_export
 # ---------------------------------------------------------------------------
 
+
 def _cmd_export(ctx: ChatCommandContext) -> str:
     """/export [md|json|txt] [filename] — export session history to a file."""
     import datetime as _dt
+
     m = _get_cli_mod()
     args = (ctx.args or "").strip().split()
     fmt = args[0].lower() if args else "md"
@@ -413,6 +436,7 @@ def _cmd_export(ctx: ChatCommandContext) -> str:
 
     try:
         from pathlib import Path
+
         now_str = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         exported_at_iso = _dt.datetime.now().isoformat()
         content = m._content_cmds_mod._build_export_body(cmd_history, fmt, now_str, exported_at_iso)
@@ -425,7 +449,9 @@ def _cmd_export(ctx: ChatCommandContext) -> str:
         size_kb = len(content.encode()) / 1024
 
         if m._RICH_AVAILABLE and is_tty:
-            m._RICH_CONSOLE.print(f"\n[bold green]✅ Exported[/] [dim]{count} entries → [/][bold cyan]{abs_path}[/] [dim]({size_kb:.1f} KB, {fmt.upper()})[/]\n")
+            m._RICH_CONSOLE.print(
+                f"\n[bold green]✅ Exported[/] [dim]{count} entries → [/][bold cyan]{abs_path}[/] [dim]({size_kb:.1f} KB, {fmt.upper()})[/]\n"
+            )
         else:
             print(f"\n✅ Exported {count} entries → {abs_path} ({size_kb:.1f} KB, {fmt.upper()})\n")
 
@@ -442,6 +468,7 @@ def _cmd_export(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_tag
 # ---------------------------------------------------------------------------
+
 
 def _cmd_tag(ctx: ChatCommandContext) -> str:
     """/tag [add <tag>|rm <tag>|list] — manage tags on the current session."""
@@ -499,6 +526,7 @@ def _cmd_tag(ctx: ChatCommandContext) -> str:
 # _cmd_bookmark
 # ---------------------------------------------------------------------------
 
+
 def _cmd_bookmark(ctx: ChatCommandContext) -> str:
     """/bookmark [label] — save a replay bookmark for the current session."""
     m = _get_cli_mod()
@@ -522,6 +550,7 @@ def _cmd_bookmark(ctx: ChatCommandContext) -> str:
 # _cmd_bookmarks
 # ---------------------------------------------------------------------------
 
+
 def _cmd_bookmarks(ctx: ChatCommandContext) -> str:
     """/bookmarks — list replay bookmarks for the current session."""
     m = _get_cli_mod()
@@ -539,8 +568,7 @@ def _cmd_bookmarks(ctx: ChatCommandContext) -> str:
     for bookmark in bookmarks:
         summary = str(bookmark.get("summary") or "").strip()
         print(
-            f"  [{bookmark.get('id', '')}] {bookmark.get('label', '')}  "
-            f"{_DM}(turn {bookmark.get('turn_index', 0)}){_R}"
+            f"  [{bookmark.get('id', '')}] {bookmark.get('label', '')}  {_DM}(turn {bookmark.get('turn_index', 0)}){_R}"
         )
         if summary:
             print(f"      {summary[:120]}")
@@ -552,6 +580,7 @@ def _cmd_bookmarks(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_resume
 # ---------------------------------------------------------------------------
+
 
 def _cmd_resume(ctx: ChatCommandContext) -> str:
     """/resume [last] — print resume instructions for the most recent other session."""
@@ -578,6 +607,7 @@ def _cmd_resume(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_replay
 # ---------------------------------------------------------------------------
+
 
 def _cmd_replay(ctx: ChatCommandContext) -> str:
     """/replay [session-id] [--from bookmark] — re-print the current or a past session's conversation."""
@@ -609,8 +639,7 @@ def _cmd_replay(ctx: ChatCommandContext) -> str:
     if token:
         all_sessions = list_sessions(limit=100)
         match = next(
-            (s for s in all_sessions
-             if s.session_id.startswith(token) or token.lower() in s.title.lower()),
+            (s for s in all_sessions if s.session_id.startswith(token) or token.lower() in s.title.lower()),
             None,
         )
         if match is None:
@@ -637,10 +666,9 @@ def _cmd_replay(ctx: ChatCommandContext) -> str:
         if bookmark is None:
             print(f"{_BRE}error:{_R} No bookmark found matching '{bookmark_token}'")
             return _CMD_CONTINUE
-        history = history[int(bookmark.get("history_index") or 0):]
+        history = history[int(bookmark.get("history_index") or 0) :]
         header = (
-            f"Replay from [{bookmark.get('id', '')}] {bookmark.get('label', '')}"
-            f" (turn {bookmark.get('turn_index', 0)})"
+            f"Replay from [{bookmark.get('id', '')}] {bookmark.get('label', '')} (turn {bookmark.get('turn_index', 0)})"
         )
 
     if not history:
@@ -672,6 +700,7 @@ def _cmd_replay(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_handoff
 # ---------------------------------------------------------------------------
+
 
 def _cmd_handoff(ctx: ChatCommandContext) -> str:
     """/handoff [create|list|open NAME|note TEXT|check] — save/restore a resumable workspace handoff."""
@@ -709,12 +738,9 @@ def _cmd_handoff(ctx: ChatCommandContext) -> str:
             m._print_error(str(exc))
             return _CMD_CONTINUE
         if m._RICH_AVAILABLE and is_tty:
+            m._RICH_CONSOLE.print(f"\n[bold green]{m._e('✅', '[OK]')} Handoff created:[/] [cyan]{handoff_id}[/]")
             m._RICH_CONSOLE.print(
-                f"\n[bold green]{m._e('✅', '[OK]')} Handoff created:[/] [cyan]{handoff_id}[/]"
-            )
-            m._RICH_CONSOLE.print(
-                f"  Resume with: [dim]openclaw --session {session_id}[/]  "
-                f"or  [dim]/handoff open {handoff_id}[/]\n"
+                f"  Resume with: [dim]openclaw --session {session_id}[/]  or  [dim]/handoff open {handoff_id}[/]\n"
             )
         else:
             print(f"\n{_GR}{m._e('✅', '[OK]')} Handoff created:{_R} {handoff_id}")
@@ -730,7 +756,12 @@ def _cmd_handoff(ctx: ChatCommandContext) -> str:
             return _CMD_CONTINUE
         if m._RICH_AVAILABLE and is_tty:
             tbl = m._RichTable(
-                "ID", "Session", "Title", "CWD", "Note", "Created",
+                "ID",
+                "Session",
+                "Title",
+                "CWD",
+                "Note",
+                "Created",
                 border_style="dim",
                 header_style="bold cyan",
                 show_lines=False,
@@ -775,7 +806,9 @@ def _cmd_handoff(ctx: ChatCommandContext) -> str:
         missing = result.get("missing", [])
         warnings = result.get("warnings", [])
         if m._RICH_AVAILABLE and is_tty:
-            m._RICH_CONSOLE.print(f"\n[bold green]{m._e('✅', '[OK]')} Handoff applied to new session:[/] [cyan]{new_session_id}[/]")
+            m._RICH_CONSOLE.print(
+                f"\n[bold green]{m._e('✅', '[OK]')} Handoff applied to new session:[/] [cyan]{new_session_id}[/]"
+            )
             if restored:
                 m._RICH_CONSOLE.print(f"  [green]Restored:[/] {', '.join(str(r) for r in restored)}")
             if missing:

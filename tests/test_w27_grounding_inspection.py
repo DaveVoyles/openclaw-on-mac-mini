@@ -8,6 +8,7 @@ Covers:
 - Output is clean (no crash) when grounding block is a minimal dict
 - /context without last still works as before (no regression)
 """
+
 from __future__ import annotations
 
 import sys
@@ -80,6 +81,7 @@ class TestGroundingBlockStorageLogic:
     def _stored_block(self, kind_value: str, args_text: str = "foo.py", rationale: str = "matched") -> dict | None:
         """Simulate the storage block logic from openclaw_cli.py's main loop."""
         from openclaw_cli_router import ReplRouteKind
+
         route_decision = self._make_route_decision(kind_value, args_text, rationale)
         route_decision.kind = ReplRouteKind(kind_value)
         prefs: dict = {}
@@ -149,15 +151,16 @@ class TestContextLastNoBlock:
     def _run_context_last(self) -> str:
         m = _mock_cli(last_grounding_block=None)
         out = StringIO()
-        with patch.object(cmd_core, "_get_cli_mod", return_value=m), \
-             patch("builtins.print", side_effect=lambda *a, **kw: out.write(" ".join(str(x) for x in a) + "\n")):
+        with (
+            patch.object(cmd_core, "_get_cli_mod", return_value=m),
+            patch("builtins.print", side_effect=lambda *a, **kw: out.write(" ".join(str(x) for x in a) + "\n")),
+        ):
             result = cmd_core._cmd_context(_ctx(args="last"))
         return out.getvalue()
 
     def test_w27_grounding_inspection_returns_continue(self):
         m = _mock_cli(last_grounding_block=None)
-        with patch.object(cmd_core, "_get_cli_mod", return_value=m), \
-             patch("builtins.print"):
+        with patch.object(cmd_core, "_get_cli_mod", return_value=m), patch("builtins.print"):
             result = cmd_core._cmd_context(_ctx(args="last"))
         assert result == _CMD_CONTINUE
 
@@ -189,15 +192,16 @@ class TestContextLastWithBlock:
     def _run_context_last(self, block: dict) -> str:
         m = _mock_cli(last_grounding_block=block)
         out = StringIO()
-        with patch.object(cmd_core, "_get_cli_mod", return_value=m), \
-             patch("builtins.print", side_effect=lambda *a, **kw: out.write(" ".join(str(x) for x in a) + "\n")):
+        with (
+            patch.object(cmd_core, "_get_cli_mod", return_value=m),
+            patch("builtins.print", side_effect=lambda *a, **kw: out.write(" ".join(str(x) for x in a) + "\n")),
+        ):
             result = cmd_core._cmd_context(_ctx(args="last"))
         return out.getvalue()
 
     def test_w27_grounding_inspection_returns_continue_v2(self):
         m = _mock_cli(last_grounding_block=self._SAMPLE_BLOCK)
-        with patch.object(cmd_core, "_get_cli_mod", return_value=m), \
-             patch("builtins.print"):
+        with patch.object(cmd_core, "_get_cli_mod", return_value=m), patch("builtins.print"):
             result = cmd_core._cmd_context(_ctx(args="last"))
         assert result == _CMD_CONTINUE
 
@@ -220,8 +224,10 @@ class TestContextLastWithBlock:
     def test_grounding_arg_alias_also_works(self):
         m = _mock_cli(last_grounding_block=self._SAMPLE_BLOCK)
         out = StringIO()
-        with patch.object(cmd_core, "_get_cli_mod", return_value=m), \
-             patch("builtins.print", side_effect=lambda *a, **kw: out.write(" ".join(str(x) for x in a) + "\n")):
+        with (
+            patch.object(cmd_core, "_get_cli_mod", return_value=m),
+            patch("builtins.print", side_effect=lambda *a, **kw: out.write(" ".join(str(x) for x in a) + "\n")),
+        ):
             result = cmd_core._cmd_context(_ctx(args="grounding"))
         output = out.getvalue()
         assert "analyze" in output.lower()
@@ -257,12 +263,22 @@ class TestContextNoArgRegression:
     def test_context_no_arg_calls_dashboard(self):
         session = _mock_session()
         m = _mock_cli(session=session)
-        with patch.object(cmd_core, "_get_cli_mod", return_value=m), \
-             patch.object(cmd_core, "_context_pressure_snapshot", return_value={
-                 "pct_next": 0, "next_tokens": 0, "pct_next_raw": 0,
-                 "limit_label": "8k", "overflow": False, "hidden_pressure": False,
-                 "has_pending_inject": False,
-             }):
+        with (
+            patch.object(cmd_core, "_get_cli_mod", return_value=m),
+            patch.object(
+                cmd_core,
+                "_context_pressure_snapshot",
+                return_value={
+                    "pct_next": 0,
+                    "next_tokens": 0,
+                    "pct_next_raw": 0,
+                    "limit_label": "8k",
+                    "overflow": False,
+                    "hidden_pressure": False,
+                    "has_pending_inject": False,
+                },
+            ),
+        ):
             result = cmd_core._cmd_context(_ctx(args=""))
         assert result == _CMD_CONTINUE
         m._print_dashboard_surface.assert_called_once()
@@ -271,12 +287,22 @@ class TestContextNoArgRegression:
         session = _mock_session()
         m = _mock_cli(session=session)
         out = StringIO()
-        with patch.object(cmd_core, "_get_cli_mod", return_value=m), \
-             patch.object(cmd_core, "_context_pressure_snapshot", return_value={
-                 "pct_next": 0, "next_tokens": 0, "pct_next_raw": 0,
-                 "limit_label": "8k", "overflow": False, "hidden_pressure": False,
-                 "has_pending_inject": False,
-             }), \
-             patch("builtins.print", side_effect=lambda *a, **kw: out.write(" ".join(str(x) for x in a) + "\n")):
+        with (
+            patch.object(cmd_core, "_get_cli_mod", return_value=m),
+            patch.object(
+                cmd_core,
+                "_context_pressure_snapshot",
+                return_value={
+                    "pct_next": 0,
+                    "next_tokens": 0,
+                    "pct_next_raw": 0,
+                    "limit_label": "8k",
+                    "overflow": False,
+                    "hidden_pressure": False,
+                    "has_pending_inject": False,
+                },
+            ),
+            patch("builtins.print", side_effect=lambda *a, **kw: out.write(" ".join(str(x) for x in a) + "\n")),
+        ):
             cmd_core._cmd_context(_ctx(args=""))
         assert "No grounding block recorded yet" not in out.getvalue()

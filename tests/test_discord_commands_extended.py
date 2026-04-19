@@ -13,6 +13,7 @@ from discord.ext import commands
 # Shared helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_interaction(user_id: int = 111):
     interaction = MagicMock(spec=discord.Interaction)
     interaction.user = MagicMock()
@@ -73,6 +74,7 @@ def _get_patreon_cmd(bot):
 
 # --- /patreon status (default) ---
 
+
 @pytest.mark.asyncio
 async def test_patreon_status_ok(monkeypatch):
     health = _make_health(
@@ -82,10 +84,12 @@ async def test_patreon_status_ok(monkeypatch):
     )
     checker = MagicMock()
     checker.check_health = AsyncMock(return_value=health)
-    with _allow_all(), \
-         patch("discord_commands.patreon.get_patreon_checker", return_value=checker), \
-         patch("discord_commands.patreon.get_recovery_manager") as mgr_patch, \
-         patch("discord_commands.patreon.audit_log"):
+    with (
+        _allow_all(),
+        patch("discord_commands.patreon.get_patreon_checker", return_value=checker),
+        patch("discord_commands.patreon.get_recovery_manager") as mgr_patch,
+        patch("discord_commands.patreon.audit_log"),
+    ):
         mgr_patch.return_value.get_recovery_history.return_value = []
         bot = _make_patreon_bot()
         interaction = _make_interaction()
@@ -107,10 +111,12 @@ async def test_patreon_status_warning(monkeypatch):
     )
     checker = MagicMock()
     checker.check_health = AsyncMock(return_value=health)
-    with _allow_all(), \
-         patch("discord_commands.patreon.get_patreon_checker", return_value=checker), \
-         patch("discord_commands.patreon.get_recovery_manager") as mgr_patch, \
-         patch("discord_commands.patreon.audit_log"):
+    with (
+        _allow_all(),
+        patch("discord_commands.patreon.get_patreon_checker", return_value=checker),
+        patch("discord_commands.patreon.get_recovery_manager") as mgr_patch,
+        patch("discord_commands.patreon.audit_log"),
+    ):
         mgr_patch.return_value.get_recovery_history.return_value = []
         bot = _make_patreon_bot()
         interaction = _make_interaction()
@@ -130,10 +136,12 @@ async def test_patreon_status_critical(monkeypatch):
     )
     checker = MagicMock()
     checker.check_health = AsyncMock(return_value=health)
-    with _allow_all(), \
-         patch("discord_commands.patreon.get_patreon_checker", return_value=checker), \
-         patch("discord_commands.patreon.get_recovery_manager") as mgr_patch, \
-         patch("discord_commands.patreon.audit_log"):
+    with (
+        _allow_all(),
+        patch("discord_commands.patreon.get_patreon_checker", return_value=checker),
+        patch("discord_commands.patreon.get_recovery_manager") as mgr_patch,
+        patch("discord_commands.patreon.audit_log"),
+    ):
         mgr_patch.return_value.get_recovery_history.return_value = []
         bot = _make_patreon_bot()
         interaction = _make_interaction()
@@ -145,9 +153,11 @@ async def test_patreon_status_critical(monkeypatch):
 async def test_patreon_status_exception(monkeypatch):
     checker = MagicMock()
     checker.check_health = AsyncMock(side_effect=RuntimeError("Connection failed"))
-    with _allow_all(), \
-         patch("discord_commands.patreon.get_patreon_checker", return_value=checker), \
-         patch("discord_commands.patreon.audit_log"):
+    with (
+        _allow_all(),
+        patch("discord_commands.patreon.get_patreon_checker", return_value=checker),
+        patch("discord_commands.patreon.audit_log"),
+    ):
         bot = _make_patreon_bot()
         interaction = _make_interaction()
         await _get_patreon_cmd(bot).callback(interaction, "status")
@@ -164,10 +174,12 @@ async def test_patreon_status_unknown_status():
     )
     checker = MagicMock()
     checker.check_health = AsyncMock(return_value=health)
-    with _allow_all(), \
-         patch("discord_commands.patreon.get_patreon_checker", return_value=checker), \
-         patch("discord_commands.patreon.get_recovery_manager") as mgr_patch, \
-         patch("discord_commands.patreon.audit_log"):
+    with (
+        _allow_all(),
+        patch("discord_commands.patreon.get_patreon_checker", return_value=checker),
+        patch("discord_commands.patreon.get_recovery_manager") as mgr_patch,
+        patch("discord_commands.patreon.audit_log"),
+    ):
         mgr_patch.return_value.get_recovery_history.return_value = []
         bot = _make_patreon_bot()
         interaction = _make_interaction()
@@ -182,16 +194,19 @@ async def test_patreon_status_with_recovery_history():
     checker = MagicMock()
     checker.check_health = AsyncMock(return_value=health)
     from patreon_recovery import RecoveryAction, RecoveryResult
+
     recent = RecoveryResult(
         action=RecoveryAction.RESTART_CONTAINER,
         success=True,
         message="Container restarted",
         timestamp=datetime.now(),
     )
-    with _allow_all(), \
-         patch("discord_commands.patreon.get_patreon_checker", return_value=checker), \
-         patch("discord_commands.patreon.get_recovery_manager") as mgr_patch, \
-         patch("discord_commands.patreon.audit_log"):
+    with (
+        _allow_all(),
+        patch("discord_commands.patreon.get_patreon_checker", return_value=checker),
+        patch("discord_commands.patreon.get_recovery_manager") as mgr_patch,
+        patch("discord_commands.patreon.audit_log"),
+    ):
         mgr_patch.return_value.get_recovery_history.return_value = [recent]
         bot = _make_patreon_bot()
         interaction = _make_interaction()
@@ -208,10 +223,12 @@ async def test_patreon_status_cookie_fresh():
     )
     checker = MagicMock()
     checker.check_health = AsyncMock(return_value=health)
-    with _allow_all(), \
-         patch("discord_commands.patreon.get_patreon_checker", return_value=checker), \
-         patch("discord_commands.patreon.get_recovery_manager") as mgr_patch, \
-         patch("discord_commands.patreon.audit_log"):
+    with (
+        _allow_all(),
+        patch("discord_commands.patreon.get_patreon_checker", return_value=checker),
+        patch("discord_commands.patreon.get_recovery_manager") as mgr_patch,
+        patch("discord_commands.patreon.audit_log"),
+    ):
         mgr_patch.return_value.get_recovery_history.return_value = []
         bot = _make_patreon_bot()
         interaction = _make_interaction()
@@ -228,10 +245,12 @@ async def test_patreon_status_cookie_expired():
     )
     checker = MagicMock()
     checker.check_health = AsyncMock(return_value=health)
-    with _allow_all(), \
-         patch("discord_commands.patreon.get_patreon_checker", return_value=checker), \
-         patch("discord_commands.patreon.get_recovery_manager") as mgr_patch, \
-         patch("discord_commands.patreon.audit_log"):
+    with (
+        _allow_all(),
+        patch("discord_commands.patreon.get_patreon_checker", return_value=checker),
+        patch("discord_commands.patreon.get_recovery_manager") as mgr_patch,
+        patch("discord_commands.patreon.audit_log"),
+    ):
         mgr_patch.return_value.get_recovery_history.return_value = []
         bot = _make_patreon_bot()
         interaction = _make_interaction()
@@ -240,6 +259,7 @@ async def test_patreon_status_cookie_expired():
 
 
 # --- /patreon refresh ---
+
 
 @pytest.mark.asyncio
 async def test_patreon_refresh_cookies():
@@ -254,6 +274,7 @@ async def test_patreon_refresh_cookies():
 
 # --- _create_cookie_refresh_embed (standalone) ---
 
+
 def test_create_cookie_refresh_embed():
     embed = patreon_mod._create_cookie_refresh_embed()
     assert isinstance(embed, discord.Embed)
@@ -261,6 +282,7 @@ def test_create_cookie_refresh_embed():
 
 
 # --- _create_status_embed coverage ---
+
 
 def test_create_status_embed_ok():
     health = _make_health(status=PatreonHealthStatus.OK, message="OK")
@@ -303,8 +325,7 @@ def _get_media_cmd(bot, name):
     return next(cmd for cmd in bot.tree.get_commands() if cmd.name == name)
 
 
-def _make_attachment(filename="test.png", content_type="image/png",
-                     size=1024, url="http://example.com/test.png"):
+def _make_attachment(filename="test.png", content_type="image/png", size=1024, url="http://example.com/test.png"):
     att = MagicMock(spec=discord.Attachment)
     att.filename = filename
     att.content_type = content_type
@@ -314,6 +335,7 @@ def _make_attachment(filename="test.png", content_type="image/png",
 
 
 # --- /analyze-image ---
+
 
 @pytest.mark.asyncio
 async def test_analyze_image_unsupported_mime():
@@ -354,8 +376,10 @@ async def test_analyze_image_download_error():
     mock_session = MagicMock()
     mock_session.get.return_value = mock_cm
 
-    with patch("permissions.is_allowed", return_value=True), \
-         patch("discord_commands.media._get_http_session", AsyncMock(return_value=mock_session)):
+    with (
+        patch("permissions.is_allowed", return_value=True),
+        patch("discord_commands.media._get_http_session", AsyncMock(return_value=mock_session)),
+    ):
         await _get_media_cmd(bot, "analyze-image").callback(interaction, image)
     interaction.followup.send.assert_awaited_once()
     msg = interaction.followup.send.await_args.args[0]
@@ -371,8 +395,10 @@ async def test_analyze_image_network_exception():
     mock_session = MagicMock()
     mock_session.get.side_effect = aiohttp.ClientError("network fail")
 
-    with patch("permissions.is_allowed", return_value=True), \
-         patch("discord_commands.media._get_http_session", AsyncMock(return_value=mock_session)):
+    with (
+        patch("permissions.is_allowed", return_value=True),
+        patch("discord_commands.media._get_http_session", AsyncMock(return_value=mock_session)),
+    ):
         await _get_media_cmd(bot, "analyze-image").callback(interaction, image)
     interaction.followup.send.assert_awaited_once()
     msg = interaction.followup.send.await_args.args[0]
@@ -394,19 +420,20 @@ async def test_analyze_image_success():
     mock_session = MagicMock()
     mock_session.get.return_value = mock_cm
 
-    with patch("permissions.is_allowed", return_value=True), \
-         patch("discord_commands.media._get_http_session", AsyncMock(return_value=mock_session)), \
-         patch("discord_commands.media.llm_analyze_image", AsyncMock(return_value="A test image")), \
-         patch("discord_commands.media.audit_log"):
-        await _get_media_cmd(bot, "analyze-image").callback(
-            interaction, image, "What is in this image?"
-        )
+    with (
+        patch("permissions.is_allowed", return_value=True),
+        patch("discord_commands.media._get_http_session", AsyncMock(return_value=mock_session)),
+        patch("discord_commands.media.llm_analyze_image", AsyncMock(return_value="A test image")),
+        patch("discord_commands.media.audit_log"),
+    ):
+        await _get_media_cmd(bot, "analyze-image").callback(interaction, image, "What is in this image?")
     interaction.followup.send.assert_awaited_once()
     kwargs = interaction.followup.send.await_args.kwargs
     assert "embed" in kwargs
 
 
 # --- /analyze-file ---
+
 
 @pytest.mark.asyncio
 async def test_analyze_file_too_large():
@@ -434,8 +461,10 @@ async def test_analyze_file_download_error():
     mock_session = MagicMock()
     mock_session.get.return_value = mock_cm
 
-    with patch("permissions.is_allowed", return_value=True), \
-         patch("discord_commands.media._get_http_session", AsyncMock(return_value=mock_session)):
+    with (
+        patch("permissions.is_allowed", return_value=True),
+        patch("discord_commands.media._get_http_session", AsyncMock(return_value=mock_session)),
+    ):
         await _get_media_cmd(bot, "analyze-file").callback(interaction, f)
     msg = interaction.followup.send.await_args.args[0]
     assert "500" in msg or "could not download" in msg.lower()
@@ -456,10 +485,12 @@ async def test_analyze_file_text_success():
     mock_session = MagicMock()
     mock_session.get.return_value = mock_cm
 
-    with patch("permissions.is_allowed", return_value=True), \
-         patch("discord_commands.media._get_http_session", AsyncMock(return_value=mock_session)), \
-         patch("discord_commands.media.llm_analyze_document", AsyncMock(return_value="Summary")), \
-         patch("discord_commands.media.audit_log"):
+    with (
+        patch("permissions.is_allowed", return_value=True),
+        patch("discord_commands.media._get_http_session", AsyncMock(return_value=mock_session)),
+        patch("discord_commands.media.llm_analyze_document", AsyncMock(return_value="Summary")),
+        patch("discord_commands.media.audit_log"),
+    ):
         await _get_media_cmd(bot, "analyze-file").callback(interaction, f)
     kwargs = interaction.followup.send.await_args.kwargs
     assert "embed" in kwargs
@@ -483,10 +514,12 @@ async def test_analyze_file_text_truncated():
     mock_session = MagicMock()
     mock_session.get.return_value = mock_cm
 
-    with patch("permissions.is_allowed", return_value=True), \
-         patch("discord_commands.media._get_http_session", AsyncMock(return_value=mock_session)), \
-         patch("discord_commands.media.llm_analyze_document", AsyncMock(return_value="Summary")), \
-         patch("discord_commands.media.audit_log"):
+    with (
+        patch("permissions.is_allowed", return_value=True),
+        patch("discord_commands.media._get_http_session", AsyncMock(return_value=mock_session)),
+        patch("discord_commands.media.llm_analyze_document", AsyncMock(return_value="Summary")),
+        patch("discord_commands.media.audit_log"),
+    ):
         await _get_media_cmd(bot, "analyze-file").callback(interaction, f)
     kwargs = interaction.followup.send.await_args.kwargs
     assert "embed" in kwargs
@@ -503,8 +536,10 @@ async def test_analyze_file_network_exception():
     mock_session = MagicMock()
     mock_session.get.side_effect = aiohttp.ClientError("network fail")
 
-    with patch("permissions.is_allowed", return_value=True), \
-         patch("discord_commands.media._get_http_session", AsyncMock(return_value=mock_session)):
+    with (
+        patch("permissions.is_allowed", return_value=True),
+        patch("discord_commands.media._get_http_session", AsyncMock(return_value=mock_session)),
+    ):
         await _get_media_cmd(bot, "analyze-file").callback(interaction, f)
     msg = interaction.followup.send.await_args.args[0]
     assert "failed to download" in msg.lower()
@@ -527,6 +562,7 @@ async def test_analyze_file_pdf_no_pypdf():
     mock_session.get.return_value = mock_cm
 
     import builtins
+
     real_import = builtins.__import__
 
     def mock_import(name, *args, **kwargs):
@@ -534,9 +570,11 @@ async def test_analyze_file_pdf_no_pypdf():
             raise ImportError("No module named 'pypdf'")
         return real_import(name, *args, **kwargs)
 
-    with patch("permissions.is_allowed", return_value=True), \
-         patch("discord_commands.media._get_http_session", AsyncMock(return_value=mock_session)), \
-         patch("builtins.__import__", side_effect=mock_import):
+    with (
+        patch("permissions.is_allowed", return_value=True),
+        patch("discord_commands.media._get_http_session", AsyncMock(return_value=mock_session)),
+        patch("builtins.__import__", side_effect=mock_import),
+    ):
         await _get_media_cmd(bot, "analyze-file").callback(interaction, f)
     msg = interaction.followup.send.await_args.args[0]
     assert "pypdf" in msg.lower() or "not installed" in msg.lower()
@@ -544,12 +582,15 @@ async def test_analyze_file_pdf_no_pypdf():
 
 # --- /briefing ---
 
+
 @pytest.mark.asyncio
 async def test_briefing_llm_not_configured():
     bot, _ = _make_media_bot()
     interaction = _make_interaction()
-    with patch("permissions.is_allowed", return_value=True), \
-         patch("discord_commands.media.llm_is_configured", return_value=False):
+    with (
+        patch("permissions.is_allowed", return_value=True),
+        patch("discord_commands.media.llm_is_configured", return_value=False),
+    ):
         await _get_media_cmd(bot, "briefing").callback(interaction)
     interaction.response.send_message.assert_awaited_once()
     msg = interaction.response.send_message.await_args.args[0]
@@ -560,9 +601,11 @@ async def test_briefing_llm_not_configured():
 async def test_briefing_success():
     bot, briefing_fn = _make_media_bot()
     interaction = _make_interaction()
-    with patch("permissions.is_allowed", return_value=True), \
-         patch("discord_commands.media.llm_is_configured", return_value=True), \
-         patch("discord_commands.media.audit_log"):
+    with (
+        patch("permissions.is_allowed", return_value=True),
+        patch("discord_commands.media.llm_is_configured", return_value=True),
+        patch("discord_commands.media.audit_log"),
+    ):
         await _get_media_cmd(bot, "briefing").callback(interaction)
     interaction.response.defer.assert_awaited_once()
     briefing_fn.assert_awaited_once()
@@ -574,24 +617,27 @@ async def test_briefing_edit_response_failure():
     bot, briefing_fn = _make_media_bot()
     interaction = _make_interaction()
     interaction.edit_original_response = AsyncMock(side_effect=Exception("edit failed"))
-    with patch("permissions.is_allowed", return_value=True), \
-         patch("discord_commands.media.llm_is_configured", return_value=True), \
-         patch("discord_commands.media.audit_log"):
+    with (
+        patch("permissions.is_allowed", return_value=True),
+        patch("discord_commands.media.llm_is_configured", return_value=True),
+        patch("discord_commands.media.audit_log"),
+    ):
         await _get_media_cmd(bot, "briefing").callback(interaction)
     briefing_fn.assert_awaited_once()
 
 
 # --- /imagine ---
 
+
 @pytest.mark.asyncio
 async def test_imagine_sd_unavailable():
     bot, _ = _make_media_bot()
     interaction = _make_interaction()
-    with patch("permissions.is_allowed", return_value=True), \
-         patch("discord_commands.media.sd_is_available", AsyncMock(return_value=False)):
-        await _get_media_cmd(bot, "imagine").callback(
-            interaction, "a cat", "", 512, 512, 20
-        )
+    with (
+        patch("permissions.is_allowed", return_value=True),
+        patch("discord_commands.media.sd_is_available", AsyncMock(return_value=False)),
+    ):
+        await _get_media_cmd(bot, "imagine").callback(interaction, "a cat", "", 512, 512, 20)
     interaction.edit_original_response.assert_awaited()
     msg = interaction.edit_original_response.await_args.kwargs.get("content", "")
     assert "stable diffusion" in msg.lower() or "not running" in msg.lower()
@@ -601,12 +647,12 @@ async def test_imagine_sd_unavailable():
 async def test_imagine_generation_failure():
     bot, _ = _make_media_bot()
     interaction = _make_interaction()
-    with patch("permissions.is_allowed", return_value=True), \
-         patch("discord_commands.media.sd_is_available", AsyncMock(return_value=True)), \
-         patch("discord_commands.media.generate_image", AsyncMock(return_value=(None, "timeout"))):
-        await _get_media_cmd(bot, "imagine").callback(
-            interaction, "a dog", "", 512, 512, 20
-        )
+    with (
+        patch("permissions.is_allowed", return_value=True),
+        patch("discord_commands.media.sd_is_available", AsyncMock(return_value=True)),
+        patch("discord_commands.media.generate_image", AsyncMock(return_value=(None, "timeout"))),
+    ):
+        await _get_media_cmd(bot, "imagine").callback(interaction, "a dog", "", 512, 512, 20)
     calls = interaction.edit_original_response.await_args_list
     last_call = calls[-1]
     content = last_call.kwargs.get("content", "")
@@ -618,13 +664,13 @@ async def test_imagine_success():
     bot, _ = _make_media_bot()
     interaction = _make_interaction()
     fake_image = b"\x89PNG\r\n\x1a\n" + b"x" * 100
-    with patch("permissions.is_allowed", return_value=True), \
-         patch("discord_commands.media.sd_is_available", AsyncMock(return_value=True)), \
-         patch("discord_commands.media.generate_image", AsyncMock(return_value=(fake_image, "ok"))), \
-         patch("discord_commands.media.audit_log"):
-        await _get_media_cmd(bot, "imagine").callback(
-            interaction, "a beautiful landscape", "ugly", 1024, 768, 30
-        )
+    with (
+        patch("permissions.is_allowed", return_value=True),
+        patch("discord_commands.media.sd_is_available", AsyncMock(return_value=True)),
+        patch("discord_commands.media.generate_image", AsyncMock(return_value=(fake_image, "ok"))),
+        patch("discord_commands.media.audit_log"),
+    ):
+        await _get_media_cmd(bot, "imagine").callback(interaction, "a beautiful landscape", "ugly", 1024, 768, 30)
     calls = interaction.edit_original_response.await_args_list
     last_call = calls[-1]
     assert "embed" in last_call.kwargs
@@ -650,6 +696,7 @@ def _get_utility_cmd(bot, name):
 
 # --- /ping ---
 
+
 @pytest.mark.asyncio
 async def test_ping_authorized():
     bot = _make_utility_bot()
@@ -664,6 +711,7 @@ async def test_ping_authorized():
 @pytest.mark.asyncio
 async def test_ping_unauthorized():
     import discord_commands._helpers as helpers_mod
+
     bot = _make_utility_bot()
     interaction = _make_interaction(user_id=9999)
     with patch.object(helpers_mod, "ALLOWED_USER_IDS", [111]):
@@ -673,6 +721,7 @@ async def test_ping_unauthorized():
 
 
 # --- /about ---
+
 
 @pytest.mark.asyncio
 async def test_about_authorized():
@@ -686,6 +735,7 @@ async def test_about_authorized():
 
 
 # --- /whoami ---
+
 
 @pytest.mark.asyncio
 async def test_whoami_authorized():
@@ -703,15 +753,18 @@ async def test_whoami_not_allowed():
     bot = _make_utility_bot()
     interaction = _make_interaction(user_id=9999)
     # Pass require_auth but show "Not Authorized" in the whoami body
-    with _allow_all(), \
-         patch("discord_commands.utility._is_allowed", return_value=False), \
-         patch("discord_commands.utility.audit_log"):
+    with (
+        _allow_all(),
+        patch("discord_commands.utility._is_allowed", return_value=False),
+        patch("discord_commands.utility.audit_log"),
+    ):
         await _get_utility_cmd(bot, "whoami").callback(interaction)
     kwargs = interaction.response.send_message.await_args.kwargs
     assert "embed" in kwargs
 
 
 # --- /help ---
+
 
 @pytest.mark.asyncio
 async def test_help_shows_embed_with_view():
@@ -761,14 +814,17 @@ def _get_code_cmd(bot, name):
 
 # --- /diff ---
 
+
 @pytest.mark.asyncio
 async def test_diff_success():
     bot = _make_code_bot()
     interaction = _make_interaction()
-    with _allow_all(), \
-         patch("discord_commands.code.git_status", AsyncMock(return_value="M file.py")), \
-         patch("discord_commands.code.git_diff", AsyncMock(return_value="-old\n+new")), \
-         patch("discord_commands.code.audit_log"):
+    with (
+        _allow_all(),
+        patch("discord_commands.code.git_status", AsyncMock(return_value="M file.py")),
+        patch("discord_commands.code.git_diff", AsyncMock(return_value="-old\n+new")),
+        patch("discord_commands.code.audit_log"),
+    ):
         await _get_code_cmd(bot, "diff").callback(interaction)
     interaction.response.defer.assert_awaited_once()
     interaction.followup.send.assert_awaited_once()
@@ -780,10 +836,12 @@ async def test_diff_success():
 async def test_diff_empty():
     bot = _make_code_bot()
     interaction = _make_interaction()
-    with _allow_all(), \
-         patch("discord_commands.code.git_status", AsyncMock(return_value="")), \
-         patch("discord_commands.code.git_diff", AsyncMock(return_value="")), \
-         patch("discord_commands.code.audit_log"):
+    with (
+        _allow_all(),
+        patch("discord_commands.code.git_status", AsyncMock(return_value="")),
+        patch("discord_commands.code.git_diff", AsyncMock(return_value="")),
+        patch("discord_commands.code.audit_log"),
+    ):
         await _get_code_cmd(bot, "diff").callback(interaction)
     interaction.followup.send.assert_awaited_once()
 
@@ -791,6 +849,7 @@ async def test_diff_empty():
 @pytest.mark.asyncio
 async def test_diff_unauthorized():
     import discord_commands._helpers as helpers_mod
+
     bot = _make_code_bot()
     interaction = _make_interaction(user_id=9999)
     with patch.object(helpers_mod, "ALLOWED_USER_IDS", [111]):
@@ -800,6 +859,7 @@ async def test_diff_unauthorized():
 
 
 # --- /run-code ---
+
 
 @pytest.mark.asyncio
 async def test_run_code_empty():
@@ -827,13 +887,12 @@ async def test_run_code_too_long():
 async def test_run_code_success():
     bot = _make_code_bot()
     interaction = _make_interaction()
-    with _allow_all(), \
-         patch("discord_commands.code.sandbox_run_code",
-               AsyncMock(return_value=("Hello, World!\n", "", 0))), \
-         patch("discord_commands.code.audit_log"):
-        await _get_code_cmd(bot, "run-code").callback(
-            interaction, "print('Hello, World!')"
-        )
+    with (
+        _allow_all(),
+        patch("discord_commands.code.sandbox_run_code", AsyncMock(return_value=("Hello, World!\n", "", 0))),
+        patch("discord_commands.code.audit_log"),
+    ):
+        await _get_code_cmd(bot, "run-code").callback(interaction, "print('Hello, World!')")
     calls = interaction.edit_original_response.await_args_list
     last = calls[-1].kwargs
     assert "embed" in last
@@ -844,10 +903,11 @@ async def test_run_code_success():
 async def test_run_code_failure():
     bot = _make_code_bot()
     interaction = _make_interaction()
-    with _allow_all(), \
-         patch("discord_commands.code.sandbox_run_code",
-               AsyncMock(return_value=("", "NameError: x", 1))), \
-         patch("discord_commands.code.audit_log"):
+    with (
+        _allow_all(),
+        patch("discord_commands.code.sandbox_run_code", AsyncMock(return_value=("", "NameError: x", 1))),
+        patch("discord_commands.code.audit_log"),
+    ):
         await _get_code_cmd(bot, "run-code").callback(interaction, "print(x)")
     calls = interaction.edit_original_response.await_args_list
     last = calls[-1].kwargs
@@ -860,10 +920,11 @@ async def test_run_code_no_output():
     """Empty stdout and stderr shows '*(no output)*'."""
     bot = _make_code_bot()
     interaction = _make_interaction()
-    with _allow_all(), \
-         patch("discord_commands.code.sandbox_run_code",
-               AsyncMock(return_value=("", "", 0))), \
-         patch("discord_commands.code.audit_log"):
+    with (
+        _allow_all(),
+        patch("discord_commands.code.sandbox_run_code", AsyncMock(return_value=("", "", 0))),
+        patch("discord_commands.code.audit_log"),
+    ):
         await _get_code_cmd(bot, "run-code").callback(interaction, "pass")
     calls = interaction.edit_original_response.await_args_list
     last = calls[-1].kwargs
@@ -883,9 +944,11 @@ async def test_run_code_strips_markdown_fence():
         captured["code"] = code
         return ("hi\n", "", 0)
 
-    with _allow_all(), \
-         patch("discord_commands.code.sandbox_run_code", side_effect=fake_run), \
-         patch("discord_commands.code.audit_log"):
+    with (
+        _allow_all(),
+        patch("discord_commands.code.sandbox_run_code", side_effect=fake_run),
+        patch("discord_commands.code.audit_log"),
+    ):
         await _get_code_cmd(bot, "run-code").callback(interaction, code_input)
     assert "```" not in captured.get("code", "```still here```")
 
@@ -896,14 +959,14 @@ async def test_run_code_large_output_attaches_file():
     bot = _make_code_bot()
     interaction = _make_interaction()
     from constants import OUTPUT_MAX_CHARS
+
     large_output = "x" * (OUTPUT_MAX_CHARS + 100)
-    with _allow_all(), \
-         patch("discord_commands.code.sandbox_run_code",
-               AsyncMock(return_value=(large_output, "", 0))), \
-         patch("discord_commands.code.audit_log"):
-        await _get_code_cmd(bot, "run-code").callback(
-            interaction, "print('x' * 10000)"
-        )
+    with (
+        _allow_all(),
+        patch("discord_commands.code.sandbox_run_code", AsyncMock(return_value=(large_output, "", 0))),
+        patch("discord_commands.code.audit_log"),
+    ):
+        await _get_code_cmd(bot, "run-code").callback(interaction, "print('x' * 10000)")
     calls = interaction.edit_original_response.await_args_list
     last = calls[-1].kwargs
     assert "attachments" in last

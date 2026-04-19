@@ -42,9 +42,7 @@ async def _ollama_available() -> bool:
     """Return True if Ollama is reachable and the model is loaded."""
     try:
         session = await _get_ollama_session()
-        async with session.get(
-            f"{OLLAMA_URL}/api/tags", timeout=aiohttp.ClientTimeout(total=3)
-        ) as resp:
+        async with session.get(f"{OLLAMA_URL}/api/tags", timeout=aiohttp.ClientTimeout(total=3)) as resp:
             if resp.status != 200:
                 return False
             data = await resp.json()
@@ -99,7 +97,10 @@ async def _chat_ollama(
 
 
 async def _try_local_model(
-    user_message: str, history: list[dict], *, force: bool = False,
+    user_message: str,
+    history: list[dict],
+    *,
+    force: bool = False,
 ) -> str | None:
     """Attempt to serve via Gemma/Ollama. Returns reply text or None to fall through."""
     if not LOCAL_LLM_ENABLED:
@@ -109,16 +110,21 @@ async def _try_local_model(
         if await _ollama_available():
             try:
                 from ollama_tools import chat_ollama_with_tools
+
                 system_prompt = _load_system_prompt()
                 reply, tools_used = await chat_ollama_with_tools(
-                    user_message, history, system_prompt, _TOOL_DECLARATIONS,
+                    user_message,
+                    history,
+                    system_prompt,
+                    _TOOL_DECLARATIONS,
                     _execute_function_call,
-                    ollama_url=OLLAMA_URL, ollama_model=OLLAMA_MODEL,
-                    temperature=TEMPERATURE, max_tokens=MAX_TOKENS,
+                    ollama_url=OLLAMA_URL,
+                    ollama_model=OLLAMA_MODEL,
+                    temperature=TEMPERATURE,
+                    max_tokens=MAX_TOKENS,
                 )
                 if reply and tools_used:
-                    log.info("Served by Ollama with tools (%d calls): %.60s…",
-                             len(tools_used), user_message)
+                    log.info("Served by Ollama with tools (%d calls): %.60s…", len(tools_used), user_message)
                     return reply
             except Exception as e:  # broad: intentional
                 log.info("Ollama tool calling failed, falling back: %s", e)

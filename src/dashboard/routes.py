@@ -68,6 +68,7 @@ def setup_dashboard(
     require_action_auth: Callable[[web.Request], web.Response | None] | None = None,
 ) -> None:
     """Register all dashboard routes on the given aiohttp application."""
+
     def action(handler: Callable[[web.Request], Awaitable[web.StreamResponse]]):
         if require_action_auth is None:
             return handler

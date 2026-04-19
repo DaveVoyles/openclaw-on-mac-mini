@@ -103,9 +103,7 @@ async def spawn_worker(
                 history_lines.append(f"  {role}: {text[:200]}")
         if history_lines:
             history_summary = "\n".join(history_lines)
-            initial_message = (
-                f"Recent conversation context:\n{history_summary}\n\n{initial_message}"
-            )
+            initial_message = f"Recent conversation context:\n{history_summary}\n\n{initial_message}"
 
     log.info("Worker spawned for goal: %.80s…", goal)
 
@@ -121,9 +119,7 @@ async def spawn_worker(
         # Send the initial message, then delegate the tool loop to ToolOrchestrator.
         loop = asyncio.get_running_loop()
         _rate_limiter.record()
-        response = await loop.run_in_executor(
-            None, lambda: chat_session.send_message(initial_message)
-        )
+        response = await loop.run_in_executor(None, lambda: chat_session.send_message(initial_message))
         await _record_usage(response)
 
         response, rounds = await _run_tool_loop(

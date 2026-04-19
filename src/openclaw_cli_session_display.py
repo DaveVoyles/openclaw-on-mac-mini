@@ -7,6 +7,7 @@ Allowed imports: openclaw_cli_sessions, openclaw_cli_ui_core, openclaw_cli_prefs
                  openclaw_cli_auth, stdlib only.
 Do NOT import from openclaw_cli — circular import.
 """
+
 from __future__ import annotations
 
 import json
@@ -37,8 +38,10 @@ from openclaw_cli_ui_core import _IS_TTY, _get_is_tty
 try:
     from llm.context_limits import get_model_context_window as _get_model_context_window
 except ImportError:  # pragma: no cover
+
     def _get_model_context_window(model_name: str | None) -> int | None:  # type: ignore[misc]
         return None
+
 
 _LOG = logging.getLogger(__name__)
 
@@ -77,6 +80,7 @@ _EMOJI_FALLBACKS: dict[str, str] = {}
 # A11y helpers
 # ---------------------------------------------------------------------------
 
+
 def _a11y_plain_mode() -> bool:
     """Return True when plain/screen-reader mode is active."""
     return bool(_PREFS.get(_A11Y_PLAIN_MODE, False))
@@ -85,6 +89,7 @@ def _a11y_plain_mode() -> bool:
 # ---------------------------------------------------------------------------
 # Emoji helper
 # ---------------------------------------------------------------------------
+
 
 def _e(emoji: str, fallback: str = "") -> str:
     """Return *emoji* or its ASCII fallback depending on the emoji pref."""
@@ -99,6 +104,7 @@ def _e(emoji: str, fallback: str = "") -> str:
 # ---------------------------------------------------------------------------
 # Timestamp / elapsed helpers (pure stdlib)
 # ---------------------------------------------------------------------------
+
 
 def _parse_utc_timestamp(raw_value: Any) -> datetime | None:
     """Parse an ISO8601 timestamp used by persisted CLI/session state."""
@@ -345,6 +351,7 @@ def _context_pressure_snapshot(
 # String helpers (pure stdlib)
 # ---------------------------------------------------------------------------
 
+
 def _single_line_excerpt(text: str, *, max_chars: int) -> str:
     compact = " ".join(str(text or "").split())
     if len(compact) <= max_chars:
@@ -367,6 +374,7 @@ def _format_byte_count(size_bytes: int) -> str:
 # ---------------------------------------------------------------------------
 # Status cell helpers
 # ---------------------------------------------------------------------------
+
 
 def _status_family(status: str) -> str:
     """Normalize related status words into a shared rendering family."""
@@ -484,6 +492,7 @@ def _progress_cell(label: str, value: str, *, status: str = "", rich: bool = Fal
 # Watch-state helpers (local copies of pure functions from openclaw_cli.py)
 # ---------------------------------------------------------------------------
 
+
 def watch_retry_delay_seconds(attempt: int) -> int:
     """Return a capped exponential backoff delay for transient watch retries."""
     return min(WATCH_RETRY_MAX_DELAY_SECONDS, max(1, 2 ** max(0, attempt - 1)))
@@ -542,7 +551,9 @@ def normalize_watch_state(state: dict[str, Any] | None) -> dict[str, Any]:
     for checkpoint in checkpoints:
         checkpoint.setdefault(
             "duration_seconds",
-            _elapsed_seconds(checkpoint.get("started_at") or checkpoint.get("created_at"), checkpoint.get("completed_at")),
+            _elapsed_seconds(
+                checkpoint.get("started_at") or checkpoint.get("created_at"), checkpoint.get("completed_at")
+            ),
         )
     normalized["checkpoints"] = checkpoints
     for entry in normalized["retry_history"]:
@@ -566,7 +577,9 @@ def _watch_timing_summary(state: dict[str, Any]) -> dict[str, Any]:
                 phase_started_at = str(item.get("created_at") or "").strip()
                 break
         if not phase_started_at:
-            phase_started_at = str(active_checkpoint.get("updated_at") or active_checkpoint.get("started_at") or "").strip()
+            phase_started_at = str(
+                active_checkpoint.get("updated_at") or active_checkpoint.get("started_at") or ""
+            ).strip()
         active_phase_elapsed = _elapsed_seconds(phase_started_at)
 
     latest_duration = (
@@ -574,7 +587,9 @@ def _watch_timing_summary(state: dict[str, Any]) -> dict[str, Any]:
         or _elapsed_seconds(latest_checkpoint.get("started_at"), latest_checkpoint.get("completed_at"))
         or _elapsed_seconds(latest_checkpoint.get("created_at"), latest_checkpoint.get("completed_at"))
     )
-    current_elapsed = _elapsed_seconds(normalized.get("last_run_at")) if normalized.get("status") in {"running", "retrying"} else None
+    current_elapsed = (
+        _elapsed_seconds(normalized.get("last_run_at")) if normalized.get("status") in {"running", "retrying"} else None
+    )
     return {
         "active_phase": active_phase,
         "active_phase_elapsed": active_phase_elapsed,
@@ -587,6 +602,7 @@ def _watch_timing_summary(state: dict[str, Any]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Session helpers
 # ---------------------------------------------------------------------------
+
 
 def _session_age_label(session: SessionSummary) -> str:
     """Return a compact age label for a persisted session."""
@@ -608,6 +624,7 @@ def _session_is_stale(s: SessionSummary, days: int = 7) -> bool:
 # ---------------------------------------------------------------------------
 # Collaboration / display helpers
 # ---------------------------------------------------------------------------
+
 
 def _format_collaboration_entry(entry: dict[str, Any]) -> str:
     actor = str(entry.get("actor") or "operator").strip()
@@ -685,6 +702,7 @@ def _operator_snapshot_lines(snapshot: dict[str, Any]) -> list[str]:
 # Dashboard surface helpers
 # ---------------------------------------------------------------------------
 
+
 def _dashboard_section_lines(title: str, lines: list[str]) -> list[str]:
     """Return normalized lines for a plain-text dashboard section."""
     clean = [str(line).strip() for line in lines if str(line or "").strip()]
@@ -730,9 +748,7 @@ def _print_dashboard_surface(
         _append_dashboard_rich_section(body, "Summary", summary_lines)
         _append_dashboard_rich_section(body, "Details", detail_lines, title_style="bold white")
         _append_dashboard_rich_section(body, "Actions", action_lines, title_style="bold yellow")
-        _RICH_CONSOLE.print(
-            _RichPanel(body, title=f"[bold]{title}[/]", border_style=border_style, padding=(0, 1))
-        )
+        _RICH_CONSOLE.print(_RichPanel(body, title=f"[bold]{title}[/]", border_style=border_style, padding=(0, 1)))
         return
     lines = [title, *(_dashboard_section_lines("Summary", summary_lines))]
     detail_block = _dashboard_section_lines("Details", detail_lines)
@@ -793,6 +809,7 @@ def _resolve_runbook_template(name: str) -> tuple[str, dict[str, Any]] | None:
 # ---------------------------------------------------------------------------
 # Primary extracted functions
 # ---------------------------------------------------------------------------
+
 
 def _session_mood_snapshot(
     session: SessionSummary,
@@ -1004,18 +1021,18 @@ def _print_session_summary(session: SessionSummary, *, pending_inject: str = "")
         summary_lines.append(mood_cell)
     detail_lines = [
         f"story: {story.get('headline', '')}" if story.get("headline") else "",
-        f"chapter: {story.get('chapter_title', '')} · {story.get('chapter_detail', '')}" if story.get("chapter_title") else "",
+        f"chapter: {story.get('chapter_title', '')} · {story.get('chapter_detail', '')}"
+        if story.get("chapter_title")
+        else "",
         _progress_cell("commands", str(session.command_count), status="active" if session.command_count else "idle"),
         _progress_cell("outputs", str(session.output_count), status="complete" if session.output_count else "idle"),
-        _progress_cell("checkpoints", str(session.checkpoint_count), status="complete" if session.checkpoint_count else "idle"),
+        _progress_cell(
+            "checkpoints", str(session.checkpoint_count), status="complete" if session.checkpoint_count else "idle"
+        ),
         f"cwd: {session.cwd}" if session.cwd else "",
         f"plan: {session.plan_id}" if session.plan_id else "",
         f"task: {session.task_id}" if session.task_id else "",
-        (
-            "files: "
-            + ", ".join(session.files[:4])
-            + ("…" if len(session.files) > 4 else "")
-        )
+        ("files: " + ", ".join(session.files[:4]) + ("…" if len(session.files) > 4 else ""))
         if session.files
         else "files: none tracked",
         f"last: {session.last_summary[:100]}" if session.last_summary else "",
@@ -1048,7 +1065,9 @@ def _print_session_summary(session: SessionSummary, *, pending_inject: str = "")
             )
         )
     if pressure["hidden_pressure"] and int(pressure["pct_next"]) >= 80:
-        detail_lines.append("hidden context cue: system or queued inject content pushes the next send closer to capacity")
+        detail_lines.append(
+            "hidden context cue: system or queued inject content pushes the next send closer to capacity"
+        )
     if pressure["has_pending_inject"]:
         detail_lines.append("recovery cue: /inject clear drops the queued one-shot context before a retry")
     detail_lines.extend(_operator_snapshot_lines(operator_snapshot)[:5])
@@ -1192,7 +1211,9 @@ def _build_session_share_text(session_id: str) -> str:
         for entry in assignments[:3]:
             assignee = str(entry.get("assignee") or entry.get("actor") or "operator")
             status = str(entry.get("status") or "active")
-            lines.append(f"  - {assignee} · {status} · {str(entry.get('content') or entry.get('summary') or '').strip()}")
+            lines.append(
+                f"  - {assignee} · {status} · {str(entry.get('content') or entry.get('summary') or '').strip()}"
+            )
     if open_risks:
         lines.append("")
         lines.append("OPEN RISKS")
@@ -1209,10 +1230,7 @@ def _build_session_share_text(session_id: str) -> str:
         lines.append("BOOKMARKS")
         for bookmark in bookmarks[-3:]:
             lines.append(
-                "  - "
-                f"[{bookmark.get('id', '')}] "
-                f"{bookmark.get('label', '')} "
-                f"(turn {bookmark.get('turn_index', 0)})"
+                f"  - [{bookmark.get('id', '')}] {bookmark.get('label', '')} (turn {bookmark.get('turn_index', 0)})"
             )
     if latest_handoff:
         lines.append("")
@@ -1406,9 +1424,21 @@ def inspect_session(session_id: str) -> str:
         "  "
         + "  |  ".join(
             [
-                _progress_cell("commands", str(session_data.get("command_count", 0)), status="active" if int(session_data.get("command_count", 0) or 0) else "idle"),
-                _progress_cell("outputs", str(session_data.get("output_count", 0)), status="complete" if int(session_data.get("output_count", 0) or 0) else "idle"),
-                _progress_cell("edits", str(session_data.get("file_edit_count", 0)), status="active" if int(session_data.get("file_edit_count", 0) or 0) else "idle"),
+                _progress_cell(
+                    "commands",
+                    str(session_data.get("command_count", 0)),
+                    status="active" if int(session_data.get("command_count", 0) or 0) else "idle",
+                ),
+                _progress_cell(
+                    "outputs",
+                    str(session_data.get("output_count", 0)),
+                    status="complete" if int(session_data.get("output_count", 0) or 0) else "idle",
+                ),
+                _progress_cell(
+                    "edits",
+                    str(session_data.get("file_edit_count", 0)),
+                    status="active" if int(session_data.get("file_edit_count", 0) or 0) else "idle",
+                ),
             ]
         ),
     ]
@@ -1449,7 +1479,9 @@ def inspect_session(session_id: str) -> str:
         if automation_mode:
             a_status = str(session_data.get("automation_status") or "active").strip()
             interval = int(session_data.get("watch_interval_seconds") or 0)
-            lines.append(f"  mode     : {_progress_cell('automation', f'{automation_mode} ({a_status})', status=a_status)}")
+            lines.append(
+                f"  mode     : {_progress_cell('automation', f'{automation_mode} ({a_status})', status=a_status)}"
+            )
             if interval:
                 lines.append(f"  interval : {_progress_cell('loop', f'{interval}s', status=a_status)}")
         if watch:
@@ -1479,11 +1511,7 @@ def inspect_session(session_id: str) -> str:
         for ckpt in routed_checkpoints[:3]:
             step_index = int(ckpt.get("step_index") or 0)
             step_total = int(ckpt.get("step_total") or 0)
-            step_label = (
-                f"step {step_index}/{step_total}"
-                if step_index > 0 and step_total > 0
-                else "routed action"
-            )
+            step_label = f"step {step_index}/{step_total}" if step_index > 0 and step_total > 0 else "routed action"
             lines.append(
                 f"  [{ckpt.get('created_at', '')}] {ckpt.get('action_kind', 'action')}"
                 f" {step_label} ({ckpt.get('rollback_status', 'available')})"
@@ -1499,9 +1527,7 @@ def inspect_session(session_id: str) -> str:
         lines.append("BOOKMARKS")
         for bookmark in bookmarks[-5:]:
             lines.append(
-                f"  [{bookmark.get('id', '')}] "
-                f"{bookmark.get('label', '')} "
-                f"· turn {bookmark.get('turn_index', 0)}"
+                f"  [{bookmark.get('id', '')}] {bookmark.get('label', '')} · turn {bookmark.get('turn_index', 0)}"
             )
             summary_text = str(bookmark.get("summary") or "").strip()
             if summary_text:
@@ -1530,7 +1556,15 @@ def inspect_session(session_id: str) -> str:
             meta = event.get("metadata") or {}
             summary_note = str(meta.get("summary") if isinstance(meta, dict) else "").strip()
             label = summary_note or content[:80]
-            event_status = "error" if kind == "error" else "complete" if kind in {"assistant", "checkpoint"} else "active" if kind in {"exec", "edit"} else "info"
+            event_status = (
+                "error"
+                if kind == "error"
+                else "complete"
+                if kind in {"assistant", "checkpoint"}
+                else "active"
+                if kind in {"exec", "edit"}
+                else "info"
+            )
             lines.append(f"  [{ts}] {_status_cell(event_status, detail=kind or 'event')} · {label}")
 
     # ── Saved outputs ─────────────────────────────────────────────
@@ -1550,8 +1584,7 @@ def inspect_session(session_id: str) -> str:
         lines.append("COLLABORATION")
         for actor in actors[:3]:
             lines.append(
-                f"  actor : {actor.get('name', 'operator')} "
-                f"({int(actor.get('event_count') or 0)} touchpoints)"
+                f"  actor : {actor.get('name', 'operator')} ({int(actor.get('event_count') or 0)} touchpoints)"
             )
         for entry in recent_decisions[:3]:
             lines.append(f"  decision : {_format_collaboration_entry(entry)}")
@@ -1606,9 +1639,24 @@ def _inspect_session_rich(
         "📊 stats",
         "  •  ".join(
             [
-                _progress_cell("commands", str(session_data.get("command_count", 0)), status="active" if int(session_data.get("command_count", 0) or 0) else "idle", rich=True),
-                _progress_cell("outputs", str(session_data.get("output_count", 0)), status="complete" if int(session_data.get("output_count", 0) or 0) else "idle", rich=True),
-                _progress_cell("edits", str(session_data.get("file_edit_count", 0)), status="active" if int(session_data.get("file_edit_count", 0) or 0) else "idle", rich=True),
+                _progress_cell(
+                    "commands",
+                    str(session_data.get("command_count", 0)),
+                    status="active" if int(session_data.get("command_count", 0) or 0) else "idle",
+                    rich=True,
+                ),
+                _progress_cell(
+                    "outputs",
+                    str(session_data.get("output_count", 0)),
+                    status="complete" if int(session_data.get("output_count", 0) or 0) else "idle",
+                    rich=True,
+                ),
+                _progress_cell(
+                    "edits",
+                    str(session_data.get("file_edit_count", 0)),
+                    status="active" if int(session_data.get("file_edit_count", 0) or 0) else "idle",
+                    rich=True,
+                ),
             ]
         ),
     )
@@ -1627,7 +1675,7 @@ def _inspect_session_rich(
         meta.add_row("✅ task", f"[magenta]{task_id}[/]")
     files: list[str] = list(session_data.get("files") or [])
     if files:
-        file_str = ", ".join(files[:5]) + (f" … +{len(files)-5}" if len(files) > 5 else "")
+        file_str = ", ".join(files[:5]) + (f" … +{len(files) - 5}" if len(files) > 5 else "")
         meta.add_row("📄 files", f"[dim]{file_str}[/]")
     _RICH_CONSOLE.print(_RichPanel(meta, title=f"[bold cyan]{title}[/]", border_style="cyan", padding=(0, 1)))
 
@@ -1644,9 +1692,19 @@ def _inspect_session_rich(
             meta_d = event.get("metadata") or {}
             summary = str(meta_d.get("summary") if isinstance(meta_d, dict) else "") or str(event.get("content") or "")
             style = kind_styles.get(kind, "dim")
-            event_status = "error" if kind == "error" else "complete" if kind in {"assistant", "checkpoint"} else "active" if kind in {"exec", "edit"} else "info"
+            event_status = (
+                "error"
+                if kind == "error"
+                else "complete"
+                if kind in {"assistant", "checkpoint"}
+                else "active"
+                if kind in {"exec", "edit"}
+                else "info"
+            )
             ev_table.add_row(ts, f"[{style}]{_status_text(event_status)}[/]", f"{kind}: {summary[:80]}")
-        _RICH_CONSOLE.print(_RichPanel(ev_table, title="[bold dim]Recent Events[/]", border_style="dim", padding=(0, 1)))
+        _RICH_CONSOLE.print(
+            _RichPanel(ev_table, title="[bold dim]Recent Events[/]", border_style="dim", padding=(0, 1))
+        )
 
     # Outputs panel
     if outputs:
@@ -1657,7 +1715,11 @@ def _inspect_session_rich(
             name = str(out.get("name") or "").strip()
             size = _format_byte_count(int(out.get("size_bytes") or 0))
             out_table.add_row(name, size)
-        _RICH_CONSOLE.print(_RichPanel(out_table, title=f"[bold dim]Saved Outputs ({len(outputs)})[/]", border_style="dim", padding=(0, 1)))
+        _RICH_CONSOLE.print(
+            _RichPanel(
+                out_table, title=f"[bold dim]Saved Outputs ({len(outputs)})[/]", border_style="dim", padding=(0, 1)
+            )
+        )
 
     if bookmarks:
         bookmark_table = _RichTable(border_style="dim", show_edge=False, pad_edge=True, header_style="bold dim")
@@ -1670,7 +1732,9 @@ def _inspect_session_rich(
                 str(bookmark.get("turn_index") or ""),
                 str(bookmark.get("label") or ""),
             )
-        _RICH_CONSOLE.print(_RichPanel(bookmark_table, title="[bold dim]Bookmarks[/]", border_style="dim", padding=(0, 1)))
+        _RICH_CONSOLE.print(
+            _RichPanel(bookmark_table, title="[bold dim]Bookmarks[/]", border_style="dim", padding=(0, 1))
+        )
 
     milestones = list(story.get("milestones") or [])
     timeline = list(story.get("timeline") or [])

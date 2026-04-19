@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_macros helpers."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -14,6 +15,7 @@ from openclaw_cli_macros import (
 # ---------------------------------------------------------------------------
 # _workflow_store
 # ---------------------------------------------------------------------------
+
 
 def test_workflow_store_initialises_macros_key():
     prefs: dict = {}
@@ -38,6 +40,7 @@ def test_workflow_store_resets_non_dict():
 # ---------------------------------------------------------------------------
 # _history_command_texts
 # ---------------------------------------------------------------------------
+
 
 def test_history_command_texts_string_entries():
     prefs = {"cmd_history": ["ls", "pwd", "echo hello"]}
@@ -73,6 +76,7 @@ def test_history_command_texts_limit_at_least_one():
 # _render_workflow_step
 # ---------------------------------------------------------------------------
 
+
 def test_render_workflow_step_no_session():
     ctx = SimpleNamespace(session_id=None)
     result = _render_workflow_step("echo {session}", ctx)
@@ -94,6 +98,7 @@ def test_render_workflow_step_empty_command():
 # _print_workflow_preview (output captured)
 # ---------------------------------------------------------------------------
 
+
 def test_print_workflow_preview_output(capsys):
     ctx = SimpleNamespace(session_id=None)
     _print_workflow_preview("deploy", ["echo hi", "ls"], ctx)
@@ -105,6 +110,7 @@ def test_print_workflow_preview_output(capsys):
 # ---------------------------------------------------------------------------
 # _print_macro_progress
 # ---------------------------------------------------------------------------
+
 
 def test_print_macro_progress_a11y_plain_skips(capsys):
     _print_macro_progress(["step1", "step2"], 0, set(), a11y_plain=True)

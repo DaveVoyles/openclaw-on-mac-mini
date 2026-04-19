@@ -15,6 +15,7 @@ import openclaw_cli_ui_utils as ui
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _run_top(capsys, **kwargs):
     """Call _print_shell_top_bar with test overrides and return captured output."""
     defaults = dict(

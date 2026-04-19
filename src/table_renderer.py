@@ -31,7 +31,7 @@ def _parse_markdown_table(text: str) -> Optional[tuple[list[str], list[list[str]
         cleaned = []
         for c in cells:
             c = c.strip("* ")
-            c = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', c)
+            c = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", c)
             cleaned.append(c)
         return cleaned
 
@@ -103,12 +103,12 @@ def render_table_image(text: str) -> Optional[bytes]:
     total_height = header_height + len(rows) * row_height + 2
 
     # Colors (dark theme matching Discord)
-    bg_color = (47, 49, 54)       # Discord dark bg
-    header_bg = (32, 34, 37)      # Slightly darker header
+    bg_color = (47, 49, 54)  # Discord dark bg
+    header_bg = (32, 34, 37)  # Slightly darker header
     text_color = (220, 221, 222)  # Light text
-    header_text = (255, 255, 255) # White header
-    border_color = (64, 68, 75)   # Subtle borders
-    alt_row_bg = (54, 57, 63)     # Alternating row
+    header_text = (255, 255, 255)  # White header
+    border_color = (64, 68, 75)  # Subtle borders
+    alt_row_bg = (54, 57, 63)  # Alternating row
 
     img = Image.new("RGB", (total_width, total_height), bg_color)
     draw = ImageDraw.Draw(img)
@@ -171,10 +171,7 @@ def should_render_table_image(
     )
     # Estimate rendered table width: sum of max column widths + separators
     all_rows = [headers] + rows
-    col_widths = [
-        max((len(r[j]) if j < len(r) else 0) for r in all_rows)
-        for j in range(cols)
-    ]
+    col_widths = [max((len(r[j]) if j < len(r) else 0) for r in all_rows) for j in range(cols)]
     table_width = sum(col_widths) + (cols + 1) * 3
     return (
         row_count >= min_rows_for_image

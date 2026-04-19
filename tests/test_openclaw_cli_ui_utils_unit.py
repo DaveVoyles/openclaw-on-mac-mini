@@ -23,6 +23,7 @@ import openclaw_cli_ui_utils as ui
 # _a11y_plain_mode / _a11y_high_contrast / _a11y_reduced_motion
 # ---------------------------------------------------------------------------
 
+
 def test_a11y_plain_mode_false_by_default():
     with patch.dict(ui._PREFS, {}, clear=True):
         assert ui._a11y_plain_mode() is False
@@ -57,6 +58,7 @@ def test_a11y_reduced_motion_true_when_set():
 # _terminal_width
 # ---------------------------------------------------------------------------
 
+
 def test_terminal_width_returns_columns():
     mock_size = MagicMock()
     mock_size.columns = 120
@@ -77,6 +79,7 @@ def test_terminal_width_custom_fallback():
 # ---------------------------------------------------------------------------
 # _e — emoji pack resolver
 # ---------------------------------------------------------------------------
+
 
 def test_e_classic_returns_emoji():
     with patch("openclaw_cli_ui_utils._emoji_pack_name", return_value="classic"):
@@ -106,6 +109,7 @@ def test_e_with_explicit_fallback():
 # ---------------------------------------------------------------------------
 # _time_greeting
 # ---------------------------------------------------------------------------
+
 
 def _greeting_at_hour(hour: int) -> str:
     fake_dt = MagicMock()
@@ -138,6 +142,7 @@ def test_time_greeting_night():
 # ---------------------------------------------------------------------------
 # _with_spinner — non-TTY pass-through
 # ---------------------------------------------------------------------------
+
 
 def test_with_spinner_non_tty_calls_fn_directly():
     """When is_tty is False, _with_spinner should call fn immediately, no thread."""
@@ -184,6 +189,7 @@ def test_with_spinner_returns_none_fn():
 # ---------------------------------------------------------------------------
 # _print_status_bar
 # ---------------------------------------------------------------------------
+
 
 def test_print_status_bar_no_tty_returns_silently(capsys):
     ui._print_status_bar(session_id="abc", _override_is_tty=False)
@@ -260,6 +266,7 @@ def test_print_status_bar_history_turns(capsys):
 # _celebration_burst
 # ---------------------------------------------------------------------------
 
+
 def test_celebration_burst_non_tty_with_message(capsys):
     with patch("openclaw_cli_ui_utils._get_is_tty", return_value=False):
         ui._celebration_burst("You did it!")
@@ -276,8 +283,10 @@ def test_celebration_burst_non_tty_no_message(capsys):
 
 
 def test_celebration_burst_plain_mode_with_message(capsys):
-    with patch("openclaw_cli_ui_utils._get_is_tty", return_value=True), \
-         patch.dict(ui._PREFS, {ui._A11Y_PLAIN_MODE: True}):
+    with (
+        patch("openclaw_cli_ui_utils._get_is_tty", return_value=True),
+        patch.dict(ui._PREFS, {ui._A11Y_PLAIN_MODE: True}),
+    ):
         ui._celebration_burst("Congrats!")
     out = capsys.readouterr().out
     assert "Congrats!" in out
@@ -286,6 +295,7 @@ def test_celebration_burst_plain_mode_with_message(capsys):
 # ---------------------------------------------------------------------------
 # _print_workspace_capsule — plain text path
 # ---------------------------------------------------------------------------
+
 
 def test_print_workspace_capsule_plain_text(capsys):
     capsule = {
@@ -298,16 +308,14 @@ def test_print_workspace_capsule_plain_text(capsys):
         "recent_outputs": [],
     }
     # Force plain path by patching _RICH_AVAILABLE and _IS_TTY
-    with patch.object(ui, "_RICH_AVAILABLE", False), \
-         patch.object(ui, "_IS_TTY", False):
+    with patch.object(ui, "_RICH_AVAILABLE", False), patch.object(ui, "_IS_TTY", False):
         ui._print_workspace_capsule(capsule, title="My Capsule")
     out = capsys.readouterr().out
     assert "My Capsule" in out
 
 
 def test_print_workspace_capsule_empty_capsule(capsys):
-    with patch.object(ui, "_RICH_AVAILABLE", False), \
-         patch.object(ui, "_IS_TTY", False):
+    with patch.object(ui, "_RICH_AVAILABLE", False), patch.object(ui, "_IS_TTY", False):
         ui._print_workspace_capsule({})
     # Should not raise
     out = capsys.readouterr().out

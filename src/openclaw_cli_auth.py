@@ -4,6 +4,7 @@ openclaw_cli_auth — Authentication and token management.
 Leaf module: no imports from other openclaw_cli_* modules.
 Handles keychain, environment variable, and file-based token resolution.
 """
+
 from __future__ import annotations
 
 import getpass

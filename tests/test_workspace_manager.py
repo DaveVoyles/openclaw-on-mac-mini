@@ -369,15 +369,9 @@ class TestSharedResources:
 
         workspace = workspace_manager.create_workspace("test", owner.id)
 
-        workspace_manager.save_resource(
-            workspace.id, "query", "q1", {}, owner.id
-        )
-        workspace_manager.save_resource(
-            workspace.id, "dashboard", "d1", {}, owner.id
-        )
-        workspace_manager.save_resource(
-            workspace.id, "query", "q2", {}, owner.id
-        )
+        workspace_manager.save_resource(workspace.id, "query", "q1", {}, owner.id)
+        workspace_manager.save_resource(workspace.id, "dashboard", "d1", {}, owner.id)
+        workspace_manager.save_resource(workspace.id, "query", "q2", {}, owner.id)
 
         all_resources = workspace_manager.list_resources(workspace.id)
         assert len(all_resources) == 3
@@ -392,9 +386,7 @@ class TestSharedResources:
 
         workspace = workspace_manager.create_workspace("test", owner.id)
 
-        resource_id = workspace_manager.save_resource(
-            workspace.id, "query", "test", {}, owner.id
-        )
+        resource_id = workspace_manager.save_resource(workspace.id, "query", "test", {}, owner.id)
 
         workspace_manager.delete_resource(resource_id)
 
@@ -425,7 +417,6 @@ class TestStatistics:
         assert stats["quota_used"] == 150
         assert stats["quota_daily"] == 500
         assert stats["quota_remaining"] == 350
-
 
 
 # ---------------------------------------------------------------------------
@@ -523,6 +514,7 @@ class TestQuotaReset:
     def test_check_quota_resets_when_expired(self, managers, sample_users):
         """check_quota resets quota when quota_reset_at is in the past."""
         import time
+
         _, workspace_manager = managers
         owner, _, _, _ = sample_users
 

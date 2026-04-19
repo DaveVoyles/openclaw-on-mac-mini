@@ -1,6 +1,7 @@
 """
 Comprehensive tests for src/thread_store.py — SQLite-backed thread store.
 """
+
 import asyncio
 import json
 import time
@@ -12,6 +13,7 @@ import thread_store as ts
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def isolated_db(tmp_path, monkeypatch):
@@ -33,6 +35,7 @@ def isolated_db(tmp_path, monkeypatch):
 # _get_db / _create_tables
 # ---------------------------------------------------------------------------
 
+
 def test_get_db_creates_file(isolated_db):
     db = ts._get_db()
     assert db is not None
@@ -47,12 +50,7 @@ def test_get_db_returns_same_connection():
 
 def test_tables_created():
     db = ts._get_db()
-    tables = {
-        row[0]
-        for row in db.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
-    }
+    tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
     assert "threads" in tables
     assert "messages" in tables
     assert "thread_tags" in tables
@@ -61,6 +59,7 @@ def test_tables_created():
 # ---------------------------------------------------------------------------
 # create_thread
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_create_thread_returns_int():
@@ -98,6 +97,7 @@ async def test_create_multiple_threads_unique_ids():
 # ---------------------------------------------------------------------------
 # add_message / get_thread_messages
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_add_message_stores_content():
@@ -171,6 +171,7 @@ async def test_add_message_all_roles():
 # get_thread_history_for_llm
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_thread_history_for_llm_format():
     tid = await ts.create_thread(user_id=1, channel_id=1)
@@ -192,6 +193,7 @@ async def test_get_thread_history_for_llm_empty():
 # ---------------------------------------------------------------------------
 # set_thread_title / set_thread_name / set_thread_status
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_set_thread_title():
@@ -232,6 +234,7 @@ async def test_set_thread_status_invalid_raises():
 # delete_thread
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_delete_thread_removes_thread():
     tid = await ts.create_thread(user_id=1, channel_id=1)
@@ -256,6 +259,7 @@ async def test_delete_thread_cascades_messages():
 # ---------------------------------------------------------------------------
 # list_user_threads
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_list_user_threads_returns_own_threads():
@@ -308,6 +312,7 @@ async def test_list_user_threads_empty():
 # find_thread_by_name
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_find_thread_by_name_found():
     await ts.create_thread(user_id=1, channel_id=1, name="alpha")
@@ -332,6 +337,7 @@ async def test_find_thread_by_name_user_scoped():
 # ---------------------------------------------------------------------------
 # search_threads
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_search_threads_by_title():
@@ -394,6 +400,7 @@ async def test_search_threads_respects_limit():
 # auto_archive_stale
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_auto_archive_stale_archives_old_threads(monkeypatch):
     tid = await ts.create_thread(user_id=1, channel_id=1)
@@ -444,6 +451,7 @@ async def test_auto_archive_stale_skips_pinned():
 # get_stats
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_stats_empty():
     stats = await ts.get_stats()
@@ -471,6 +479,7 @@ async def test_get_stats_counts_correctly():
 # migrate_json_threads
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_migrate_json_threads_nonexistent_dir(tmp_path):
     count = await ts.migrate_json_threads(tmp_path / "no_such_dir")
@@ -482,13 +491,17 @@ async def test_migrate_json_threads_imports_files(tmp_path):
     thread_dir = tmp_path / "threads"
     thread_dir.mkdir()
     thread_file = thread_dir / "42_my-thread.json"
-    thread_file.write_text(json.dumps({
-        "name": "my-thread",
-        "history": [
-            {"role": "user", "parts": ["Hello"]},
-            {"role": "model", "parts": ["Hi there"]},
-        ],
-    }))
+    thread_file.write_text(
+        json.dumps(
+            {
+                "name": "my-thread",
+                "history": [
+                    {"role": "user", "parts": ["Hello"]},
+                    {"role": "model", "parts": ["Hi there"]},
+                ],
+            }
+        )
+    )
     count = await ts.migrate_json_threads(thread_dir)
     assert count == 1
     # Verify the thread and messages were created
@@ -502,10 +515,14 @@ async def test_migrate_json_threads_imports_files(tmp_path):
 async def test_migrate_json_threads_idempotent(tmp_path):
     thread_dir = tmp_path / "threads"
     thread_dir.mkdir()
-    (thread_dir / "1_test.json").write_text(json.dumps({
-        "name": "test",
-        "history": [{"role": "user", "parts": ["hi"]}],
-    }))
+    (thread_dir / "1_test.json").write_text(
+        json.dumps(
+            {
+                "name": "test",
+                "history": [{"role": "user", "parts": ["hi"]}],
+            }
+        )
+    )
     count1 = await ts.migrate_json_threads(thread_dir)
     count2 = await ts.migrate_json_threads(thread_dir)
     assert count1 == 1
@@ -516,13 +533,17 @@ async def test_migrate_json_threads_idempotent(tmp_path):
 async def test_migrate_json_threads_skips_empty_messages(tmp_path):
     thread_dir = tmp_path / "threads"
     thread_dir.mkdir()
-    (thread_dir / "1_test.json").write_text(json.dumps({
-        "name": "test",
-        "history": [
-            {"role": "user", "parts": ["   "]},  # Whitespace only — should be skipped
-            {"role": "model", "parts": ["real content"]},
-        ],
-    }))
+    (thread_dir / "1_test.json").write_text(
+        json.dumps(
+            {
+                "name": "test",
+                "history": [
+                    {"role": "user", "parts": ["   "]},  # Whitespace only — should be skipped
+                    {"role": "model", "parts": ["real content"]},
+                ],
+            }
+        )
+    )
     count = await ts.migrate_json_threads(thread_dir)
     assert count == 1
     result = await ts.find_thread_by_name(1, "test")
@@ -536,10 +557,14 @@ async def test_migrate_json_threads_invalid_user_id(tmp_path):
     thread_dir = tmp_path / "threads"
     thread_dir.mkdir()
     # Filename without integer prefix → user_id=0
-    (thread_dir / "badname.json").write_text(json.dumps({
-        "name": "badname",
-        "history": [{"role": "user", "parts": ["hi"]}],
-    }))
+    (thread_dir / "badname.json").write_text(
+        json.dumps(
+            {
+                "name": "badname",
+                "history": [{"role": "user", "parts": ["hi"]}],
+            }
+        )
+    )
     count = await ts.migrate_json_threads(thread_dir)
     assert count == 1
     result = await ts.find_thread_by_name(0, "badname")
@@ -558,6 +583,7 @@ async def test_migrate_json_threads_handles_bad_json(tmp_path):
 # ---------------------------------------------------------------------------
 # auto_title_thread (with mocked LLM)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_auto_title_thread_returns_none_too_few_messages():
@@ -578,6 +604,7 @@ async def test_auto_title_thread_sets_title(monkeypatch):
         return "Great Conversation Title", None
 
     import sys
+
     fake_llm = type(sys)("llm")
     fake_llm.chat_deep = fake_chat_deep
     monkeypatch.setitem(sys.modules, "llm", fake_llm)

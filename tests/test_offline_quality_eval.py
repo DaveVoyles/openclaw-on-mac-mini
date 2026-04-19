@@ -35,6 +35,7 @@ from offline_quality_eval import (
 # Fixtures helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_case(**kwargs: Any) -> dict[str, Any]:
     defaults: dict[str, Any] = {
         "id": "test-001",
@@ -58,6 +59,7 @@ def _make_fixture_file(tmp_path: Path, cases: list[dict]) -> Path:
 # ---------------------------------------------------------------------------
 # latency_bucket_for_ms
 # ---------------------------------------------------------------------------
+
 
 class TestLatencyBucketForMs:
     def test_zero_is_fast(self):
@@ -95,6 +97,7 @@ class TestLatencyBucketForMs:
 # _bucket_rank
 # ---------------------------------------------------------------------------
 
+
 class TestBucketRank:
     def test_fast_is_lowest(self):
         assert _bucket_rank("fast") < _bucket_rank("moderate")
@@ -118,6 +121,7 @@ class TestBucketRank:
 # ---------------------------------------------------------------------------
 # _bucket_from_rank
 # ---------------------------------------------------------------------------
+
 
 class TestBucketFromRank:
     def test_rank_0_is_fast(self):
@@ -143,6 +147,7 @@ class TestBucketFromRank:
 # _clamp
 # ---------------------------------------------------------------------------
 
+
 class TestClamp:
     def test_within_range(self):
         assert _clamp(0.5, 0.0, 1.0) == 0.5
@@ -164,6 +169,7 @@ class TestClamp:
 # _normalize_domain
 # ---------------------------------------------------------------------------
 
+
 class TestNormalizeDomain:
     def test_offline_quality_eval_strips_www(self):
         assert _normalize_domain("www.example.com") == "example.com"
@@ -181,6 +187,7 @@ class TestNormalizeDomain:
 # ---------------------------------------------------------------------------
 # _resolve_case_domain
 # ---------------------------------------------------------------------------
+
 
 class TestResolveCaseDomain:
     def test_explicit_domain_field(self):
@@ -207,6 +214,7 @@ class TestResolveCaseDomain:
 # ---------------------------------------------------------------------------
 # _is_claim_like_line
 # ---------------------------------------------------------------------------
+
 
 class TestIsClaimLikeLine:
     def test_line_with_number_is_claim(self):
@@ -241,6 +249,7 @@ class TestIsClaimLikeLine:
 # _contains_evidence_token
 # ---------------------------------------------------------------------------
 
+
 class TestContainsEvidenceToken:
     def test_url_is_evidence(self):
         assert _contains_evidence_token("See https://example.com for info") is True
@@ -270,6 +279,7 @@ class TestContainsEvidenceToken:
 # ---------------------------------------------------------------------------
 # _evaluate_claim_grounding
 # ---------------------------------------------------------------------------
+
 
 class TestEvaluateClaimGrounding:
     def test_no_claims_returns_full_completeness(self):
@@ -315,6 +325,7 @@ class TestEvaluateClaimGrounding:
 # ---------------------------------------------------------------------------
 # evaluate_replay_case
 # ---------------------------------------------------------------------------
+
 
 class TestEvaluateReplayCase:
     def test_perfect_case_passes(self):
@@ -398,9 +409,16 @@ class TestEvaluateReplayCase:
         case = _make_case()
         result = evaluate_replay_case(case)
         required_keys = [
-            "id", "domain", "tags", "prompt", "coverage_proxy",
-            "source_diversity_proxy", "evidence_completeness",
-            "warning_or_partial", "latency_bucket", "quality_status",
+            "id",
+            "domain",
+            "tags",
+            "prompt",
+            "coverage_proxy",
+            "source_diversity_proxy",
+            "evidence_completeness",
+            "warning_or_partial",
+            "latency_bucket",
+            "quality_status",
         ]
         for key in required_keys:
             assert key in result, f"Missing key: {key}"
@@ -448,6 +466,7 @@ class TestEvaluateReplayCase:
 # run_quality_eval
 # ---------------------------------------------------------------------------
 
+
 class TestRunQualityEval:
     def test_empty_cases_returns_valid_report(self):
         result = run_quality_eval([])
@@ -457,10 +476,12 @@ class TestRunQualityEval:
         assert result["summary"]["sample_size"] == 0
 
     def test_single_good_case_passes(self):
-        cases = [_make_case(
-            response="The incident had 42 errors. Source: https://example.com",
-            required_terms=["incident", "errors"],
-        )]
+        cases = [
+            _make_case(
+                response="The incident had 42 errors. Source: https://example.com",
+                required_terms=["incident", "errors"],
+            )
+        ]
         result = run_quality_eval(cases)
         assert result["summary"]["sample_size"] == 1
         assert result["summary"]["coverage_proxy"] == 1.0
@@ -486,10 +507,12 @@ class TestRunQualityEval:
         assert "coverage_proxy" in result["ci_summary"]["failed_checks"]
 
     def test_pass_field_reflects_checks(self):
-        cases = [_make_case(
-            response="incident errors Source: https://a.com",
-            required_terms=["incident", "errors"],
-        )]
+        cases = [
+            _make_case(
+                response="incident errors Source: https://a.com",
+                required_terms=["incident", "errors"],
+            )
+        ]
         result = run_quality_eval(cases)
         assert result["pass"] == all(result["checks"].values())
 
@@ -505,7 +528,9 @@ class TestRunQualityEval:
 
     def test_warning_rate_computed(self):
         cases = [
-            _make_case(simulated_partial_coverage=True, response="errors 42 Source: https://x.com", required_terms=["errors"]),
+            _make_case(
+                simulated_partial_coverage=True, response="errors 42 Source: https://x.com", required_terms=["errors"]
+            ),
             _make_case(response="errors 42 Source: https://x.com", required_terms=["errors"]),
         ]
         result = run_quality_eval(cases)
@@ -527,19 +552,23 @@ class TestRunQualityEval:
         assert result["calibration"]["drift"]["baseline_available"] is True
 
     def test_quality_status_counts_populated(self):
-        cases = [_make_case(
-            response="incident errors Source: https://a.com",
-            required_terms=["incident", "errors"],
-        )]
+        cases = [
+            _make_case(
+                response="incident errors Source: https://a.com",
+                required_terms=["incident", "errors"],
+            )
+        ]
         result = run_quality_eval(cases)
         assert isinstance(result["summary"]["quality_status_counts"], dict)
 
     def test_target_assertion_failures_in_ci_summary(self):
-        cases = [_make_case(
-            response="nothing",
-            required_terms=["a", "b", "c"],
-            targets={"min_coverage_proxy": 0.9},
-        )]
+        cases = [
+            _make_case(
+                response="nothing",
+                required_terms=["a", "b", "c"],
+                targets={"min_coverage_proxy": 0.9},
+            )
+        ]
         result = run_quality_eval(cases)
         assert isinstance(result["ci_summary"]["target_assertion_failures"], list)
 
@@ -547,6 +576,7 @@ class TestRunQualityEval:
 # ---------------------------------------------------------------------------
 # load_replay_fixtures
 # ---------------------------------------------------------------------------
+
 
 class TestLoadReplayFixtures:
     def test_list_payload(self, tmp_path: Path):
@@ -619,6 +649,7 @@ class TestLoadReplayFixtures:
 # _build_drift_report
 # ---------------------------------------------------------------------------
 
+
 class TestBuildDriftReport:
     def _good_summary(self) -> dict:
         return {
@@ -676,6 +707,7 @@ class TestBuildDriftReport:
 # _classify_drift_severity
 # ---------------------------------------------------------------------------
 
+
 class TestClassifyDriftSeverity:
     def test_no_baseline_returns_unknown(self):
         result = _classify_drift_severity(
@@ -720,12 +752,18 @@ class TestClassifyDriftSeverity:
         # coverage + evidence completeness both regressed → extra score
         metrics = {
             "coverage_proxy": {
-                "delta": -0.10, "tolerance": 0.03,
-                "regressed": True, "improved": False, "direction": "worse",
+                "delta": -0.10,
+                "tolerance": 0.03,
+                "regressed": True,
+                "improved": False,
+                "direction": "worse",
             },
             "evidence_completeness": {
-                "delta": -0.10, "tolerance": 0.03,
-                "regressed": True, "improved": False, "direction": "worse",
+                "delta": -0.10,
+                "tolerance": 0.03,
+                "regressed": True,
+                "improved": False,
+                "direction": "worse",
             },
         }
         result = _classify_drift_severity(
@@ -758,6 +796,7 @@ class TestClassifyDriftSeverity:
 # ---------------------------------------------------------------------------
 # _build_threshold_recommendations
 # ---------------------------------------------------------------------------
+
 
 class TestBuildThresholdRecommendations:
     def test_returns_proposals_list(self):
@@ -813,6 +852,7 @@ class TestBuildThresholdRecommendations:
 # ---------------------------------------------------------------------------
 # Integration: run_quality_eval with canary cases
 # ---------------------------------------------------------------------------
+
 
 class TestRunQualityEvalIntegration:
     def test_canary_tagged_cases_evaluated(self):

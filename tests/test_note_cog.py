@@ -1,4 +1,5 @@
 """Tests for cogs/note_cog.py."""
+
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -60,6 +61,7 @@ def _make_cog():
 
 # ── __init__ ──────────────────────────────────────────────────────────────────
 
+
 def test_note_cog_init():
     cog = _make_cog()
     assert cog.bot is not None
@@ -67,15 +69,14 @@ def test_note_cog_init():
 
 # ── note_create ───────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_note_create_success():
     cog = _make_cog()
     inter = _make_interaction()
 
     with patch("obsidian_writer.save_to_vault", new=AsyncMock(return_value="Note saved")):
-        await cog.note_create.callback(
-            cog, inter, title="My Note", content="Content here", tags="python,testing"
-        )
+        await cog.note_create.callback(cog, inter, title="My Note", content="Content here", tags="python,testing")
 
     inter.response.defer.assert_awaited_once()
     inter.followup.send.assert_awaited_once()
@@ -87,9 +88,7 @@ async def test_note_create_no_tags():
     inter = _make_interaction()
 
     with patch("obsidian_writer.save_to_vault", new=AsyncMock(return_value="Saved!")):
-        await cog.note_create.callback(
-            cog, inter, title="Untitled", content="Quick note", tags=""
-        )
+        await cog.note_create.callback(cog, inter, title="Untitled", content="Quick note", tags="")
 
     inter.followup.send.assert_awaited_once()
 
@@ -100,15 +99,14 @@ async def test_note_create_error():
     inter = _make_interaction()
 
     with patch("obsidian_writer.save_to_vault", new=AsyncMock(side_effect=IOError("Disk full"))):
-        await cog.note_create.callback(
-            cog, inter, title="Fail Note", content="Content", tags=""
-        )
+        await cog.note_create.callback(cog, inter, title="Fail Note", content="Content", tags="")
 
     inter.followup.send.assert_awaited_once()
     assert "❌" in inter.followup.send.call_args[0][0]
 
 
 # ── note_list ─────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_note_list_all():
@@ -145,6 +143,7 @@ async def test_note_list_error():
 
 
 # ── note_view ─────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_note_view_not_found(tmp_path, monkeypatch):
@@ -187,6 +186,7 @@ async def test_note_view_large_file(tmp_path, monkeypatch):
 
 
 # ── note_search ───────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_note_search_no_matches(tmp_path, monkeypatch):

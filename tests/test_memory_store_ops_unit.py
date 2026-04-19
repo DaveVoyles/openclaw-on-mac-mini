@@ -18,6 +18,7 @@ from memory_store_ops import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_vector_store(**overrides):
     mock = MagicMock()
     mock.MEMORIES_COLLECTION = "memories"
@@ -46,6 +47,7 @@ def _make_qmd(**overrides):
 # _mem_content_id / _mem_unique_id
 # ---------------------------------------------------------------------------
 
+
 class TestIDHelpers:
     def test_memory_store_ops_unit_content_id_is_deterministic(self):
         assert _mem_content_id("hello") == _mem_content_id("hello")
@@ -60,6 +62,7 @@ class TestIDHelpers:
         """Non-dedup IDs should differ (timestamp suffix makes them unique)."""
         # We patch time.time to return different values to ensure divergence
         import memory_store_ops as mso
+
         with patch.object(mso, "_time") as mock_time:
             mock_time.time.side_effect = [1000.0, 2000.0]
             id1 = _mem_unique_id("hello")
@@ -71,6 +74,7 @@ class TestIDHelpers:
 
     def test_aliases_match_originals(self):
         from memory_store_ops import _content_id, _unique_id
+
         assert _content_id is _mem_content_id
         assert _unique_id is _mem_unique_id
 
@@ -78,6 +82,7 @@ class TestIDHelpers:
 # ---------------------------------------------------------------------------
 # store_memory
 # ---------------------------------------------------------------------------
+
 
 class TestStoreMemory:
     @pytest.mark.asyncio
@@ -138,6 +143,7 @@ class TestStoreMemory:
 # recall_memories
 # ---------------------------------------------------------------------------
 
+
 class TestRecallMemories:
     @pytest.mark.asyncio
     async def test_memory_store_ops_unit_returns_list(self):
@@ -148,8 +154,7 @@ class TestRecallMemories:
 
     @pytest.mark.asyncio
     async def test_vector_results_mapped_to_schema(self):
-        raw = [{"text": "fact", "metadata": {"source": "user"}, "similarity": 0.9,
-                "collection": "memory", "id": "abc"}]
+        raw = [{"text": "fact", "metadata": {"source": "user"}, "similarity": 0.9, "collection": "memory", "id": "abc"}]
         vs = _make_vector_store(search_all=AsyncMock(return_value=raw))
         with patch.dict(sys.modules, {"vector_store": vs}):
             results = await recall_memories("query", include_rules=False)
@@ -187,8 +192,7 @@ class TestRecallMemories:
     @pytest.mark.asyncio
     async def test_top_k_limits_results(self):
         raw = [
-            {"text": f"fact{i}", "metadata": {}, "similarity": float(i) / 10,
-             "collection": "m", "id": str(i)}
+            {"text": f"fact{i}", "metadata": {}, "similarity": float(i) / 10, "collection": "m", "id": str(i)}
             for i in range(10)
         ]
         vs = _make_vector_store(search_all=AsyncMock(return_value=raw))
@@ -200,6 +204,7 @@ class TestRecallMemories:
 # ---------------------------------------------------------------------------
 # forget_memory
 # ---------------------------------------------------------------------------
+
 
 class TestForgetMemory:
     @pytest.mark.asyncio
@@ -240,6 +245,7 @@ class TestForgetMemory:
 # memory_stats
 # ---------------------------------------------------------------------------
 
+
 class TestMemoryStats:
     @pytest.mark.asyncio
     async def test_memory_store_ops_unit_returns_dict_with_expected_keys(self):
@@ -249,10 +255,9 @@ class TestMemoryStats:
         rules_mock.get_all_rules = AsyncMock(return_value=["rule1", "rule2"])
         profile_mock = MagicMock()
         profile_mock.load_profile = MagicMock(return_value={"name": "Alice"})
-        with patch.dict(sys.modules, {
-            "vector_store": vs, "qmd": qmd,
-            "rules_engine": rules_mock, "user_profile": profile_mock
-        }):
+        with patch.dict(
+            sys.modules, {"vector_store": vs, "qmd": qmd, "rules_engine": rules_mock, "user_profile": profile_mock}
+        ):
             result = await memory_stats()
         for key in ("vector_store", "qmd", "rules", "profile"):
             assert key in result
@@ -265,19 +270,29 @@ class TestMemoryStats:
         rules_mock.get_all_rules = AsyncMock(return_value=["r1", "r2", "r3"])
         profile_mock = MagicMock()
         profile_mock.load_profile = MagicMock(return_value={})
-        with patch.dict(sys.modules, {
-            "vector_store": vs, "qmd": qmd,
-            "rules_engine": rules_mock, "user_profile": profile_mock,
-        }):
+        with patch.dict(
+            sys.modules,
+            {
+                "vector_store": vs,
+                "qmd": qmd,
+                "rules_engine": rules_mock,
+                "user_profile": profile_mock,
+            },
+        ):
             result = await memory_stats()
         assert result["rules"]["count"] == 3
 
     @pytest.mark.asyncio
     async def test_all_backends_failing_returns_empty_defaults(self):
-        with patch.dict(sys.modules, {
-            "vector_store": None, "qmd": None,
-            "rules_engine": None, "user_profile": None,
-        }):
+        with patch.dict(
+            sys.modules,
+            {
+                "vector_store": None,
+                "qmd": None,
+                "rules_engine": None,
+                "user_profile": None,
+            },
+        ):
             result = await memory_stats()
         assert result["qmd"]["count"] == 0
         assert result["rules"]["count"] == 0

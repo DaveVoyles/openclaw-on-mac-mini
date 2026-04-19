@@ -183,16 +183,16 @@ async def test_tool_orchestrator_returns_direct_result_without_provider_rewrite(
     response.tool_calls = [ToolCallRequest("generate_sports_watch_report", {})]
     adapter = _FakeAdapter()
     rate_limiter = MagicMock()
-    execute_tool_call = AsyncMock(
-        return_value="| Matchup |\n| --- |\n| UNC vs Notre Dame |\n\n_via perplexity-direct_"
-    )
+    execute_tool_call = AsyncMock(return_value="| Matchup |\n| --- |\n| UNC vs Notre Dame |\n\n_via perplexity-direct_")
 
     orchestrator = ToolOrchestrator(
         adapter=adapter,
         execute_tool_call=execute_tool_call,
         rate_limiter=rate_limiter,
         record_usage=AsyncMock(),
-        should_return_tool_result_directly=lambda name, result: name == "generate_sports_watch_report" and "_via perplexity-direct_" in result,
+        should_return_tool_result_directly=lambda name, result: (
+            name == "generate_sports_watch_report" and "_via perplexity-direct_" in result
+        ),
     )
 
     final_response, rounds = await orchestrator.run(

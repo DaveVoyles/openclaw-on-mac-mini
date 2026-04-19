@@ -24,6 +24,7 @@ class ConversationCache:
     def __init__(self):
         # Imported here to avoid a circular import at module load time.
         from memory_conversation import Conversation  # noqa: PLC0415
+
         self._Conversation = Conversation
         self._conversations: dict[tuple[int, int], object] = {}
 
@@ -41,16 +42,20 @@ class ConversationCache:
             self._conversations[key] = conv
             recall = _load_last_summary(user_id)
             if recall:
-                conv.history.append({
-                    "role": "model",
-                    "parts": [f"[Recall from last session] {recall}"],
-                })
+                conv.history.append(
+                    {
+                        "role": "model",
+                        "parts": [f"[Recall from last session] {recall}"],
+                    }
+                )
             handover = load_last_handover(user_id)
             if handover:
-                conv.history.append({
-                    "role": "model",
-                    "parts": [f"[Session handover — pending items & next steps]\n{handover}"],
-                })
+                conv.history.append(
+                    {
+                        "role": "model",
+                        "parts": [f"[Session handover — pending items & next steps]\n{handover}"],
+                    }
+                )
         return conv
 
     def set(self, user_id: int, channel_id: int, conv) -> None:
@@ -76,12 +81,8 @@ class ConversationCache:
                 user_id, _channel_id = k
                 try:
                     loop = asyncio.get_running_loop()
-                    loop.create_task(
-                        _summarize_and_store(user_id, conv.user_name, conv.history)
-                    )
-                    loop.create_task(
-                        create_session_handover(user_id, conv.user_name, conv.history)
-                    )
+                    loop.create_task(_summarize_and_store(user_id, conv.user_name, conv.history))
+                    loop.create_task(create_session_handover(user_id, conv.user_name, conv.history))
                 except RuntimeError:
                     log.debug("No running loop for summarization")
         if expired:

@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_layout.py — pure helper functions."""
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -10,6 +11,7 @@ import openclaw_cli_layout as mod
 # ---------------------------------------------------------------------------
 # _status_family_layout
 # ---------------------------------------------------------------------------
+
 
 def test_status_family_complete():
     for s in ("ok", "healthy", "done", "completed", "success", "succeeded", "complete"):
@@ -45,6 +47,7 @@ def test_status_family_normalizes_dashes_and_spaces():
 # _status_text_layout
 # ---------------------------------------------------------------------------
 
+
 def test_status_text_layout_known_families():
     assert mod._status_text_layout("ok") == "COMPLETE"
     assert mod._status_text_layout("running") == "ACTIVE"
@@ -61,6 +64,7 @@ def test_status_text_layout_unknown_falls_back_to_status():
 # _status_cell_layout
 # ---------------------------------------------------------------------------
 
+
 def test_status_cell_layout_no_detail():
     result = mod._status_cell_layout("ok")
     assert result == "COMPLETE"
@@ -74,6 +78,7 @@ def test_status_cell_layout_with_detail():
 # ---------------------------------------------------------------------------
 # _progress_cell_layout
 # ---------------------------------------------------------------------------
+
 
 def test_progress_cell_layout_no_status():
     result = mod._progress_cell_layout("files", "3")
@@ -89,6 +94,7 @@ def test_progress_cell_layout_with_status():
 # ---------------------------------------------------------------------------
 # _truncate_preview_layout
 # ---------------------------------------------------------------------------
+
 
 def test_truncate_preview_short_text_unchanged():
     text = "Hello world"
@@ -114,6 +120,7 @@ def test_truncate_preview_none_like():
 # _single_line_excerpt_layout
 # ---------------------------------------------------------------------------
 
+
 def test_single_line_excerpt_fits():
     assert mod._single_line_excerpt_layout("Hello", max_chars=20) == "Hello"
 
@@ -136,13 +143,17 @@ def test_openclaw_cli_layout_unit_single_line_excerpt_collapses_whitespace():
 # _format_byte_count_layout
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("size,expected", [
-    (0, "0 B"),
-    (512, "512 B"),
-    (1024, "1.0 KB"),
-    (1024 * 1024, "1.0 MB"),
-    (1536 * 1024, "1.5 MB"),
-])
+
+@pytest.mark.parametrize(
+    "size,expected",
+    [
+        (0, "0 B"),
+        (512, "512 B"),
+        (1024, "1.0 KB"),
+        (1024 * 1024, "1.0 MB"),
+        (1536 * 1024, "1.5 MB"),
+    ],
+)
 def test_format_byte_count_layout(size, expected):
     assert mod._format_byte_count_layout(size) == expected
 
@@ -155,16 +166,20 @@ def test_format_byte_count_layout_negative_clamps_to_zero():
 # _format_elapsed_compact_layout
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("seconds,expected", [
-    (0, "0.0s"),
-    (0.5, "0.5s"),
-    (9, "9.0s"),
-    (30, "30s"),
-    (60, "1m"),
-    (90, "1m 30s"),
-    (3600, "1h"),
-    (3660, "1h 1m"),
-])
+
+@pytest.mark.parametrize(
+    "seconds,expected",
+    [
+        (0, "0.0s"),
+        (0.5, "0.5s"),
+        (9, "9.0s"),
+        (30, "30s"),
+        (60, "1m"),
+        (90, "1m 30s"),
+        (3600, "1h"),
+        (3660, "1h 1m"),
+    ],
+)
 def test_format_elapsed_compact_layout(seconds, expected):
     assert mod._format_elapsed_compact_layout(seconds) == expected
 
@@ -177,6 +192,7 @@ def test_format_elapsed_compact_layout_invalid():
 # ---------------------------------------------------------------------------
 # _format_collaboration_entry_layout
 # ---------------------------------------------------------------------------
+
 
 def test_openclaw_cli_layout_unit_format_collaboration_entry_basic():
     entry = {"actor": "alice", "summary": "Approved PR"}
@@ -201,6 +217,7 @@ def test_format_collaboration_entry_empty_actor_defaults():
 # _effective_layout_mode
 # ---------------------------------------------------------------------------
 
+
 def test_effective_layout_mode_valid():
     for mode in ("compact", "normal", "verbose", "plain"):
         assert mod._effective_layout_mode({"layout": mode}) == mode
@@ -214,6 +231,7 @@ def test_effective_layout_mode_invalid_defaults_to_normal():
 # ---------------------------------------------------------------------------
 # _layout_preset_name
 # ---------------------------------------------------------------------------
+
 
 def test_layout_preset_name_known():
     for preset in ("focus", "watch-monitor", "handoff"):
@@ -229,6 +247,7 @@ def test_layout_preset_name_unknown_returns_empty():
 # _layout_focus_name
 # ---------------------------------------------------------------------------
 
+
 def test_layout_focus_name_valid():
     assert mod._layout_focus_name({"layout_focus": "primary"}) == "primary"
     assert mod._layout_focus_name({"layout_focus": "supporting"}) == "supporting"
@@ -242,6 +261,7 @@ def test_layout_focus_name_invalid_defaults_to_primary():
 # ---------------------------------------------------------------------------
 # _layout_focus_transition_line
 # ---------------------------------------------------------------------------
+
 
 def test_layout_focus_transition_line_from_primary():
     assert (
@@ -260,6 +280,7 @@ def test_layout_focus_transition_line_from_supporting():
 # ---------------------------------------------------------------------------
 # _layout_preset_config
 # ---------------------------------------------------------------------------
+
 
 def test_layout_preset_config_focus():
     cfg = mod._layout_preset_config({}, "focus")
@@ -285,6 +306,7 @@ def test_layout_preset_config_unknown_returns_empty():
 # _layout_pane_line_limit
 # ---------------------------------------------------------------------------
 
+
 def test_layout_pane_line_limit_modes():
     assert mod._layout_pane_line_limit({"layout": "compact"}) == 6
     assert mod._layout_pane_line_limit({"layout": "normal"}) == 9
@@ -294,6 +316,7 @@ def test_layout_pane_line_limit_modes():
 # ---------------------------------------------------------------------------
 # _layout_pane_block
 # ---------------------------------------------------------------------------
+
 
 def test_layout_pane_block_basic():
     lines = ["line one", "line two"]
@@ -325,6 +348,7 @@ def test_layout_pane_block_shows_overflow_hint():
 # _layout_column_lines
 # ---------------------------------------------------------------------------
 
+
 def test_layout_column_lines_produces_output():
     left = ["left line 1", "left line 2"]
     right = ["right line 1", "right line 2"]
@@ -343,6 +367,7 @@ def test_layout_column_lines_unequal_lengths():
 # ---------------------------------------------------------------------------
 # _layout_preset_fallback
 # ---------------------------------------------------------------------------
+
 
 def test_layout_preset_fallback_no_preset():
     result = mod._layout_preset_fallback({}, width=200, is_tty=True)
@@ -382,6 +407,7 @@ def test_layout_preset_fallback_plain_mode():
 # ---------------------------------------------------------------------------
 # _terminal_width_layout
 # ---------------------------------------------------------------------------
+
 
 def test_terminal_width_layout_fallback():
     with patch("os.get_terminal_size", side_effect=OSError):

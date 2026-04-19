@@ -53,10 +53,7 @@ class TestEmbedBuilderCore:
         assert embed.fields[0].value == "\u200b"
 
     def test_add_field_multiple(self):
-        embed = (EmbedBuilder()
-                 .add_field("F1", "V1", inline=True)
-                 .add_field("F2", "V2", inline=False)
-                 .build())
+        embed = EmbedBuilder().add_field("F1", "V1", inline=True).add_field("F2", "V2", inline=False).build()
         assert len(embed.fields) == 2
         assert embed.fields[0].inline is True
         assert embed.fields[1].inline is False

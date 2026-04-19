@@ -17,6 +17,7 @@ Does NOT import from openclaw_cli.py at module level (avoids circular imports).
 Functions that still live in openclaw_cli.py (_theme_ansi, _print_feedback) are
 lazy-imported at call time — by that point openclaw_cli.py is fully loaded.
 """
+
 from __future__ import annotations
 
 import os
@@ -30,6 +31,7 @@ try:
     import select as _select_mod
     import termios as _termios_mod
     import tty as _tty_mod
+
     _ESCAPE_DETECTION_AVAILABLE = True
 except ImportError:
     _ESCAPE_DETECTION_AVAILABLE = False
@@ -149,6 +151,7 @@ def _time_greeting() -> str:
 def _motion_pause(stage: str) -> None:
     """Delegate to openclaw_cli_exec._motion_pause with live accessibility state."""
     from openclaw_cli_exec import _motion_pause as _exec_motion_pause  # noqa: PLC0415
+
     _exec_motion_pause(
         stage,
         is_tty=_get_is_tty(),
@@ -277,6 +280,7 @@ def _with_spinner(
         snapshot = _spinner_progress_snapshot(0.0)
         # Lazy import to avoid circular dependency
         from openclaw_cli import _print_feedback, _theme_ansi  # noqa: PLC0415
+
         prefix = "[working]" if _a11y_plain_mode() else f"{_theme_ansi()}{_e('⏳', '[working]')}{_R}"
         status_style = "" if (_a11y_plain_mode() or _a11y_high_contrast()) else _DM
         sys.stdout.write(
@@ -347,6 +351,7 @@ def _with_spinner(
         raise exc_holder[0]
     # Lazy import to avoid circular dependency
     from openclaw_cli import _print_feedback  # noqa: PLC0415
+
     snapshot = _spinner_progress_snapshot(max(time.monotonic() - start, 4.0))
     _print_feedback(
         "response ready.",
@@ -369,6 +374,7 @@ def _print_startup_banner(config: "CliConfig", session_id: str) -> None:
     _session_count = 0
     try:
         from openclaw_cli_sessions import list_sessions as _list_sessions  # noqa: PLC0415
+
         _session_count = len(_list_sessions(limit=1001))
         for m in (10, 50, 100, 250, 500, 1000):
             if _session_count == m:
@@ -519,6 +525,7 @@ def _print_status_bar(
         else:
             # Lazy import to avoid circular dependency
             from openclaw_cli import _theme_ansi  # noqa: PLC0415
+
             style = _theme_ansi() if _a11y_high_contrast() else _DM
             reset = _R if style else ""
             print(f"  {style}{line}{reset}")
@@ -644,6 +651,7 @@ def _print_shell_bottom_bar(
 def _celebration_burst(message: str = "") -> None:
     """Print a short animated celebration burst (confetti + message)."""
     import random  # noqa: PLC0415
+
     is_tty = _get_is_tty()
     if not is_tty or _a11y_reduced_motion() or _a11y_plain_mode():
         if message:
@@ -690,13 +698,29 @@ def _print_workspace_capsule(capsule: dict[str, Any], *, title: str = "Workspace
     if _RICH_AVAILABLE and _IS_TTY:
         lines = [
             f"cwd: {capsule.get('cwd', '')}",
-            _progress_cell("files", str(capsule.get("tracked_file_count", len(tracked_files))), status="active" if tracked_files else "idle"),
-            _progress_cell("bookmarks", str(capsule.get("bookmark_count", len(bookmarks))), status="complete" if bookmarks else "idle"),
-            _progress_cell("outputs", str(capsule.get("output_count", len(recent_outputs))), status="complete" if recent_outputs else "idle"),
+            _progress_cell(
+                "files",
+                str(capsule.get("tracked_file_count", len(tracked_files))),
+                status="active" if tracked_files else "idle",
+            ),
+            _progress_cell(
+                "bookmarks",
+                str(capsule.get("bookmark_count", len(bookmarks))),
+                status="complete" if bookmarks else "idle",
+            ),
+            _progress_cell(
+                "outputs",
+                str(capsule.get("output_count", len(recent_outputs))),
+                status="complete" if recent_outputs else "idle",
+            ),
         ]
         watch_status = str(capsule.get("watch_status") or "").strip()
         if watch_status:
-            lines.append(_progress_cell("watch", watch_status, status="active" if watch_status not in {"idle", "waiting"} else "idle"))
+            lines.append(
+                _progress_cell(
+                    "watch", watch_status, status="active" if watch_status not in {"idle", "waiting"} else "idle"
+                )
+            )
         signature = str(capsule.get("workspace_signature") or "").strip()
         if signature:
             lines.append(f"signature: {signature}")
@@ -726,6 +750,7 @@ def _print_workspace_capsule(capsule: dict[str, Any], *, title: str = "Workspace
 # ---------------------------------------------------------------------------
 # _preview_panel — shared Rich panel preview helper
 # ---------------------------------------------------------------------------
+
 
 def _preview_panel(
     title: str,

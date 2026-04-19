@@ -44,13 +44,9 @@ class ResourceMonitor:
 
     def _save(self):
         MONITOR_FILE.parent.mkdir(parents=True, exist_ok=True)
-        MONITOR_FILE.write_text(
-            json.dumps({k: asdict(v) for k, v in self._thresholds.items()}, indent=2)
-        )
+        MONITOR_FILE.write_text(json.dumps({k: asdict(v) for k, v in self._thresholds.items()}, indent=2))
 
-    def set_threshold(
-        self, container: str, cpu: float = 80.0, memory: float = 90.0
-    ) -> ResourceThreshold:
+    def set_threshold(self, container: str, cpu: float = 80.0, memory: float = 90.0) -> ResourceThreshold:
         t = ResourceThreshold(container=container, cpu_percent=cpu, memory_percent=memory)
         self._thresholds[container] = t
         self._save()
@@ -70,8 +66,11 @@ class ResourceMonitor:
         """Fetch per-container CPU% and Memory% via docker stats."""
         rc, out, err = await _run(
             [
-                "docker", "stats", "--no-stream",
-                "--format", "{{.Name}}\t{{.CPUPerc}}\t{{.MemPerc}}",
+                "docker",
+                "stats",
+                "--no-stream",
+                "--format",
+                "{{.Name}}\t{{.CPUPerc}}\t{{.MemPerc}}",
             ],
             timeout=30,
         )
@@ -85,11 +84,13 @@ class ResourceMonitor:
             if len(parts) < 3:
                 continue
             try:
-                results.append({
-                    "name": parts[0].strip(),
-                    "cpu": float(parts[1].strip().rstrip("%")),
-                    "memory": float(parts[2].strip().rstrip("%")),
-                })
+                results.append(
+                    {
+                        "name": parts[0].strip(),
+                        "cpu": float(parts[1].strip().rstrip("%")),
+                        "memory": float(parts[2].strip().rstrip("%")),
+                    }
+                )
             except (ValueError, IndexError):
                 continue
         return results

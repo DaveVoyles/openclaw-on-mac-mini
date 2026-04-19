@@ -1,4 +1,5 @@
 """Extended tests for src/error_tracker.py — get_recent_outcomes, get_error_stats, check_error_patterns, get_past_incidents."""
+
 import json
 import time
 from pathlib import Path
@@ -37,9 +38,15 @@ class TestGetRecentOutcomes:
     def test_excludes_old_entries(self, isolated_journal):
         old_entry = {
             "ts": time.time() - (48 * 3600),  # 48 hours ago
-            "user_id": 1, "question": "old", "model_used": "gpt",
-            "success": True, "error": "", "latency_ms": 0,
-            "routing_notes": [], "tools_called": [], "reflected": False,
+            "user_id": 1,
+            "question": "old",
+            "model_used": "gpt",
+            "success": True,
+            "error": "",
+            "latency_ms": 0,
+            "routing_notes": [],
+            "tools_called": [],
+            "reflected": False,
         }
         with open(isolated_journal, "w") as f:
             f.write(json.dumps(old_entry) + "\n")
@@ -181,10 +188,7 @@ class TestGetPastIncidents:
         assert result[0]["patterns"][0]["type"] == "high_failure_rate"
 
     def test_error_tracker_coverage_limits_results_v2(self, isolated_journal):
-        incidents = [
-            {"ts": time.time(), "patterns": [{"type": "t"}], "diagnosis": {}, "fix": {}}
-            for _ in range(10)
-        ]
+        incidents = [{"ts": time.time(), "patterns": [{"type": "t"}], "diagnosis": {}, "fix": {}} for _ in range(10)]
         mod.INCIDENTS_FILE.write_text(json.dumps(incidents))
         result = mod.get_past_incidents(limit=3)
         assert len(result) == 3
@@ -194,10 +198,9 @@ class TestGetPastIncidents:
         result = mod.get_past_incidents()
         assert result == []
 
+
 # --- Merged from test_error_tracker.py ---
 """Tests for trace persistence in error_tracker outcomes."""
-
-
 
 
 def test_record_outcome_persists_explicit_trace_id(tmp_path, monkeypatch):
@@ -233,4 +236,3 @@ def test_record_outcome_uses_active_trace_when_missing(tmp_path, monkeypatch):
     line = journal.read_text().strip()
     payload = json.loads(line)
     assert payload["trace_id"] == "trace-from-context"
-

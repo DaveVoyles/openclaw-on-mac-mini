@@ -24,6 +24,7 @@ from exceptions import (
 # Importability
 # ---------------------------------------------------------------------------
 
+
 class TestImportability:
     def test_all_exceptions_importable(self):
         for cls in (
@@ -53,6 +54,7 @@ class TestImportability:
 # Hierarchy
 # ---------------------------------------------------------------------------
 
+
 class TestHierarchy:
     def test_rate_limit_is_api_error(self):
         assert issubclass(RateLimitError, APIError)
@@ -72,11 +74,19 @@ class TestHierarchy:
 
     def test_all_inherit_from_openclaw_error(self):
         for cls in (
-            APIError, RateLimitError, TimeoutError, ToolError,
-            ConfigError, DatabaseError, PermissionError,
-            APIConnectionError, AuthenticationError,
-            InvalidRequestError, ResourceNotFoundError,
-            StorageError, ValidationError,
+            APIError,
+            RateLimitError,
+            TimeoutError,
+            ToolError,
+            ConfigError,
+            DatabaseError,
+            PermissionError,
+            APIConnectionError,
+            AuthenticationError,
+            InvalidRequestError,
+            ResourceNotFoundError,
+            StorageError,
+            ValidationError,
         ):
             assert issubclass(cls, OpenClawError), f"{cls.__name__} must inherit from OpenClawError"
 
@@ -84,6 +94,7 @@ class TestHierarchy:
 # ---------------------------------------------------------------------------
 # APIError
 # ---------------------------------------------------------------------------
+
 
 class TestAPIError:
     def test_optional_fields_default_none(self):
@@ -104,6 +115,7 @@ class TestAPIError:
 # ---------------------------------------------------------------------------
 # RateLimitError
 # ---------------------------------------------------------------------------
+
 
 class TestRateLimitError:
     def test_carries_service_and_status_code(self):
@@ -136,6 +148,7 @@ class TestRateLimitError:
 # TimeoutError
 # ---------------------------------------------------------------------------
 
+
 class TestTimeoutError:
     def test_message_without_timeout_seconds(self):
         err = TimeoutError("Spotify")
@@ -159,6 +172,7 @@ class TestTimeoutError:
 # ToolError
 # ---------------------------------------------------------------------------
 
+
 class TestToolError:
     def test_carries_tool_name_and_reason(self):
         err = ToolError("my_tool", "something went wrong")
@@ -178,6 +192,7 @@ class TestToolError:
 # PermissionError
 # ---------------------------------------------------------------------------
 
+
 class TestPermissionError:
     def test_carries_user_id_and_action(self):
         err = PermissionError(42, "delete_all")
@@ -196,6 +211,7 @@ class TestPermissionError:
 # ---------------------------------------------------------------------------
 # ConfigError / DatabaseError (simple subclasses)
 # ---------------------------------------------------------------------------
+
 
 class TestConfigError:
     def test_exceptions_inherits_from_openclaw_error(self):
@@ -218,6 +234,7 @@ class TestDatabaseError:
 # ---------------------------------------------------------------------------
 # Remaining existing classes
 # ---------------------------------------------------------------------------
+
 
 class TestAPIConnectionError:
     def test_includes_api_name_and_reason(self):
@@ -290,6 +307,7 @@ class TestValidationError:
 # ---------------------------------------------------------------------------
 # Broad-catch regression
 # ---------------------------------------------------------------------------
+
 
 class TestBroadCatch:
     def test_can_catch_all_with_base(self):

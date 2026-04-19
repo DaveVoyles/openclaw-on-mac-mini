@@ -1,4 +1,5 @@
 """tests/test_w28_completion_recaps.py — Wave 28, Lane 2: completion recaps & _preview_panel."""
+
 from __future__ import annotations
 
 import types
@@ -10,13 +11,15 @@ import pytest
 # Helpers — word count / source count logic mirrored from cmd_core
 # ---------------------------------------------------------------------------
 
+
 def _word_count(text: str) -> int:
     return len(text.split())
 
 
 def _source_count(text: str) -> int:
     import re
-    found = set(re.findall(r'\[\d+\]', text))
+
+    found = set(re.findall(r"\[\d+\]", text))
     return len(found) if found else text.count("http")
 
 
@@ -24,10 +27,12 @@ def _source_count(text: str) -> int:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def cmd_core_mod():
     """Import openclaw_cli_cmd_core with openclaw_cli monkeypatched to avoid real I/O."""
     import openclaw_cli_cmd_core as mod
+
     return mod
 
 
@@ -35,12 +40,14 @@ def cmd_core_mod():
 def ui_utils_mod():
     """Import openclaw_cli_ui_utils."""
     import openclaw_cli_ui_utils as mod
+
     return mod
 
 
 # ---------------------------------------------------------------------------
 # _preview_panel — unit tests (no LLM deps)
 # ---------------------------------------------------------------------------
+
 
 class TestPreviewPanel:
     def test_plain_text_prints_title_header(self, ui_utils_mod, capsys):
@@ -162,6 +169,7 @@ class TestPreviewPanel:
 # Word count helper
 # ---------------------------------------------------------------------------
 
+
 class TestWordCount:
     def test_w28_completion_recaps_single_word(self):
         assert _word_count("hello") == 1
@@ -179,6 +187,7 @@ class TestWordCount:
 # ---------------------------------------------------------------------------
 # Source count helper
 # ---------------------------------------------------------------------------
+
 
 class TestSourceCount:
     def test_numbered_citations_counted(self):
@@ -201,6 +210,7 @@ class TestSourceCount:
 # ---------------------------------------------------------------------------
 # _cmd_analyze recap (via stdout capture)
 # ---------------------------------------------------------------------------
+
 
 def _make_fake_response(text: str) -> MagicMock:
     r = MagicMock()
@@ -277,6 +287,7 @@ class TestAnalyzeRecap:
 # _cmd_research recap
 # ---------------------------------------------------------------------------
 
+
 def _make_research_ctx(query: str = "test query") -> MagicMock:
     ctx = MagicMock()
     ctx.args = query
@@ -349,6 +360,7 @@ class TestResearchRecap:
 # ---------------------------------------------------------------------------
 # _cmd_write recap
 # ---------------------------------------------------------------------------
+
 
 def _make_write_ctx(task: str = "write a report") -> MagicMock:
     ctx = MagicMock()

@@ -1,4 +1,5 @@
 """test_bg_monitoring_unit.py — Unit tests for src/bg_monitoring.py."""
+
 from __future__ import annotations
 
 import importlib as _importlib
@@ -41,8 +42,12 @@ for _mod in [
     "llm_ratelimit",
     "resource_monitor",
     "config",
-    "google", "google.genai", "google.genai.types",
-    "pandas", "psutil", "prometheus_client",
+    "google",
+    "google.genai",
+    "google.genai.types",
+    "pandas",
+    "psutil",
+    "prometheus_client",
 ]:
     _try_stub(_mod)
 

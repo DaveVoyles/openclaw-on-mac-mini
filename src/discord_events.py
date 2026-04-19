@@ -76,6 +76,7 @@ def _mark_archive_warning_sent(thread_id: int) -> None:
 # Copied helper functions from bot.py
 # ---------------------------------------------------------------------------
 
+
 def _is_user_allowed(user_id: int) -> bool:
     """Return True when *user_id* is in the configured allow-list."""
     if not ALLOWED_USER_IDS:
@@ -226,7 +227,8 @@ async def _get_or_create_default_ask_thread(
         try:
             async for archived_thread in channel.archived_threads(limit=15):
                 if (
-                    _bot is not None and _bot.user is not None
+                    _bot is not None
+                    and _bot.user is not None
                     and getattr(archived_thread, "owner_id", None) == _bot.user.id
                     and getattr(archived_thread, "parent_id", None) == int(channel.id)
                     and not getattr(archived_thread, "locked", False)
@@ -274,8 +276,7 @@ async def _maybe_send_archive_warning(thread: discord.Thread) -> None:
     if 0 < archive_in_seconds <= 600:
         try:
             await thread.send(
-                "⚠️ This thread will auto-archive soon. "
-                "Keep chatting to extend it, or start a new `/ask`."
+                "⚠️ This thread will auto-archive soon. Keep chatting to extend it, or start a new `/ask`."
             )
             _mark_archive_warning_sent(thread_id)
         except discord.HTTPException as exc:
@@ -305,9 +306,7 @@ async def _preflight_message_checks(
         return True, False, False
 
     in_thread = isinstance(message.channel, discord.Thread)
-    bot_owns_thread = (
-        in_thread and _bot.user is not None and message.channel.owner_id == _bot.user.id
-    )
+    bot_owns_thread = in_thread and _bot.user is not None and message.channel.owner_id == _bot.user.id
 
     if in_thread and not _bot_can_read_channel(message.channel):
         await _bot.process_commands(message)
@@ -360,9 +359,7 @@ async def _resolve_flow_channel(
             flow_channel = routed_thread
             in_thread = True
             bot_owns_thread = True
-            _remember_default_ask_thread(
-                message.channel, message.author.id, int(routed_thread.id)
-            )
+            _remember_default_ask_thread(message.channel, message.author.id, int(routed_thread.id))
             try:
                 await message.channel.send(f"💬 Continuing in {routed_thread.mention}")
             except Exception as exc:  # broad: intentional — redirect send can raise any Discord error
@@ -432,6 +429,7 @@ async def _run_ask_pipeline(
     model_pref = get_model_preference(message.author.id)
     user_routing_profile = get_routing_profile(message.author.id)
     from llm import _needs_tools as llm_needs_tools
+
     model_pref, _ = normalize_model_preference(user_question, model_pref, llm_needs_tools)
 
     response_text = ""
@@ -444,21 +442,25 @@ async def _run_ask_pipeline(
     )
 
     try:
+
         def _update_history(updated_history: list[dict[str, Any]]) -> None:
             conv.update_from_llm(updated_history)
             conversation_store.auto_save_thread(
-                message.author.id, flow_channel.id, str(message.author.display_name),
+                message.author.id,
+                flow_channel.id,
+                str(message.author.display_name),
             )
 
         from bot import PROVIDER_STREAM, make_discord_stream_handler
+
         _on_partial, _get_placeholder = (
             make_discord_stream_handler(flow_channel) if PROVIDER_STREAM else (None, lambda: None)
         )
 
         context_controls: dict[str, Any] = {}
-        if hasattr(message.channel, 'name'):
+        if hasattr(message.channel, "name"):
             context_controls["channel_name"] = message.channel.name
-        elif hasattr(message.channel, 'parent') and message.channel.parent:
+        elif hasattr(message.channel, "parent") and message.channel.parent:
             context_controls["channel_name"] = message.channel.parent.name
 
         result = await run_ask_stream(
@@ -485,9 +487,7 @@ async def _run_ask_pipeline(
         response_text = result.response_text
         model_used = result.model_used
 
-        final_meta: dict[str, Any] = _with_requested_item_target(
-            result.final_meta, question=user_question
-        )
+        final_meta: dict[str, Any] = _with_requested_item_target(result.final_meta, question=user_question)
         _is_memory_store = bool(_MEMORY_STORE_RE.search(user_question))
         quality_meta = _safe_score_answer_quality(
             response_text,
@@ -525,10 +525,10 @@ async def _run_ask_pipeline(
             recovery_block = None
         if recovery_block and "Recovery note" not in response_text and not _is_memory_store:
             # W4-1: Strip duplicate sources from recovery block
-            if re.search(r'(?:\*\*Sources\*\*|Sources)\s*:', response_text, re.IGNORECASE):
+            if re.search(r"(?:\*\*Sources\*\*|Sources)\s*:", response_text, re.IGNORECASE):
                 recovery_block = re.sub(
-                    r'\n{0,2}(?:\*\*Sources\*\*|Sources):?\s*\n(?:(?:[-*]|\d+\.)\s+.+\n?)+',
-                    '',
+                    r"\n{0,2}(?:\*\*Sources\*\*|Sources):?\s*\n(?:(?:[-*]|\d+\.)\s+.+\n?)+",
+                    "",
                     recovery_block,
                     flags=re.IGNORECASE,
                 ).rstrip()
@@ -569,6 +569,7 @@ async def _render_and_send_ask_response(
             render_table_image,
             should_render_table_image,
         )
+
         table_text = extract_table_text(response_text)
         if table_text and should_render_table_image(table_text):
             img_bytes = render_table_image(table_text)
@@ -616,18 +617,21 @@ async def _render_and_send_ask_response(
         try:
             from bot import _collect_feedback
             import hashlib as _hashlib
+
             _qhash = _hashlib.sha256(user_question.encode()).hexdigest()[:16]
             _result_meta = getattr(result, "final_meta", {}) or {}
             _provider = str(_result_meta.get("provider", ""))
             _skills: list[str] = list(_result_meta.get("skills_invoked", []))
             _model = getattr(result, "model_used", "")
-            asyncio.ensure_future(_collect_feedback(
-                bot_message=_last_sent_msg,
-                query_hash=_qhash,
-                model=_model,
-                provider=_provider,
-                skills=_skills,
-            ))
+            asyncio.ensure_future(
+                _collect_feedback(
+                    bot_message=_last_sent_msg,
+                    query_hash=_qhash,
+                    model=_model,
+                    provider=_provider,
+                    skills=_skills,
+                )
+            )
         except (AttributeError, KeyError, RuntimeError, TypeError):
             pass
 
@@ -635,6 +639,7 @@ async def _render_and_send_ask_response(
 # ---------------------------------------------------------------------------
 # Main handler
 # ---------------------------------------------------------------------------
+
 
 async def handle_message(
     message: discord.Message,
@@ -671,8 +676,8 @@ async def handle_message(
     _ask_start = time.monotonic()
 
     async with flow_channel.typing():
-        response_text, model_used, result, scoped_channel_id, scoped_thread_id = (
-            await _run_ask_pipeline(message, flow_channel, user_question)
+        response_text, model_used, result, scoped_channel_id, scoped_thread_id = await _run_ask_pipeline(
+            message, flow_channel, user_question
         )
 
         await _render_and_send_ask_response(

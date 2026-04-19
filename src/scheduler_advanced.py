@@ -15,6 +15,7 @@ def _parse_utc(dt_str):
         return dt.replace(tzinfo=datetime.timezone.utc)
     return dt.astimezone(datetime.timezone.utc)
 
+
 import json
 import logging
 import os
@@ -97,6 +98,7 @@ SCHEDULER_DB = Path(os.getenv("MEMORY_DIR", "/memory")) / "scheduler_advanced.db
 
 class TriggerType(str, Enum):
     """Types of event triggers."""
+
     CRON = "cron"
     EVENT = "event"
     THRESHOLD = "threshold"
@@ -105,6 +107,7 @@ class TriggerType(str, Enum):
 
 class RetryStrategy(str, Enum):
     """Retry backoff strategies."""
+
     NONE = "none"
     LINEAR = "linear"
     EXPONENTIAL = "exponential"
@@ -113,6 +116,7 @@ class RetryStrategy(str, Enum):
 @dataclass
 class RetryPolicy:
     """Retry configuration for failed tasks."""
+
     max_retries: int = 3
     strategy: RetryStrategy = RetryStrategy.EXPONENTIAL
     base_delay_seconds: int = 60
@@ -125,12 +129,13 @@ class RetryPolicy:
         elif self.strategy == RetryStrategy.LINEAR:
             return min(self.base_delay_seconds * (retry_count + 1), self.max_delay_seconds)
         else:  # EXPONENTIAL
-            return min(self.base_delay_seconds * (2 ** retry_count), self.max_delay_seconds)
+            return min(self.base_delay_seconds * (2**retry_count), self.max_delay_seconds)
 
 
 @dataclass
 class EventTrigger:
     """Configuration for event-based triggers."""
+
     trigger_type: TriggerType
     event_name: str = ""  # e.g., "on_message", "on_member_join"
     event_filter: dict[str, Any] | None = None  # conditions for event to fire
@@ -143,6 +148,7 @@ class EventTrigger:
 @dataclass
 class ConditionalExecution:
     """Conditional logic for task execution."""
+
     enabled: bool = False
     condition_script: str = ""  # Python expression to evaluate
     variables: dict[str, Any] | None = None  # variables available to condition
@@ -151,6 +157,7 @@ class ConditionalExecution:
 @dataclass
 class AdvancedTask:
     """Enhanced scheduled task with advanced features."""
+
     task_id: str
     action: str
     args: dict[str, Any]
@@ -182,6 +189,7 @@ class AdvancedTask:
 @dataclass
 class ExecutionLog:
     """Log entry for task execution."""
+
     log_id: int
     task_id: str
     executed_at: str
@@ -256,28 +264,31 @@ class SchedulerDatabase:
     def save_task(self, task: AdvancedTask) -> None:
         """Persist task to database."""
         with sqlite3.connect(self.db_path, timeout=10) as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT OR REPLACE INTO advanced_tasks VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                 )
-            """, (
-                task.task_id,
-                task.action,
-                json.dumps(task.args),
-                json.dumps(asdict(task.trigger)),
-                json.dumps(asdict(task.condition)) if task.condition else None,
-                json.dumps(asdict(task.retry_policy)) if task.retry_policy else None,
-                1 if task.enabled else 0,
-                task.created_by,
-                task.created_at,
-                task.last_run,
-                task.last_result,
-                task.run_count,
-                task.retry_count,
-                task.next_retry_at,
-                task.notify_channel_id,
-                1 if task.alert_only else 0,
-            ))
+            """,
+                (
+                    task.task_id,
+                    task.action,
+                    json.dumps(task.args),
+                    json.dumps(asdict(task.trigger)),
+                    json.dumps(asdict(task.condition)) if task.condition else None,
+                    json.dumps(asdict(task.retry_policy)) if task.retry_policy else None,
+                    1 if task.enabled else 0,
+                    task.created_by,
+                    task.created_at,
+                    task.last_run,
+                    task.last_result,
+                    task.run_count,
+                    task.retry_count,
+                    task.next_retry_at,
+                    task.notify_channel_id,
+                    1 if task.alert_only else 0,
+                ),
+            )
             conn.commit()
 
     def load_tasks(self) -> list[AdvancedTask]:
@@ -293,9 +304,11 @@ class SchedulerDatabase:
                     args=json.loads(row["args_json"]),
                     trigger=EventTrigger(**json.loads(row["trigger_json"])),
                     condition=ConditionalExecution(**json.loads(row["condition_json"]))
-                              if row["condition_json"] else None,
+                    if row["condition_json"]
+                    else None,
                     retry_policy=RetryPolicy(**json.loads(row["retry_policy_json"]))
-                                 if row["retry_policy_json"] else None,
+                    if row["retry_policy_json"]
+                    else None,
                     enabled=bool(row["enabled"]),
                     created_by=row["created_by"] or "",
                     created_at=row["created_at"] or "",
@@ -327,18 +340,21 @@ class SchedulerDatabase:
     ) -> int:
         """Log task execution."""
         with sqlite3.connect(self.db_path, timeout=10) as conn:
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 INSERT INTO execution_logs (
                     task_id, executed_at, status, result, duration_ms, retry_attempt
                 ) VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                task_id,
-                datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                status,
-                result[:1000],  # Truncate long results
-                duration_ms,
-                retry_attempt,
-            ))
+            """,
+                (
+                    task_id,
+                    datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    status,
+                    result[:1000],  # Truncate long results
+                    duration_ms,
+                    retry_attempt,
+                ),
+            )
             conn.commit()
             return cursor.lastrowid
 
@@ -352,29 +368,37 @@ class SchedulerDatabase:
         with sqlite3.connect(self.db_path, timeout=10) as conn:
             conn.row_factory = sqlite3.Row
             if task_id:
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     SELECT * FROM execution_logs
                     WHERE task_id = ?
                     ORDER BY executed_at DESC
                     LIMIT ?
-                """, (task_id, limit))
+                """,
+                    (task_id, limit),
+                )
             else:
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     SELECT * FROM execution_logs
                     ORDER BY executed_at DESC
                     LIMIT ?
-                """, (limit,))
+                """,
+                    (limit,),
+                )
 
             for row in cursor:
-                logs.append(ExecutionLog(
-                    log_id=row["log_id"],
-                    task_id=row["task_id"],
-                    executed_at=row["executed_at"],
-                    status=row["status"],
-                    result=row["result"] or "",
-                    duration_ms=row["duration_ms"] or 0,
-                    retry_attempt=row["retry_attempt"] or 0,
-                ))
+                logs.append(
+                    ExecutionLog(
+                        log_id=row["log_id"],
+                        task_id=row["task_id"],
+                        executed_at=row["executed_at"],
+                        status=row["status"],
+                        result=row["result"] or "",
+                        duration_ms=row["duration_ms"] or 0,
+                        retry_attempt=row["retry_attempt"] or 0,
+                    )
+                )
         return logs
 
 
@@ -447,10 +471,14 @@ class AdvancedScheduler:
                 variables={},
             )
 
-        retry_policy = RetryPolicy(
-            max_retries=retry_max,
-            strategy=retry_strategy,
-        ) if retry_max > 0 else None
+        retry_policy = (
+            RetryPolicy(
+                max_retries=retry_max,
+                strategy=retry_strategy,
+            )
+            if retry_max > 0
+            else None
+        )
 
         task = AdvancedTask(
             task_id=task_id,
@@ -561,8 +589,13 @@ class AdvancedScheduler:
             task.next_retry_at = (
                 datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=delay)
             ).isoformat()
-            log.info("Task %s failed, will retry in %ds (attempt %d/%d)",
-                    task.task_id, delay, task.retry_count, task.retry_policy.max_retries)
+            log.info(
+                "Task %s failed, will retry in %ds (attempt %d/%d)",
+                task.task_id,
+                delay,
+                task.retry_count,
+                task.retry_policy.max_retries,
+            )
         else:
             task.retry_count = 0
             task.next_retry_at = ""
@@ -581,8 +614,7 @@ class AdvancedScheduler:
                     if not task.enabled:
                         continue
 
-                    if (task.trigger.trigger_type == TriggerType.EVENT and
-                        task.trigger.event_name == event_name):
+                    if task.trigger.trigger_type == TriggerType.EVENT and task.trigger.event_name == event_name:
                         log.info("Event %s triggered task %s", event_name, task.task_id)
                         await self._execute_with_retry(task, event_data)
 
@@ -619,6 +651,7 @@ class AdvancedScheduler:
         """Check if cron task is due."""
         try:
             from croniter import croniter
+
             cron_expr = task.trigger.event_name
             cron = croniter(cron_expr, now - datetime.timedelta(minutes=2))
             next_run = cron.get_next(datetime.datetime)
@@ -644,6 +677,7 @@ class AdvancedScheduler:
 
 # Global instance (lazy initialization to avoid issues at import time)
 _advanced_scheduler = None
+
 
 def get_advanced_scheduler():
     """Get or create the global advanced scheduler instance."""

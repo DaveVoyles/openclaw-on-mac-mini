@@ -42,6 +42,7 @@ def _reload_config(monkeypatch, env_overrides: dict | None = None, yaml_text: st
         del sys.modules[mod_name]
 
     import config
+
     importlib.reload(config)
     return config.cfg
 

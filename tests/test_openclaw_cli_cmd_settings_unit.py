@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_cmd_settings.py — settings and appearance handlers."""
+
 from __future__ import annotations
 
 import sys
@@ -58,6 +59,7 @@ def _mock_cli(**kwargs) -> MagicMock:
 # _cmd_theme
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_theme_list_shows_current(capsys):
     cli = _mock_cli(_PREFS={"theme": "default"})
     with patch.object(mod, "_m", return_value=cli):
@@ -113,10 +115,13 @@ def test_cmd_theme_reset_sets_default(capsys):
 # _cmd_emoji
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_emoji_status_shows_state(capsys):
     cli = _mock_cli(_PREFS={"emoji_pack": "classic", "emoji": True})
-    with patch.object(mod, "_m", return_value=cli), \
-         patch("openclaw_cli_cmd_settings._emoji_pack_name", return_value="classic"):
+    with (
+        patch.object(mod, "_m", return_value=cli),
+        patch("openclaw_cli_cmd_settings._emoji_pack_name", return_value="classic"),
+    ):
         result = mod._cmd_emoji(_ctx(""))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -125,9 +130,11 @@ def test_cmd_emoji_status_shows_state(capsys):
 
 def test_cmd_emoji_off_disables(capsys):
     cli = _mock_cli(_PREFS={"emoji_pack": "classic", "emoji": True})
-    with patch.object(mod, "_m", return_value=cli), \
-         patch("openclaw_cli_cmd_settings._emoji_pack_name", return_value="classic"), \
-         patch("openclaw_cli_cmd_settings._save_prefs"):
+    with (
+        patch.object(mod, "_m", return_value=cli),
+        patch("openclaw_cli_cmd_settings._emoji_pack_name", return_value="classic"),
+        patch("openclaw_cli_cmd_settings._save_prefs"),
+    ):
         result = mod._cmd_emoji(_ctx("off"))
     assert result == _CMD_CONTINUE
     cli._prefs_set.assert_called_with("emoji_pack", "ascii")
@@ -137,9 +144,11 @@ def test_cmd_emoji_off_disables(capsys):
 
 def test_cmd_emoji_on_enables(capsys):
     cli = _mock_cli(_PREFS={"emoji_pack": "classic", "emoji": False})
-    with patch.object(mod, "_m", return_value=cli), \
-         patch("openclaw_cli_cmd_settings._emoji_pack_name", return_value="classic"), \
-         patch("openclaw_cli_cmd_settings._save_prefs"):
+    with (
+        patch.object(mod, "_m", return_value=cli),
+        patch("openclaw_cli_cmd_settings._emoji_pack_name", return_value="classic"),
+        patch("openclaw_cli_cmd_settings._save_prefs"),
+    ):
         result = mod._cmd_emoji(_ctx("on"))
     assert result == _CMD_CONTINUE
     assert cli._PREFS["emoji"] is True
@@ -149,8 +158,10 @@ def test_cmd_emoji_on_enables(capsys):
 
 def test_cmd_emoji_invalid_token_prints_error(capsys):
     cli = _mock_cli(_PREFS={"emoji_pack": "classic"})
-    with patch.object(mod, "_m", return_value=cli), \
-         patch("openclaw_cli_cmd_settings._emoji_pack_name", return_value="classic"):
+    with (
+        patch.object(mod, "_m", return_value=cli),
+        patch("openclaw_cli_cmd_settings._emoji_pack_name", return_value="classic"),
+    ):
         result = mod._cmd_emoji(_ctx("blarg"))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -159,8 +170,10 @@ def test_cmd_emoji_invalid_token_prints_error(capsys):
 
 def test_cmd_emoji_pack_valid(capsys):
     cli = _mock_cli(_PREFS={"emoji_pack": "classic", "emoji": True})
-    with patch.object(mod, "_m", return_value=cli), \
-         patch("openclaw_cli_cmd_settings._emoji_pack_name", return_value="classic"):
+    with (
+        patch.object(mod, "_m", return_value=cli),
+        patch("openclaw_cli_cmd_settings._emoji_pack_name", return_value="classic"),
+    ):
         result = mod._cmd_emoji(_ctx("pack minimal"))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -169,8 +182,10 @@ def test_cmd_emoji_pack_valid(capsys):
 
 def test_cmd_emoji_pack_invalid(capsys):
     cli = _mock_cli(_PREFS={"emoji_pack": "classic"})
-    with patch.object(mod, "_m", return_value=cli), \
-         patch("openclaw_cli_cmd_settings._emoji_pack_name", return_value="classic"):
+    with (
+        patch.object(mod, "_m", return_value=cli),
+        patch("openclaw_cli_cmd_settings._emoji_pack_name", return_value="classic"),
+    ):
         result = mod._cmd_emoji(_ctx("pack ultraemoji"))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -180,6 +195,7 @@ def test_cmd_emoji_pack_invalid(capsys):
 # ---------------------------------------------------------------------------
 # _cmd_overlay
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_overlay_status_shows_state(capsys):
     cli = _mock_cli()
@@ -220,6 +236,7 @@ def test_cmd_overlay_invalid_token(capsys):
 # _cmd_pasteguard
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_pasteguard_on_enables(capsys):
     cli = _mock_cli(_PREFS={"paste_guard": False})
     with patch.object(mod, "_m", return_value=cli):
@@ -251,6 +268,7 @@ def test_cmd_pasteguard_status_shows_current(capsys):
 # _cmd_links (delegates to toggle pref)
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_links_delegates_to_toggle(capsys):
     cli = _mock_cli()
     cli._handle_simple_toggle_pref.return_value = _CMD_CONTINUE
@@ -263,6 +281,7 @@ def test_cmd_links_delegates_to_toggle(capsys):
 # ---------------------------------------------------------------------------
 # _cmd_keybind
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_keybind_list_empty(capsys):
     cli = _mock_cli(_PREFS={"custom_keybinds": {}})
@@ -331,6 +350,7 @@ def test_cmd_keybind_clear_missing(capsys):
 # _cmd_colorscheme
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_colorscheme_list_shows_schemes(capsys):
     cli = _mock_cli(_PREFS={"color_scheme": "default"})
     with patch.object(mod, "_m", return_value=cli):
@@ -369,6 +389,7 @@ def test_cmd_colorscheme_reset_sets_default(capsys):
 # _cmd_emojiheaders
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_emojiheaders_on(capsys):
     cli = _mock_cli(_PREFS={"emoji_headers": False})
     with patch.object(mod, "_m", return_value=cli):
@@ -397,6 +418,7 @@ def test_cmd_emojiheaders_status_shows_current(capsys):
 # ---------------------------------------------------------------------------
 # _cmd_layout
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_layout_status_no_arg(capsys):
     cli = _mock_cli(_PREFS={"layout": "normal"})
@@ -449,6 +471,7 @@ def test_cmd_layout_focus_reports_explicit_transition():
 # ---------------------------------------------------------------------------
 # _cycle_theme helper
 # ---------------------------------------------------------------------------
+
 
 def test_cycle_theme_next_advances(capsys):
     cli = _mock_cli(_PREFS={"theme": "default"})

@@ -33,23 +33,17 @@ class HabitCog(commands.Cog):
         frequency: str = "daily",
     ) -> None:
         if frequency not in ("daily", "weekly"):
-            await interaction.response.send_message(
-                "❌ Frequency must be `daily` or `weekly`", ephemeral=True
-            )
+            await interaction.response.send_message("❌ Frequency must be `daily` or `weekly`", ephemeral=True)
             return
 
         user_id = str(interaction.user.id)
         existing = self.tracker.list_for_user(user_id)
         if any(h.name.lower() == name.lower() for h in existing):
-            await interaction.response.send_message(
-                f"❌ You already track **{name}**", ephemeral=True
-            )
+            await interaction.response.send_message(f"❌ You already track **{name}**", ephemeral=True)
             return
 
         habit = self.tracker.add_habit(user_id, name, frequency)
-        await interaction.response.send_message(
-            f"✅ Now tracking **{habit.name}** ({habit.frequency})"
-        )
+        await interaction.response.send_message(f"✅ Now tracking **{habit.name}** ({habit.frequency})")
 
     @habit_group.command(name="checkin", description="Check in for a habit today")
     @app_commands.describe(name="Habit name")
@@ -57,21 +51,15 @@ class HabitCog(commands.Cog):
         user_id = str(interaction.user.id)
         habit = self.tracker.checkin(user_id, name)
         if not habit:
-            await interaction.response.send_message(
-                f"❌ Habit **{name}** not found", ephemeral=True
-            )
+            await interaction.response.send_message(f"❌ Habit **{name}** not found", ephemeral=True)
             return
 
         streak = self.tracker.get_streak(habit)
-        await interaction.response.send_message(
-            f"✅ Checked in for **{habit.name}**! 🔥 Streak: **{streak}** day(s)"
-        )
+        await interaction.response.send_message(f"✅ Checked in for **{habit.name}**! 🔥 Streak: **{streak}** day(s)")
 
     @habit_group.command(name="streak", description="Show current streaks")
     @app_commands.describe(name="Habit name (leave blank for all)")
-    async def habit_streak(
-        self, interaction: discord.Interaction, name: str | None = None
-    ) -> None:
+    async def habit_streak(self, interaction: discord.Interaction, name: str | None = None) -> None:
         user_id = str(interaction.user.id)
         habits = self.tracker.list_for_user(user_id)
 
@@ -79,9 +67,7 @@ class HabitCog(commands.Cog):
             habits = [h for h in habits if h.name.lower() == name.lower()]
 
         if not habits:
-            await interaction.response.send_message(
-                "No habits found.", ephemeral=True
-            )
+            await interaction.response.send_message("No habits found.", ephemeral=True)
             return
 
         embed = discord.Embed(title="🔥 Habit Streaks", color=discord.Color.orange())
@@ -102,17 +88,13 @@ class HabitCog(commands.Cog):
         habits = self.tracker.list_for_user(user_id)
 
         if not habits:
-            await interaction.response.send_message(
-                "No habits yet. Use `/habit add` to start!", ephemeral=True
-            )
+            await interaction.response.send_message("No habits yet. Use `/habit add` to start!", ephemeral=True)
             return
 
         today = datetime.now(timezone.utc).date()
         lines = []
         for h in habits:
-            checkin_dates = {
-                datetime.fromisoformat(ts).date() for ts in h.checkins
-            }
+            checkin_dates = {datetime.fromisoformat(ts).date() for ts in h.checkins}
             status = "✅" if today in checkin_dates else "⬜"
             streak = self.tracker.get_streak(h)
             lines.append(f"{status} **{h.name}** — 🔥 {streak} day(s) ({h.frequency})")
@@ -131,9 +113,7 @@ class HabitCog(commands.Cog):
         if self.tracker.delete_habit(user_id, name):
             await interaction.response.send_message(f"🗑️ Deleted habit **{name}**")
         else:
-            await interaction.response.send_message(
-                f"❌ Habit **{name}** not found", ephemeral=True
-            )
+            await interaction.response.send_message(f"❌ Habit **{name}** not found", ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:

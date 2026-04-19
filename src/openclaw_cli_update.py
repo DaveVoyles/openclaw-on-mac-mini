@@ -4,6 +4,7 @@ openclaw_cli_update — Version checking and self-update management.
 Leaf module: no imports from other openclaw_cli_* modules except ui_core (for ANSI).
 Handles PyPI version polling, standalone binary replacement, and update notices.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -28,6 +29,7 @@ from openclaw_cli_ui_core import (
 
 try:
     from rich.console import Console as _RichConsole
+
     _RICH_CONSOLE = _RichConsole(highlight=False)
     _RICH_ERR = _RichConsole(stderr=True, highlight=False)
     _RICH_AVAILABLE = True
@@ -84,7 +86,7 @@ def _find_pip() -> list[str] | None:
     common ``pip``/``pip3`` shims on PATH.
     """
     candidates: list[list[str]] = [
-        [sys.executable, "-m", "pip"],   # same venv/interpreter as running process
+        [sys.executable, "-m", "pip"],  # same venv/interpreter as running process
         ["pip3"],
         ["pip"],
         ["python3", "-m", "pip"],
@@ -113,6 +115,7 @@ def _print_update_notice(current: str, latest: str | None) -> None:
     if _RICH_AVAILABLE and _IS_TTY:
         from rich.panel import Panel as _P
         from rich.text import Text as _T
+
         t = _T()
         t.append("⬆  Update available", style="bold yellow")
         if latest is not None:
@@ -130,9 +133,7 @@ def _print_update_notice(current: str, latest: str | None) -> None:
         else:
             version_line = ""
         print(
-            f"\n{_BYE}⬆  Update available!{_R}\n"
-            f"{version_line}"
-            f"{action}\n",
+            f"\n{_BYE}⬆  Update available!{_R}\n{version_line}{action}\n",
             file=sys.stderr,
         )
 
@@ -175,10 +176,7 @@ def _update_standalone_install(install_dir: str, *, current: str, base_url: str)
     server = base_url.rstrip("/")
 
     if _RICH_AVAILABLE and _IS_TTY:
-        _RICH_CONSOLE.print(
-            f"[bold cyan]🦞 Updating openclaw[/]  [dim]{current}[/]  "
-            f"[dim]from[/] [cyan]{server}[/]"
-        )
+        _RICH_CONSOLE.print(f"[bold cyan]🦞 Updating openclaw[/]  [dim]{current}[/]  [dim]from[/] [cyan]{server}[/]")
     else:
         print(f"Updating openclaw {current} from {server}…")
 
@@ -262,10 +260,7 @@ def handle_update_command(_args: argparse.Namespace) -> int:
     install_cmd = pip_cmd + ["install", "--upgrade"] + user_flag
 
     if _RICH_AVAILABLE and _IS_TTY:
-        _RICH_CONSOLE.print(
-            f"[bold cyan]🦞 Updating openclaw[/]  "
-            f"[dim]{current}[/] [dim]→[/] [bold green]{latest}[/]"
-        )
+        _RICH_CONSOLE.print(f"[bold cyan]🦞 Updating openclaw[/]  [dim]{current}[/] [dim]→[/] [bold green]{latest}[/]")
 
         # Run pip quietly and show a live spinner with elapsed time.
         result_holder: list[subprocess.CompletedProcess[bytes]] = []

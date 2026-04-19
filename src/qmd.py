@@ -51,11 +51,13 @@ class QMDMemory:
             # Dedup: skip if identical content exists in last 100 entries
             if any(m["content"] == content for m in self._memory[-100:]):
                 return
-            self._memory.append({
-                "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                "content": content,
-                "tags": tags or [],
-            })
+            self._memory.append(
+                {
+                    "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    "content": content,
+                    "tags": tags or [],
+                }
+            )
             # Evict oldest entries if over limit
             if len(self._memory) > MAX_MEMORY_ENTRIES:
                 self._memory = self._memory[-MAX_MEMORY_ENTRIES:]
@@ -66,7 +68,8 @@ class QMDMemory:
         async with self._lock:
             query_lower = query.lower()
             results = [
-                m["content"] for m in self._memory
+                m["content"]
+                for m in self._memory
                 if query_lower in m["content"].lower() or any(query_lower in t.lower() for t in m["tags"])
             ]
         if not results:
@@ -107,6 +110,7 @@ async def remember_fact(content: str, tags: str | None = "", source: str = "user
         route = _classify_fact(content)
         if route == "preference":
             from user_profile import sync_profile_to_vectors, update_preference
+
             # Try to parse "key = value" or "key: value" patterns
             for sep in ("=", ":"):
                 if sep in content:
@@ -120,11 +124,13 @@ async def remember_fact(content: str, tags: str | None = "", source: str = "user
                     break
             if not routed:
                 from user_profile import add_context_note
+
                 add_context_note(content)
                 routed = True
             log.info("Routed to user_profile: %s", content[:80])
         elif route == "rule":
             from rules_engine import add_rule
+
             await add_rule(content)
             routed = True
             log.info("Routed to rules_engine: %s", content[:80])
@@ -136,6 +142,7 @@ async def remember_fact(content: str, tags: str | None = "", source: str = "user
     # Also embed into ChromaDB for semantic search
     try:
         import vector_store
+
         fact_id = str(int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000))
         await vector_store.add_memory(fact_id, content, tag_list, source=source)
     except Exception as e:  # broad: intentional — vector store can fail in many ways
@@ -155,13 +162,32 @@ def _classify_fact(content: str) -> str:
     """
     lower = content.lower()
     # Preference indicators
-    pref_signals = ["i prefer", "i like", "i want", "my timezone", "my favorite",
-                    "i use", "i always", "i never", "default to", "set my"]
+    pref_signals = [
+        "i prefer",
+        "i like",
+        "i want",
+        "my timezone",
+        "my favorite",
+        "i use",
+        "i always",
+        "i never",
+        "default to",
+        "set my",
+    ]
     if any(s in lower for s in pref_signals):
         return "preference"
     # Rule indicators
-    rule_signals = ["don't", "do not", "always ", "never ", "you should",
-                    "you must", "stop ", "remember to", "make sure"]
+    rule_signals = [
+        "don't",
+        "do not",
+        "always ",
+        "never ",
+        "you should",
+        "you must",
+        "stop ",
+        "remember to",
+        "make sure",
+    ]
     if any(s in lower for s in rule_signals):
         return "rule"
     return "general"
@@ -182,9 +208,8 @@ async def recall_fact(query: str) -> str:
     semantic_hits = []
     try:
         import vector_store
-        results = await vector_store.search(
-            vector_store.MEMORIES_COLLECTION, query, top_k=10
-        )
+
+        results = await vector_store.search(vector_store.MEMORIES_COLLECTION, query, top_k=10)
         semantic_hits = [r["text"] for r in results]
     except Exception as e:  # broad: intentional — vector store can fail in many ways
         log.debug("Vector search failed (non-critical): %s", e)

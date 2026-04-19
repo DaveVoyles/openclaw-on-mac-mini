@@ -64,10 +64,10 @@ class TestRetryPolicy:
 
     def test_exponential_backoff(self):
         policy = RetryPolicy(max_retries=5, strategy=RetryStrategy.EXPONENTIAL, base_delay_seconds=10)
-        assert policy.get_delay(0) == 10   # 10 * 2^0
-        assert policy.get_delay(1) == 20   # 10 * 2^1
-        assert policy.get_delay(2) == 40   # 10 * 2^2
-        assert policy.get_delay(3) == 80   # 10 * 2^3
+        assert policy.get_delay(0) == 10  # 10 * 2^0
+        assert policy.get_delay(1) == 20  # 10 * 2^1
+        assert policy.get_delay(2) == 40  # 10 * 2^2
+        assert policy.get_delay(3) == 80  # 10 * 2^3
 
     def test_max_delay_cap(self):
         policy = RetryPolicy(
@@ -90,14 +90,10 @@ class TestSchedulerDatabase:
         SchedulerDatabase(db_path=temp_db)
 
         with sqlite3.connect(temp_db) as conn:
-            cursor = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='advanced_tasks'"
-            )
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='advanced_tasks'")
             assert cursor.fetchone() is not None
 
-            cursor = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='execution_logs'"
-            )
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='execution_logs'")
             assert cursor.fetchone() is not None
 
     def test_save_and_load_task(self, scheduler_db):
@@ -501,7 +497,6 @@ class TestAdvancedSchedulerIntegration:
         assert history[0].task_id == task.task_id
 
 
-
 # ---------------------------------------------------------------------------
 # Additional tests for improved scheduler_advanced coverage
 # ---------------------------------------------------------------------------
@@ -539,11 +534,13 @@ class TestSafeConditionEval:
 
     def test_too_long_expression_raises_value_error(self):
         import pytest
+
         with pytest.raises(ValueError, match="too long"):
             _safe_condition_eval("x" * 501, {"x": 1})
 
     def test_unsafe_call_raises(self):
         import pytest
+
         with pytest.raises((ValueError, Exception)):
             _safe_condition_eval("__import__('os').system('echo')", {})
 
@@ -605,6 +602,7 @@ class TestExecuteTaskConditionSkip:
     async def test_condition_false_skips_execution(self, scheduler):
         """When condition evaluates to False, task returns skipped message."""
         from scheduler_advanced import ConditionalExecution
+
         task = AdvancedTask(
             task_id="test-skip",
             action="test_action",
@@ -674,10 +672,10 @@ class TestGetAdvancedSchedulerSingleton:
             adv_module._advanced_scheduler = orig
 
 
-
 @pytest.mark.asyncio
 async def test_execute_task_raises_exception_handled(scheduler):
     """_execute_task handles general exceptions."""
+
     async def bad_skill(**kwargs):
         raise ValueError("bad input")
 
@@ -702,6 +700,7 @@ async def test_scheduler_start_method(scheduler):
     scheduler._runner_task.cancel()
     scheduler._event_processor_task.cancel()
     import asyncio
+
     try:
         await scheduler._runner_task
     except asyncio.CancelledError:
@@ -715,6 +714,7 @@ async def test_scheduler_start_method(scheduler):
 def test_load_tasks_counter_update(tmp_path):
     """_load_tasks updates counter for standard adv- task IDs."""
     from scheduler_advanced import AdvancedScheduler, AdvancedTask, EventTrigger, TriggerType
+
     s = AdvancedScheduler(db_path=tmp_path / "b.db")
     task = AdvancedTask(
         task_id="adv-42",

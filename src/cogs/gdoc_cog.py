@@ -88,12 +88,7 @@ class GDocCog(commands.Cog):
         try:
             q = urlquote("mimeType='application/vnd.google-apps.document'")
             fields = urlquote("files(id,name,modifiedTime,webViewLink)")
-            path = (
-                f"v3/files?q={q}"
-                "&orderBy=modifiedTime+desc"
-                "&pageSize=10"
-                f"&fields={fields}"
-            )
+            path = f"v3/files?q={q}&orderBy=modifiedTime+desc&pageSize=10&fields={fields}"
             data = await _drive_request(path)
             files = data.get("files", [])
             if not files:
@@ -105,9 +100,7 @@ class GDocCog(commands.Cog):
                 name = f.get("name", "Untitled")
                 link = f.get("webViewLink", "")
                 modified = f.get("modifiedTime", "")[:10]
-                lines.append(
-                    f"📄 [{name}]({link}) — {modified}" if link else f"📄 {name} — {modified}"
-                )
+                lines.append(f"📄 [{name}]({link}) — {modified}" if link else f"📄 {name} — {modified}")
 
             embed = discord.Embed(
                 title="📂 Recent Google Docs",

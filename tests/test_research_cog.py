@@ -23,9 +23,7 @@ async def test_rerun_button_schedules_full_research_workflow():
     interaction = _fake_interaction()
 
     scheduler_stub = SimpleNamespace(
-        scheduler=SimpleNamespace(
-            create=MagicMock(return_value=SimpleNamespace(task_id="task-42"))
-        )
+        scheduler=SimpleNamespace(create=MagicMock(return_value=SimpleNamespace(task_id="task-42")))
     )
 
     with (

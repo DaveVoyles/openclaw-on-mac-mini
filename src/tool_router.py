@@ -215,8 +215,23 @@ _WORKFLOW_BUNDLES: tuple[dict[str, Any], ...] = (
         ),
         "token_groups": (
             {"calendar", "schedule", "agenda", "meeting", "event", "events"},
-            {"today", "tomorrow", "week", "weekend", "tonight", "monday", "tuesday", "wednesday",
-             "thursday", "friday", "saturday", "sunday", "add", "create", "schedule"},
+            {
+                "today",
+                "tomorrow",
+                "week",
+                "weekend",
+                "tonight",
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday",
+                "saturday",
+                "sunday",
+                "add",
+                "create",
+                "schedule",
+            },
         ),
         "tools": ("get_todays_events", "get_upcoming_events", "create_calendar_event"),
     },
@@ -275,32 +290,79 @@ _PACK_PROFILES: dict[str, dict[str, Any]] = {
         "persona": "finance-analyst",
         "aliases": ("markets", "stocks", "investing"),
         "terms": (
-            "finance", "financial", "market", "markets", "stock", "stocks", "invest",
-            "investing", "portfolio", "etf", "earnings", "economic", "economy", "indices",
+            "finance",
+            "financial",
+            "market",
+            "markets",
+            "stock",
+            "stocks",
+            "invest",
+            "investing",
+            "portfolio",
+            "etf",
+            "earnings",
+            "economic",
+            "economy",
+            "indices",
         ),
     },
     "sports": {
         "persona": "sports-analyst",
         "aliases": ("sportsbook",),
         "terms": (
-            "sports", "game", "games", "matchup", "watch", "schedule", "scores", "team",
-            "teams", "league", "espn", "ncaa", "nba", "nfl", "mlb", "nhl", "mls", "lacrosse",
+            "sports",
+            "game",
+            "games",
+            "matchup",
+            "watch",
+            "schedule",
+            "scores",
+            "team",
+            "teams",
+            "league",
+            "espn",
+            "ncaa",
+            "nba",
+            "nfl",
+            "mlb",
+            "nhl",
+            "mls",
+            "lacrosse",
         ),
     },
     "wwe": {
         "persona": "wwe-reporter",
         "aliases": ("wrestling", "pro-wrestling"),
         "terms": (
-            "wwe", "wrestling", "raw", "smackdown", "nxt", "wrestlemania",
-            "pay-per-view", "ppv", "premium live event", "sports entertainment",
+            "wwe",
+            "wrestling",
+            "raw",
+            "smackdown",
+            "nxt",
+            "wrestlemania",
+            "pay-per-view",
+            "ppv",
+            "premium live event",
+            "sports entertainment",
         ),
     },
     "gaming": {
         "persona": "gaming-scout",
         "aliases": ("videogames", "video-games"),
         "terms": (
-            "gaming", "game", "games", "steam", "xbox", "playstation", "nintendo",
-            "pc", "esports", "patch", "release notes", "multiplayer", "twitch",
+            "gaming",
+            "game",
+            "games",
+            "steam",
+            "xbox",
+            "playstation",
+            "nintendo",
+            "pc",
+            "esports",
+            "patch",
+            "release notes",
+            "multiplayer",
+            "twitch",
         ),
     },
 }
@@ -546,7 +608,10 @@ def _extract_request_hints(message: str, message_lower: str, message_tokens: set
     if "box office" in message_lower:
         hints["report_topic"] = "box-office"
         hints["retrieval_profile"] = "news"
-    elif any(term in message_lower for term in ("gaming", "esports", "videogame", "video game", "steam", "xbox", "playstation", "nintendo")):
+    elif any(
+        term in message_lower
+        for term in ("gaming", "esports", "videogame", "video game", "steam", "xbox", "playstation", "nintendo")
+    ):
         hints["report_topic"] = "gaming"
         hints["retrieval_profile"] = "gaming"
     elif any(term in message_tokens for term in _SPORT_TERMS) or "sports" in message_lower:
@@ -606,9 +671,7 @@ def route_tool_declarations(
     candidate_declarations = declarations
     if pack_name:
         filtered_declarations = [
-            declaration
-            for declaration in declarations
-            if _declaration_matches_pack(declaration, pack_name)
+            declaration for declaration in declarations if _declaration_matches_pack(declaration, pack_name)
         ]
         if filtered_declarations:
             candidate_declarations = filtered_declarations
@@ -621,11 +684,7 @@ def route_tool_declarations(
         request_hints["pack"] = pack_name
     if persona_name:
         request_hints["persona"] = persona_name
-    bundled_tool_names = {
-        str(tool_name)
-        for bundle in matched_bundles
-        for tool_name in bundle.get("tools", ())
-    }
+    bundled_tool_names = {str(tool_name) for bundle in matched_bundles for tool_name in bundle.get("tools", ())}
     scored: list[tuple[int, str, dict[str, Any]]] = []
     always_on: list[dict[str, Any]] = []
     guard_suppressed: list[str] = []

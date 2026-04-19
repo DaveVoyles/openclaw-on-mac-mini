@@ -52,6 +52,7 @@ close_session = _sessions.close
 # Saved feed registry (persisted to /memory/rss_feeds.json)
 # ---------------------------------------------------------------------------
 
+
 def _load_feeds() -> list[dict]:
     """Load saved feed subscriptions."""
     if _FEEDS_FILE.exists():
@@ -149,6 +150,7 @@ def _parse_feed(xml_text: str, limit: int = 10) -> tuple[str, list[dict]]:
 # Public skills
 # ---------------------------------------------------------------------------
 
+
 async def fetch_rss_feed(url: str, limit: int = 10) -> str:
     """
     Fetch recent items from any RSS or Atom feed URL.
@@ -234,10 +236,7 @@ async def search_rss(url: str, query: str) -> str:
 
     feed_title, items = _parse_feed(xml_text, _MAX_ITEMS)
     q_lower = query.lower()
-    matched = [
-        it for it in items
-        if q_lower in it["title"].lower() or q_lower in it["summary"].lower()
-    ]
+    matched = [it for it in items if q_lower in it["title"].lower() or q_lower in it["summary"].lower()]
 
     if not matched:
         return f"🔍 No items in **{feed_title}** matching `{query}`."
@@ -305,6 +304,7 @@ async def get_rss_digest(urls_json: str, topic: str = "") -> str:
 
     try:
         from llm import chat as _llm_chat
+
         digest, _, _ = await asyncio.wait_for(_llm_chat(prompt), timeout=30)
         return digest[:1900]
     except Exception as e:  # broad: intentional

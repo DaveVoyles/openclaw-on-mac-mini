@@ -1,4 +1,5 @@
 """Tests for cogs/rss_cog.py."""
+
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -59,6 +60,7 @@ def _make_cog():
 
 # ── __init__ ──────────────────────────────────────────────────────────────────
 
+
 def test_rss_cog_init():
     cog = _make_cog()
     assert cog.bot is not None
@@ -66,9 +68,11 @@ def test_rss_cog_init():
 
 # ── cog_command_error ─────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_cog_command_error_check_failure_not_done():
     from discord import app_commands
+
     cog = _make_cog()
     inter = _make_interaction(done=False)
     err = app_commands.CheckFailure("Not authorized")
@@ -80,6 +84,7 @@ async def test_cog_command_error_check_failure_not_done():
 @pytest.mark.asyncio
 async def test_cog_command_error_generic_done():
     from discord import app_commands
+
     cog = _make_cog()
     inter = _make_interaction(done=True)
     err = app_commands.AppCommandError("Boom")
@@ -90,13 +95,16 @@ async def test_cog_command_error_generic_done():
 
 # ── rss_list_cmd ──────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_rss_list_cmd_success():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("rss_skills.list_rss_feeds", new=AsyncMock(return_value="Feed1\nFeed2")), \
-         patch("cogs.rss_cog.audit_log") as mock_audit:
+    with (
+        patch("rss_skills.list_rss_feeds", new=AsyncMock(return_value="Feed1\nFeed2")),
+        patch("cogs.rss_cog.audit_log") as mock_audit,
+    ):
         await cog.rss_list_cmd.callback(cog, inter)
 
     inter.response.send_message.assert_awaited_once()
@@ -105,14 +113,17 @@ async def test_rss_list_cmd_success():
 
 # ── rss_fetch_cmd ─────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_rss_fetch_cmd_success():
     cog = _make_cog()
     inter = _make_interaction()
 
     feed_result = "My Feed\nItem 1\nItem 2"
-    with patch("rss_skills.fetch_rss_feed", new=AsyncMock(return_value=feed_result)), \
-         patch("cogs.rss_cog.audit_log") as mock_audit:
+    with (
+        patch("rss_skills.fetch_rss_feed", new=AsyncMock(return_value=feed_result)),
+        patch("cogs.rss_cog.audit_log") as mock_audit,
+    ):
         await cog.rss_fetch_cmd.callback(cog, inter, url="https://example.com/feed", limit=5)
 
     inter.response.defer.assert_awaited_once()
@@ -125,8 +136,10 @@ async def test_rss_fetch_cmd_error_response():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("rss_skills.fetch_rss_feed", new=AsyncMock(return_value="❌ Failed to fetch")), \
-         patch("cogs.rss_cog.audit_log"):
+    with (
+        patch("rss_skills.fetch_rss_feed", new=AsyncMock(return_value="❌ Failed to fetch")),
+        patch("cogs.rss_cog.audit_log"),
+    ):
         await cog.rss_fetch_cmd.callback(cog, inter, url="https://bad.url/feed", limit=10)
 
     inter.followup.send.assert_awaited_once()
@@ -134,13 +147,16 @@ async def test_rss_fetch_cmd_error_response():
 
 # ── rss_search_cmd ────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_rss_search_cmd_success():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("rss_skills.search_rss", new=AsyncMock(return_value="Found 2 items")), \
-         patch("cogs.rss_cog.audit_log") as mock_audit:
+    with (
+        patch("rss_skills.search_rss", new=AsyncMock(return_value="Found 2 items")),
+        patch("cogs.rss_cog.audit_log") as mock_audit,
+    ):
         await cog.rss_search_cmd.callback(cog, inter, url="https://example.com/feed", query="python")
 
     inter.followup.send.assert_awaited_once()
@@ -152,8 +168,10 @@ async def test_rss_search_cmd_no_results():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("rss_skills.search_rss", new=AsyncMock(return_value="🔍 No items matched")), \
-         patch("cogs.rss_cog.audit_log"):
+    with (
+        patch("rss_skills.search_rss", new=AsyncMock(return_value="🔍 No items matched")),
+        patch("cogs.rss_cog.audit_log"),
+    ):
         await cog.rss_search_cmd.callback(cog, inter, url="https://example.com/feed", query="xyz123")
 
     inter.followup.send.assert_awaited_once()
@@ -161,13 +179,13 @@ async def test_rss_search_cmd_no_results():
 
 # ── rss_digest_cmd ────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_rss_digest_cmd_no_feeds():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("rss_skills._load_feeds", return_value=[]), \
-         patch("cogs.rss_cog.audit_log"):
+    with patch("rss_skills._load_feeds", return_value=[]), patch("cogs.rss_cog.audit_log"):
         await cog.rss_digest_cmd.callback(cog, inter, topic="")
 
     inter.followup.send.assert_awaited_once()
@@ -181,9 +199,11 @@ async def test_rss_digest_cmd_with_feeds():
     inter = _make_interaction()
 
     feeds = [{"url": "https://example.com/feed"}]
-    with patch("rss_skills._load_feeds", return_value=feeds), \
-         patch("rss_skills.get_rss_digest", new=AsyncMock(return_value="Digest content")), \
-         patch("cogs.rss_cog.audit_log") as mock_audit:
+    with (
+        patch("rss_skills._load_feeds", return_value=feeds),
+        patch("rss_skills.get_rss_digest", new=AsyncMock(return_value="Digest content")),
+        patch("cogs.rss_cog.audit_log") as mock_audit,
+    ):
         await cog.rss_digest_cmd.callback(cog, inter, topic="tech")
 
     inter.followup.send.assert_awaited_once()

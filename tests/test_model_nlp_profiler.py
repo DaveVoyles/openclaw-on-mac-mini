@@ -1,4 +1,5 @@
 """Tests for model_aliases.py, nlp_entities.py, and profiler.py."""
+
 from __future__ import annotations
 
 import pytest
@@ -9,6 +10,7 @@ from nlp_entities import _dedupe, _phrase_in_text, enrich_route_text_and_hints, 
 # ===========================================================================
 # model_aliases.py
 # ===========================================================================
+
 
 class TestNormalizeModelInput:
     def test_model_nlp_profiler_empty_returns_empty(self):
@@ -57,6 +59,7 @@ class TestModelInputSuggestion:
 # ===========================================================================
 # nlp_entities.py — pure helpers
 # ===========================================================================
+
 
 class TestPhraseInText:
     def test_model_nlp_profiler_exact_match(self):
@@ -138,14 +141,17 @@ class TestEnrichRouteTextAndHints:
 # profiler.py
 # ===========================================================================
 
+
 class TestProfiler:
     def test_model_nlp_profiler_initial_state_not_profiling(self):
         from profiler import Profiler
+
         p = Profiler()
         assert not p._is_profiling
 
     def test_start_and_stop(self):
         from profiler import Profiler
+
         p = Profiler()
         p.start_cpu_profiling()
         assert p._is_profiling
@@ -156,6 +162,7 @@ class TestProfiler:
 
     def test_model_nlp_profiler_double_start_raises(self):
         from profiler import Profiler
+
         p = Profiler()
         p.start_cpu_profiling()
         try:
@@ -166,22 +173,26 @@ class TestProfiler:
 
     def test_model_nlp_profiler_stop_without_start_raises(self):
         from profiler import Profiler
+
         p = Profiler()
         with pytest.raises(RuntimeError, match="No active"):
             p.stop_cpu_profiling()
 
     def test_get_cpu_stats_dict_not_profiling(self):
         from profiler import Profiler
+
         p = Profiler()
         assert p.get_cpu_stats_dict() == {}
 
     def test_generate_flame_graph_data_not_profiling(self):
         from profiler import Profiler
+
         p = Profiler()
         assert p.generate_flame_graph_data() == {}
 
     def test_get_profiler_returns_singleton(self):
         from profiler import get_profiler
+
         p1 = get_profiler()
         p2 = get_profiler()
         assert p1 is p2

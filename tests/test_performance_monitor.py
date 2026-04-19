@@ -128,7 +128,7 @@ def test_cpu_profiling(monitor):
     assert monitor._is_profiling
 
     # Do some work
-    sum([i ** 2 for i in range(1000)])
+    sum([i**2 for i in range(1000)])
 
     stats = monitor.stop_profiling()
     assert not monitor._is_profiling
@@ -170,6 +170,7 @@ def test_monitor_performance_decorator_sync():
 @pytest.mark.asyncio
 async def test_alert_slow_queries_decorator():
     """Test alert_slow_queries decorator."""
+
     @alert_slow_queries(threshold=0.1)
     async def slow_func():
         await asyncio.sleep(0.2)
@@ -232,10 +233,7 @@ async def test_concurrent_tracing():
         monitor.finish_trace(correlation_id)
 
     # Create multiple concurrent traces
-    await asyncio.gather(*[
-        create_and_finish_trace(f"op{i}")
-        for i in range(10)
-    ])
+    await asyncio.gather(*[create_and_finish_trace(f"op{i}") for i in range(10)])
 
     # All should be finished
     assert len(monitor._active_traces) == 0

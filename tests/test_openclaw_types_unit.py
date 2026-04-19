@@ -1,4 +1,5 @@
 """Unit tests for openclaw_types.py — type aliases, TypedDicts, and structured types."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -21,29 +22,35 @@ from openclaw_types import (
 # Type aliases are plain strings — smoke-check that they resolve
 # ---------------------------------------------------------------------------
 
+
 class TestTypeAliases:
     def test_import_json_alias(self):
         from openclaw_types import JSON
+
         d: JSON = {"key": "value"}
         assert d["key"] == "value"
 
     def test_import_jsonvalue_alias(self):
         from openclaw_types import JSONValue
+
         v: JSONValue = 42
         assert v == 42
 
     def test_import_headers(self):
         from openclaw_types import Headers
+
         h: Headers = {"Content-Type": "application/json"}
         assert h["Content-Type"] == "application/json"
 
     def test_import_query_params(self):
         from openclaw_types import QueryParams
+
         q: QueryParams = {"page": 1, "active": True}
         assert q["page"] == 1
 
     def test_discord_id_aliases(self):
         from openclaw_types import ChannelID, GuildID, MessageID, RoleID, UserID
+
         uid: UserID = "123456789"
         cid: ChannelID = "987654321"
         gid: GuildID = "111111111"
@@ -54,6 +61,7 @@ class TestTypeAliases:
 
     def test_api_aliases(self):
         from openclaw_types import URL, APIKey, FilePath
+
         key: APIKey = "secret"
         url: URL = "https://example.com"
         fp: FilePath = "/tmp/file.txt"
@@ -61,6 +69,7 @@ class TestTypeAliases:
 
     def test_openclaw_types_unit_callback_aliases(self):
         from openclaw_types import AsyncCallback, AsyncCallbackWithResult, ErrorHandler
+
         assert isinstance(ErrorHandler, str)
         assert isinstance(AsyncCallback, str)
         assert isinstance(AsyncCallbackWithResult, str)
@@ -69,6 +78,7 @@ class TestTypeAliases:
 # ---------------------------------------------------------------------------
 # MessageContext
 # ---------------------------------------------------------------------------
+
 
 class TestMessageContext:
     def test_minimal_creation(self):
@@ -103,6 +113,7 @@ class TestMessageContext:
 # ConversationMessage
 # ---------------------------------------------------------------------------
 
+
 class TestConversationMessage:
     def test_user_role(self):
         msg: ConversationMessage = {
@@ -136,6 +147,7 @@ class TestConversationMessage:
 # SkillResult
 # ---------------------------------------------------------------------------
 
+
 class TestSkillResult:
     def test_success_result(self):
         result: SkillResult = {"status": "success", "data": {"answer": 42}}
@@ -167,6 +179,7 @@ class TestSkillResult:
 # APIResponse
 # ---------------------------------------------------------------------------
 
+
 class TestAPIResponse:
     def test_success_response(self):
         resp: APIResponse = {"status": "success", "data": {"key": "value"}}
@@ -191,6 +204,7 @@ class TestAPIResponse:
 # ---------------------------------------------------------------------------
 # NewsArticle
 # ---------------------------------------------------------------------------
+
 
 class TestNewsArticle:
     def test_minimal_article(self):
@@ -217,6 +231,7 @@ class TestNewsArticle:
 # SearchResult
 # ---------------------------------------------------------------------------
 
+
 class TestSearchResult:
     def test_minimal_result(self):
         result: SearchResult = {"title": "Page", "url": "https://example.com", "snippet": "..."}
@@ -236,6 +251,7 @@ class TestSearchResult:
 # ---------------------------------------------------------------------------
 # WeatherData
 # ---------------------------------------------------------------------------
+
 
 class TestWeatherData:
     def test_basic_weather(self):
@@ -265,6 +281,7 @@ class TestWeatherData:
 # ---------------------------------------------------------------------------
 # HealthCheck
 # ---------------------------------------------------------------------------
+
 
 class TestHealthCheck:
     def test_healthy_service(self):
@@ -304,6 +321,7 @@ class TestHealthCheck:
 # MetricDataPoint
 # ---------------------------------------------------------------------------
 
+
 class TestMetricDataPoint:
     def test_basic_metric(self):
         dp: MetricDataPoint = {
@@ -331,6 +349,7 @@ class TestMetricDataPoint:
 # UserPreferences
 # ---------------------------------------------------------------------------
 
+
 class TestUserPreferences:
     def test_minimal_preferences(self):
         prefs: UserPreferences = {"user_id": "u1"}
@@ -355,6 +374,7 @@ class TestUserPreferences:
 # ---------------------------------------------------------------------------
 # DBRow
 # ---------------------------------------------------------------------------
+
 
 class TestDBRow:
     def test_basic_row(self):

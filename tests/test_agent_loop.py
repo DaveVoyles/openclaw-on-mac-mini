@@ -1,4 +1,5 @@
 """Tests for agent_loop — Plan CRUD, serialization, dependency tracking."""
+
 import pytest
 
 import agent_loop
@@ -12,11 +13,15 @@ def _isolate_plans(tmp_path, monkeypatch):
 
 @pytest.fixture
 def sample_plan():
-    plan = Plan(plan_id="test-001", goal="Test roundtrip", steps=[
-        Step(num=1, description="First step", status="done", output="Result A"),
-        Step(num=2, description="Second step", depends_on=[1]),
-        Step(num=3, description="Third step", depends_on=[1, 2]),
-    ])
+    plan = Plan(
+        plan_id="test-001",
+        goal="Test roundtrip",
+        steps=[
+            Step(num=1, description="First step", status="done", output="Result A"),
+            Step(num=2, description="Second step", depends_on=[1]),
+            Step(num=3, description="Third step", depends_on=[1, 2]),
+        ],
+    )
     plan.context = {"search_results": "found 3 items"}
     return plan
 
@@ -77,6 +82,7 @@ class TestPlanDependencyTracking:
 # Async skill functions — create / read / update / adjust / cancel / resume
 # ---------------------------------------------------------------------------
 
+
 class TestCreatePlan:
     @pytest.mark.asyncio
     async def test_creates_plan_with_steps(self):
@@ -94,9 +100,9 @@ class TestCreatePlan:
     async def test_blocks_when_too_many_active(self, monkeypatch):
         # Fill up MAX_ACTIVE_PLANS with in-progress plans
         for i in range(agent_loop.MAX_ACTIVE_PLANS):
-            p = agent_loop.Plan(plan_id=f"filler-{i:03d}", goal=f"Filler {i}", steps=[
-                agent_loop.Step(num=1, description="Work")
-            ])
+            p = agent_loop.Plan(
+                plan_id=f"filler-{i:03d}", goal=f"Filler {i}", steps=[agent_loop.Step(num=1, description="Work")]
+            )
             p.status = "in-progress"
             agent_loop.save_plan(p)
         result = await agent_loop.create_plan("One more")
@@ -281,9 +287,13 @@ class TestExecutePlan:
         """Single-step plan: LLM returns text directly, step marked done, plan completed."""
         from unittest.mock import AsyncMock, patch
 
-        plan = agent_loop.Plan(plan_id="happy-001", goal="Do one thing", steps=[
-            agent_loop.Step(num=1, description="Just do it"),
-        ])
+        plan = agent_loop.Plan(
+            plan_id="happy-001",
+            goal="Do one thing",
+            steps=[
+                agent_loop.Step(num=1, description="Just do it"),
+            ],
+        )
         plan.status = "in-progress"
         agent_loop.save_plan(plan)
 
@@ -321,10 +331,14 @@ class TestExecutePlan:
         from unittest.mock import patch
 
         # Two steps: step 1 times out → plan is interrupted (step 2 still pending)
-        plan = agent_loop.Plan(plan_id="timeout-001", goal="Time me out", steps=[
-            agent_loop.Step(num=1, description="This will timeout"),
-            agent_loop.Step(num=2, description="Never reached", depends_on=[1]),
-        ])
+        plan = agent_loop.Plan(
+            plan_id="timeout-001",
+            goal="Time me out",
+            steps=[
+                agent_loop.Step(num=1, description="This will timeout"),
+                agent_loop.Step(num=2, description="Never reached", depends_on=[1]),
+            ],
+        )
         plan.status = "in-progress"
         agent_loop.save_plan(plan)
 
@@ -340,9 +354,13 @@ class TestExecutePlan:
         """on_progress callback receives step updates."""
         from unittest.mock import AsyncMock, patch
 
-        plan = agent_loop.Plan(plan_id="cb-001", goal="Callback test", steps=[
-            agent_loop.Step(num=1, description="Do work"),
-        ])
+        plan = agent_loop.Plan(
+            plan_id="cb-001",
+            goal="Callback test",
+            steps=[
+                agent_loop.Step(num=1, description="Do work"),
+            ],
+        )
         plan.status = "in-progress"
         agent_loop.save_plan(plan)
 
@@ -362,10 +380,14 @@ class TestExecutePlan:
         """When llm.chat raises a generic exception the step is failed and plan interrupted."""
         from unittest.mock import AsyncMock, patch
 
-        plan = agent_loop.Plan(plan_id="exc-001", goal="Blow up", steps=[
-            agent_loop.Step(num=1, description="Step that errors"),
-            agent_loop.Step(num=2, description="Never reached", depends_on=[1]),
-        ])
+        plan = agent_loop.Plan(
+            plan_id="exc-001",
+            goal="Blow up",
+            steps=[
+                agent_loop.Step(num=1, description="Step that errors"),
+                agent_loop.Step(num=2, description="Never reached", depends_on=[1]),
+            ],
+        )
         plan.status = "in-progress"
         agent_loop.save_plan(plan)
 
@@ -385,10 +407,14 @@ class TestExecutePlan:
         """Outputs from completed steps are stored in plan.context for subsequent steps."""
         from unittest.mock import AsyncMock, patch
 
-        plan = agent_loop.Plan(plan_id="ctx-001", goal="Accumulate context", steps=[
-            agent_loop.Step(num=1, description="Search for data"),
-            agent_loop.Step(num=2, description="Summarise findings"),
-        ])
+        plan = agent_loop.Plan(
+            plan_id="ctx-001",
+            goal="Accumulate context",
+            steps=[
+                agent_loop.Step(num=1, description="Search for data"),
+                agent_loop.Step(num=2, description="Summarise findings"),
+            ],
+        )
         plan.status = "in-progress"
         agent_loop.save_plan(plan)
 
@@ -413,11 +439,15 @@ class TestExecutePlan:
         import asyncio as _asyncio
         from unittest.mock import patch
 
-        plan = agent_loop.Plan(plan_id="inf-001", goal="Run forever", steps=[
-            agent_loop.Step(num=1, description="Infinite step"),
-            agent_loop.Step(num=2, description="Unreachable", depends_on=[1]),
-            agent_loop.Step(num=3, description="Also unreachable", depends_on=[2]),
-        ])
+        plan = agent_loop.Plan(
+            plan_id="inf-001",
+            goal="Run forever",
+            steps=[
+                agent_loop.Step(num=1, description="Infinite step"),
+                agent_loop.Step(num=2, description="Unreachable", depends_on=[1]),
+                agent_loop.Step(num=3, description="Also unreachable", depends_on=[2]),
+            ],
+        )
         plan.status = "in-progress"
         agent_loop.save_plan(plan)
 

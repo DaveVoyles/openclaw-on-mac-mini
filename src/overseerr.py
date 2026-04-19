@@ -37,9 +37,7 @@ async def _get(path: str) -> dict | list | str:
     headers = {"X-Api-Key": OVERSEERR_API_KEY}
     try:
         session = await _get_session()
-        async with session.get(
-            f"{OVERSEERR_URL}/api/v1{path}", headers=headers
-        ) as resp:
+        async with session.get(f"{OVERSEERR_URL}/api/v1{path}", headers=headers) as resp:
             if resp.status == 200:
                 return await resp.json()
             try:
@@ -61,9 +59,7 @@ async def _post(path: str) -> dict | str:
     headers = {"X-Api-Key": OVERSEERR_API_KEY}
     try:
         session = await _get_session()
-        async with session.post(
-            f"{OVERSEERR_URL}/api/v1{path}", headers=headers
-        ) as resp:
+        async with session.post(f"{OVERSEERR_URL}/api/v1{path}", headers=headers) as resp:
             if resp.status in (200, 201, 204):
                 return {} if resp.status == 204 else await resp.json()
             try:
@@ -80,12 +76,7 @@ async def _post(path: str) -> dict | str:
 
 
 def _media_title(media: dict) -> str:
-    return (
-        media.get("title")
-        or media.get("originalTitle")
-        or media.get("name")
-        or f"TMDB #{media.get('tmdbId', '?')}"
-    )
+    return media.get("title") or media.get("originalTitle") or media.get("name") or f"TMDB #{media.get('tmdbId', '?')}"
 
 
 # ---------------------------------------------------------------------------
@@ -110,10 +101,7 @@ async def get_pending_requests() -> str:
         media = r.get("media", {})
         title = _media_title(media)
         media_type = "🎬" if r.get("type") == "movie" else "📺"
-        requester = (
-            r.get("requestedBy", {}).get("displayName")
-            or r.get("requestedBy", {}).get("username", "Unknown")
-        )
+        requester = r.get("requestedBy", {}).get("displayName") or r.get("requestedBy", {}).get("username", "Unknown")
         lines.append(f"• **#{req_id}** {media_type} {title} — by {requester}")
 
     return _truncate("\n".join(lines))
@@ -154,9 +142,7 @@ async def get_request_stats() -> str:
             return d.get("pageInfo", {}).get("results", 0)
         return "?"
 
-    all_c, pending_c, approved_c, available_c, processing_c = [
-        _count(r) for r in results
-    ]
+    all_c, pending_c, approved_c, available_c, processing_c = [_count(r) for r in results]
     lines = [
         "**Overseerr Request Stats**",
         f"• Total:         {all_c}",

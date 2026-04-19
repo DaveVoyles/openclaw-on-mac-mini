@@ -4,6 +4,7 @@ Extracted from openclaw_cli.py. Thin shims are left in the main module.
 Do NOT import from openclaw_cli — circular import risk. Use lazy imports
 inside function bodies where openclaw_cli symbols are needed at call time.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -309,9 +310,7 @@ def _print_dashboard_surface(
         _append_dashboard_rich_section(body, "Summary", summary_lines)
         _append_dashboard_rich_section(body, "Details", detail_lines, title_style="bold white")
         _append_dashboard_rich_section(body, "Actions", action_lines, title_style="bold yellow")
-        _RICH_CONSOLE.print(
-            _RichPanel(body, title=f"[bold]{title}[/]", border_style=border_style, padding=(0, 1))
-        )
+        _RICH_CONSOLE.print(_RichPanel(body, title=f"[bold]{title}[/]", border_style=border_style, padding=(0, 1)))
         return
     lines = [title, *(_dashboard_section_lines("Summary", summary_lines))]
     detail_block = _dashboard_section_lines("Details", detail_lines)
@@ -389,6 +388,7 @@ def run_async(coro: Any) -> Any:
 def _get_cli_module() -> Any:
     """Return the openclaw_cli module, loading it lazily to avoid circular imports."""
     import openclaw_cli as _m  # noqa: PLC0415
+
     return _m
 
 
@@ -480,7 +480,9 @@ def normalize_watch_state(state: dict[str, Any] | None) -> dict[str, Any]:
     for checkpoint in checkpoints:
         checkpoint.setdefault(
             "duration_seconds",
-            _elapsed_seconds(checkpoint.get("started_at") or checkpoint.get("created_at"), checkpoint.get("completed_at")),
+            _elapsed_seconds(
+                checkpoint.get("started_at") or checkpoint.get("created_at"), checkpoint.get("completed_at")
+            ),
         )
     normalized["checkpoints"] = checkpoints
     for entry in normalized["retry_history"]:
@@ -580,7 +582,9 @@ def _watch_timing_summary(state: dict[str, Any]) -> dict[str, Any]:
                 phase_started_at = str(item.get("created_at") or "").strip()
                 break
         if not phase_started_at:
-            phase_started_at = str(active_checkpoint.get("updated_at") or active_checkpoint.get("started_at") or "").strip()
+            phase_started_at = str(
+                active_checkpoint.get("updated_at") or active_checkpoint.get("started_at") or ""
+            ).strip()
         active_phase_elapsed = _elapsed_seconds(phase_started_at)
 
     latest_duration = (
@@ -588,7 +592,9 @@ def _watch_timing_summary(state: dict[str, Any]) -> dict[str, Any]:
         or _elapsed_seconds(latest_checkpoint.get("started_at"), latest_checkpoint.get("completed_at"))
         or _elapsed_seconds(latest_checkpoint.get("created_at"), latest_checkpoint.get("completed_at"))
     )
-    current_elapsed = _elapsed_seconds(normalized.get("last_run_at")) if normalized.get("status") in {"running", "retrying"} else None
+    current_elapsed = (
+        _elapsed_seconds(normalized.get("last_run_at")) if normalized.get("status") in {"running", "retrying"} else None
+    )
     return {
         "active_phase": active_phase,
         "active_phase_elapsed": active_phase_elapsed,
@@ -611,7 +617,11 @@ def print_watch_resume_snapshot(session_id: str, state: dict[str, Any], *, outpu
 
     if _RICH_AVAILABLE and _IS_TTY:
         emoji = _status_emoji(status)
-        border = "green" if status in ("active", "running") else ("yellow" if status in ("paused", "idle") else ("red" if status in ("failed", "error") else "dim"))
+        border = (
+            "green"
+            if status in ("active", "running")
+            else ("yellow" if status in ("paused", "idle") else ("red" if status in ("failed", "error") else "dim"))
+        )
         body = _RichText()
         body.append(f"{emoji} status    ", style="dim")
         body.append(f"{status}", style=f"bold {border}")
@@ -632,7 +642,9 @@ def print_watch_resume_snapshot(session_id: str, state: dict[str, Any], *, outpu
             body.append("\n📋 recent   ", style="dim")
             for entry in recent_progress:
                 body.append(f"\n   • {entry.get('message', '')}", style="dim")
-        _RICH_CONSOLE.print(_RichPanel(body, title=f"[bold]resuming watch[/] [dim]{session_id}[/]", border_style=border, padding=(0, 1)))
+        _RICH_CONSOLE.print(
+            _RichPanel(body, title=f"[bold]resuming watch[/] [dim]{session_id}[/]", border_style=border, padding=(0, 1))
+        )
     else:
         print(f"Resuming watch {session_id} (status={status}, completed polls={poll_count}).")
         if last_summary:
@@ -845,7 +857,9 @@ def _print_watch_status(state: dict[str, Any]) -> None:
     interval_seconds = int(state.get("interval_seconds") or 0)
     last_error = str(state.get("last_error") or "").strip()
     last_summary = str(state.get("last_summary") or "").strip()
-    history = load_conversation_history(str(state.get("session_id") or ""), limit_turns=0) if state.get("session_id") else []
+    history = (
+        load_conversation_history(str(state.get("session_id") or ""), limit_turns=0) if state.get("session_id") else []
+    )
     pressure = _context_pressure_snapshot(
         history,
         system_prompt=str(_PREFS.get("system_prompt", "") or ""),
@@ -881,7 +895,9 @@ def _print_watch_status(state: dict[str, Any]) -> None:
         ]
     )
     if w_status in {"completed", "complete"}:
-        summary_lines.append(_progress_cell("mood", "milestone reached · latest watch loop finished cleanly", status="complete"))
+        summary_lines.append(
+            _progress_cell("mood", "milestone reached · latest watch loop finished cleanly", status="complete")
+        )
     elif w_status == "retrying" or failure_count:
         summary_lines.append(_progress_cell("mood", "resilient recovery · retry budget still active", status="retry"))
     elif poll_count >= 2 or last_summary:
@@ -899,9 +915,13 @@ def _print_watch_status(state: dict[str, Any]) -> None:
             phase_line += f" · {_format_elapsed_compact(timing['active_phase_elapsed'])}"
         detail_lines.append(_progress_cell("phase", phase_line, status=phase_status))
     if timing["latest_duration"] is not None:
-        detail_lines.append(_progress_cell("last duration", _format_elapsed_compact(timing["latest_duration"]), status="info"))
+        detail_lines.append(
+            _progress_cell("last duration", _format_elapsed_compact(timing["latest_duration"]), status="info")
+        )
     if timing["retry_delay_total"]:
-        detail_lines.append(_progress_cell("backoff", _format_elapsed_compact(timing["retry_delay_total"]), status="retry"))
+        detail_lines.append(
+            _progress_cell("backoff", _format_elapsed_compact(timing["retry_delay_total"]), status="retry")
+        )
     if last_run_at:
         detail_lines.append(f"last run: {last_run_at}")
     if last_summary:
@@ -919,7 +939,9 @@ def _print_watch_status(state: dict[str, Any]) -> None:
         if bool(pressure["overflow"]):
             detail_lines.append("overflow cue: next retry likely exceeds the resolved window")
     if pressure["hidden_pressure"]:
-        detail_lines.append("hidden context cue: system or queued inject content pushes the next retry closer to capacity")
+        detail_lines.append(
+            "hidden context cue: system or queued inject content pushes the next retry closer to capacity"
+        )
     if pressure["has_pending_inject"]:
         detail_lines.append("recovery cue: /inject clear drops the queued one-shot context before a retry")
     detail_lines.extend(_watch_focus_lines(state))
@@ -1091,7 +1113,9 @@ def execute_watch_iteration(
             saved_path = str(
                 save_output(
                     session.session_id,
-                    output_name_from_title(f"watch-{mode}-{state.get('poll_count', 0)}", default_stem="watch-analysis", suffix=".md"),
+                    output_name_from_title(
+                        f"watch-{mode}-{state.get('poll_count', 0)}", default_stem="watch-analysis", suffix=".md"
+                    ),
                     response.response,
                 )
             )
@@ -1133,11 +1157,15 @@ def execute_watch_iteration(
             saved = str(
                 save_output(
                     session.session_id,
-                    output_name_from_title(f"watch-{mode}-{state.get('poll_count', 0)}", default_stem="watch-research", suffix=".md"),
+                    output_name_from_title(
+                        f"watch-{mode}-{state.get('poll_count', 0)}", default_stem="watch-research", suffix=".md"
+                    ),
                     report,
                 )
             )
-        append_event(session.session_id, kind="assistant", content=report, metadata={"summary": f"saved research to {saved}"})
+        append_event(
+            session.session_id, kind="assistant", content=report, metadata={"summary": f"saved research to {saved}"}
+        )
         return report, saved
 
     if mode == "write":
@@ -1166,7 +1194,9 @@ def execute_watch_iteration(
             saved = str(
                 save_output(
                     session.session_id,
-                    output_name_from_title(f"watch-{document_title}-{state.get('poll_count', 0)}", default_stem="watch-draft", suffix=".md"),
+                    output_name_from_title(
+                        f"watch-{document_title}-{state.get('poll_count', 0)}", default_stem="watch-draft", suffix=".md"
+                    ),
                     response.response,
                 )
             )
@@ -1233,8 +1263,16 @@ def _watch_init_args(args: argparse.Namespace, config: "CliConfig") -> dict:
         cwd=getattr(args, "cwd", None) or (session_seed.cwd if session_seed else None),
     )
     prompt_goal = parse_prompt(goal_parts) if goal_parts else ""
-    plan_id = str(getattr(args, "plan_id", "") or (existing_state or {}).get("plan_id") or (session_seed.plan_id if session_seed else "")).strip()
-    task_id = str(getattr(args, "task_id", "") or (existing_state or {}).get("task_id") or (session_seed.task_id if session_seed else "")).strip()
+    plan_id = str(
+        getattr(args, "plan_id", "")
+        or (existing_state or {}).get("plan_id")
+        or (session_seed.plan_id if session_seed else "")
+    ).strip()
+    task_id = str(
+        getattr(args, "task_id", "")
+        or (existing_state or {}).get("task_id")
+        or (session_seed.task_id if session_seed else "")
+    ).strip()
     goal = prompt_goal or str((existing_state or {}).get("goal") or "").strip() or load_plan_goal(plan_id)
     if task_id and not goal:
         goal = f"Continue task {task_id}"
@@ -1245,10 +1283,17 @@ def _watch_init_args(args: argparse.Namespace, config: "CliConfig") -> dict:
     interval_seconds = max(1, int(getattr(args, "interval", 0) or (existing_state or {}).get("interval_seconds") or 60))
     max_polls = max(0, int(getattr(args, "iterations", 0) or (existing_state or {}).get("max_polls") or 0))
     on_change = bool(getattr(args, "on_change", False) or (existing_state or {}).get("on_change"))
-    cwd = str(getattr(args, "cwd", "") or (existing_state or {}).get("cwd") or (session_seed.cwd if session_seed else "")).strip() or None
+    cwd = (
+        str(
+            getattr(args, "cwd", "") or (existing_state or {}).get("cwd") or (session_seed.cwd if session_seed else "")
+        ).strip()
+        or None
+    )
     explicit_targets = [*list(getattr(args, "files", []) or []), *prompt_targets]
     if not explicit_targets:
-        explicit_targets = list((existing_state or {}).get("files") or (session_seed.files if session_seed else []) or [])
+        explicit_targets = list(
+            (existing_state or {}).get("files") or (session_seed.files if session_seed else []) or []
+        )
     normalized_targets, _ = collect_workspace_context(cwd=cwd, targets=explicit_targets)
 
     return {
@@ -1404,7 +1449,9 @@ def _watch_run_iteration_with_retry(
     attempt = 0
     while True:
         attempt += 1
-        active_checkpoint = state.setdefault("active_checkpoint", start_watch_checkpoint(iteration=state["poll_count"], mode=mode))
+        active_checkpoint = state.setdefault(
+            "active_checkpoint", start_watch_checkpoint(iteration=state["poll_count"], mode=mode)
+        )
         attempts = list(active_checkpoint.get("attempts") or [])
         attempts.append({"attempt": attempt, "started_at": utc_timestamp(), "status": "running"})
         active_checkpoint["attempts"] = attempts[-WATCH_PROGRESS_LOG_LIMIT:]
@@ -1541,7 +1588,9 @@ def _watch_run_iteration_with_retry(
             raise OpenClawCliError(
                 f"Watch poll {state['poll_count']} failed after {attempt} attempt(s): {error_message}"
             ) from exc
-    checkpoint_summary = str(result_text or "").strip().splitlines()[0][:160] if str(result_text or "").strip() else f"{mode} checkpoint"
+    checkpoint_summary = (
+        str(result_text or "").strip().splitlines()[0][:160] if str(result_text or "").strip() else f"{mode} checkpoint"
+    )
     checkpoint = {
         "poll": state["poll_count"],
         "created_at": utc_timestamp(),
@@ -1555,7 +1604,9 @@ def _watch_run_iteration_with_retry(
         "attempts": list(state.get("active_checkpoint", {}).get("attempts") or []),
         "started_at": str(state.get("active_checkpoint", {}).get("started_at") or ""),
     }
-    checkpoint["duration_seconds"] = _elapsed_seconds(checkpoint.get("started_at") or checkpoint.get("created_at"), checkpoint.get("completed_at"))
+    checkpoint["duration_seconds"] = _elapsed_seconds(
+        checkpoint.get("started_at") or checkpoint.get("created_at"), checkpoint.get("completed_at")
+    )
     state.setdefault("checkpoints", []).append(checkpoint)
     state["workspace_signature"] = workspace_signature
     state["last_run_at"] = checkpoint["completed_at"]
@@ -1642,19 +1693,29 @@ def handle_watch_command(args: argparse.Namespace, *, config: "CliConfig") -> in
                     output_json=config.output_json,
                 )
             state["poll_count"] = int(state.get("poll_count", 0) or 0) + 1
-            workspace_signature = build_workspace_signature(cwd=state.get("cwd"), targets=list(state.get("files") or []))
+            workspace_signature = build_workspace_signature(
+                cwd=state.get("cwd"), targets=list(state.get("files") or [])
+            )
             force_run_once = bool(state.get("force_run_once"))
-            if on_change and state.get("workspace_signature") and workspace_signature == state.get("workspace_signature") and not force_run_once:
+            if (
+                on_change
+                and state.get("workspace_signature")
+                and workspace_signature == state.get("workspace_signature")
+                and not force_run_once
+            ):
                 state["updated_at"] = utc_timestamp()
                 state["status"] = "waiting"
                 save_watch_state(session.session_id, state)
                 update_session(session.session_id, automation_status="waiting", automation_mode=mode)
                 if not config.output_json:
-                    _iter_label = f"{state['poll_count']}/{max_polls}" if max_polls > 0 else f"iter {state['poll_count']}"
+                    _iter_label = (
+                        f"{state['poll_count']}/{max_polls}" if max_polls > 0 else f"iter {state['poll_count']}"
+                    )
                     print(f"[watch {_iter_label}] unchanged; waiting for workspace updates.")
             else:
                 state = _watch_run_iteration_with_retry(
-                    session, state,
+                    session,
+                    state,
                     mode=mode,
                     plan_id=plan_id,
                     task_id=task_id,

@@ -178,9 +178,7 @@ def _build_salience_summary(messages: list[dict[str, Any]]) -> tuple[str, dict[s
         salient_lines.append(f"- {role}: {compact}")
 
     original_topics = _extract_key_topics(messages)
-    retained_topics = _extract_key_topics(
-        [{"role": "model", "parts": [line]} for line in salient_lines]
-    )
+    retained_topics = _extract_key_topics([{"role": "model", "parts": [line]} for line in salient_lines])
     retained_topic_set = set(retained_topics)
     retained_count = sum(1 for topic in original_topics if topic in retained_topic_set)
     topic_total = len(original_topics)

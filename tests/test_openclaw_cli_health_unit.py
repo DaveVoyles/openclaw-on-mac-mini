@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_health.py."""
+
 from __future__ import annotations
 
 import json
@@ -10,6 +11,7 @@ from openclaw_cli_health import HealthResponse
 # ---------------------------------------------------------------------------
 # HealthResponse dataclass
 # ---------------------------------------------------------------------------
+
 
 def test_health_response_defaults():
     hr = HealthResponse(payload={"status": "ok"}, raw_text="ok")
@@ -34,6 +36,7 @@ def test_health_response_unhealthy():
 # print_health — JSON output mode
 # ---------------------------------------------------------------------------
 
+
 def test_print_health_json_dict(capsys):
     hr = HealthResponse(payload={"status": "ok", "uptime_seconds": 42}, raw_text="", healthy=True)
     mod.print_health(hr, output_json=True)
@@ -55,10 +58,13 @@ def test_print_health_json_string(capsys):
 # print_health — plain text mode (non-TTY, non-rich)
 # ---------------------------------------------------------------------------
 
+
 def _print_health_plain(hr: HealthResponse) -> str:
-    with patch.object(mod, "_IS_TTY", False), \
-         patch.object(mod, "_RICH_AVAILABLE", False), \
-         patch("builtins.print") as mock_print:
+    with (
+        patch.object(mod, "_IS_TTY", False),
+        patch.object(mod, "_RICH_AVAILABLE", False),
+        patch("builtins.print") as mock_print,
+    ):
         mod.print_health(hr, output_json=False)
         calls = [str(c) for c in mock_print.call_args_list]
         return "\n".join(calls)
@@ -112,6 +118,7 @@ def test_print_health_plain_string_payload(capsys):
 # _clean_sources_for_display
 # ---------------------------------------------------------------------------
 
+
 def test_clean_sources_bare_urls():
     sources = "https://example.com\nhttps://another.org/page"
     result = mod._clean_sources_for_display(sources)
@@ -162,6 +169,7 @@ def test_clean_sources_no_valid_urls():
 # ---------------------------------------------------------------------------
 # _operator_snapshot_lines
 # ---------------------------------------------------------------------------
+
 
 def test_operator_snapshot_lines_always_has_visibility():
     lines = mod._operator_snapshot_lines({})

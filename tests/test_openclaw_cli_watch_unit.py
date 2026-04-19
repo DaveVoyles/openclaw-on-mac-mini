@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_watch.py — pure/utility functions."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -143,23 +144,26 @@ def test_dedupe_preserve_order_empty_list():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("status,expected", [
-    ("done", "complete"),
-    ("completed", "complete"),
-    ("success", "complete"),
-    ("running", "active"),
-    ("in_progress", "active"),
-    ("pending", "waiting"),
-    ("queued", "waiting"),
-    ("idle", "idle"),
-    ("error", "error"),
-    ("failed", "error"),
-    ("warn", "warn"),
-    ("blocked", "blocked"),
-    ("paused", "paused"),
-    ("cancelled", "paused"),
-    ("unknown_xyz", "unknown"),
-])
+@pytest.mark.parametrize(
+    "status,expected",
+    [
+        ("done", "complete"),
+        ("completed", "complete"),
+        ("success", "complete"),
+        ("running", "active"),
+        ("in_progress", "active"),
+        ("pending", "waiting"),
+        ("queued", "waiting"),
+        ("idle", "idle"),
+        ("error", "error"),
+        ("failed", "error"),
+        ("warn", "warn"),
+        ("blocked", "blocked"),
+        ("paused", "paused"),
+        ("cancelled", "paused"),
+        ("unknown_xyz", "unknown"),
+    ],
+)
 def test_status_family_classifications(status: str, expected: str):
     assert mod._status_family(status) == expected
 
@@ -225,14 +229,17 @@ def test_watch_retry_delay_seconds_capped():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("msg", [
-    "timed out waiting for server",
-    "connection refused on port 80",
-    "http 429 rate limit",
-    "http 503 service unavailable",
-    "network is unreachable",
-    "temporary failure in name resolution",
-])
+@pytest.mark.parametrize(
+    "msg",
+    [
+        "timed out waiting for server",
+        "connection refused on port 80",
+        "http 429 rate limit",
+        "http 503 service unavailable",
+        "network is unreachable",
+        "temporary failure in name resolution",
+    ],
+)
 def test_is_transient_watch_error_matches(msg: str):
     assert mod.is_transient_watch_error(msg) is True
 

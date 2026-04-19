@@ -179,9 +179,7 @@ async def test_send_step_message(onboarding_manager):
     mock_user = Mock()
     mock_channel = AsyncMock()
 
-    embed = await onboarding_manager.send_step_message(
-        mock_user, mock_channel, TutorialStep.WELCOME
-    )
+    embed = await onboarding_manager.send_step_message(mock_user, mock_channel, TutorialStep.WELCOME)
 
     # Should have sent a message
     mock_channel.send.assert_called_once()
@@ -253,9 +251,7 @@ async def test_send_step_message_progress_indicator(onboarding_manager):
     mock_user = Mock()
     mock_channel = AsyncMock()
 
-    embed = await onboarding_manager.send_step_message(
-        mock_user, mock_channel, TutorialStep.BASIC_COMMANDS
-    )
+    embed = await onboarding_manager.send_step_message(mock_user, mock_channel, TutorialStep.BASIC_COMMANDS)
 
     # Footer should contain step number
     assert embed.footer is not None

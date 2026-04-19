@@ -6,6 +6,7 @@ Imports from:
   - openclaw_cli_sessions (load_session, load_watch_state, SessionSummary, …)
 Does NOT import from openclaw_cli.py.
 """
+
 from __future__ import annotations
 
 import os
@@ -28,6 +29,7 @@ _OUTPUT_DASHBOARD_EXCERPT_CHARS = 220
 # ---------------------------------------------------------------------------
 # Internal plain-text helpers (no dependency on openclaw_cli.py)
 # ---------------------------------------------------------------------------
+
 
 def _terminal_width_layout(*, fallback: int = 80) -> int:
     try:
@@ -160,6 +162,7 @@ def _format_collaboration_entry_layout(entry: dict[str, Any]) -> str:
 # Layout mode / preset config (pure prefs-based)
 # ---------------------------------------------------------------------------
 
+
 def _effective_layout_mode(prefs: dict) -> str:
     """Return the normalized active layout mode."""
     layout = str(prefs.get("layout", "normal") or "normal").strip().lower()
@@ -290,6 +293,7 @@ def _layout_column_lines(left: list[str], right: list[str], *, width: int) -> li
 # Content rendering helpers (session/watch/collab/outputs)
 # ---------------------------------------------------------------------------
 
+
 def _layout_outputs_lines(prefs: dict, session_id: str) -> list[str]:
     """Return compact recent-output lines for layout presets."""
     outputs = list_saved_outputs(session_id, limit=3)
@@ -307,7 +311,11 @@ def _layout_outputs_lines(prefs: dict, session_id: str) -> list[str]:
             f"focused preview: {str(preview.get('name') or '').strip()} · "
             f"{_format_byte_count_layout(int(preview.get('size_bytes') or 0))}"
         )
-        lines.extend(_preview_block_lines_layout("excerpt", str(preview.get("preview") or ""), max_chars=_OUTPUT_DASHBOARD_EXCERPT_CHARS))
+        lines.extend(
+            _preview_block_lines_layout(
+                "excerpt", str(preview.get("preview") or ""), max_chars=_OUTPUT_DASHBOARD_EXCERPT_CHARS
+            )
+        )
     for index, item in enumerate(outputs, start=1):
         lines.append(
             f"{index}. {str(item.get('name') or '').strip()} · "
@@ -329,11 +337,12 @@ def _layout_collab_lines(prefs: dict, session_id: str) -> list[str]:
     ]
     for actor in actors[:2]:
         lines.append(
-            f"actor: {str(actor.get('name') or 'operator').strip()} · "
-            f"{int(actor.get('event_count') or 0)} touchpoints"
+            f"actor: {str(actor.get('name') or 'operator').strip()} · {int(actor.get('event_count') or 0)} touchpoints"
         )
     if decisions:
-        lines.append(f"decision: {_single_line_excerpt_layout(_format_collaboration_entry_layout(decisions[0]), max_chars=96)}")
+        lines.append(
+            f"decision: {_single_line_excerpt_layout(_format_collaboration_entry_layout(decisions[0]), max_chars=96)}"
+        )
     if notes:
         lines.append(f"note: {_single_line_excerpt_layout(_format_collaboration_entry_layout(notes[0]), max_chars=96)}")
     if latest_handoff:
@@ -366,8 +375,14 @@ def _layout_watch_lines(
     if watch_timing_summary_fn is not None:
         timing = watch_timing_summary_fn(state)
     lines = [
-        _progress_cell_layout("status", str(state.get("status") or "active"), status=str(state.get("status") or "active")),
-        _progress_cell_layout("polls", f"{int(state.get('poll_count') or 0)}/{int(state.get('max_polls') or 0) or '∞'}", status=str(state.get("status") or "active")),
+        _progress_cell_layout(
+            "status", str(state.get("status") or "active"), status=str(state.get("status") or "active")
+        ),
+        _progress_cell_layout(
+            "polls",
+            f"{int(state.get('poll_count') or 0)}/{int(state.get('max_polls') or 0) or '∞'}",
+            status=str(state.get("status") or "active"),
+        ),
     ]
     goal = str(state.get("goal") or "").strip()
     if goal:
@@ -429,11 +444,15 @@ def _print_layout_preset_workspace(
         return
     sid = str(session_id or "").strip()
     if not sid:
-        print(f"Workspace preset {_layout_preset_config(prefs, preset).get('label', preset)} saved. Resume a session, then run /layout show.")
+        print(
+            f"Workspace preset {_layout_preset_config(prefs, preset).get('label', preset)} saved. Resume a session, then run /layout show."
+        )
         return
     session = load_session(sid)
     if session is None:
-        print(f"Workspace preset {_layout_preset_config(prefs, preset).get('label', preset)} saved. Resume a session, then run /layout show.")
+        print(
+            f"Workspace preset {_layout_preset_config(prefs, preset).get('label', preset)} saved. Resume a session, then run /layout show."
+        )
         return
 
     focus = _layout_focus_name(prefs)

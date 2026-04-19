@@ -59,11 +59,12 @@ class TestCompanyReportSynthesis:
     @pytest.mark.asyncio
     async def test_company_report_structure(self):
         """Test that company report returns expected structure."""
-        with patch("skills.synthesis_skills.finance_skills.get_stock_info") as mock_stock, \
-             patch("skills.synthesis_skills.finance_skills.get_sentiment_analysis") as mock_sentiment, \
-             patch("skills.synthesis_skills.news_skills.search_news") as mock_news, \
-             patch("skills.synthesis_skills._generate_llm_summary") as mock_llm:
-
+        with (
+            patch("skills.synthesis_skills.finance_skills.get_stock_info") as mock_stock,
+            patch("skills.synthesis_skills.finance_skills.get_sentiment_analysis") as mock_sentiment,
+            patch("skills.synthesis_skills.news_skills.search_news") as mock_news,
+            patch("skills.synthesis_skills._generate_llm_summary") as mock_llm,
+        ):
             # Mock successful API responses
             mock_stock.return_value = {
                 "status": "ok",
@@ -139,10 +140,11 @@ class TestCompanyReportSynthesis:
     @pytest.mark.asyncio
     async def test_company_report_handles_partial_failure(self):
         """Test company report gracefully handles partial API failures."""
-        with patch("skills.synthesis_skills.finance_skills.get_stock_info") as mock_stock, \
-             patch("skills.synthesis_skills.finance_skills.get_sentiment_analysis") as mock_sentiment, \
-             patch("skills.synthesis_skills.news_skills.search_news") as mock_news:
-
+        with (
+            patch("skills.synthesis_skills.finance_skills.get_stock_info") as mock_stock,
+            patch("skills.synthesis_skills.finance_skills.get_sentiment_analysis") as mock_sentiment,
+            patch("skills.synthesis_skills.news_skills.search_news") as mock_news,
+        ):
             # Stock succeeds
             mock_stock.return_value = {
                 "status": "ok",
@@ -179,11 +181,12 @@ class TestCompanyReportSynthesis:
     @pytest.mark.asyncio
     async def test_company_report_caching(self):
         """Test that company reports are cached properly."""
-        with patch("skills.synthesis_skills.finance_skills.get_stock_info") as mock_stock, \
-             patch("skills.synthesis_skills.finance_skills.get_sentiment_analysis") as mock_sentiment, \
-             patch("skills.synthesis_skills.news_skills.search_news") as mock_news, \
-             patch("skills.synthesis_skills._generate_llm_summary") as mock_llm:
-
+        with (
+            patch("skills.synthesis_skills.finance_skills.get_stock_info") as mock_stock,
+            patch("skills.synthesis_skills.finance_skills.get_sentiment_analysis") as mock_sentiment,
+            patch("skills.synthesis_skills.news_skills.search_news") as mock_news,
+            patch("skills.synthesis_skills._generate_llm_summary") as mock_llm,
+        ):
             mock_stock.return_value = {
                 "status": "ok",
                 "symbol": "TSLA",
@@ -221,11 +224,12 @@ class TestEntertainmentReportSynthesis:
     @pytest.mark.asyncio
     async def test_entertainment_report_structure(self):
         """Test entertainment report returns expected structure."""
-        with patch("skills.synthesis_skills.finance_skills.get_box_office_stocks") as mock_stocks, \
-             patch("skills.synthesis_skills.finance_skills.get_sentiment_analysis") as mock_sentiment, \
-             patch("skills.synthesis_skills.news_skills.top_headlines") as mock_news, \
-             patch("skills.synthesis_skills._generate_llm_summary") as mock_llm:
-
+        with (
+            patch("skills.synthesis_skills.finance_skills.get_box_office_stocks") as mock_stocks,
+            patch("skills.synthesis_skills.finance_skills.get_sentiment_analysis") as mock_sentiment,
+            patch("skills.synthesis_skills.news_skills.top_headlines") as mock_news,
+            patch("skills.synthesis_skills._generate_llm_summary") as mock_llm,
+        ):
             mock_stocks.return_value = {
                 "status": "ok",
                 "studios": {
@@ -279,10 +283,11 @@ class TestEntertainmentReportSynthesis:
     @pytest.mark.asyncio
     async def test_entertainment_report_detects_correlations(self):
         """Test that entertainment report detects key stock correlations."""
-        with patch("skills.synthesis_skills.finance_skills.get_box_office_stocks") as mock_stocks, \
-             patch("skills.synthesis_skills.finance_skills.get_sentiment_analysis") as mock_sentiment, \
-             patch("skills.synthesis_skills.news_skills.top_headlines") as mock_news:
-
+        with (
+            patch("skills.synthesis_skills.finance_skills.get_box_office_stocks") as mock_stocks,
+            patch("skills.synthesis_skills.finance_skills.get_sentiment_analysis") as mock_sentiment,
+            patch("skills.synthesis_skills.news_skills.top_headlines") as mock_news,
+        ):
             # Mock significant stock movement
             mock_stocks.return_value = {
                 "status": "ok",
@@ -320,10 +325,11 @@ class TestMarketOverviewSynthesis:
     @pytest.mark.asyncio
     async def test_market_overview_structure(self):
         """Test market overview returns expected structure."""
-        with patch("skills.synthesis_skills.news_skills.top_headlines") as mock_news, \
-             patch("skills.synthesis_skills.finance_skills.get_market_news") as mock_market_news, \
-             patch("skills.synthesis_skills._generate_llm_summary") as mock_llm:
-
+        with (
+            patch("skills.synthesis_skills.news_skills.top_headlines") as mock_news,
+            patch("skills.synthesis_skills.finance_skills.get_market_news") as mock_market_news,
+            patch("skills.synthesis_skills._generate_llm_summary") as mock_llm,
+        ):
             mock_news.return_value = {
                 "status": "ok",
                 "articles": [
@@ -355,8 +361,7 @@ class TestMarketOverviewSynthesis:
             }
 
             mock_llm.return_value = (
-                "Markets show mixed performance with technology sector leading gains "
-                "while energy faces headwinds."
+                "Markets show mixed performance with technology sector leading gains while energy faces headwinds."
             )
 
             result = await synthesize_market_overview()
@@ -380,9 +385,10 @@ class TestMarketOverviewSynthesis:
         # Clear cache to ensure fresh results
         _synthesis_cache.clear()
 
-        with patch("skills.synthesis_skills.news_skills.top_headlines") as mock_news, \
-             patch("skills.synthesis_skills.finance_skills.get_market_news") as mock_market_news:
-
+        with (
+            patch("skills.synthesis_skills.news_skills.top_headlines") as mock_news,
+            patch("skills.synthesis_skills.finance_skills.get_market_news") as mock_market_news,
+        ):
             mock_news.return_value = {"status": "ok", "articles": []}
 
             # Multiple articles for same sector with varying sentiment
@@ -454,10 +460,7 @@ class TestCorrelationDetection:
             assert len(result["correlations"]) > 0
 
             # Should detect alignment
-            alignment_corr = [
-                c for c in result["correlations"]
-                if c["type"] == "stock_sentiment_alignment"
-            ]
+            alignment_corr = [c for c in result["correlations"] if c["type"] == "stock_sentiment_alignment"]
             assert len(alignment_corr) > 0
             assert "aligns with" in alignment_corr[0]["description"].lower()
             assert alignment_corr[0]["confidence"] == "high"
@@ -487,10 +490,7 @@ class TestCorrelationDetection:
             result = await find_correlations("TSLA", entity_type="company")
 
             # Should detect divergence
-            divergence_corr = [
-                c for c in result["correlations"]
-                if c["type"] == "stock_sentiment_divergence"
-            ]
+            divergence_corr = [c for c in result["correlations"] if c["type"] == "stock_sentiment_divergence"]
             assert len(divergence_corr) > 0
             assert "diverges" in divergence_corr[0]["description"].lower()
 
@@ -536,10 +536,11 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_handles_complete_api_failure(self):
         """Test graceful handling when all APIs fail."""
-        with patch("skills.synthesis_skills.finance_skills.get_stock_info") as mock_stock, \
-             patch("skills.synthesis_skills.finance_skills.get_sentiment_analysis") as mock_sentiment, \
-             patch("skills.synthesis_skills.news_skills.search_news") as mock_news:
-
+        with (
+            patch("skills.synthesis_skills.finance_skills.get_stock_info") as mock_stock,
+            patch("skills.synthesis_skills.finance_skills.get_sentiment_analysis") as mock_sentiment,
+            patch("skills.synthesis_skills.news_skills.search_news") as mock_news,
+        ):
             # All APIs fail
             mock_stock.return_value = {"status": "error", "message": "API error"}
             mock_sentiment.return_value = {"status": "error", "message": "Rate limit"}
@@ -554,9 +555,10 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_handles_llm_failure_gracefully(self):
         """Test that LLM failures don't break synthesis."""
-        with patch("skills.synthesis_skills.finance_skills.get_stock_info") as mock_stock, \
-             patch("skills.synthesis_skills._generate_llm_summary") as mock_llm:
-
+        with (
+            patch("skills.synthesis_skills.finance_skills.get_stock_info") as mock_stock,
+            patch("skills.synthesis_skills._generate_llm_summary") as mock_llm,
+        ):
             mock_stock.return_value = {
                 "status": "ok",
                 "symbol": "GOOGL",
@@ -605,16 +607,27 @@ class TestIntegration:
     @pytest.mark.asyncio
     async def test_parallel_api_calls(self):
         """Test that synthesis makes efficient parallel API calls."""
-        with patch("skills.synthesis_skills.finance_skills.get_stock_info") as mock_stock, \
-             patch("skills.synthesis_skills.finance_skills.get_sentiment_analysis") as mock_sentiment, \
-             patch("skills.synthesis_skills.news_skills.search_news") as mock_news:
-
+        with (
+            patch("skills.synthesis_skills.finance_skills.get_stock_info") as mock_stock,
+            patch("skills.synthesis_skills.finance_skills.get_sentiment_analysis") as mock_sentiment,
+            patch("skills.synthesis_skills.news_skills.search_news") as mock_news,
+        ):
             # Set up quick responses
-            mock_stock.return_value = {"status": "ok", "symbol": "AMZN", "price": 150.0, "change": "+1.00", "change_percent": "+0.67%", "volume": "40000000", "high": 151.0, "low": 149.0}
+            mock_stock.return_value = {
+                "status": "ok",
+                "symbol": "AMZN",
+                "price": 150.0,
+                "change": "+1.00",
+                "change_percent": "+0.67%",
+                "volume": "40000000",
+                "high": 151.0,
+                "low": 149.0,
+            }
             mock_sentiment.return_value = {"status": "ok", "sentiment": {}}
             mock_news.return_value = {"status": "ok", "articles": []}
 
             import time
+
             start = time.time()
             await synthesize_company_report("AMZN")
             elapsed = time.time() - start

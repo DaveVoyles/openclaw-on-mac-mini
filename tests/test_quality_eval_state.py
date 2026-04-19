@@ -151,8 +151,12 @@ def test_build_quality_eval_scorecard_empty_runs():
     assert sc["sample_size"] == 0
     assert "metrics" in sc
     assert "summary" in sc
-    for metric in ("channel_leakage_prevention", "followup_anchor_correctness",
-                   "profile_adherence", "table_readability_copy_safety"):
+    for metric in (
+        "channel_leakage_prevention",
+        "followup_anchor_correctness",
+        "profile_adherence",
+        "table_readability_copy_safety",
+    ):
         assert metric in sc["metrics"]
 
 
@@ -176,8 +180,7 @@ def test_build_quality_eval_scorecard_window_hours_param():
 def test_build_scorecard_channel_leakage_pass():
     from quality_eval_state import build_quality_eval_scorecard
 
-    runs = [{"question": "hello", "scope_mode": "channel", "lock_mode": "none",
-              "anchor_id": "", "profile_values": {}}]
+    runs = [{"question": "hello", "scope_mode": "channel", "lock_mode": "none", "anchor_id": "", "profile_values": {}}]
     with patch.dict("sys.modules", {"error_tracker": _make_error_tracker_mock(runs)}):
         sc = build_quality_eval_scorecard()
     assert sc["metrics"]["channel_leakage_prevention"]["pass"] >= 1
@@ -186,8 +189,15 @@ def test_build_scorecard_channel_leakage_pass():
 def test_build_scorecard_channel_leakage_cross_channel_without_opt_in_fails():
     from quality_eval_state import build_quality_eval_scorecard
 
-    runs = [{"question": "what is the forecast", "scope_mode": "cross-channel",
-              "lock_mode": "none", "anchor_id": "", "profile_values": {}}]
+    runs = [
+        {
+            "question": "what is the forecast",
+            "scope_mode": "cross-channel",
+            "lock_mode": "none",
+            "anchor_id": "",
+            "profile_values": {},
+        }
+    ]
     with patch.dict("sys.modules", {"error_tracker": _make_error_tracker_mock(runs)}):
         sc = build_quality_eval_scorecard()
     assert sc["metrics"]["channel_leakage_prevention"]["fail"] >= 1
@@ -197,8 +207,15 @@ def test_build_scorecard_followup_anchor_pass():
     from quality_eval_state import build_quality_eval_scorecard
 
     # Short followup-like question with anchor present → pass
-    runs = [{"question": "and also?", "scope_mode": "channel",
-              "lock_mode": "none", "anchor_id": "anc-1", "profile_values": {}}]
+    runs = [
+        {
+            "question": "and also?",
+            "scope_mode": "channel",
+            "lock_mode": "none",
+            "anchor_id": "anc-1",
+            "profile_values": {},
+        }
+    ]
     with patch.dict("sys.modules", {"error_tracker": _make_error_tracker_mock(runs)}):
         sc = build_quality_eval_scorecard()
     assert sc["metrics"]["followup_anchor_correctness"]["pass"] >= 1
@@ -208,8 +225,9 @@ def test_build_scorecard_followup_anchor_fail():
     from quality_eval_state import build_quality_eval_scorecard
 
     # Short question but no anchor → fail
-    runs = [{"question": "and also?", "scope_mode": "channel",
-              "lock_mode": "none", "anchor_id": "", "profile_values": {}}]
+    runs = [
+        {"question": "and also?", "scope_mode": "channel", "lock_mode": "none", "anchor_id": "", "profile_values": {}}
+    ]
     with patch.dict("sys.modules", {"error_tracker": _make_error_tracker_mock(runs)}):
         sc = build_quality_eval_scorecard()
     assert sc["metrics"]["followup_anchor_correctness"]["fail"] >= 1
@@ -218,14 +236,16 @@ def test_build_scorecard_followup_anchor_fail():
 def test_build_scorecard_profile_adherence_emoji_none_pass():
     from quality_eval_state import build_quality_eval_scorecard
 
-    runs = [{
-        "question": "tell me about xyz",
-        "response_preview": "Here is the answer with no emojis at all.",
-        "scope_mode": "channel",
-        "lock_mode": "none",
-        "anchor_id": "",
-        "profile_values": {"emoji_level": "none", "report_depth": "standard", "tone": "neutral"},
-    }]
+    runs = [
+        {
+            "question": "tell me about xyz",
+            "response_preview": "Here is the answer with no emojis at all.",
+            "scope_mode": "channel",
+            "lock_mode": "none",
+            "anchor_id": "",
+            "profile_values": {"emoji_level": "none", "report_depth": "standard", "tone": "neutral"},
+        }
+    ]
     with patch.dict("sys.modules", {"error_tracker": _make_error_tracker_mock(runs)}):
         sc = build_quality_eval_scorecard()
     assert sc["metrics"]["profile_adherence"]["pass"] >= 1
@@ -234,14 +254,16 @@ def test_build_scorecard_profile_adherence_emoji_none_pass():
 def test_build_scorecard_profile_adherence_emoji_none_fail():
     from quality_eval_state import build_quality_eval_scorecard
 
-    runs = [{
-        "question": "tell me about xyz",
-        "response_preview": "Here is the answer 🎉 with an emoji.",
-        "scope_mode": "channel",
-        "lock_mode": "none",
-        "anchor_id": "",
-        "profile_values": {"emoji_level": "none"},
-    }]
+    runs = [
+        {
+            "question": "tell me about xyz",
+            "response_preview": "Here is the answer 🎉 with an emoji.",
+            "scope_mode": "channel",
+            "lock_mode": "none",
+            "anchor_id": "",
+            "profile_values": {"emoji_level": "none"},
+        }
+    ]
     with patch.dict("sys.modules", {"error_tracker": _make_error_tracker_mock(runs)}):
         sc = build_quality_eval_scorecard()
     assert sc["metrics"]["profile_adherence"]["fail"] >= 1
@@ -251,14 +273,16 @@ def test_build_scorecard_table_readability_discord_pass():
     from quality_eval_state import build_quality_eval_scorecard
 
     table_text = "```text\n+---+---+\n| A | B |\n+---+---+\n```"
-    runs = [{
-        "question": "table question",
-        "response_preview": table_text,
-        "scope_mode": "channel",
-        "lock_mode": "none",
-        "anchor_id": "",
-        "profile_values": {"table_style": "discord"},
-    }]
+    runs = [
+        {
+            "question": "table question",
+            "response_preview": table_text,
+            "scope_mode": "channel",
+            "lock_mode": "none",
+            "anchor_id": "",
+            "profile_values": {"table_style": "discord"},
+        }
+    ]
     with patch.dict("sys.modules", {"error_tracker": _make_error_tracker_mock(runs)}):
         sc = build_quality_eval_scorecard()
     assert sc["metrics"]["table_readability_copy_safety"]["pass"] >= 1
@@ -267,8 +291,15 @@ def test_build_scorecard_table_readability_discord_pass():
 def test_build_scorecard_cross_channel_opt_in_pass():
     from quality_eval_state import build_quality_eval_scorecard
 
-    runs = [{"question": "--cross-channel search everything", "scope_mode": "cross-channel",
-              "lock_mode": "none", "anchor_id": "", "profile_values": {}}]
+    runs = [
+        {
+            "question": "--cross-channel search everything",
+            "scope_mode": "cross-channel",
+            "lock_mode": "none",
+            "anchor_id": "",
+            "profile_values": {},
+        }
+    ]
     with patch.dict("sys.modules", {"error_tracker": _make_error_tracker_mock(runs)}):
         sc = build_quality_eval_scorecard()
     assert sc["metrics"]["channel_leakage_prevention"]["pass"] >= 1
@@ -280,14 +311,16 @@ def test_build_scorecard_recall_alerts_boost_leakage():
     from quality_eval_state import build_quality_eval_scorecard
 
     with _SCOPED_RECALL_ALERTS_LOCK:
-        _SCOPED_RECALL_ALERTS.append({
-            "timestamp": time.time(),
-            "category": "scope_guard_block",
-            "message": "blocked",
-            "channel_id": "999",
-            "thread_id": None,
-            "metadata": {},
-        })
+        _SCOPED_RECALL_ALERTS.append(
+            {
+                "timestamp": time.time(),
+                "category": "scope_guard_block",
+                "message": "blocked",
+                "channel_id": "999",
+                "thread_id": None,
+                "metadata": {},
+            }
+        )
 
     with patch.dict("sys.modules", {"error_tracker": _make_error_tracker_mock([])}):
         sc = build_quality_eval_scorecard()

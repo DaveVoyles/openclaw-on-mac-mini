@@ -8,6 +8,7 @@ import pytest
 # quick_generate
 # ---------------------------------------------------------------------------
 
+
 class TestQuickGenerate:
     """Tests for llm_client.quick_generate."""
 
@@ -23,6 +24,7 @@ class TestQuickGenerate:
         ):
             mock_client.models.generate_content.return_value = fake_response
             from llm_client import quick_generate
+
             result = await quick_generate("test prompt")
 
         assert result == "Extracted fact."
@@ -31,6 +33,7 @@ class TestQuickGenerate:
     async def test_returns_empty_string_when_no_client(self):
         with patch("llm_client._client", None):
             from llm_client import quick_generate
+
             result = await quick_generate("test prompt")
         assert result == ""
 
@@ -41,6 +44,7 @@ class TestQuickGenerate:
         ):
             mock_client.models.generate_content.side_effect = RuntimeError("API down")
             from llm_client import quick_generate
+
             result = await quick_generate("test prompt")
         assert result == ""
 
@@ -56,6 +60,7 @@ class TestQuickGenerate:
         ):
             mock_client.models.generate_content.return_value = fake_response
             from llm_client import quick_generate
+
             result = await quick_generate("hello", max_tokens=42, temperature=0.5)
 
         assert result == "ok"
@@ -72,6 +77,7 @@ class TestQuickGenerate:
         ):
             mock_client.models.generate_content.return_value = fake_response
             from llm_client import quick_generate
+
             await quick_generate("hello")
 
         mock_record.assert_awaited_once_with(fake_response)
@@ -81,11 +87,13 @@ class TestQuickGenerate:
 # fact_extractor no longer creates its own genai.Client
 # ---------------------------------------------------------------------------
 
+
 class TestFactExtractorNoBareClient:
     def test_quick_generate_no_genai_client_in_source(self):
         import inspect
 
         import fact_extractor
+
         src = inspect.getsource(fact_extractor)
         assert "genai.Client(" not in src
 
@@ -94,9 +102,7 @@ class TestFactExtractorNoBareClient:
         from fact_extractor import extract_and_store_facts
 
         with patch("llm_client.quick_generate", AsyncMock(return_value="NONE")):
-            result = await extract_and_store_facts(
-                "hi there how are you doing today?", "I'm good!", 42
-            )
+            result = await extract_and_store_facts("hi there how are you doing today?", "I'm good!", 42)
         assert result == []
 
 
@@ -104,11 +110,13 @@ class TestFactExtractorNoBareClient:
 # goal_tracker no longer creates its own genai.Client
 # ---------------------------------------------------------------------------
 
+
 class TestGoalTrackerNoBareClient:
     def test_quick_generate_no_genai_client_in_source_v2(self):
         import inspect
 
         import goal_tracker
+
         src = inspect.getsource(goal_tracker)
         assert "genai.Client(" not in src
 
@@ -125,11 +133,13 @@ class TestGoalTrackerNoBareClient:
 # error_tracker no longer creates its own genai.Client
 # ---------------------------------------------------------------------------
 
+
 class TestErrorTrackerNoBareClient:
     def test_quick_generate_no_genai_client_in_source_v3(self):
         import inspect
 
         import error_tracker
+
         src = inspect.getsource(error_tracker)
         assert "genai.Client(" not in src
 
@@ -138,8 +148,5 @@ class TestErrorTrackerNoBareClient:
         from error_tracker import diagnose_error_pattern
 
         with patch("llm_client.quick_generate", AsyncMock(return_value="")):
-            result = await diagnose_error_pattern(
-                [{"severity": "high", "type": "crash", "detail": "OOM"}]
-            )
+            result = await diagnose_error_pattern([{"severity": "high", "type": "crash", "detail": "OOM"}])
         assert result["fix_type"] == "manual_required"
-

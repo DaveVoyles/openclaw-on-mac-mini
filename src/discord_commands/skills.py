@@ -52,7 +52,7 @@ def _register_skills_commands(bot: commands.Bot) -> None:
         embed = discord.Embed(
             title=f"🧰 OpenClaw Skills ({len(SKILLS)} total)",
             description="Skills are grouped by category. Use `/skills category:<name>` to see details.\n"
-                        "You usually do **not** need to memorize them - ask naturally via `/ask` and OpenClaw will pick the right ones.",
+            "You usually do **not** need to memorize them - ask naturally via `/ask` and OpenClaw will pick the right ones.",
             color=discord.Color.blurple(),
         )
         for cat_name, skill_names in SKILL_CATEGORIES.items():

@@ -45,6 +45,7 @@ def _isolate_sys_modules():
 # Low-level helpers
 # ---------------------------------------------------------------------------
 
+
 def _build_stubs(copilot_enabled: bool = True, ollama_result=True):
     """Return (providers_stub, mrp_stub) with fresh AsyncMocks."""
     providers = ModuleType("llm.providers")
@@ -368,9 +369,7 @@ class TestLogFormat:
         startup = self._startup()
 
         with patch("logging.Logger.info") as mock_info:
-            startup._log_availability_summary(
-                self._status(copilot=False, ollama=False, openai=False, anthropic=False)
-            )
+            startup._log_availability_summary(self._status(copilot=False, ollama=False, openai=False, anthropic=False))
 
         log_output = mock_info.call_args[0][0]
         assert "❌" in log_output
@@ -380,9 +379,7 @@ class TestLogFormat:
         startup = self._startup()
 
         with patch("logging.Logger.info") as mock_info:
-            startup._log_availability_summary(
-                self._status(copilot=True, ollama=True, openai=True, anthropic=True)
-            )
+            startup._log_availability_summary(self._status(copilot=True, ollama=True, openai=True, anthropic=True))
 
         log_output = mock_info.call_args[0][0]
         assert "✅" in log_output
@@ -402,9 +399,7 @@ class TestLogFormat:
         startup = self._startup()
 
         with patch("logging.Logger.info") as mock_info:
-            startup._log_availability_summary(
-                {"copilot": {"available": True, "latency_ms": None}}
-            )
+            startup._log_availability_summary({"copilot": {"available": True, "latency_ms": None}})
 
         log_output = mock_info.call_args[0][0]
         assert "Provider Availability" in log_output
@@ -413,9 +408,7 @@ class TestLogFormat:
         startup = self._startup()
 
         with patch("logging.Logger.info") as mock_info:
-            startup._log_availability_summary(
-                {"copilot": {"available": True, "latency_ms": 142.0}}
-            )
+            startup._log_availability_summary({"copilot": {"available": True, "latency_ms": 142.0}})
 
         log_output = mock_info.call_args[0][0]
         assert "142ms" in log_output
@@ -424,9 +417,7 @@ class TestLogFormat:
         startup = self._startup()
 
         with patch("logging.Logger.info") as mock_info:
-            startup._log_availability_summary(
-                {"copilot": {"available": False, "latency_ms": None}}
-            )
+            startup._log_availability_summary({"copilot": {"available": False, "latency_ms": None}})
 
         log_output = mock_info.call_args[0][0]
         assert "timeout" in log_output

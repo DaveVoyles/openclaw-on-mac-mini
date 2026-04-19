@@ -111,17 +111,14 @@ class AnalyticsCog(commands.Cog, name="Analytics"):
             int(e.get("ts", "T00")[11:13]) for e in entries if len(e.get("ts", "")) >= 13
         )
 
-        top_actions = "\n".join(
-            f"  `{action}` — {count}x"
-            for action, count in action_counts.most_common(10)
+        top_actions = "\n".join(f"  `{action}` — {count}x" for action, count in action_counts.most_common(10))
+        top_hours = ", ".join(f"{h:02d}:xx ({c})" for h, c in sorted(hour_counts.items(), key=lambda x: -x[1])[:5])
+        errors_text = (
+            "\n".join(
+                f"  `{e.get('ts', '')[:19]}` {e.get('action', '?')} → {e.get('result', '?')}" for e in error_entries[:5]
+            )
+            or "  None"
         )
-        top_hours = ", ".join(
-            f"{h:02d}:xx ({c})" for h, c in sorted(hour_counts.items(), key=lambda x: -x[1])[:5]
-        )
-        errors_text = "\n".join(
-            f"  `{e.get('ts','')[:19]}` {e.get('action','?')} → {e.get('result','?')}"
-            for e in error_entries[:5]
-        ) or "  None"
 
         embed = discord.Embed(
             title=f"📊 Audit Summary — {today}",

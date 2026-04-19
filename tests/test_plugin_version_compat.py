@@ -1,8 +1,9 @@
 """Tests for plugin version compatibility checking in plugin_registry."""
+
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from plugin_system.plugin_registry import (
     _check_plugin_version_compat,

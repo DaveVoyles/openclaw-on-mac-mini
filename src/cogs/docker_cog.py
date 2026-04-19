@@ -64,10 +64,15 @@ async def _cached_container_list() -> str:
 
 async def _list_containers_structured() -> list[dict]:
     """Return container info as a list of dicts using docker ps JSON output."""
-    rc, out, err = await _run([
-        "docker", "ps", "-a",
-        "--format", '{{json .}}',
-    ])
+    rc, out, err = await _run(
+        [
+            "docker",
+            "ps",
+            "-a",
+            "--format",
+            "{{json .}}",
+        ]
+    )
     if rc != 0:
         return []
     containers = []
@@ -106,7 +111,8 @@ def _build_container_embed(container: dict) -> discord.Embed:
 
 
 async def _container_autocomplete(
-    interaction: discord.Interaction, current: str,
+    interaction: discord.Interaction,
+    current: str,
 ) -> list[app_commands.Choice[str]]:
     """Live autocomplete: query docker ps and return matching container names."""
     try:
@@ -140,7 +146,8 @@ class ContainerActionView(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.requester_id:
             await interaction.response.send_message(
-                "❌ Only the person who ran `/containers` can use these buttons.", ephemeral=True,
+                "❌ Only the person who ran `/containers` can use these buttons.",
+                ephemeral=True,
             )
             return False
         return True
@@ -196,12 +203,14 @@ class ContainerActionView(discord.ui.View):
     async def restart_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if is_emergency_stopped():
             await interaction.response.send_message(
-                "🛑 **Emergency stop is active.** All actions halted.", ephemeral=True,
+                "🛑 **Emergency stop is active.** All actions halted.",
+                ephemeral=True,
             )
             return
         if not is_service_allowed("restart_container", self.container_name):
             await interaction.response.send_message(
-                f"🚫 Restarting `{self.container_name}` is not permitted by policy.", ephemeral=True,
+                f"🚫 Restarting `{self.container_name}` is not permitted by policy.",
+                ephemeral=True,
             )
             return
 
@@ -226,7 +235,8 @@ class ContainerActionView(discord.ui.View):
                 color=color,
             )
             audit_log(
-                None, "restart_executed",
+                None,
+                "restart_executed",
                 detail=f"{approved_req.target} approved_by={approved_req.resolver_name}",
                 result="success" if result.startswith("✅") else "failed",
             )
@@ -242,12 +252,14 @@ class ContainerActionView(discord.ui.View):
     async def stop_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if is_emergency_stopped():
             await interaction.response.send_message(
-                "🛑 **Emergency stop is active.** All actions halted.", ephemeral=True,
+                "🛑 **Emergency stop is active.** All actions halted.",
+                ephemeral=True,
             )
             return
         if not is_service_allowed("stop_container", self.container_name):
             await interaction.response.send_message(
-                f"🚫 Stopping `{self.container_name}` is not permitted by policy.", ephemeral=True,
+                f"🚫 Stopping `{self.container_name}` is not permitted by policy.",
+                ephemeral=True,
             )
             return
 
@@ -272,7 +284,8 @@ class ContainerActionView(discord.ui.View):
                 color=color,
             )
             audit_log(
-                None, "stop_executed",
+                None,
+                "stop_executed",
                 detail=f"{approved_req.target} approved_by={approved_req.resolver_name}",
                 result="success" if result.startswith("✅") else "failed",
             )
@@ -305,16 +318,15 @@ class ContainerSelect(discord.ui.Select):
             max_values=1,
             options=options,
         )
-        self._containers_by_name = {
-            c.get("Names", c.get("Name", "")): c for c in containers
-        }
+        self._containers_by_name = {c.get("Names", c.get("Name", "")): c for c in containers}
 
     async def callback(self, interaction: discord.Interaction):
         selected_name = self.values[0]
         container = self._containers_by_name.get(selected_name)
         if container is None:
             await interaction.response.send_message(
-                f"❌ Container `{selected_name}` is no longer available.", ephemeral=True,
+                f"❌ Container `{selected_name}` is no longer available.",
+                ephemeral=True,
             )
             return
 
@@ -338,19 +350,22 @@ class ContainerSelectView(discord.ui.View):
             status = c.get("Status", "unknown")
             image = c.get("Image", "unknown")
             emoji = "🟢" if state.lower() == "running" else "🔴"
-            options.append(discord.SelectOption(
-                label=name[:25],
-                value=name,
-                description=f"{status[:40]} | {image[:40]}"[:100],
-                emoji=emoji,
-            ))
+            options.append(
+                discord.SelectOption(
+                    label=name[:25],
+                    value=name,
+                    description=f"{status[:40]} | {image[:40]}"[:100],
+                    emoji=emoji,
+                )
+            )
         if options:
             self.add_item(ContainerSelect(options=options, containers=containers))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.requester_id:
             await interaction.response.send_message(
-                "❌ Only the person who ran `/containers` can use this menu.", ephemeral=True,
+                "❌ Only the person who ran `/containers` can use this menu.",
+                ephemeral=True,
             )
             return False
         return True
@@ -490,7 +505,8 @@ class DockerCog(commands.Cog, name="Docker"):
 
         if not is_service_allowed("restart_container", service):
             await interaction.response.send_message(
-                f"🚫 Restarting `{service}` is not permitted by policy.", ephemeral=True,
+                f"🚫 Restarting `{service}` is not permitted by policy.",
+                ephemeral=True,
             )
             audit_log(interaction.user, "restart", detail=service, result="blocked_by_policy")
             return
@@ -513,7 +529,8 @@ class DockerCog(commands.Cog, name="Docker"):
                 color=color,
             )
             audit_log(
-                None, "restart_executed",
+                None,
+                "restart_executed",
                 detail=f"{approved_req.target} approved_by={approved_req.resolver_name}",
                 result="success" if result.startswith("✅") else "failed",
             )
@@ -525,7 +542,6 @@ class DockerCog(commands.Cog, name="Docker"):
         await interaction.response.send_message(embed=embed, view=view)
         view.message = await interaction.original_response()
         audit_log(interaction.user, "restart_requested", detail=service)
-
 
     # -----------------------------------------------------------------------
     # /monitor subcommand group
@@ -575,9 +591,7 @@ class DockerCog(commands.Cog, name="Docker"):
                 )
             )
         else:
-            await interaction.response.send_message(
-                f"⚠️ No monitor found for `{container}`.", ephemeral=True
-            )
+            await interaction.response.send_message(f"⚠️ No monitor found for `{container}`.", ephemeral=True)
         audit_log(interaction.user, "monitor_remove", detail=container)
 
     @monitor_group.command(name="list", description="Show all monitored containers and their thresholds")

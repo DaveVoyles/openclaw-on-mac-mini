@@ -1,4 +1,5 @@
 """Tests for cogs/notify_cog.py."""
+
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -75,12 +76,14 @@ def _make_prefs(
 
 # ── __init__ ──────────────────────────────────────────────────────────────────
 
+
 def test_notify_cog_init():
     cog = _make_cog()
     assert cog.bot is not None
 
 
 # ── show ──────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_show_not_muted():
@@ -100,6 +103,7 @@ async def test_show_not_muted():
 @pytest.mark.asyncio
 async def test_show_muted():
     import time
+
     cog = _make_cog()
     inter = _make_interaction()
 
@@ -114,6 +118,7 @@ async def test_show_muted():
 
 
 # ── mute ──────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_mute_valid_duration():
@@ -161,6 +166,7 @@ async def test_mute_hours():
 
 # ── unmute ────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_unmute():
     cog = _make_cog()
@@ -181,9 +187,11 @@ async def test_unmute():
 
 # ── filter_cmd ────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_filter_cmd_set_warning():
     from discord import app_commands
+
     cog = _make_cog()
     inter = _make_interaction()
 
@@ -204,6 +212,7 @@ async def test_filter_cmd_set_warning():
 @pytest.mark.asyncio
 async def test_filter_cmd_set_critical():
     from discord import app_commands
+
     cog = _make_cog()
     inter = _make_interaction()
 
@@ -221,6 +230,7 @@ async def test_filter_cmd_set_critical():
 
 
 # ── block ─────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_block_new_service():
@@ -258,6 +268,7 @@ async def test_block_already_blocked():
 
 # ── unblock ───────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_unblock_existing():
     cog = _make_cog()
@@ -294,9 +305,11 @@ async def test_unblock_not_blocked():
 
 # ── dm_toggle ─────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_dm_toggle_on():
     from discord import app_commands
+
     cog = _make_cog()
     inter = _make_interaction()
 
@@ -318,6 +331,7 @@ async def test_dm_toggle_on():
 @pytest.mark.asyncio
 async def test_dm_toggle_off():
     from discord import app_commands
+
     cog = _make_cog()
     inter = _make_interaction()
 

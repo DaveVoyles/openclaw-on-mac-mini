@@ -61,7 +61,7 @@ class Conversation:
             preserve_head = self.history[:2]
             recent_keep = max(1, MAX_HISTORY_LENGTH - len(preserve_head) - 1)
             recent = self.history[-recent_keep:]
-            overflow = self.history[len(preserve_head):-recent_keep] if recent_keep < len(self.history) else []
+            overflow = self.history[len(preserve_head) : -recent_keep] if recent_keep < len(self.history) else []
 
             packed_summary, _meta = _build_salience_summary(overflow)
             if packed_summary:

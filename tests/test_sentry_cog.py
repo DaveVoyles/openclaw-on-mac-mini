@@ -1,4 +1,5 @@
 """Tests for cogs/sentry_cog.py."""
+
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -78,12 +79,14 @@ _SAMPLE_ISSUES = [
 
 # ── __init__ ──────────────────────────────────────────────────────────────────
 
+
 def test_sentry_cog_init():
     cog = _make_cog()
     assert cog.bot is not None
 
 
 # ── sentry_issues ─────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_sentry_issues_no_token():
@@ -102,8 +105,10 @@ async def test_sentry_issues_org_wide():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.sentry_cog.cfg", _mock_cfg()), \
-         patch("cogs.sentry_cog._sentry", new=AsyncMock(return_value=_SAMPLE_ISSUES)):
+    with (
+        patch("cogs.sentry_cog.cfg", _mock_cfg()),
+        patch("cogs.sentry_cog._sentry", new=AsyncMock(return_value=_SAMPLE_ISSUES)),
+    ):
         await cog.sentry_issues.callback(cog, inter, project="")
 
     inter.followup.send.assert_awaited_once()
@@ -114,8 +119,10 @@ async def test_sentry_issues_by_project():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.sentry_cog.cfg", _mock_cfg()), \
-         patch("cogs.sentry_cog._sentry", new=AsyncMock(return_value=_SAMPLE_ISSUES)):
+    with (
+        patch("cogs.sentry_cog.cfg", _mock_cfg()),
+        patch("cogs.sentry_cog._sentry", new=AsyncMock(return_value=_SAMPLE_ISSUES)),
+    ):
         await cog.sentry_issues.callback(cog, inter, project="my-app")
 
     inter.followup.send.assert_awaited_once()
@@ -126,8 +133,7 @@ async def test_sentry_issues_empty():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.sentry_cog.cfg", _mock_cfg()), \
-         patch("cogs.sentry_cog._sentry", new=AsyncMock(return_value=[])):
+    with patch("cogs.sentry_cog.cfg", _mock_cfg()), patch("cogs.sentry_cog._sentry", new=AsyncMock(return_value=[])):
         await cog.sentry_issues.callback(cog, inter, project="")
 
     inter.followup.send.assert_awaited_once()
@@ -139,8 +145,10 @@ async def test_sentry_issues_error():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.sentry_cog.cfg", _mock_cfg()), \
-         patch("cogs.sentry_cog._sentry", new=AsyncMock(side_effect=Exception("Network error"))):
+    with (
+        patch("cogs.sentry_cog.cfg", _mock_cfg()),
+        patch("cogs.sentry_cog._sentry", new=AsyncMock(side_effect=Exception("Network error"))),
+    ):
         await cog.sentry_issues.callback(cog, inter, project="")
 
     inter.followup.send.assert_awaited_once()
@@ -148,6 +156,7 @@ async def test_sentry_issues_error():
 
 
 # ── sentry_projects ───────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_sentry_projects_no_token():
@@ -167,14 +176,17 @@ async def test_sentry_projects_success():
     inter = _make_interaction()
 
     projects = [{"slug": "my-app", "name": "My App", "platform": "python"}]
-    with patch("cogs.sentry_cog.cfg", _mock_cfg()), \
-         patch("cogs.sentry_cog._sentry", new=AsyncMock(return_value=projects)):
+    with (
+        patch("cogs.sentry_cog.cfg", _mock_cfg()),
+        patch("cogs.sentry_cog._sentry", new=AsyncMock(return_value=projects)),
+    ):
         await cog.sentry_projects.callback(cog, inter)
 
     inter.followup.send.assert_awaited_once()
 
 
 # ── sentry_resolve ────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_sentry_resolve_no_token():
@@ -192,14 +204,17 @@ async def test_sentry_resolve_success():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.sentry_cog.cfg", _mock_cfg()), \
-         patch("cogs.sentry_cog._sentry", new=AsyncMock(return_value={"status": "resolved"})):
+    with (
+        patch("cogs.sentry_cog.cfg", _mock_cfg()),
+        patch("cogs.sentry_cog._sentry", new=AsyncMock(return_value={"status": "resolved"})),
+    ):
         await cog.sentry_resolve.callback(cog, inter, issue_id="456")
 
     inter.followup.send.assert_awaited_once()
 
 
 # ── sentry_stats ──────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_sentry_stats_no_token():
@@ -219,10 +234,10 @@ async def test_sentry_stats_success():
 
     # Stats API returns list of [timestamp_seconds, count] pairs
     import time
+
     now = int(time.time())
     stats = [[now - (i * 3600), i * 5] for i in range(24)]
-    with patch("cogs.sentry_cog.cfg", _mock_cfg()), \
-         patch("cogs.sentry_cog._sentry", new=AsyncMock(return_value=stats)):
+    with patch("cogs.sentry_cog.cfg", _mock_cfg()), patch("cogs.sentry_cog._sentry", new=AsyncMock(return_value=stats)):
         await cog.sentry_stats.callback(cog, inter, project="my-app")
 
     inter.followup.send.assert_awaited_once()
@@ -234,6 +249,7 @@ async def test_sentry_stats_no_project_fallback():
     inter = _make_interaction()
 
     import time
+
     now = int(time.time())
     stats = [[now - (i * 3600), i * 5] for i in range(24)]
     projects = [{"slug": "my-app", "name": "My App"}]
@@ -246,8 +262,7 @@ async def test_sentry_stats_no_project_fallback():
             return projects
         return stats
 
-    with patch("cogs.sentry_cog.cfg", _mock_cfg()), \
-         patch("cogs.sentry_cog._sentry", side_effect=_mock_sentry):
+    with patch("cogs.sentry_cog.cfg", _mock_cfg()), patch("cogs.sentry_cog._sentry", side_effect=_mock_sentry):
         await cog.sentry_stats.callback(cog, inter, project="")
 
     inter.followup.send.assert_awaited_once()

@@ -1,4 +1,5 @@
 """Request tracing with correlation IDs for structured logging."""
+
 import contextvars
 import logging
 import uuid
@@ -6,9 +7,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
-_current_trace: contextvars.ContextVar["TraceContext | None"] = contextvars.ContextVar(
-    "current_trace", default=None
-)
+_current_trace: contextvars.ContextVar["TraceContext | None"] = contextvars.ContextVar("current_trace", default=None)
 
 
 @dataclass

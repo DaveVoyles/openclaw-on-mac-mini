@@ -98,13 +98,7 @@ class TestFormatting:
         assert "+---+---+" in result
 
     def test_format_tables_copy_safe_preserves_following_bullets(self):
-        text = (
-            "| Team | Record |\n"
-            "| --- | --- |\n"
-            "| Wolves | 10-2 |\n\n"
-            "- ✅ Keep this summary\n"
-            "- 📌 Next step"
-        )
+        text = "| Team | Record |\n| --- | --- |\n| Wolves | 10-2 |\n\n- ✅ Keep this summary\n- 📌 Next step"
         result = format_tables_for_copy(text)
         assert "📋 Table" in result
         assert "  - Team: Wolves" in result
@@ -627,7 +621,9 @@ class TestDefaultAskChannelMode:
         # test_discord_events.py stubs quality_helpers via sys.modules before importing discord_events;
         # if they share a worker and run first, discord_events._run_quality_auto_repair is a MagicMock and
         # await-ing it throws TypeError (caught by handle_message's outer except).  Restore it here.
-        monkeypatch.setattr(discord_events_mod, "_run_quality_auto_repair", _real_quality_helpers._run_quality_auto_repair)
+        monkeypatch.setattr(
+            discord_events_mod, "_run_quality_auto_repair", _real_quality_helpers._run_quality_auto_repair
+        )
 
         channel = MagicMock()
         channel.id = 123

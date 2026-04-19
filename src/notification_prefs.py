@@ -1,4 +1,5 @@
 """Per-user notification preferences with JSON file persistence."""
+
 import asyncio
 import json
 import logging
@@ -9,9 +10,7 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-PREFS_FILE = Path(
-    os.getenv("NOTIFICATION_PREFS_PATH", "/app/data/notification_prefs.json")
-)
+PREFS_FILE = Path(os.getenv("NOTIFICATION_PREFS_PATH", "/app/data/notification_prefs.json"))
 
 # Separate file for extended per-user preferences (e.g. timezone)
 _USER_PREFS_FILE = Path(os.getenv("USER_PREFS_PATH", "data/user_prefs.json"))
@@ -66,9 +65,7 @@ class NotificationPrefsStore:
         self._prefs[prefs.user_id] = prefs
         await self._save()
 
-    def should_notify(
-        self, user_id: int, service: str = "", severity: str = "info"
-    ) -> bool:
+    def should_notify(self, user_id: int, service: str = "", severity: str = "info") -> bool:
         """Return True if *user_id* should receive this notification."""
         prefs = self.get(user_id)
         if not prefs.enabled:
@@ -92,6 +89,7 @@ notif_prefs = NotificationPrefsStore()
 # ---------------------------------------------------------------------------
 # W13-4 — Timezone support for per-user briefing scheduling
 # ---------------------------------------------------------------------------
+
 
 def _load_user_prefs() -> dict:
     if _USER_PREFS_FILE.exists():

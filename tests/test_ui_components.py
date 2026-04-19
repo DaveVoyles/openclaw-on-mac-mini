@@ -9,6 +9,7 @@ import ui_components as uc  # noqa: E402
 # EmbedColors
 # ---------------------------------------------------------------------------
 
+
 class TestEmbedColors:
     def test_success_is_green(self):
         assert uc.EmbedColors.SUCCESS == 0x00FF00
@@ -29,6 +30,7 @@ class TestEmbedColors:
 # ---------------------------------------------------------------------------
 # paginate_items
 # ---------------------------------------------------------------------------
+
 
 class TestPaginateItems:
     def test_empty_list_returns_single_page(self):
@@ -64,9 +66,11 @@ class TestPaginateItems:
 # build_embed
 # ---------------------------------------------------------------------------
 
+
 class TestBuildEmbed:
     def test_basic_build_returns_embed(self):
         import discord
+
         result = uc.build_embed("My Title", "My description")
         assert isinstance(result, discord.Embed)
 
@@ -95,6 +99,7 @@ class TestBuildEmbed:
 # ---------------------------------------------------------------------------
 # error_embed
 # ---------------------------------------------------------------------------
+
 
 class TestErrorEmbed:
     def test_error_embed_uses_error_color(self):

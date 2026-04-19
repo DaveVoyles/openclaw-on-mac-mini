@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_router.py — pure routing logic."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -71,9 +72,7 @@ def test_should_auto_execute_plan_with_two_steps():
 
 
 def test_should_auto_execute_plan_only_one_step():
-    steps = (
-        mod.ReplPlanStep(index=1, kind=mod.ReplRouteKind.ANALYZE, target_text="", args_text="", rationale=""),
-    )
+    steps = (mod.ReplPlanStep(index=1, kind=mod.ReplRouteKind.ANALYZE, target_text="", args_text="", rationale=""),)
     d = _make_decision(mod.ReplRouteKind.PLAN, confidence=0.9, steps=steps)
     assert d.should_auto_execute_plan() is False
 
@@ -122,17 +121,20 @@ def test_normalize_prompt_text_empty():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("token,expected", [
-    ("src/main.py", True),
-    ("./config.json", True),
-    ("~/Documents/file.txt", True),
-    ("README.md", True),
-    ("readme", True),
-    ("Makefile", True),
-    ("hello", False),
-    ("", False),
-    ("world", False),
-])
+@pytest.mark.parametrize(
+    "token,expected",
+    [
+        ("src/main.py", True),
+        ("./config.json", True),
+        ("~/Documents/file.txt", True),
+        ("README.md", True),
+        ("readme", True),
+        ("Makefile", True),
+        ("hello", False),
+        ("", False),
+        ("world", False),
+    ],
+)
 def test_looks_like_path(token: str, expected: bool):
     assert mod._looks_like_path(token) is expected
 

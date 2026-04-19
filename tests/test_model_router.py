@@ -1,6 +1,5 @@
 """Tests for model_router.py — query classification and routing logic."""
 
-
 from types import SimpleNamespace
 
 import model_router

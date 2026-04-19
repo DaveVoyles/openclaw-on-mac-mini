@@ -353,7 +353,12 @@ def test_quality_eval_scorecard_calculates_metrics(monkeypatch):
             "anchor_id": "ask_123",
             "lock_mode": "none",
             "response_preview": "```text\n+---+\n| A |\n+---+\n```",
-            "profile_values": {"emoji_level": "none", "report_depth": "brief", "tone": "concise", "table_style": "discord"},
+            "profile_values": {
+                "emoji_level": "none",
+                "report_depth": "brief",
+                "tone": "concise",
+                "table_style": "discord",
+            },
         },
         {
             "question": "follow up with this too",
@@ -361,7 +366,12 @@ def test_quality_eval_scorecard_calculates_metrics(monkeypatch):
             "anchor_id": "",
             "lock_mode": "none",
             "response_preview": "No anchor here 😅",
-            "profile_values": {"emoji_level": "none", "report_depth": "brief", "tone": "concise", "table_style": "discord"},
+            "profile_values": {
+                "emoji_level": "none",
+                "report_depth": "brief",
+                "tone": "concise",
+                "table_style": "discord",
+            },
         },
         {
             "question": "summarize [cross-channel] findings",
@@ -372,7 +382,9 @@ def test_quality_eval_scorecard_calculates_metrics(monkeypatch):
             "profile_values": {"table_style": "copy-safe"},
         },
     ]
-    monkeypatch.setitem(mod.__dict__, "get_scoped_recall_alerts", lambda limit=20, **_: [{"category": "scope_guard_block"}])
+    monkeypatch.setitem(
+        mod.__dict__, "get_scoped_recall_alerts", lambda limit=20, **_: [{"category": "scope_guard_block"}]
+    )
     monkeypatch.setitem(
         __import__("sys").modules,
         "error_tracker",

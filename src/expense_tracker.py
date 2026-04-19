@@ -35,9 +35,7 @@ class Expense:
     category: str
     note: str
     user_id: str
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class ExpenseTracker:
@@ -61,9 +59,7 @@ class ExpenseTracker:
 
     def _save(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
-            json.dumps([asdict(e) for e in self._expenses], indent=2)
-        )
+        self.path.write_text(json.dumps([asdict(e) for e in self._expenses], indent=2))
 
     # -- public API -----------------------------------------------------------
 
@@ -87,25 +83,16 @@ class ExpenseTracker:
 
     def list_for_user(self, user_id: str, days: int = 7) -> list[Expense]:
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-        return [
-            e
-            for e in self._expenses
-            if e.user_id == user_id
-            and datetime.fromisoformat(e.timestamp) >= cutoff
-        ]
+        return [e for e in self._expenses if e.user_id == user_id and datetime.fromisoformat(e.timestamp) >= cutoff]
 
-    def summary_by_category(
-        self, user_id: str, days: int = 7
-    ) -> dict[str, float]:
+    def summary_by_category(self, user_id: str, days: int = 7) -> dict[str, float]:
         expenses = self.list_for_user(user_id, days)
         totals: dict[str, float] = {}
         for e in expenses:
             totals[e.category] = totals.get(e.category, 0) + e.amount
         return dict(sorted(totals.items(), key=lambda x: x[1], reverse=True))
 
-    def summary_by_period(
-        self, user_id: str, period: str = "week"
-    ) -> dict[str, float]:
+    def summary_by_period(self, user_id: str, period: str = "week") -> dict[str, float]:
         days_map = {"week": 7, "month": 30, "year": 365}
         days = days_map.get(period, 7)
         return self.summary_by_category(user_id, days)

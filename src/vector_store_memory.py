@@ -117,6 +117,7 @@ async def get_scoped_memory_summary(
 
     def _inspect_scope() -> dict:
         from vector_store_client import _get_collection  # lazy — allows test patching
+
         collections = [MEMORIES_COLLECTION, CONVERSATIONS_COLLECTION, RESEARCH_COLLECTION]
         payload: dict[str, Any] = {
             "scope": {
@@ -141,14 +142,16 @@ async def get_scoped_memory_summary(
             for i, doc_id in enumerate(results.get("ids", [])):
                 meta = results["metadatas"][i] if results.get("metadatas") else {}
                 doc = results["documents"][i] if results.get("documents") else ""
-                rows.append({
-                    "id": doc_id,
-                    "added_at": float(meta.get("added_at", 0) or 0),
-                    "type": meta.get("type", "unknown"),
-                    "excerpt": (doc or "")[:180],
-                    "channel_id": _normalize_scope_id(meta.get("channel_id")),
-                    "thread_id": _normalize_scope_id(meta.get("thread_id")),
-                })
+                rows.append(
+                    {
+                        "id": doc_id,
+                        "added_at": float(meta.get("added_at", 0) or 0),
+                        "type": meta.get("type", "unknown"),
+                        "excerpt": (doc or "")[:180],
+                        "channel_id": _normalize_scope_id(meta.get("channel_id")),
+                        "thread_id": _normalize_scope_id(meta.get("thread_id")),
+                    }
+                )
             rows.sort(key=lambda r: r.get("added_at", 0), reverse=True)
             payload["collections"][name] = {
                 "count": len(rows),
@@ -168,10 +171,7 @@ async def get_scoped_memory_summary(
                 anchor_channel = _normalize_scope_id(anchor_state.get("channel_id"))
                 anchor_thread = _normalize_scope_id(anchor_state.get("thread_id"))
                 payload["anchor"] = {
-                    "present": (
-                        anchor_channel == resolved_channel_id
-                        and anchor_thread == resolved_thread_id
-                    ),
+                    "present": (anchor_channel == resolved_channel_id and anchor_thread == resolved_thread_id),
                     "anchor_id": anchor_state.get("anchor_id"),
                     "timestamp": anchor_state.get("timestamp"),
                     "channel_id": anchor_channel,
@@ -232,6 +232,7 @@ async def clear_scoped_memory(
 
     def _clear_scope() -> dict:
         from vector_store_client import _get_collection  # lazy — allows test patching
+
         collections = [MEMORIES_COLLECTION, CONVERSATIONS_COLLECTION, RESEARCH_COLLECTION]
         deleted_by_collection: dict[str, int] = {}
         total_deleted = 0
@@ -277,6 +278,7 @@ async def add_memory(
 ) -> None:
     """Store a fact/memory in the memories collection."""
     from vector_store_client import add_document  # lazy — allows test patching
+
     await add_document(
         MEMORIES_COLLECTION,
         doc_id=f"mem_{fact_id}",
@@ -306,6 +308,7 @@ async def add_memory_deduped(
     # Check for near-duplicates
     try:
         from vector_store_client import search  # lazy — allows test patching via vector_store_client
+
         existing = await search(
             MEMORIES_COLLECTION,
             content,
@@ -316,10 +319,14 @@ async def add_memory_deduped(
             thread_id=thread_id,
         )
         if existing:
-            log.debug("Dedup: skipped near-duplicate (%.0f%% similar to '%s')",
-                      existing[0]["similarity"] * 100, existing[0]["id"])
+            log.debug(
+                "Dedup: skipped near-duplicate (%.0f%% similar to '%s')",
+                existing[0]["similarity"] * 100,
+                existing[0]["id"],
+            )
             # Reinforce the existing memory instead
             from vector_store_compaction import bump_access  # lazy — allows test patching
+
             await bump_access(MEMORIES_COLLECTION, [existing[0]["id"]])
             return False
     except Exception as exc:  # broad: intentional — vector store can fail in many ways
@@ -330,6 +337,7 @@ async def add_memory_deduped(
     meta["tags"] = meta.get("tags", ",".join(tags or []))
 
     from vector_store_client import add_document as _add_document  # lazy — allows test patching
+
     await _add_document(
         MEMORIES_COLLECTION,
         doc_id=f"mem_{fact_id}",
@@ -351,6 +359,7 @@ async def add_conversation_summary(
 ) -> None:
     """Store a conversation summary in the conversations collection."""
     from vector_store_client import add_document  # lazy — allows test patching
+
     await add_document(
         CONVERSATIONS_COLLECTION,
         doc_id=f"conv_{user_id}_{thread_name}_{int(time.time())}",
@@ -375,6 +384,7 @@ async def add_research_report(
 ) -> str:
     """Store a research report in the research collection."""
     from vector_store_client import add_document  # lazy — allows test patching
+
     report_id = f"research_{int(time.time())}_{hash(query) % 10000}"
     await add_document(
         RESEARCH_COLLECTION,
@@ -414,6 +424,7 @@ async def recall(
 ) -> str:
     """Semantic recall across all collections. Returns formatted text."""
     from vector_store_client import search_all  # lazy — allows test patching
+
     results = await search_all(
         query,
         top_k=top_k,
@@ -459,6 +470,7 @@ async def recall_for_context(
 
     where = {"anchor_id": anchor_id} if anchor_id else None
     from vector_store_client import search_all  # lazy — allows test patching
+
     results = await search_all(
         query,
         top_k=top_k,
@@ -502,12 +514,7 @@ async def recall_for_context(
             query_in_domain = _query_has_domain_signal(query, guard_target_domains)
         else:
             query_in_domain = bool(query_domains & guard_target_domains)
-        if (
-            not cross_channel
-            and not explicit_domains
-            and not query_in_domain
-            and (item_domains & guard_target_domains)
-        ):
+        if not cross_channel and not explicit_domains and not query_in_domain and (item_domains & guard_target_domains):
             suppressed_domain += 1
             continue
         guarded_results.append(item)

@@ -1,6 +1,7 @@
 """
 openclaw_cli_cmd_misc.py — Miscellaneous UX, history, and analytics command handlers.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -12,6 +13,7 @@ from openclaw_cli_types import ChatCommandContext
 def _get_cli_mod():
     """Lazy import of main module for monkeypatch-safe back-references."""
     import openclaw_cli as _m
+
     return _m
 
 
@@ -36,6 +38,7 @@ def _print_error(msg: str, **kw: object) -> None:
     """Route through main module so monkeypatching works in tests."""
     _get_cli_mod()._print_error(msg, **kw)
 
+
 # _YL is used in _cmd_rate (score==3 branch) — alias to yellow
 _YL = _YE
 
@@ -43,6 +46,7 @@ try:
     from rich.console import Console as _RichConsole
     from rich.panel import Panel as _RichPanel
     from rich.text import Text as _RichText
+
     _RICH_CONSOLE = _RichConsole()
     _RICH_AVAILABLE = True
 except ImportError:
@@ -57,6 +61,7 @@ _IS_TTY = _get_is_tty()
 # ---------------------------------------------------------------------------
 # _cmd_recall
 # ---------------------------------------------------------------------------
+
 
 def _cmd_recall(ctx: ChatCommandContext) -> str:
     """/recall <n> — re-inject the nth most recent prompt into the chat (1=most recent)."""
@@ -121,6 +126,7 @@ def _cmd_recall(ctx: ChatCommandContext) -> str:
 # _cmd_histsearch
 # ---------------------------------------------------------------------------
 
+
 def _cmd_histsearch(ctx: ChatCommandContext) -> str:
     """/histsearch <query> — search prompt history for matching entries."""
     query = ctx.args.strip().lower()
@@ -157,7 +163,9 @@ def _cmd_histsearch(ctx: ChatCommandContext) -> str:
         return _CMD_CONTINUE
 
     if _RICH_AVAILABLE and is_tty:
-        _RICH_CONSOLE.print(f"\n[bold cyan]🔍 History Search:[/] [italic]\"{query}\"[/] [dim]({len(matches)} match{'es' if len(matches)!=1 else ''})[/]\n")
+        _RICH_CONSOLE.print(
+            f'\n[bold cyan]🔍 History Search:[/] [italic]"{query}"[/] [dim]({len(matches)} match{"es" if len(matches) != 1 else ""})[/]\n'
+        )
         for idx, text, ts in matches[:20]:
             preview = text[:80] + "…" if len(text) > 80 else text
             highlighted = preview.replace(query, f"[bold yellow]{query}[/]")
@@ -165,15 +173,16 @@ def _cmd_histsearch(ctx: ChatCommandContext) -> str:
             if ts:
                 try:
                     import datetime
+
                     dt = datetime.datetime.fromisoformat(ts)
                     diff = int((datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - dt).total_seconds())
-                    rel = f"[dim] ({diff//3600}h ago)[/]" if diff >= 3600 else f"[dim] ({diff//60}m ago)[/]"
+                    rel = f"[dim] ({diff // 3600}h ago)[/]" if diff >= 3600 else f"[dim] ({diff // 60}m ago)[/]"
                 except (ValueError, TypeError, AttributeError):  # noqa: BLE001
                     pass
             _RICH_CONSOLE.print(f"  [dim]#{idx:<4}[/] {highlighted}{rel}")
         _RICH_CONSOLE.print()
     else:
-        print(f"\n🔍 History: \"{query}\" ({len(matches)} matches)\n")
+        print(f'\n🔍 History: "{query}" ({len(matches)} matches)\n')
         for idx, text, ts in matches[:20]:
             preview = text[:75] + "…" if len(text) > 75 else text
             highlighted = preview.replace(query, query.upper())
@@ -187,6 +196,7 @@ def _cmd_histsearch(ctx: ChatCommandContext) -> str:
 # _cmd_celebrate
 # ---------------------------------------------------------------------------
 
+
 def _cmd_celebrate(ctx: ChatCommandContext) -> str:
     """/celebrate — trigger a celebration animation (just for fun!)."""
     msg = ctx.args.strip() or "Woohoo! 🎉"
@@ -197,6 +207,7 @@ def _cmd_celebrate(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _print_ascii_trophy (shared helper)
 # ---------------------------------------------------------------------------
+
 
 def _print_ascii_trophy(streak: int) -> None:
     """Print an ASCII trophy for streak achievements."""
@@ -231,6 +242,7 @@ def _print_ascii_trophy(streak: int) -> None:
 # _cmd_rate
 # ---------------------------------------------------------------------------
 
+
 def _cmd_rate(ctx: ChatCommandContext) -> str:
     """Rate the last AI response (/rate [good|ok|bad|meh|1-5])."""
     _cli = _get_cli_mod()
@@ -241,14 +253,14 @@ def _cmd_rate(ctx: ChatCommandContext) -> str:
 
     _RATING_MAP = {
         "good": (5, "good"),
-        "5":    (5, "good"),
-        "4":    (4, "great"),
-        "ok":   (3, "ok"),
-        "meh":  (3, "ok"),
-        "3":    (3, "ok"),
-        "2":    (2, "poor"),
-        "bad":  (1, "bad"),
-        "1":    (1, "bad"),
+        "5": (5, "good"),
+        "4": (4, "great"),
+        "ok": (3, "ok"),
+        "meh": (3, "ok"),
+        "3": (3, "ok"),
+        "2": (2, "poor"),
+        "bad": (1, "bad"),
+        "1": (1, "bad"),
     }
     if raw not in _RATING_MAP:
         _print_error("Unknown rating — use good, ok, bad, or 1-5")
@@ -321,6 +333,7 @@ def _cmd_rate(ctx: ChatCommandContext) -> str:
 # _cmd_streak
 # ---------------------------------------------------------------------------
 
+
 def _cmd_streak(ctx: ChatCommandContext) -> str:
     """/streak — show your current rating streak and all-time best."""
     is_tty = _get_is_tty()
@@ -365,12 +378,16 @@ def _cmd_streak(ctx: ChatCommandContext) -> str:
             running = 0
 
     total = len(ratings)
-    high_pct = int(sum(1 for r in ratings if (r.get("score", 0) if isinstance(r, dict) else 0) >= 4) / max(1, total) * 100)
+    high_pct = int(
+        sum(1 for r in ratings if (r.get("score", 0) if isinstance(r, dict) else 0) >= 4) / max(1, total) * 100
+    )
 
     if _RICH_AVAILABLE and is_tty:
         streak_color = "green" if current_streak >= 5 else "yellow" if current_streak >= 2 else "default"
         _RICH_CONSOLE.print("\n[bold cyan]🔥 Rating Streak[/]\n")
-        _RICH_CONSOLE.print(f"  Current streak:  [{streak_color}]{current_streak} high ratings[/]  {'🔥' * min(current_streak, 10)}")
+        _RICH_CONSOLE.print(
+            f"  Current streak:  [{streak_color}]{current_streak} high ratings[/]  {'🔥' * min(current_streak, 10)}"
+        )
         _RICH_CONSOLE.print(f"  Best streak:     [bold]{best_streak}[/]")
         _RICH_CONSOLE.print(f"  High rate (4+):  [bold]{high_pct}%[/] of {total} ratings")
         _RICH_CONSOLE.print()
@@ -391,9 +408,11 @@ def _cmd_streak(ctx: ChatCommandContext) -> str:
 # _cmd_heatmap
 # ---------------------------------------------------------------------------
 
+
 def _cmd_heatmap(ctx: ChatCommandContext) -> str:
     """/heatmap — show a color-coded hourly activity heatmap of openclaw usage."""
     import datetime
+
     is_tty = _get_is_tty()
 
     cmd_history = _get_cli_mod()._PREFS.get("cmd_history", [])
@@ -467,8 +486,10 @@ def _cmd_heatmap(ctx: ChatCommandContext) -> str:
     peak_hour = max(hour_counts, key=hour_counts.get)
     peak_count = hour_counts[peak_hour]
 
-    print(f"\n  {_DM}Peak hour: {_B}{peak_hour:02d}:00{_R} {_DM}({peak_count} events)  ·  "
-          f"Legend: {_RE}██{_R}=hot  {_YE}██{_R}=warm  {_GR}██{_R}=mild  {_CY}██{_R}=cool  {_DM}░░=none{_R}\n")
+    print(
+        f"\n  {_DM}Peak hour: {_B}{peak_hour:02d}:00{_R} {_DM}({peak_count} events)  ·  "
+        f"Legend: {_RE}██{_R}=hot  {_YE}██{_R}=warm  {_GR}██{_R}=mild  {_CY}██{_R}=cool  {_DM}░░=none{_R}\n"
+    )
 
     return _CMD_CONTINUE
 
@@ -477,13 +498,14 @@ def _cmd_heatmap(ctx: ChatCommandContext) -> str:
 # _cmd_followup
 # ---------------------------------------------------------------------------
 
+
 def _cmd_followup(ctx: ChatCommandContext) -> str:
     """/followup [on|off] — show contextually relevant follow-up suggestions for your last prompt, or toggle the auto-suggestion footer."""
     arg = (ctx.args or "").strip().lower()
     _cli = _get_cli_mod()
 
     if arg in ("on", "off"):
-        _cli._PREFS["show_suggestions"] = (arg == "on")
+        _cli._PREFS["show_suggestions"] = arg == "on"
         state = "on" if _cli._PREFS["show_suggestions"] else "off"
         is_tty = _get_is_tty()
         if _RICH_AVAILABLE and is_tty:
@@ -502,13 +524,15 @@ def _cmd_followup(ctx: ChatCommandContext) -> str:
             print(msg)
         return _CMD_CONTINUE
 
-    suggestions = _cli._suggest_followups(last_prompt, response_text=_cli._last_response_text, session_id=ctx.session_id)
+    suggestions = _cli._suggest_followups(
+        last_prompt, response_text=_cli._last_response_text, session_id=ctx.session_id
+    )
     is_tty = _get_is_tty()
 
     if _RICH_AVAILABLE and is_tty:
         _RICH_CONSOLE.print(
             f"\n[bold cyan]💡 Follow-up suggestions[/] "
-            f"[dim]based on: \"{last_prompt[:50]}{'…' if len(last_prompt) > 50 else ''}\"[/]\n"
+            f'[dim]based on: "{last_prompt[:50]}{"…" if len(last_prompt) > 50 else ""}"[/]\n'
         )
         for s in suggestions:
             cmd = s.split(" — ")[0]
@@ -516,12 +540,9 @@ def _cmd_followup(ctx: ChatCommandContext) -> str:
             _RICH_CONSOLE.print(f"  [bold cyan]{cmd}[/]  [dim]{desc}[/]")
         _RICH_CONSOLE.print()
     else:
-        print(f"\n💡 Follow-up suggestions (based on: \"{last_prompt[:50]}…\")\n")
+        print(f'\n💡 Follow-up suggestions (based on: "{last_prompt[:50]}…")\n')
         for s in suggestions:
-            print(
-                f"  {_BCY}{s.split(' — ')[0]}{_R}  "
-                f"{_DM}{s.split(' — ')[1] if ' — ' in s else ''}{_R}"
-            )
+            print(f"  {_BCY}{s.split(' — ')[0]}{_R}  {_DM}{s.split(' — ')[1] if ' — ' in s else ''}{_R}")
         print()
 
     return _CMD_CONTINUE
@@ -531,52 +552,70 @@ def _cmd_followup(ctx: ChatCommandContext) -> str:
 # _cmd_shortcuts
 # ---------------------------------------------------------------------------
 
+
 def _cmd_shortcuts(ctx: ChatCommandContext) -> str:
     """/shortcuts — show keyboard shortcuts and quick-access reference card."""
     is_tty = _get_is_tty()
 
     sections = [
-        ("⌨️  Navigation", [
-            ("Tab",          "Auto-complete slash commands"),
-            ("↑ / ↓",        "Scroll through command history"),
-            ("Ctrl+A",       "Jump to start of line"),
-            ("Ctrl+E",       "Jump to end of line"),
-            ("Ctrl+W",       "Delete last word"),
-            ("Ctrl+U",       "Clear current line"),
-        ]),
-        ("🔄  Session", [
-            ("Ctrl+C",       "Interrupt current response"),
-            ("Ctrl+D",       "Exit openclaw"),
-            ("/quit",        "Exit gracefully"),
-            ("/clear",       "Clear screen"),
-        ]),
-        ("📋  Quick Commands", [
-            ("/last",        "Re-print last response"),
-            ("/retry",       "Retry last prompt"),
-            ("/draft",       "Edit current draft buffer"),
-            ("/history",     "Browse recent prompts"),
-            ("/palette",     "Search all commands (new!)"),
-        ]),
-        ("🎨  Appearance", [
-            ("/separator [style]",  "Set response separator style"),
-            ("/emojiheaders on|off", "Toggle emoji on headings"),
-            ("/autobold on|off",     "Toggle auto-bold in responses"),
-            ("/jsonformat on|off",   "Toggle JSON auto-detect & pretty-print"),
-            ("/theme",               "Switch color theme"),
-        ]),
-        ("🔧  Power", [
-            ("/macro [name]",   "Run saved macro"),
-            ("/pin [key]",      "Pin a value for quick reference"),
-            ("/export",         "Export session to file"),
-            ("/help",           "Full command reference"),
-        ]),
+        (
+            "⌨️  Navigation",
+            [
+                ("Tab", "Auto-complete slash commands"),
+                ("↑ / ↓", "Scroll through command history"),
+                ("Ctrl+A", "Jump to start of line"),
+                ("Ctrl+E", "Jump to end of line"),
+                ("Ctrl+W", "Delete last word"),
+                ("Ctrl+U", "Clear current line"),
+            ],
+        ),
+        (
+            "🔄  Session",
+            [
+                ("Ctrl+C", "Interrupt current response"),
+                ("Ctrl+D", "Exit openclaw"),
+                ("/quit", "Exit gracefully"),
+                ("/clear", "Clear screen"),
+            ],
+        ),
+        (
+            "📋  Quick Commands",
+            [
+                ("/last", "Re-print last response"),
+                ("/retry", "Retry last prompt"),
+                ("/draft", "Edit current draft buffer"),
+                ("/history", "Browse recent prompts"),
+                ("/palette", "Search all commands (new!)"),
+            ],
+        ),
+        (
+            "🎨  Appearance",
+            [
+                ("/separator [style]", "Set response separator style"),
+                ("/emojiheaders on|off", "Toggle emoji on headings"),
+                ("/autobold on|off", "Toggle auto-bold in responses"),
+                ("/jsonformat on|off", "Toggle JSON auto-detect & pretty-print"),
+                ("/theme", "Switch color theme"),
+            ],
+        ),
+        (
+            "🔧  Power",
+            [
+                ("/macro [name]", "Run saved macro"),
+                ("/pin [key]", "Pin a value for quick reference"),
+                ("/export", "Export session to file"),
+                ("/help", "Full command reference"),
+            ],
+        ),
     ]
 
     if _RICH_AVAILABLE and is_tty:
         from rich.table import Table
 
         _RICH_CONSOLE.print()
-        _RICH_CONSOLE.print(_RichPanel.fit("[bold cyan]⌨️  Keyboard Shortcuts & Quick Reference[/]", border_style="cyan"))
+        _RICH_CONSOLE.print(
+            _RichPanel.fit("[bold cyan]⌨️  Keyboard Shortcuts & Quick Reference[/]", border_style="cyan")
+        )
         _RICH_CONSOLE.print()
 
         for section_title, items in sections:
@@ -604,6 +643,7 @@ def _cmd_shortcuts(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_top
 # ---------------------------------------------------------------------------
+
 
 def _cmd_top(ctx: ChatCommandContext) -> str:
     """/top [n] — show the n most frequently used prompts and commands (default: 10)."""
@@ -640,6 +680,7 @@ def _cmd_top(ctx: ChatCommandContext) -> str:
     if _RICH_AVAILABLE and is_tty:
         from rich.box import SIMPLE
         from rich.table import Table
+
         _RICH_CONSOLE.print(f"\n[bold cyan]🔝 Top {len(top)} Most Used[/]\n")
         tbl = Table(box=SIMPLE, show_header=True, header_style="bold cyan")
         tbl.add_column("#", justify="right", style="dim", width=4)
@@ -669,6 +710,7 @@ def _cmd_top(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_freq
 # ---------------------------------------------------------------------------
+
 
 def _cmd_freq(ctx: ChatCommandContext) -> str:
     """/freq — show frequency analysis of slash commands used."""
@@ -719,9 +761,11 @@ def _cmd_freq(ctx: ChatCommandContext) -> str:
 # _cmd_tip
 # ---------------------------------------------------------------------------
 
+
 def _cmd_tip(ctx: ChatCommandContext) -> str:
     """/tip — show a random openclaw usage tip."""
     import random
+
     is_tty = _get_is_tty()
 
     tip = random.choice(_get_cli_mod()._OPENCLAW_TIPS)
@@ -737,6 +781,7 @@ def _cmd_tip(ctx: ChatCommandContext) -> str:
 def _cmd_copy(ctx: ChatCommandContext) -> str:
     """/copy — copy the last AI response to the macOS clipboard."""
     import subprocess
+
     m = _get_cli_mod()
     text = str(getattr(m, "_last_response_text", "") or "").strip()
     if not text:
@@ -761,6 +806,7 @@ def _cmd_copy(ctx: ChatCommandContext) -> str:
 def _cmd_save(ctx: ChatCommandContext) -> str:
     """/save [filename] — save the last AI response to a file."""
     import datetime
+
     m = _get_cli_mod()
     text = str(getattr(m, "_last_response_text", "") or "").strip()
     if not text:
@@ -773,6 +819,7 @@ def _cmd_save(ctx: ChatCommandContext) -> str:
         stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
         path = f"openclaw-response-{stamp}.md"
     from openclaw_cli_actions import write_text_file
+
     try:
         result = write_text_file(path, content=text)
         print(f"  {_DM}✅ Saved to {result.path} ({len(text):,} chars){_R}")
@@ -784,8 +831,8 @@ def _cmd_save(ctx: ChatCommandContext) -> str:
 _RETRY_QUALIFIERS: dict[str, str] = {
     "shorter": "Please give a shorter, more concise answer to: ",
     "simpler": "Please explain this more simply, avoiding jargon: ",
-    "code":    "Please answer with code only, no explanations: ",
-    "bullet":  "Please answer in bullet points only: ",
+    "code": "Please answer with code only, no explanations: ",
+    "bullet": "Please answer in bullet points only: ",
 }
 
 
@@ -870,25 +917,27 @@ def _cmd_notify(ctx: ChatCommandContext) -> str:
 # _print_key_bindings / _cmd_keys
 # ---------------------------------------------------------------------------
 
+
 def _print_key_bindings() -> None:
     """Print currently active readline key bindings summary."""
     is_tty = _get_is_tty()
     bindings = [
-        ("Ctrl+R",   "Reverse history search (type to filter)"),
-        ("Ctrl+L",   "Clear screen"),
-        ("Ctrl+W",   "Delete previous word"),
-        ("Ctrl+U",   "Clear current line"),
-        ("Ctrl+A",   "Jump to start of line"),
-        ("Ctrl+E",   "Jump to end of line"),
-        ("Ctrl+C",   "Interrupt / cancel"),
-        ("Ctrl+D",   "Exit openclaw"),
-        ("Tab",      "Auto-complete slash commands"),
-        ("↑ / ↓",    "Browse command history"),
+        ("Ctrl+R", "Reverse history search (type to filter)"),
+        ("Ctrl+L", "Clear screen"),
+        ("Ctrl+W", "Delete previous word"),
+        ("Ctrl+U", "Clear current line"),
+        ("Ctrl+A", "Jump to start of line"),
+        ("Ctrl+E", "Jump to end of line"),
+        ("Ctrl+C", "Interrupt / cancel"),
+        ("Ctrl+D", "Exit openclaw"),
+        ("Tab", "Auto-complete slash commands"),
+        ("↑ / ↓", "Browse command history"),
     ]
 
     if _RICH_AVAILABLE and is_tty:
         from rich.box import SIMPLE
         from rich.table import Table
+
         _RICH_CONSOLE.print("\n[bold cyan]⌨️  Active Key Bindings[/]\n")
         tbl = Table(box=SIMPLE, show_header=True, header_style="bold cyan")
         tbl.add_column("Key", style="bold yellow", no_wrap=True, width=16)
@@ -914,21 +963,22 @@ def _cmd_keys(ctx: ChatCommandContext) -> str:
 # _cmd_bindlist
 # ---------------------------------------------------------------------------
 
+
 def _cmd_bindlist(ctx: ChatCommandContext) -> str:
     """/bindlist — show all keyboard bindings (built-in readline + custom)."""
     is_tty = _get_is_tty()
 
     builtin_bindings = [
-        ("Ctrl+R",   "Reverse history search"),
-        ("Ctrl+L",   "Clear screen"),
-        ("Ctrl+W",   "Delete previous word"),
-        ("Ctrl+U",   "Clear current line"),
-        ("Ctrl+A",   "Jump to line start"),
-        ("Ctrl+E",   "Jump to line end"),
-        ("Ctrl+C",   "Interrupt"),
-        ("Ctrl+D",   "Exit"),
-        ("Tab",      "Auto-complete /commands"),
-        ("↑ / ↓",    "Browse history"),
+        ("Ctrl+R", "Reverse history search"),
+        ("Ctrl+L", "Clear screen"),
+        ("Ctrl+W", "Delete previous word"),
+        ("Ctrl+U", "Clear current line"),
+        ("Ctrl+A", "Jump to line start"),
+        ("Ctrl+E", "Jump to line end"),
+        ("Ctrl+C", "Interrupt"),
+        ("Ctrl+D", "Exit"),
+        ("Tab", "Auto-complete /commands"),
+        ("↑ / ↓", "Browse history"),
     ]
 
     custom_bindings = list(_get_cli_mod()._PREFS.get("custom_keybinds", {}).items())
@@ -936,6 +986,7 @@ def _cmd_bindlist(ctx: ChatCommandContext) -> str:
     if _RICH_AVAILABLE and is_tty:
         from rich.box import SIMPLE
         from rich.table import Table
+
         _RICH_CONSOLE.print("\n[bold cyan]⌨️  All Key Bindings[/]\n")
 
         tbl = Table(box=SIMPLE, show_header=True, header_style="bold cyan")
@@ -971,18 +1022,17 @@ def _cmd_bindlist(ctx: ChatCommandContext) -> str:
 # _cmd_diff
 # ---------------------------------------------------------------------------
 
+
 def _cmd_diff(ctx: ChatCommandContext) -> str:
     """/diff [file1 file2 | --git] — show a colorized unified diff."""
     import subprocess
+
     arg = ctx.args.strip()
     is_tty = _get_is_tty()
 
     if not arg or arg == "--git":
         try:
-            result = subprocess.run(
-                ["git", "diff", "--no-color"],
-                capture_output=True, text=True, timeout=10
-            )
+            result = subprocess.run(["git", "diff", "--no-color"], capture_output=True, text=True, timeout=10)
             diff_text = result.stdout or result.stderr
         except (OSError, subprocess.SubprocessError) as e:  # noqa: BLE001
             diff_text = f"Error: {e}"
@@ -996,10 +1046,7 @@ def _cmd_diff(ctx: ChatCommandContext) -> str:
                 print(msg)
             return _CMD_CONTINUE
         try:
-            result = subprocess.run(
-                ["diff", "-u", parts[0], parts[1]],
-                capture_output=True, text=True, timeout=10
-            )
+            result = subprocess.run(["diff", "-u", parts[0], parts[1]], capture_output=True, text=True, timeout=10)
             diff_text = result.stdout or "(no differences)"
         except (OSError, subprocess.SubprocessError) as e:  # noqa: BLE001
             diff_text = f"Error: {e}"
@@ -1021,19 +1068,18 @@ def _cmd_diff(ctx: ChatCommandContext) -> str:
 # _cmd_changes
 # ---------------------------------------------------------------------------
 
+
 def _cmd_changes(ctx: ChatCommandContext) -> str:
     """/changes — show files mentioned/edited in this session."""
     import subprocess
+
     is_tty = _get_is_tty()
     _cli = _get_cli_mod()
 
     edits = _cli._PREFS.get("session_edits", [])
 
     try:
-        result = subprocess.run(
-            ["git", "status", "--short"],
-            capture_output=True, text=True, timeout=5
-        )
+        result = subprocess.run(["git", "status", "--short"], capture_output=True, text=True, timeout=5)
         git_changes = result.stdout.strip()
     except (OSError, subprocess.SubprocessError):  # noqa: BLE001
         git_changes = ""

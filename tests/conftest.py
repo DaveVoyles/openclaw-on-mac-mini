@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 try:
     import discord
 except ModuleNotFoundError:  # pragma: no cover - exercised in lightweight CLI test environments
+
     class _DiscordInteraction:
         pass
 
@@ -47,6 +48,7 @@ def _patch_memory_dirs(tmp_path, monkeypatch):
     monkeypatch.setattr(memory_conversation, "THREADS_DIR", mem_dir / "threads")
     # memory_thread_persistence also references THREADS_DIR from memory_helpers
     import memory_thread_persistence
+
     monkeypatch.setattr(memory_thread_persistence, "THREADS_DIR", mem_dir / "threads")
     # memory_session imports SUMMARIES_DIR/MEMORY_DIR from memory_helpers
     monkeypatch.setattr(memory_session, "MEMORY_DIR", mem_dir)
@@ -101,6 +103,7 @@ def _clear_module_caches():
                             setattr(mod, attr, None)
                     except Exception as e:
                         import warnings
+
                         warnings.warn(f"Failed to clear cache {attr} on {mod_name}: {e}")
 
 
@@ -120,6 +123,7 @@ def _clear_module_caches():
 @pytest.fixture(autouse=True)
 def _mock_llm_model_init(monkeypatch):
     """Mock LLM model initialization to avoid requiring API keys in tests."""
+
     # Prevent model initialization from requiring API keys
     def mock_get_model():
         """Mock _get_model to return a MagicMock instead of real Gemini model."""
@@ -132,6 +136,7 @@ def _mock_llm_model_init(monkeypatch):
     # Patch before llm module imports
     try:
         import llm_client
+
         monkeypatch.setattr(llm_client, "_init_gemini_model", mock_init_gemini)
     except Exception:
         pass  # Module not imported yet, that's fine
@@ -142,6 +147,7 @@ def _trigger_lazy_llm_loads():
     """Trigger lazy loading of llm submodules to populate sys.modules for tests."""
     try:
         import llm
+
         # Access lazy-loaded submodules via __getattr__ to populate sys.modules
         _ = llm.chat
         _ = llm.chat_stream
@@ -158,6 +164,7 @@ def reset_emergency_stop():
     resetting it here prevents cross-test bleed for the entire suite.
     """
     from approval_store import set_emergency_stop
+
     set_emergency_stop(False)
     yield
     set_emergency_stop(False)
@@ -172,6 +179,7 @@ def sched(tmp_path):
     """
     import scheduler as scheduler_module
     from scheduler import TaskScheduler
+
     temp_file = tmp_path / "schedules.json"
     with patch.object(scheduler_module, "SCHEDULE_FILE", temp_file):
         yield TaskScheduler()

@@ -10,6 +10,7 @@ Allowed imports: openclaw_cli_session_display, openclaw_cli_ui_core,
                  openclaw_cli_preprocess, stdlib only.
 Do NOT import from openclaw_cli — circular import.
 """
+
 from __future__ import annotations
 
 import json
@@ -59,6 +60,7 @@ except ImportError:  # pragma: no cover
 # HealthResponse dataclass
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class HealthResponse:
     """Structured response from the OpenClaw health endpoint."""
@@ -73,6 +75,7 @@ class HealthResponse:
 # Health display
 # ---------------------------------------------------------------------------
 
+
 def print_health(response: HealthResponse, *, output_json: bool) -> None:
     """Render a health response to stdout."""
     if output_json:
@@ -85,7 +88,9 @@ def print_health(response: HealthResponse, *, output_json: bool) -> None:
     emoji = _status_emoji(response.status or "")
     if _RICH_AVAILABLE and _IS_TTY:
         border = "green" if response.healthy is True else ("yellow" if response.healthy is False else "dim")
-        status_style = "bold green" if response.healthy is True else ("bold yellow" if response.healthy is False else "dim")
+        status_style = (
+            "bold green" if response.healthy is True else ("bold yellow" if response.healthy is False else "dim")
+        )
         t = _RichText()
         t.append(f"{emoji}  OpenClaw  ", style="bold")
         t.append(status, style=status_style)
@@ -112,10 +117,16 @@ def print_health(response: HealthResponse, *, output_json: bool) -> None:
                     chk_emoji = "✅" if str(value).lower() in {"ok", "true", "healthy"} else "⚠️"
                     grid.add_row(f"  {name}", f"{chk_emoji} {value}")
             from rich.console import Group as _RichGroup
+
             _RICH_CONSOLE.print(_RichPanel(_RichGroup(t, grid), border_style=border, padding=(0, 1)))
         elif isinstance(response.payload, str) and response.payload.strip():
             from rich.console import Group as _RichGroup
-            _RICH_CONSOLE.print(_RichPanel(_RichGroup(t, _RichText(response.payload.strip(), style="dim")), border_style=border, padding=(0, 1)))
+
+            _RICH_CONSOLE.print(
+                _RichPanel(
+                    _RichGroup(t, _RichText(response.payload.strip(), style="dim")), border_style=border, padding=(0, 1)
+                )
+            )
         else:
             _RICH_CONSOLE.print(_RichPanel(t, border_style=border, padding=(0, 1)))
     else:
@@ -145,6 +156,7 @@ def print_health(response: HealthResponse, *, output_json: bool) -> None:
 # ---------------------------------------------------------------------------
 # Source URL display
 # ---------------------------------------------------------------------------
+
 
 def _clean_sources_for_display(sources: str) -> list[tuple[str, str]]:
     """Extract clean URLs from a sources block, stripping markdown link syntax.
@@ -189,6 +201,7 @@ def _clean_sources_for_display(sources: str) -> list[tuple[str, str]]:
 # ---------------------------------------------------------------------------
 # Operator snapshot display
 # ---------------------------------------------------------------------------
+
 
 def _operator_snapshot_lines(snapshot: dict[str, Any]) -> list[str]:
     """Render human-readable lines for the operator snapshot."""

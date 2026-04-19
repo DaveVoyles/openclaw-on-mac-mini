@@ -4,6 +4,7 @@ openclaw_cli_macros — Macro recording, storage, and workflow execution engine.
 Imports from: openclaw_cli_sessions (load_session), openclaw_cli_ui_core (ANSI colors)
 Does NOT import from openclaw_cli.py.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -39,7 +40,7 @@ def _history_command_texts(prefs: dict, limit: int) -> list[str]:
             text = str(entry or "").strip()
         if text:
             commands.append(text)
-    return commands[-max(1, limit):]
+    return commands[-max(1, limit) :]
 
 
 def _render_workflow_step(command: str, ctx: Any) -> str:
@@ -95,6 +96,6 @@ def _print_macro_progress(
             marker = " "
             style = _DM
             end_style = _R
-        num = f"Step {i+1}/{total}:"
+        num = f"Step {i + 1}/{total}:"
         print(f"  {marker} {style}{num} {step_str}{end_style}")
     print()

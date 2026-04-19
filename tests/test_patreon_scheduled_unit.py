@@ -1,4 +1,5 @@
 """Unit tests for patreon_scheduled.py — set_discord_client, scheduled task, config."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -15,6 +16,7 @@ from patreon_scheduled import (
 # ---------------------------------------------------------------------------
 # set_discord_client
 # ---------------------------------------------------------------------------
+
 
 class TestSetDiscordClient:
     def test_stores_client(self):
@@ -37,6 +39,7 @@ class TestSetDiscordClient:
 # ---------------------------------------------------------------------------
 # PATREON_MONITORING_TASK config dict
 # ---------------------------------------------------------------------------
+
 
 class TestPatreonMonitoringTask:
     def test_has_required_keys(self):
@@ -69,6 +72,7 @@ class TestPatreonMonitoringTask:
 # scheduled_patreon_health_check — success path
 # ---------------------------------------------------------------------------
 
+
 def _make_health(status_value="healthy", message="OK", issues=None):
     health = MagicMock()
     health.status = MagicMock()
@@ -95,10 +99,12 @@ class TestScheduledPatreonHealthCheckSuccess:
         alert_mgr = AsyncMock()
         alert_mgr.send_alert_if_needed = AsyncMock(return_value=False)
 
-        with patch("patreon_scheduled.get_patreon_checker", return_value=checker), \
-             patch("patreon_scheduled.get_recovery_manager", return_value=recovery_mgr), \
-             patch("patreon_scheduled.get_alert_manager", return_value=alert_mgr), \
-             patch("patreon_scheduled.cfg") as mock_cfg:
+        with (
+            patch("patreon_scheduled.get_patreon_checker", return_value=checker),
+            patch("patreon_scheduled.get_recovery_manager", return_value=recovery_mgr),
+            patch("patreon_scheduled.get_alert_manager", return_value=alert_mgr),
+            patch("patreon_scheduled.cfg") as mock_cfg,
+        ):
             mock_cfg.alert_channel_id = None
             result = await scheduled_patreon_health_check()
 
@@ -115,10 +121,12 @@ class TestScheduledPatreonHealthCheckSuccess:
         alert_mgr = AsyncMock()
         alert_mgr.send_alert_if_needed = AsyncMock(return_value=False)
 
-        with patch("patreon_scheduled.get_patreon_checker", return_value=checker), \
-             patch("patreon_scheduled.get_recovery_manager", return_value=recovery_mgr), \
-             patch("patreon_scheduled.get_alert_manager", return_value=alert_mgr), \
-             patch("patreon_scheduled.cfg") as mock_cfg:
+        with (
+            patch("patreon_scheduled.get_patreon_checker", return_value=checker),
+            patch("patreon_scheduled.get_recovery_manager", return_value=recovery_mgr),
+            patch("patreon_scheduled.get_alert_manager", return_value=alert_mgr),
+            patch("patreon_scheduled.cfg") as mock_cfg,
+        ):
             mock_cfg.alert_channel_id = None
             result = await scheduled_patreon_health_check()
 
@@ -135,10 +143,12 @@ class TestScheduledPatreonHealthCheckSuccess:
 
         mock_discord = MagicMock()
 
-        with patch("patreon_scheduled.get_patreon_checker", return_value=checker), \
-             patch("patreon_scheduled.get_recovery_manager", return_value=recovery_mgr), \
-             patch("patreon_scheduled.get_alert_manager", return_value=alert_mgr), \
-             patch("patreon_scheduled.cfg") as mock_cfg:
+        with (
+            patch("patreon_scheduled.get_patreon_checker", return_value=checker),
+            patch("patreon_scheduled.get_recovery_manager", return_value=recovery_mgr),
+            patch("patreon_scheduled.get_alert_manager", return_value=alert_mgr),
+            patch("patreon_scheduled.cfg") as mock_cfg,
+        ):
             mock_cfg.alert_channel_id = None
             result = await scheduled_patreon_health_check(discord_client=mock_discord)
 
@@ -160,11 +170,13 @@ class TestScheduledPatreonHealthCheckSuccess:
         alert_mgr = AsyncMock()
         alert_mgr.send_alert_if_needed = AsyncMock(return_value=False)
 
-        with patch("patreon_scheduled.get_patreon_checker", return_value=checker), \
-             patch("patreon_scheduled.get_recovery_manager", return_value=recovery_mgr), \
-             patch("patreon_scheduled.get_alert_manager", return_value=alert_mgr), \
-             patch("patreon_scheduled.cfg") as mock_cfg, \
-             patch("asyncio.sleep", new=AsyncMock()):
+        with (
+            patch("patreon_scheduled.get_patreon_checker", return_value=checker),
+            patch("patreon_scheduled.get_recovery_manager", return_value=recovery_mgr),
+            patch("patreon_scheduled.get_alert_manager", return_value=alert_mgr),
+            patch("patreon_scheduled.cfg") as mock_cfg,
+            patch("asyncio.sleep", new=AsyncMock()),
+        ):
             mock_cfg.alert_channel_id = None
             result = await scheduled_patreon_health_check()
 
@@ -175,6 +187,7 @@ class TestScheduledPatreonHealthCheckSuccess:
 # ---------------------------------------------------------------------------
 # scheduled_patreon_health_check — error path
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 class TestScheduledPatreonHealthCheckError:
@@ -205,10 +218,12 @@ class TestScheduledPatreonHealthCheckError:
         mock_client = MagicMock()
         set_discord_client(mock_client)
 
-        with patch("patreon_scheduled.get_patreon_checker", return_value=checker), \
-             patch("patreon_scheduled.get_recovery_manager", return_value=recovery_mgr), \
-             patch("patreon_scheduled.get_alert_manager", return_value=alert_mgr), \
-             patch("patreon_scheduled.cfg") as mock_cfg:
+        with (
+            patch("patreon_scheduled.get_patreon_checker", return_value=checker),
+            patch("patreon_scheduled.get_recovery_manager", return_value=recovery_mgr),
+            patch("patreon_scheduled.get_alert_manager", return_value=alert_mgr),
+            patch("patreon_scheduled.cfg") as mock_cfg,
+        ):
             mock_cfg.alert_channel_id = None
             # No discord_client arg → should use _discord_client module var
             result = await scheduled_patreon_health_check()

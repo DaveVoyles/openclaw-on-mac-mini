@@ -1,4 +1,5 @@
 """Tests for cogs/translate_cog.py."""
+
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -59,12 +60,14 @@ def _make_cog():
 
 # ── __init__ ──────────────────────────────────────────────────────────────────
 
+
 def test_translate_cog_init():
     cog = _make_cog()
     assert cog.bot is not None
 
 
 # ── translate_cmd ──────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_translate_cmd_success():

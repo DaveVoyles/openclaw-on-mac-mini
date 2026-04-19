@@ -22,6 +22,7 @@ from cogs.docker_cog import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_interaction(user_id=1):
     interaction = AsyncMock()
     interaction.user = MagicMock()
@@ -60,6 +61,7 @@ def _sample_container(name="mycontainer", state="running", status="Up 2 hours", 
 # _cached_container_list
 # ---------------------------------------------------------------------------
 
+
 class TestCachedContainerList:
     async def test_calls_list_containers_on_cold_cache(self):
         mod._container_cache["ts"] = 0.0
@@ -71,6 +73,7 @@ class TestCachedContainerList:
 
     async def test_returns_cached_result_when_fresh(self):
         import time
+
         mod._container_cache["ts"] = time.monotonic()
         mod._container_cache["data"] = "cached_data"
 
@@ -91,6 +94,7 @@ class TestCachedContainerList:
 # ---------------------------------------------------------------------------
 # _list_containers_structured
 # ---------------------------------------------------------------------------
+
 
 class TestListContainersStructured:
     async def test_returns_list_of_dicts_on_success(self):
@@ -133,6 +137,7 @@ class TestListContainersStructured:
 # ---------------------------------------------------------------------------
 # _build_container_embed
 # ---------------------------------------------------------------------------
+
 
 class TestBuildContainerEmbed:
     def test_running_container_green(self):
@@ -184,6 +189,7 @@ class TestBuildContainerEmbed:
 # _container_autocomplete
 # ---------------------------------------------------------------------------
 
+
 class TestContainerAutocomplete:
     async def test_returns_matching_container_names(self):
         cache_data = "NAMES\nnginx\nredis\nmongodb"
@@ -223,6 +229,7 @@ class TestContainerAutocomplete:
 # ---------------------------------------------------------------------------
 # ContainerActionView
 # ---------------------------------------------------------------------------
+
 
 class TestContainerActionView:
     def test_requester_check_allows_requester(self):
@@ -444,6 +451,7 @@ class TestContainerActionView:
 # ContainerSelect
 # ---------------------------------------------------------------------------
 
+
 class TestContainerSelect:
     async def test_callback_shows_embed_and_action_view(self):
         containers = [_sample_container("app1"), _sample_container("app2", state="exited")]
@@ -474,6 +482,7 @@ class TestContainerSelect:
 # ---------------------------------------------------------------------------
 # ContainerSelectView
 # ---------------------------------------------------------------------------
+
 
 class TestContainerSelectView:
     def test_creates_select_with_containers(self):
@@ -525,6 +534,7 @@ class TestContainerSelectView:
 # ---------------------------------------------------------------------------
 # DockerCog.containers_cmd
 # ---------------------------------------------------------------------------
+
 
 class TestContainersCmd:
     async def test_containers_cmd_with_containers(self):
@@ -578,6 +588,7 @@ class TestContainersCmd:
 # DockerCog.status_cmd
 # ---------------------------------------------------------------------------
 
+
 class TestStatusCmd:
     async def test_docker_cog_status_cmd_success(self):
         bot = _make_bot()
@@ -594,6 +605,7 @@ class TestStatusCmd:
 # ---------------------------------------------------------------------------
 # DockerCog.logs_cmd
 # ---------------------------------------------------------------------------
+
 
 class TestLogsCmd:
     async def test_logs_cmd_default_lines(self):
@@ -621,6 +633,7 @@ class TestLogsCmd:
 # DockerCog.system_cmd
 # ---------------------------------------------------------------------------
 
+
 class TestSystemCmd:
     async def test_system_cmd_returns_stats_embed(self):
         bot = _make_bot()
@@ -638,6 +651,7 @@ class TestSystemCmd:
 # DockerCog.dockerstats_cmd
 # ---------------------------------------------------------------------------
 
+
 class TestDockerstatsCmd:
     async def test_dockerstats_cmd_returns_embed(self):
         bot = _make_bot()
@@ -653,6 +667,7 @@ class TestDockerstatsCmd:
 # ---------------------------------------------------------------------------
 # DockerCog.restart_cmd
 # ---------------------------------------------------------------------------
+
 
 class TestRestartCmd:
     async def test_restart_cmd_emergency_stopped(self):
@@ -703,6 +718,7 @@ class TestRestartCmd:
 # DockerCog.monitor_set
 # ---------------------------------------------------------------------------
 
+
 class TestMonitorSet:
     async def test_monitor_set_creates_threshold(self):
         bot = _make_bot()
@@ -725,6 +741,7 @@ class TestMonitorSet:
 # ---------------------------------------------------------------------------
 # DockerCog.monitor_remove
 # ---------------------------------------------------------------------------
+
 
 class TestMonitorRemove:
     async def test_monitor_remove_found(self):
@@ -754,6 +771,7 @@ class TestMonitorRemove:
 # ---------------------------------------------------------------------------
 # DockerCog.monitor_list
 # ---------------------------------------------------------------------------
+
 
 class TestMonitorList:
     async def test_monitor_list_empty(self):
@@ -805,6 +823,7 @@ class TestMonitorList:
 # DockerCog.monitor_check
 # ---------------------------------------------------------------------------
 
+
 class TestMonitorCheck:
     async def test_monitor_check_no_violations(self):
         bot = _make_bot()
@@ -842,6 +861,7 @@ class TestMonitorCheck:
 # DockerCog.cog_command_error
 # ---------------------------------------------------------------------------
 
+
 class TestCogCommandError:
     async def test_error_when_response_not_done(self):
         bot = _make_bot()
@@ -850,6 +870,7 @@ class TestCogCommandError:
         interaction.response.is_done = MagicMock(return_value=False)
 
         from discord import app_commands
+
         error = app_commands.AppCommandError("Something went wrong")
         await cog.cog_command_error(interaction, error)
         interaction.response.send_message.assert_called_once()
@@ -864,6 +885,7 @@ class TestCogCommandError:
         interaction.response.is_done = MagicMock(return_value=True)
 
         from discord import app_commands
+
         error = app_commands.AppCommandError("Something went wrong")
         await cog.cog_command_error(interaction, error)
         interaction.followup.send.assert_called_once()
@@ -872,6 +894,7 @@ class TestCogCommandError:
 # ---------------------------------------------------------------------------
 # setup()
 # ---------------------------------------------------------------------------
+
 
 class TestSetup:
     async def test_setup_adds_cog(self):

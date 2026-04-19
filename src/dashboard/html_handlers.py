@@ -69,7 +69,9 @@ async def openclaw_cli_support_download_handler(request: web.Request) -> web.Res
     try:
         source = load_openclaw_cli_support_source(name)
     except OSError as exc:
-        return web.Response(text=f"OpenClaw CLI support source unavailable: {exc}", status=404, content_type="text/plain")
+        return web.Response(
+            text=f"OpenClaw CLI support source unavailable: {exc}", status=404, content_type="text/plain"
+        )
     return web.Response(
         text=source,
         content_type="text/plain",

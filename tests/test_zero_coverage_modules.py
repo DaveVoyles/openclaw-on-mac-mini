@@ -1,4 +1,5 @@
 """Tests for zero-coverage simple modules."""
+
 import asyncio
 import json
 import os
@@ -405,6 +406,7 @@ class TestProfiler:
         p.start_cpu_profiling()
         # Do something non-trivial to ensure at least one entry
         import json as _json
+
         _json.dumps({"a": 1})
         stats = p.get_cpu_stats_dict()
         if stats:
@@ -468,9 +470,7 @@ def rm(tmp_path, monkeypatch):
     """Fresh ReminderManager backed by a tmp_path file."""
     rf = tmp_path / "reminders.json"
     monkeypatch.setattr(rm_mod, "REMINDERS_FILE", rf)
-    monkeypatch.setattr(
-        rm_mod, "atomic_write", lambda path, data: path.write_text(data)
-    )
+    monkeypatch.setattr(rm_mod, "atomic_write", lambda path, data: path.write_text(data))
     return ReminderManager()
 
 
@@ -514,9 +514,7 @@ class TestReminderManager:
         ]
         rf.write_text(json.dumps(data))
         monkeypatch.setattr(rm_mod, "REMINDERS_FILE", rf)
-        monkeypatch.setattr(
-            rm_mod, "atomic_write", lambda p, d: p.write_text(d)
-        )
+        monkeypatch.setattr(rm_mod, "atomic_write", lambda p, d: p.write_text(d))
         mgr = ReminderManager()
         assert len(mgr._reminders) == 1
         assert mgr._reminders[0].id == "abc12345"
@@ -526,9 +524,7 @@ class TestReminderManager:
         rf = tmp_path / "reminders.json"
         rf.write_text("not { valid json !!!")
         monkeypatch.setattr(rm_mod, "REMINDERS_FILE", rf)
-        monkeypatch.setattr(
-            rm_mod, "atomic_write", lambda p, d: p.write_text(d)
-        )
+        monkeypatch.setattr(rm_mod, "atomic_write", lambda p, d: p.write_text(d))
         mgr = ReminderManager()
         assert mgr._reminders == []
 
@@ -547,9 +543,7 @@ class TestReminderManager:
         """add() writes to the file."""
         rf = tmp_path / "reminders.json"
         monkeypatch.setattr(rm_mod, "REMINDERS_FILE", rf)
-        monkeypatch.setattr(
-            rm_mod, "atomic_write", lambda p, d: p.write_text(d)
-        )
+        monkeypatch.setattr(rm_mod, "atomic_write", lambda p, d: p.write_text(d))
         mgr = ReminderManager()
         mgr.add(1, 100, "Persist me", 9999.0)
         assert rf.exists()
@@ -680,11 +674,14 @@ class TestParseTimeExpression:
         ts = parse_time_expression("at 2:45pm")
         assert ts is not None
 
-    @pytest.mark.parametrize("expr", [
-        "tomorrow morning",
-        "  ",
-        "xyz abc 123",
-    ])
+    @pytest.mark.parametrize(
+        "expr",
+        [
+            "tomorrow morning",
+            "  ",
+            "xyz abc 123",
+        ],
+    )
     def test_invalid_expressions(self, expr):
         assert parse_time_expression(expr) is None
 
@@ -715,9 +712,7 @@ def _make_patreon_mocks(
     recovery.success = recovery_success
 
     recovery_mgr = MagicMock()
-    recovery_mgr.attempt_recovery = AsyncMock(
-        return_value=recovery if recovery_result else None
-    )
+    recovery_mgr.attempt_recovery = AsyncMock(return_value=recovery if recovery_result else None)
 
     alert_mgr = MagicMock()
     alert_mgr.send_alert_if_needed = AsyncMock(return_value=alert_sent)
@@ -728,9 +723,7 @@ def _make_patreon_mocks(
 class TestScheduledPatreonHealthCheck:
     @pytest.mark.asyncio
     async def test_success_no_client(self):
-        checker, recovery_mgr, alert_mgr, health, _ = _make_patreon_mocks(
-            recovery_result=None
-        )
+        checker, recovery_mgr, alert_mgr, health, _ = _make_patreon_mocks(recovery_result=None)
         with (
             patch.object(patreon_scheduled, "get_patreon_checker", return_value=checker),
             patch.object(patreon_scheduled, "get_recovery_manager", return_value=recovery_mgr),
@@ -746,18 +739,14 @@ class TestScheduledPatreonHealthCheck:
 
     @pytest.mark.asyncio
     async def test_success_with_discord_client(self):
-        checker, recovery_mgr, alert_mgr, health, _ = _make_patreon_mocks(
-            recovery_result=None, alert_sent=True
-        )
+        checker, recovery_mgr, alert_mgr, health, _ = _make_patreon_mocks(recovery_result=None, alert_sent=True)
         mock_client = MagicMock()
         with (
             patch.object(patreon_scheduled, "get_patreon_checker", return_value=checker),
             patch.object(patreon_scheduled, "get_recovery_manager", return_value=recovery_mgr),
             patch.object(patreon_scheduled, "get_alert_manager", return_value=alert_mgr),
         ):
-            result = await scheduled_patreon_health_check(
-                discord_client=mock_client, alert_channel_id=99
-            )
+            result = await scheduled_patreon_health_check(discord_client=mock_client, alert_channel_id=99)
 
         assert result["success"] is True
         assert result["alert_sent"] is True
@@ -804,9 +793,7 @@ class TestScheduledPatreonHealthCheck:
     @pytest.mark.asyncio
     async def test_uses_cfg_alert_channel(self):
         """Falls back to cfg.alert_channel_id when no explicit channel given."""
-        checker, recovery_mgr, alert_mgr, health, _ = _make_patreon_mocks(
-            recovery_result=None, alert_sent=True
-        )
+        checker, recovery_mgr, alert_mgr, health, _ = _make_patreon_mocks(recovery_result=None, alert_sent=True)
         mock_client = MagicMock()
         with (
             patch.object(patreon_scheduled, "get_patreon_checker", return_value=checker),
@@ -840,9 +827,7 @@ class TestScheduledPatreonHealthCheck:
     @pytest.mark.asyncio
     async def test_issues_count_in_result(self):
         issues = [MagicMock(), MagicMock(), MagicMock()]
-        checker, recovery_mgr, alert_mgr, health, _ = _make_patreon_mocks(
-            issues=issues, recovery_result=None
-        )
+        checker, recovery_mgr, alert_mgr, health, _ = _make_patreon_mocks(issues=issues, recovery_result=None)
         with (
             patch.object(patreon_scheduled, "get_patreon_checker", return_value=checker),
             patch.object(patreon_scheduled, "get_recovery_manager", return_value=recovery_mgr),
@@ -854,18 +839,14 @@ class TestScheduledPatreonHealthCheck:
 
     @pytest.mark.asyncio
     async def test_alert_user_id_used(self):
-        checker, recovery_mgr, alert_mgr, health, _ = _make_patreon_mocks(
-            recovery_result=None, alert_sent=False
-        )
+        checker, recovery_mgr, alert_mgr, health, _ = _make_patreon_mocks(recovery_result=None, alert_sent=False)
         mock_client = MagicMock()
         with (
             patch.object(patreon_scheduled, "get_patreon_checker", return_value=checker),
             patch.object(patreon_scheduled, "get_recovery_manager", return_value=recovery_mgr),
             patch.object(patreon_scheduled, "get_alert_manager", return_value=alert_mgr),
         ):
-            result = await scheduled_patreon_health_check(
-                discord_client=mock_client, alert_user_id=777
-            )
+            result = await scheduled_patreon_health_check(discord_client=mock_client, alert_user_id=777)
 
         assert result["success"] is True
         call_kwargs = alert_mgr.send_alert_if_needed.call_args[1]

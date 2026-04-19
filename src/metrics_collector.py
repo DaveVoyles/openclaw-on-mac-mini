@@ -113,12 +113,7 @@ def _normalize_quality_failure_category(event_name: str) -> str:
         or "item_coverage" in event
     ):
         return "requested_item_shortfall"
-    if (
-        "source_diversity" in event
-        or "single_source" in event
-        or "mono_source" in event
-        or "one_source" in event
-    ):
+    if "source_diversity" in event or "single_source" in event or "mono_source" in event or "one_source" in event:
         return "source_diversity_shortfall"
     if (
         "partial_coverage" in event
@@ -362,11 +357,7 @@ class MetricsCollector:
 
                 # Active users (count unique users in last 5 minutes)
                 cutoff = datetime.now() - timedelta(minutes=5)
-                recent_users = {
-                    m.user
-                    for m in self._command_history
-                    if m.timestamp > cutoff
-                }
+                recent_users = {m.user for m in self._command_history if m.timestamp > cutoff}
                 active_users.set(len(recent_users))
 
                 await asyncio.sleep(10)  # Update every 10 seconds
@@ -384,9 +375,7 @@ class MetricsCollector:
     ):
         """Record a command execution."""
         # Update Prometheus metrics
-        command_counter.labels(
-            command=command, user=user, workspace=workspace
-        ).inc()
+        command_counter.labels(command=command, user=user, workspace=workspace).inc()
         command_duration.labels(command=command).observe(duration)
 
         if not success and error_type:
@@ -492,9 +481,7 @@ class MetricsCollector:
         cutoff = datetime.now() - timedelta(hours=hours)
 
         # Filter recent commands
-        recent_commands = [
-            m for m in self._command_history if m.timestamp > cutoff
-        ]
+        recent_commands = [m for m in self._command_history if m.timestamp > cutoff]
 
         # Calculate response time percentiles
         percentiles = {}
@@ -548,9 +535,7 @@ class MetricsCollector:
 
     def get_top_commands(self, limit: int = 10) -> list[tuple]:
         """Get top N most used commands."""
-        return sorted(
-            self._command_counts.items(), key=lambda x: x[1], reverse=True
-        )[:limit]
+        return sorted(self._command_counts.items(), key=lambda x: x[1], reverse=True)[:limit]
 
     def get_top_users(self, limit: int = 10) -> list[tuple]:
         """Get top N most active users."""
@@ -561,9 +546,7 @@ class MetricsCollector:
 
     def get_top_errors(self, limit: int = 10) -> list[tuple]:
         """Get top N most common errors."""
-        return sorted(
-            self._error_counts.items(), key=lambda x: x[1], reverse=True
-        )[:limit]
+        return sorted(self._error_counts.items(), key=lambda x: x[1], reverse=True)[:limit]
 
     def export_prometheus(self) -> bytes:
         """Export metrics in Prometheus format."""
@@ -689,18 +672,12 @@ def get_quality_event_snapshot(limit: int = 20) -> dict:
     feedback_total = feedback_helpful + feedback_not_helpful
     feedback_accepted = int(event_counts.get("ask_feedback_accepted", feedback_total))
     feedback_suppressed = int(event_counts.get("ask_feedback_suppressed", 0))
-    feedback_suppressed_dedupe = int(
-        event_counts.get("ask_feedback_suppressed_dedupe", 0)
-    )
+    feedback_suppressed_dedupe = int(event_counts.get("ask_feedback_suppressed_dedupe", 0))
     feedback_suppressed_rate_limited = int(
         event_counts.get("ask_feedback_suppressed_rate_limited_user", 0)
         + event_counts.get("ask_feedback_suppressed_rate_limited_channel", 0)
     )
-    helpful_rate = (
-        round(feedback_helpful / feedback_total, 3)
-        if feedback_total > 0
-        else None
-    )
+    helpful_rate = round(feedback_helpful / feedback_total, 3) if feedback_total > 0 else None
 
     return {
         "total_events": total_events,
@@ -733,7 +710,9 @@ def get_quality_event_snapshot(limit: int = 20) -> dict:
             "reason_counts": {name: int(value) for name, value in sorted_degrade_reasons},
             "top_modes": [{"mode": name, "count": int(value)} for name, value in sorted_degrade_modes[:safe_limit]],
             "top_paths": [{"path": name, "count": int(value)} for name, value in sorted_degrade_paths[:safe_limit]],
-            "top_reasons": [{"reason": name, "count": int(value)} for name, value in sorted_degrade_reasons[:safe_limit]],
+            "top_reasons": [
+                {"reason": name, "count": int(value)} for name, value in sorted_degrade_reasons[:safe_limit]
+            ],
         },
     }
 

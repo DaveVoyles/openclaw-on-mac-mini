@@ -55,6 +55,7 @@ class ContextMenuCog(commands.Cog, name="ContextMenus"):
 
         try:
             from llm import chat
+
             prompt = (
                 f"Analyze the following message. Summarize key points, identify any "
                 f"action items, and note anything notable:\n\n{content}"
@@ -82,6 +83,7 @@ class ContextMenuCog(commands.Cog, name="ContextMenus"):
 
         try:
             from memory import store_memory
+
             await store_memory(content, source="context_menu")
             await interaction.response.send_message(
                 f"📌 Saved to memory: *{content[:80]}{'…' if len(content) > 80 else ''}*",
@@ -90,7 +92,9 @@ class ContextMenuCog(commands.Cog, name="ContextMenus"):
             audit_log(interaction.user, "context_save", detail=content[:100])
         except Exception as e:  # broad: intentional
             log.exception("context_save failed")
-            await interaction.response.send_message(embed=build_error_embed(e, context="Save to Memory"), ephemeral=True)
+            await interaction.response.send_message(
+                embed=build_error_embed(e, context="Save to Memory"), ephemeral=True
+            )
 
     async def _research_message(self, interaction: discord.Interaction, message: discord.Message):
         """Right-click → Research This: run a research query on message content."""
@@ -104,6 +108,7 @@ class ContextMenuCog(commands.Cog, name="ContextMenus"):
 
         try:
             from llm import chat
+
             prompt = (
                 f"Research the following topic thoroughly. Provide key facts, context, "
                 f"and relevant details:\n\n{content}"

@@ -111,9 +111,7 @@ async def _raw_login(session: aiohttp.ClientSession) -> str | None:
         "format": "sid",
     }
     try:
-        async with session.post(
-            f"{NAS_URL}/webapi/auth.cgi", data=params, ssl=_SSL_CTX
-        ) as resp:
+        async with session.post(f"{NAS_URL}/webapi/auth.cgi", data=params, ssl=_SSL_CTX) as resp:
             data = await resp.json(content_type=None)
             if data.get("success"):
                 sid = data.get("data", {}).get("sid")
@@ -137,9 +135,7 @@ async def _raw_logout(session: aiohttp.ClientSession, sid: str) -> None:
         "_sid": sid,
     }
     try:
-        async with session.get(
-            f"{NAS_URL}/webapi/auth.cgi", params=params, ssl=_SSL_CTX
-        ):
+        async with session.get(f"{NAS_URL}/webapi/auth.cgi", params=params, ssl=_SSL_CTX):
             pass
     except (aiohttp.ClientError, asyncio.TimeoutError):
         # Logout failure is non-critical; session will expire naturally
@@ -178,9 +174,7 @@ _DSM_MAX_RETRIES = 3
 _DSM_BACKOFF_BASE = 1.5  # seconds
 
 
-async def _dsm(
-    api: str, version: int, method: str, extra: dict | None = None
-) -> dict:
+async def _dsm(api: str, version: int, method: str, extra: dict | None = None) -> dict:
     """Make a single DSM API call with automatic auth and retry. Returns response dict."""
     if not NAS_USER or not NAS_PASSWORD:
         return {"success": False, "_err": "NAS_USER / NAS_PASSWORD not configured."}
@@ -203,9 +197,7 @@ async def _dsm(
             params.update(extra)
 
         try:
-            async with session.get(
-                f"{NAS_URL}/webapi/entry.cgi", params=params, ssl=_SSL_CTX
-            ) as resp:
+            async with session.get(f"{NAS_URL}/webapi/entry.cgi", params=params, ssl=_SSL_CTX) as resp:
                 result = await resp.json(content_type=None)
 
             # Check for auth errors (DSM error code 105 = invalid SID, 119 = no perm)
@@ -221,7 +213,10 @@ async def _dsm(
             last_err = str(e)
             log.warning(
                 "DSM request %s failed (attempt %d/%d): %s",
-                api, attempt + 1, _DSM_MAX_RETRIES, last_err,
+                api,
+                attempt + 1,
+                _DSM_MAX_RETRIES,
+                last_err,
             )
             # Invalidate SID in case the connection dropped mid-session
             await _invalidate_sid()
@@ -293,9 +288,7 @@ async def get_nas_storage_health() -> str:
         used_pct = mem.get("real_usage", 0)
         mem_icon = "✅" if used_pct < 85 else "⚠️"
         lines.append("")
-        lines.append(
-            f"{mem_icon} **Memory**: {used_pct}% used ({total_mb:.0f} MB total)"
-        )
+        lines.append(f"{mem_icon} **Memory**: {used_pct}% used ({total_mb:.0f} MB total)")
 
     # CPU
     cpu = d.get("cpu", {})
@@ -420,10 +413,7 @@ async def get_disk_smart_status() -> str:
             read_mbps = round(disk.get("read_byte", 0) / (1024 * 1024), 2)
             write_mbps = round(disk.get("write_byte", 0) / (1024 * 1024), 2)
             util_icon = "✅" if util_pct < 80 else "⚠️"
-            lines.append(
-                f"{util_icon} **{name}**: {util_pct}% busy | "
-                f"↓{read_mbps} MB/s ↑{write_mbps} MB/s"
-            )
+            lines.append(f"{util_icon} **{name}**: {util_pct}% busy | ↓{read_mbps} MB/s ↑{write_mbps} MB/s")
 
     active_usb = [dk for dk in usb if dk.get("utilization", 0) > 0 or dk.get("read_byte", 0) > 0]
     if active_usb:
@@ -461,18 +451,27 @@ async def get_nas_full_status() -> str:
 
 # Number-word equivalents for matching "6" ↔ "six", etc.
 _NUM_WORDS: dict[str, str] = {
-    "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
-    "5": "five", "6": "six", "7": "seven", "8": "eight", "9": "nine",
-    "10": "ten", "11": "eleven", "12": "twelve", "13": "thirteen",
+    "0": "zero",
+    "1": "one",
+    "2": "two",
+    "3": "three",
+    "4": "four",
+    "5": "five",
+    "6": "six",
+    "7": "seven",
+    "8": "eight",
+    "9": "nine",
+    "10": "ten",
+    "11": "eleven",
+    "12": "twelve",
+    "13": "thirteen",
 }
 _WORD_NUMS: dict[str, str] = {v: k for k, v in _NUM_WORDS.items()}
 
 # Common author-style prefixes to strip: "Tom Clancy - ", "J.K. Rowling - "
 import re as _re
 
-_AUTHOR_PREFIX_RE = _re.compile(
-    r"^[A-Z][A-Za-z.']+(?:\s+[A-Z][A-Za-z.']+)*\s*[-–—]\s*", flags=_re.UNICODE
-)
+_AUTHOR_PREFIX_RE = _re.compile(r"^[A-Z][A-Za-z.']+(?:\s+[A-Z][A-Za-z.']+)*\s*[-–—]\s*", flags=_re.UNICODE)
 
 _RELEVANCE_EXACT = 3
 _RELEVANCE_WORD = 2
@@ -558,6 +557,7 @@ def _fuzzy_filter(files: list[dict], pattern: str) -> list[dict]:
 # FileStation — read operations
 # ---------------------------------------------------------------------------
 
+
 async def nas_list_folder(path: str = "/Misc/audiobooks", pattern: str = "") -> str:
     """
     List contents of a folder on the Synology NAS via FileStation.
@@ -573,6 +573,7 @@ async def nas_list_folder(path: str = "/Misc/audiobooks", pattern: str = "") -> 
         return "❌ NAS credentials not configured (NAS_USER / NAS_PASSWORD)."
 
     import posixpath
+
     normed = posixpath.normpath(path)
     if normed.startswith("..") or "/../" in path or path.endswith("/.."):
         return "❌ Invalid path: directory traversal is not allowed."
@@ -633,6 +634,7 @@ async def nas_list_folder(path: str = "/Misc/audiobooks", pattern: str = "") -> 
 # FileStation — write operations
 # ---------------------------------------------------------------------------
 
+
 async def nas_create_folder(path: str) -> str:
     """
     Create a folder on the Synology NAS via FileStation.
@@ -644,6 +646,7 @@ async def nas_create_folder(path: str) -> str:
         return "❌ NAS credentials not configured (NAS_USER / NAS_PASSWORD)."
 
     import posixpath
+
     normed = posixpath.normpath(path)
     if normed.startswith("..") or "/../" in path or path.endswith("/.."):
         return "❌ Invalid path: directory traversal is not allowed."
@@ -683,6 +686,7 @@ async def nas_write_file(
         return "❌ NAS credentials not configured (NAS_USER / NAS_PASSWORD)."
 
     import posixpath
+
     normed = posixpath.normpath(remote_folder)
     if normed.startswith("..") or "/../" in remote_folder or remote_folder.endswith("/.."):
         return "❌ Invalid path: directory traversal is not allowed."
@@ -737,6 +741,7 @@ async def nas_write_file(
 # FileStation — search across shares
 # ---------------------------------------------------------------------------
 
+
 async def nas_search_files(query: str, path: str = "") -> str:
     """
     Search recursively across NAS shares using the Synology FileStation Search API.
@@ -750,10 +755,7 @@ async def nas_search_files(query: str, path: str = "") -> str:
         return "❌ NAS credentials not configured (NAS_USER / NAS_PASSWORD)."
 
     # Default: search the main content shares
-    search_paths = (
-        [path] if path
-        else ["/Misc", "/PlexMediaServer"]
-    )
+    search_paths = [path] if path else ["/Misc", "/PlexMediaServer"]
 
     all_results: list[dict] = []
     for folder in search_paths:
@@ -762,10 +764,7 @@ async def nas_search_files(query: str, path: str = "") -> str:
 
     if not all_results:
         searched = ", ".join(f"`{p}`" for p in search_paths)
-        return (
-            f"✅ Search complete — no files matching '{query}' found.\n"
-            f"Searched: {searched}"
-        )
+        return f"✅ Search complete — no files matching '{query}' found.\nSearched: {searched}"
 
     lines = [f"🔍 **Search results for '{query}'** — {len(all_results)} item{'s' if len(all_results) != 1 else ''}"]
     for item in all_results[:50]:
@@ -792,7 +791,9 @@ async def _search_one_folder(query: str, folder_path: str) -> list[dict]:
     """Run a FileStation search in a single folder and return matched items."""
     # Start the search task
     start_result = await _dsm(
-        "SYNO.FileStation.Search", 2, "start",
+        "SYNO.FileStation.Search",
+        2,
+        "start",
         {"folder_path": folder_path, "pattern": query},
     )
     if not start_result.get("success"):
@@ -811,7 +812,9 @@ async def _search_one_folder(query: str, folder_path: str) -> list[dict]:
         while time.monotonic() < deadline:
             await asyncio.sleep(0.5)
             list_result = await _dsm(
-                "SYNO.FileStation.Search", 2, "list",
+                "SYNO.FileStation.Search",
+                2,
+                "list",
                 {
                     "taskid": taskid,
                     "limit": "50",

@@ -26,6 +26,7 @@ if "bot_formatting" not in sys.modules:
     for name, mock in _mocks.items():
         sys.modules[name] = mock
     import bot_formatting as bf  # noqa: E402
+
     # Restore originals so other test files in this worker see the real modules.
     for name, original in _saved.items():
         if original is not None:
@@ -142,12 +143,7 @@ def test_format_markdown_plain_text_unchanged():
 # ---------------------------------------------------------------------------
 
 
-_SIMPLE_TABLE = (
-    "| Name | Age |\n"
-    "| ---- | --- |\n"
-    "| Alice | 30 |\n"
-    "| Bob | 25 |"
-)
+_SIMPLE_TABLE = "| Name | Age |\n| ---- | --- |\n| Alice | 30 |\n| Bob | 25 |"
 
 
 def test_format_tables_discord_mode_renders_code_block():

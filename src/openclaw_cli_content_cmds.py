@@ -6,6 +6,7 @@ Handlers (_cmd_*) remain in openclaw_cli.py; only pure inner helpers live here.
 Allowed imports: stdlib only (no openclaw_cli_* imports needed here).
 Do NOT import from openclaw_cli — circular import.
 """
+
 from __future__ import annotations
 
 import json
@@ -15,6 +16,7 @@ from typing import Any
 # ---------------------------------------------------------------------------
 # _cmd_export helpers
 # ---------------------------------------------------------------------------
+
 
 def _build_export_body(
     cmd_history: list,
@@ -70,6 +72,7 @@ def _build_export_body(
 # ---------------------------------------------------------------------------
 # _cmd_stats (bar-chart variant) helpers
 # ---------------------------------------------------------------------------
+
 
 def _compute_cmd_freq(cmd_history: list) -> dict[str, int]:
     """Count the frequency of each command token in cmd_history.
@@ -139,6 +142,7 @@ def _build_ascii_bar_rows(
 # _cmd_stats (aggregate variant) helpers
 # ---------------------------------------------------------------------------
 
+
 def _build_session_stats_agg(sessions: list) -> dict[str, Any]:
     """Aggregate a list of SessionSummary objects into a stats summary dict.
 
@@ -157,8 +161,8 @@ def _build_session_stats_agg(sessions: list) -> dict[str, Any]:
 
     first = sessions[0] if sessions else None
     last = sessions[-1] if sessions else None
-    newest = (first.updated_at[:10] if first and getattr(first, "updated_at", None) else "—")
-    oldest = (last.created_at[:10] if last and getattr(last, "created_at", None) else "—")
+    newest = first.updated_at[:10] if first and getattr(first, "updated_at", None) else "—"
+    oldest = last.created_at[:10] if last and getattr(last, "created_at", None) else "—"
 
     cwd_counts: Counter[str] = Counter()
     for s in sessions:

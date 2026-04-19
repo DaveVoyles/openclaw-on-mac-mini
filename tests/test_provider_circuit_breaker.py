@@ -78,9 +78,7 @@ class TestFailureAccumulation:
     def test_circuit_stays_closed_before_threshold(self):
         for i in range(_CB_THRESHOLD - 1):
             _record_failure("openai")
-            assert _is_open("openai") is False, (
-                f"Circuit should be closed after {i + 1} failure(s)"
-            )
+            assert _is_open("openai") is False, f"Circuit should be closed after {i + 1} failure(s)"
 
     def test_circuit_opens_at_threshold(self):
         for _ in range(_CB_THRESHOLD):
@@ -172,9 +170,7 @@ class TestCallProviderCircuitGuard:
         # Disable the fallback chain so no other provider is attempted
         monkeypatch.setattr(_providers_mod, "PROVIDER_FALLBACK_CHAIN", [])
 
-        resp = await call_provider(
-            "openai", "hello", [], "you are helpful"
-        )
+        resp = await call_provider("openai", "hello", [], "you are helpful")
 
         mock_chat.assert_not_called()
         assert resp.text is None

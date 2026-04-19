@@ -185,8 +185,7 @@ def test_export_prometheus(collector):
 def test_response_time_percentiles(collector):
     """Test response time percentile calculation."""
     # Add a range of response times (need more for distinct percentiles)
-    times = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
-             1.2, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0]
+    times = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0]
     for t in times:
         collector.record_command("ask", "user1", "general", t)
 
@@ -233,9 +232,9 @@ def test_quality_event_snapshot_feedback_guardrail_counts(collector):
     base_accepted = int(base_events.get("ask_feedback_accepted", 0))
     base_suppressed = int(base_events.get("ask_feedback_suppressed", 0))
     base_suppressed_dedupe = int(base_events.get("ask_feedback_suppressed_dedupe", 0))
-    base_suppressed_rate_limited = int(
-        base_events.get("ask_feedback_suppressed_rate_limited_user", 0)
-    ) + int(base_events.get("ask_feedback_suppressed_rate_limited_channel", 0))
+    base_suppressed_rate_limited = int(base_events.get("ask_feedback_suppressed_rate_limited_user", 0)) + int(
+        base_events.get("ask_feedback_suppressed_rate_limited_channel", 0)
+    )
 
     collector.record_quality_event("ask_feedback_helpful", "discord_ask")
     collector.record_quality_event("ask_feedback_helpful", "discord_ask")
@@ -287,8 +286,13 @@ def test_record_degrade_mode_activation_updates_snapshot(collector):
     assert degrade["total_activations"] == base_total + 2
     assert degrade["mode_counts"]["constrained"] == int(base_mode_counts.get("constrained", 0)) + 2
     assert degrade["path_counts"]["ask_retrieval"] == int(base_path_counts.get("ask_retrieval", 0)) + 2
-    assert degrade["reason_counts"]["provider_timeout_rate"] == int(base_reason_counts.get("provider_timeout_rate", 0)) + 1
-    assert degrade["reason_counts"]["retrieval_sparsity_rate"] == int(base_reason_counts.get("retrieval_sparsity_rate", 0)) + 1
+    assert (
+        degrade["reason_counts"]["provider_timeout_rate"] == int(base_reason_counts.get("provider_timeout_rate", 0)) + 1
+    )
+    assert (
+        degrade["reason_counts"]["retrieval_sparsity_rate"]
+        == int(base_reason_counts.get("retrieval_sparsity_rate", 0)) + 1
+    )
     assert snapshot["event_counts"]["degrade_mode_constrained"] == base_constrained_events + 2
 
 
@@ -312,14 +316,11 @@ def test_quality_event_snapshot_includes_bounded_domain_and_signal_slices(collec
     assert len(snapshot["recent_signal_slices"]["mitigation"]) <= 5
     assert len(snapshot["recent_signal_slices"]["degrade"]) <= 5
     assert any(
-        item["domain"] == "zztest"
-        and int(item["failure_events"]) >= 12
-        and int(item["mitigation_events"]) >= 8
+        item["domain"] == "zztest" and int(item["failure_events"]) >= 12 and int(item["mitigation_events"]) >= 8
         for item in snapshot["domain_trends"]
     )
     assert any(
-        item["event"] == failure_event and int(item["count"]) >= 12
-        for item in snapshot["top_recurring_failures"]
+        item["event"] == failure_event and int(item["count"]) >= 12 for item in snapshot["top_recurring_failures"]
     )
     assert any(
         item["signal"] == mitigation_event and int(item["count"]) >= 8

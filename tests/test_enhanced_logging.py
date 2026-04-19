@@ -85,6 +85,7 @@ class TestJSONFormatter:
             raise ValueError("boom")
         except ValueError:
             import sys
+
             exc_info = sys.exc_info()
 
         record = _make_record(exc_info=exc_info)
@@ -180,17 +181,13 @@ class TestSetupLogging:
     def test_json_formatter_when_enabled(self, tmp_path):
         setup_logging(log_dir=tmp_path, enable_json=True)
         root = logging.getLogger()
-        file_handlers = [
-            h for h in root.handlers if isinstance(h, logging.handlers.RotatingFileHandler)
-        ]
+        file_handlers = [h for h in root.handlers if isinstance(h, logging.handlers.RotatingFileHandler)]
         assert any(isinstance(h.formatter, JSONFormatter) for h in file_handlers)
 
     def test_standard_formatter_when_json_disabled(self, tmp_path):
         setup_logging(log_dir=tmp_path, enable_json=False)
         root = logging.getLogger()
-        file_handlers = [
-            h for h in root.handlers if isinstance(h, logging.handlers.RotatingFileHandler)
-        ]
+        file_handlers = [h for h in root.handlers if isinstance(h, logging.handlers.RotatingFileHandler)]
         assert any(not isinstance(h.formatter, JSONFormatter) for h in file_handlers)
 
     def test_audit_logger_created(self, tmp_path):
@@ -203,9 +200,7 @@ class TestSetupLogging:
         setup_logging(log_dir=tmp_path)
         root = logging.getLogger()
         error_handlers = [
-            h for h in root.handlers
-            if isinstance(h, logging.handlers.RotatingFileHandler)
-            and h.level == logging.ERROR
+            h for h in root.handlers if isinstance(h, logging.handlers.RotatingFileHandler) and h.level == logging.ERROR
         ]
         assert len(error_handlers) >= 1
 
@@ -213,29 +208,20 @@ class TestSetupLogging:
         setup_logging(log_dir=tmp_path)
         # After setup the files are created (or will be on first log)
         root = logging.getLogger()
-        rotating = [
-            h for h in root.handlers
-            if isinstance(h, logging.handlers.RotatingFileHandler)
-        ]
+        rotating = [h for h in root.handlers if isinstance(h, logging.handlers.RotatingFileHandler)]
         base_dirs = {Path(h.baseFilename).parent for h in rotating}
         assert tmp_path in base_dirs
 
     def test_custom_max_bytes(self, tmp_path):
         setup_logging(log_dir=tmp_path, max_bytes=1024)
         root = logging.getLogger()
-        rotating = [
-            h for h in root.handlers
-            if isinstance(h, logging.handlers.RotatingFileHandler)
-        ]
+        rotating = [h for h in root.handlers if isinstance(h, logging.handlers.RotatingFileHandler)]
         assert any(h.maxBytes == 1024 for h in rotating)
 
     def test_custom_backup_count(self, tmp_path):
         setup_logging(log_dir=tmp_path, backup_count=5)
         root = logging.getLogger()
-        rotating = [
-            h for h in root.handlers
-            if isinstance(h, logging.handlers.RotatingFileHandler)
-        ]
+        rotating = [h for h in root.handlers if isinstance(h, logging.handlers.RotatingFileHandler)]
         assert any(h.backupCount == 5 for h in rotating)
 
 
@@ -275,6 +261,7 @@ class TestAuditLoggerLogUserAction:
 
     def test_calls_legacy_audit_log(self, audit_logger, monkeypatch):
         import enhanced_logging as _enh_mod
+
         mock_fn = MagicMock()
         monkeypatch.setattr(_enh_mod, "legacy_audit_log", mock_fn)
         audit_logger.log_user_action("u1", "test_action", "some detail", result="success")
@@ -441,13 +428,15 @@ class TestAuditLoggerLogSuspiciousActivity:
 
 def _make_log_entry(user_id="u1", category="user_action", age_days=0):
     ts = (datetime.utcnow() - timedelta(days=age_days)).isoformat() + "Z"
-    return json.dumps({
-        "timestamp": ts,
-        "user_id": user_id,
-        "metadata": {"category": category},
-        "level": "INFO",
-        "message": "test",
-    })
+    return json.dumps(
+        {
+            "timestamp": ts,
+            "user_id": user_id,
+            "metadata": {"category": category},
+            "level": "INFO",
+            "message": "test",
+        }
+    )
 
 
 class TestGetAuditLogs:
@@ -462,8 +451,7 @@ class TestGetAuditLogs:
         al = AuditLogger()
         entries = "\n".join([_make_log_entry("u1"), _make_log_entry("u2")])
         m = mock_open(read_data=entries)
-        with patch("builtins.open", m), \
-             patch("enhanced_logging.Path") as mp:
+        with patch("builtins.open", m), patch("enhanced_logging.Path") as mp:
             mp.return_value.exists.return_value = True
             result = al.get_audit_logs()
         assert len(result) == 2
@@ -472,21 +460,21 @@ class TestGetAuditLogs:
         al = AuditLogger()
         entries = "\n".join([_make_log_entry("alice"), _make_log_entry("bob")])
         m = mock_open(read_data=entries)
-        with patch("builtins.open", m), \
-             patch("enhanced_logging.Path") as mp:
+        with patch("builtins.open", m), patch("enhanced_logging.Path") as mp:
             mp.return_value.exists.return_value = True
             result = al.get_audit_logs(user_id="alice")
         assert all(e["user_id"] == "alice" for e in result)
 
     def test_filters_by_category(self):
         al = AuditLogger()
-        entries = "\n".join([
-            _make_log_entry(category="user_action"),
-            _make_log_entry(category="command_execution"),
-        ])
+        entries = "\n".join(
+            [
+                _make_log_entry(category="user_action"),
+                _make_log_entry(category="command_execution"),
+            ]
+        )
         m = mock_open(read_data=entries)
-        with patch("builtins.open", m), \
-             patch("enhanced_logging.Path") as mp:
+        with patch("builtins.open", m), patch("enhanced_logging.Path") as mp:
             mp.return_value.exists.return_value = True
             result = al.get_audit_logs(category="user_action")
         assert all(e["metadata"]["category"] == "user_action" for e in result)
@@ -496,8 +484,7 @@ class TestGetAuditLogs:
         recent = _make_log_entry(age_days=1)
         old = _make_log_entry(age_days=10)
         m = mock_open(read_data="\n".join([recent, old]))
-        with patch("builtins.open", m), \
-             patch("enhanced_logging.Path") as mp:
+        with patch("builtins.open", m), patch("enhanced_logging.Path") as mp:
             mp.return_value.exists.return_value = True
             result = al.get_audit_logs(days=7)
         assert len(result) == 1
@@ -506,8 +493,7 @@ class TestGetAuditLogs:
         al = AuditLogger()
         entries = "not valid json\n" + _make_log_entry("u1")
         m = mock_open(read_data=entries)
-        with patch("builtins.open", m), \
-             patch("enhanced_logging.Path") as mp:
+        with patch("builtins.open", m), patch("enhanced_logging.Path") as mp:
             mp.return_value.exists.return_value = True
             result = al.get_audit_logs()
         assert len(result) == 1

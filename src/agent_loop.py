@@ -38,7 +38,7 @@ PLAN_TIMEOUT = int(os.getenv("PLAN_TIMEOUT", "600"))
 class Step:
     num: int
     description: str
-    status: str = "pending"          # pending | in-progress | done | failed | skipped
+    status: str = "pending"  # pending | in-progress | done | failed | skipped
     output: str = ""
     worker_id: str = ""
     depends_on: list[int] = field(default_factory=list)
@@ -52,8 +52,8 @@ class Step:
 class Plan:
     plan_id: str
     goal: str
-    status: str = "in-progress"      # in-progress | completed | interrupted | failed
-    initiator: str = "user"          # user:<name> | scheduler:<id> | self:proactive
+    status: str = "in-progress"  # in-progress | completed | interrupted | failed
+    initiator: str = "user"  # user:<name> | scheduler:<id> | self:proactive
     channel_id: int = 0
     steps: list[Step] = field(default_factory=list)
     context: dict[str, str] = field(default_factory=dict)
@@ -79,10 +79,7 @@ class Plan:
     def independent_pending_steps(self) -> list[Step]:
         """Return all pending steps whose dependencies are already met."""
         done_nums = {s.num for s in self.steps if s.is_complete}
-        return [
-            s for s in self.steps
-            if s.status == "pending" and all(d in done_nums for d in s.depends_on)
-        ]
+        return [s for s in self.steps if s.status == "pending" and all(d in done_nums for d in s.depends_on)]
 
     def progress_str(self) -> str:
         done = sum(1 for s in self.steps if s.is_complete)
@@ -93,9 +90,7 @@ class Plan:
 # Markdown serialization
 # ---------------------------------------------------------------------------
 
-_STEP_RE = re.compile(
-    r"^- \[([ xX!~])\] Step (\d+): (.+)$", re.MULTILINE
-)
+_STEP_RE = re.compile(r"^- \[([ xX!~])\] Step (\d+): (.+)$", re.MULTILINE)
 _STATUS_CHAR = {"done": "x", "failed": "!", "skipped": "~", "in-progress": "/", "pending": " "}
 _CHAR_STATUS = {"x": "done", "X": "done", "!": "failed", "~": "skipped", "/": "in-progress", " ": "pending"}
 
@@ -192,7 +187,7 @@ def plan_from_markdown(text: str, plan_id: str = "") -> Plan:
 
         # Collect output lines (indented > lines after the step)
         step_line_idx = text.find(match.group(0))
-        after = text[step_line_idx + len(match.group(0)):]
+        after = text[step_line_idx + len(match.group(0)) :]
         output_lines = []
         for ol in after.split("\n"):
             if ol.startswith("  > "):
@@ -265,7 +260,8 @@ def save_plan(plan: Plan, _retries: int = 3, _backoff: float = 0.5) -> None:
             tmp.unlink(missing_ok=True)
             if attempt < _retries - 1:
                 import time
-                time.sleep(min(_backoff * (2 ** attempt), 1.0))  # short sync sleep; only on write failure
+
+                time.sleep(min(_backoff * (2**attempt), 1.0))  # short sync sleep; only on write failure
                 log.warning("save_plan retry %d/%d for %s: %s", attempt + 1, _retries, plan.plan_id, exc)
     log.error("save_plan failed after %d attempts for %s: %s", _retries, plan.plan_id, last_exc)
     raise last_exc
@@ -517,6 +513,7 @@ def scan_interrupted() -> list[Plan]:
 # Autonomous plan execution — runs the plan steps via LLM tool calls
 # ---------------------------------------------------------------------------
 
+
 async def execute_plan(
     plan_id: str,
     on_progress: Any | None = None,
@@ -575,9 +572,7 @@ async def execute_plan(
                 context_parts.append(f"  {k}: {v[:500]}")
 
         step_prompt = (
-            f"You are executing step {step.num} of a plan.\n"
-            f"Overall goal: {plan.goal}\n"
-            f"This step: {step.description}\n"
+            f"You are executing step {step.num} of a plan.\nOverall goal: {plan.goal}\nThis step: {step.description}\n"
         )
         if context_parts:
             step_prompt += "\n".join(context_parts) + "\n"
@@ -588,6 +583,7 @@ async def execute_plan(
 
         try:
             from llm import chat as _llm_chat
+
             result_text, _, _ = await asyncio.wait_for(
                 _llm_chat(step_prompt),
                 timeout=PLAN_TIMEOUT,

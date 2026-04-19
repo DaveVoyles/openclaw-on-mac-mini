@@ -35,6 +35,7 @@ def retry_on_error(
         async def fetch_data():
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
@@ -70,6 +71,7 @@ def retry_on_error(
             raise last_exception  # type: ignore
 
         return wrapper
+
     return decorator
 
 
@@ -82,6 +84,7 @@ def log_execution_time(func: Callable) -> Callable:
         async def slow_operation():
             ...
     """
+
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
         start = time.perf_counter()
@@ -110,6 +113,7 @@ def timeout(seconds: float) -> Callable:
         async def api_call():
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
@@ -120,6 +124,7 @@ def timeout(seconds: float) -> Callable:
                 raise
 
         return wrapper
+
     return decorator
 
 
@@ -138,6 +143,7 @@ def cache_result(ttl_seconds: float = 60.0) -> Callable:
     Note: This is a simple cache that doesn't consider arguments.
     For argument-aware caching, use functools.lru_cache or aiocache.
     """
+
     def decorator(func: Callable) -> Callable:
         cached_result = None
         cache_time = None
@@ -161,6 +167,7 @@ def cache_result(ttl_seconds: float = 60.0) -> Callable:
             return result
 
         return wrapper
+
     return decorator
 
 
@@ -177,6 +184,7 @@ def rate_limit(calls: int, period: float) -> Callable:
         async def api_call():
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         call_times: list[float] = []
 
@@ -211,6 +219,7 @@ def rate_limit(calls: int, period: float) -> Callable:
             return await func(*args, **kwargs)
 
         return wrapper
+
     return decorator
 
 
@@ -232,6 +241,7 @@ def catch_and_log(
         async def risky_operation():
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
@@ -242,6 +252,7 @@ def catch_and_log(
                 return fallback
 
         return wrapper
+
     return decorator
 
 
@@ -258,6 +269,7 @@ def deprecated(message: str = "", replacement: str = "") -> Callable:
         async def old_function():
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
@@ -270,4 +282,5 @@ def deprecated(message: str = "", replacement: str = "") -> Callable:
             return await func(*args, **kwargs)
 
         return wrapper
+
     return decorator

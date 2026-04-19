@@ -14,8 +14,8 @@ from copy_workflow_formatter import build_copy_workflow_payload
 from runtime_state import get_effective_channel_profile, record_channel_profile_signal
 
 # Regex patterns for formatting
-_IMAGE_LINK_RE = re.compile(r'!\[.*?\]\((https?://[^\s)]+)\)')
-_BARE_IMAGE_RE = re.compile(r'\b(https?://[^\s]+\.(?:png|jpg|jpeg|gif|webp))\b', re.IGNORECASE)
+_IMAGE_LINK_RE = re.compile(r"!\[.*?\]\((https?://[^\s)]+)\)")
+_BARE_IMAGE_RE = re.compile(r"\b(https?://[^\s]+\.(?:png|jpg|jpeg|gif|webp))\b", re.IGNORECASE)
 _CODE_BLOCK_RE = re.compile(r"```(\w+)?\n([\s\S]+?)```")
 _FENCED_BLOCK_RE = re.compile(r"```[^\n]*\n[\s\S]*?```")
 TableFormatMode = Literal["discord", "copy-safe"]
@@ -91,7 +91,7 @@ def format_markdown_for_discord(text: str) -> str:
             result.append(line)
             continue
 
-        header_match = re.match(r'^(#{1,3})\s+(.+)$', line)
+        header_match = re.match(r"^(#{1,3})\s+(.+)$", line)
         if header_match:
             level = len(header_match.group(1))
             heading_text = header_match.group(2).strip()
@@ -158,7 +158,7 @@ def _parse_markdown_table_rows(table_lines: list[str]) -> list[list[str]]:
         cleaned = []
         for cell in cells:
             cell = cell.strip("*")
-            cell = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', cell)
+            cell = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", cell)
             cleaned.append(cell)
         rows.append(cleaned)
     return rows
@@ -303,7 +303,7 @@ def _split_plain_segment(text: str, limit: int) -> list[str]:
                 current = ""
             start = 0
             while start < len(line):
-                piece = line[start:start + limit]
+                piece = line[start : start + limit]
                 start += limit
                 if start < len(line):
                     piece = piece[:-1] + "…"
@@ -327,8 +327,8 @@ def _split_code_block_segment(block: str, limit: int) -> list[str]:
     if first_newline == -1:
         return _split_plain_segment(block, limit)
 
-    opener = block[:first_newline + 1]
-    inner_and_close = block[first_newline + 1:]
+    opener = block[: first_newline + 1]
+    inner_and_close = block[first_newline + 1 :]
     if not inner_and_close.endswith("```"):
         return _split_plain_segment(block, limit)
 
@@ -356,7 +356,7 @@ def split_response(text: str, limit: int = _EMBED_LIMIT) -> list[str]:
     cursor = 0
     for match in _FENCED_BLOCK_RE.finditer(text):
         if match.start() > cursor:
-            pieces.extend(_split_plain_segment(text[cursor:match.start()], limit))
+            pieces.extend(_split_plain_segment(text[cursor : match.start()], limit))
         pieces.extend(_split_code_block_segment(match.group(0), limit))
         cursor = match.end()
     if cursor < len(text):
@@ -393,10 +393,23 @@ def extract_file_attachment(text: str) -> tuple[discord.File, str] | None:
         return None
 
     ext_map = {
-        "python": "py", "py": "py", "javascript": "js", "js": "js",
-        "typescript": "ts", "ts": "ts", "json": "json", "yaml": "yaml",
-        "yml": "yaml", "html": "html", "css": "css", "sql": "sql",
-        "bash": "sh", "sh": "sh", "csv": "csv", "markdown": "md", "md": "md",
+        "python": "py",
+        "py": "py",
+        "javascript": "js",
+        "js": "js",
+        "typescript": "ts",
+        "ts": "ts",
+        "json": "json",
+        "yaml": "yaml",
+        "yml": "yaml",
+        "html": "html",
+        "css": "css",
+        "sql": "sql",
+        "bash": "sh",
+        "sh": "sh",
+        "csv": "csv",
+        "markdown": "md",
+        "md": "md",
     }
     ext = ext_map.get(lang, "txt")
 
@@ -420,10 +433,7 @@ def build_brief_detail_bundle(text: str) -> str:
     if not brief and not detail:
         return ""
     return (
-        "## Brief\n"
-        f"{brief or 'No brief summary available.'}\n\n"
-        "## Detail\n"
-        f"{detail or 'No detailed content available.'}"
+        f"## Brief\n{brief or 'No brief summary available.'}\n\n## Detail\n{detail or 'No detailed content available.'}"
     ).strip()
 
 

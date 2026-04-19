@@ -60,17 +60,21 @@ async def test_run_ask_stream_collects_metadata_and_updates_history():
         assert kwargs["on_tool_call"] == "tool-callback"
         assert kwargs["context_controls"] == {"scope": "cross-channel", "reset_context": True}
         yield "partial", False, {"context_badge": "🌐 Cross-channel"}
-        yield "final response", True, {
-            "model_used": "models/gemini-2.5-pro",
-            "routing_notes": ["Tool shortlist: create_status_report"],
-            "explainability_note": "Cross-channel",
-            "context_quality": {
-                "compression_ratio": 0.41,
-                "retained_key_facts_count": 6,
+        yield (
+            "final response",
+            True,
+            {
+                "model_used": "models/gemini-2.5-pro",
+                "routing_notes": ["Tool shortlist: create_status_report"],
+                "explainability_note": "Cross-channel",
+                "context_quality": {
+                    "compression_ratio": 0.41,
+                    "retained_key_facts_count": 6,
+                },
+                "updated_history": [{"role": "model", "parts": ["final response"]}],
+                "context_badge": "🌐 Cross-channel",
             },
-            "updated_history": [{"role": "model", "parts": ["final response"]}],
-            "context_badge": "🌐 Cross-channel",
-        }
+        )
 
     partial_chunks: list[str] = []
     finalized: list[tuple[str, str]] = []

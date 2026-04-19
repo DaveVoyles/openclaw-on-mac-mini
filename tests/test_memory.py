@@ -345,17 +345,20 @@ class TestModelPreference:
 class TestConversationStoreThreads:
     def test_save_invalid_name_rejected(self):
         from memory import ConversationStore
+
         store = ConversationStore()
         assert "❌" in store.save_thread(1, 100, "bad name!")
 
     def test_save_no_active_conv(self):
         from memory import ConversationStore
+
         store = ConversationStore()
         assert "❌" in store.save_thread(1, 100, "ok-name")
 
     def test_save_load_delete(self, tmp_path, monkeypatch):
         monkeypatch.setattr(_mem_mod, "THREADS_DIR", tmp_path)
         from memory import Conversation, ConversationStore
+
         store = ConversationStore()
         conv = Conversation("Alice")
         conv.history = [{"role": "user", "parts": ["hi"]}]
@@ -369,10 +372,12 @@ class TestConversationStoreThreads:
     def test_memory_list_empty(self, tmp_path, monkeypatch):
         monkeypatch.setattr(_mem_mod, "THREADS_DIR", tmp_path)
         from memory import ConversationStore
+
         result = ConversationStore().list_threads(1)
         assert "No saved threads" in result
 
     def test_load_nonexistent(self, tmp_path, monkeypatch):
         monkeypatch.setattr(_mem_mod, "THREADS_DIR", tmp_path)
         from memory import ConversationStore
+
         assert "❌" in ConversationStore().load_thread(1, 100, "ghost")

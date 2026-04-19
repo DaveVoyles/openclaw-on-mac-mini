@@ -184,4 +184,3 @@ def build_sms_provider(provider_name: str | None = None, config: Any = _cfg) -> 
     if selected != "twilio":
         raise SMSProviderConfigError(f"Unsupported SMS provider '{selected}'. Supported providers: twilio.")
     return TwilioSMSProvider(TwilioSMSConfig.from_config(config))
-

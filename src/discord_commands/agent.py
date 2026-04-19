@@ -74,17 +74,17 @@ def _register_agent_commands(bot: commands.Bot) -> None:
 
             try:
                 from skills.advanced_skills import browse_url
+
                 page_text = await asyncio.wait_for(browse_url(url), timeout=15)
                 if page_text and not page_text.startswith("❌"):
                     prompt = (
                         f"Summarize this webpage in 3-5 bullet points for a bookmark note.\n"
                         f"URL: {url}\n\nContent:\n{page_text[:3000]}"
                     )
-                    summary, _, model_used = await asyncio.wait_for(
-                        llm_chat(user_message=prompt), timeout=30
-                    )
+                    summary, _, model_used = await asyncio.wait_for(llm_chat(user_message=prompt), timeout=30)
                     content_parts.append(f"\n## Summary\n\n{summary}")
                     import re as _re
+
                     h1 = _re.search(r"^#\s+(.+)$", page_text, _re.MULTILINE)
                     if h1:
                         title = h1.group(1)[:80]
@@ -131,6 +131,7 @@ def _register_agent_commands(bot: commands.Bot) -> None:
     async def weather_cmd(interaction: discord.Interaction, location: str = "", units: str = "uscs"):
         await interaction.response.defer()
         from skills.advanced_skills import get_weather
+
         result = await get_weather(location=location, units=units)
         embed = discord.Embed(
             title="🌤️ Weather",

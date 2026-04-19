@@ -24,27 +24,26 @@ def _register_uptime_kuma_commands(bot: commands.Bot) -> None:
         service="Optional: filter to a specific service name (partial match)",
     )
     @require_auth
-    async def uptime_status_cmd(
-        interaction: discord.Interaction, service: str | None = None
-    ):
+    async def uptime_status_cmd(interaction: discord.Interaction, service: str | None = None):
         await interaction.response.defer(ephemeral=True)
 
         try:
             if service:
                 from uptime_kuma_skills import get_monitor_detail
+
                 result = await get_monitor_detail(service)
             else:
                 from uptime_kuma_skills import get_monitors_down
+
                 down_result = await get_monitors_down()
 
                 from uptime_kuma_skills import get_uptime_summary
+
                 summary = await get_uptime_summary()
 
                 result = f"{down_result}\n\n{summary}"
         except Exception as exc:  # broad: intentional
-            await interaction.followup.send(
-                f"❌ Error querying Uptime Kuma: {exc}", ephemeral=True
-            )
+            await interaction.followup.send(f"❌ Error querying Uptime Kuma: {exc}", ephemeral=True)
             return
 
         # Split into embed if short enough, plain text otherwise

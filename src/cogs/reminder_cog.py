@@ -59,9 +59,7 @@ def _parse_duration_seconds(expr: str) -> int | None:
 class ReminderCog(commands.Cog):
     """Personal reminders and countdown timers."""
 
-    remind_group = app_commands.Group(
-        name="remind", description="Set, list, or cancel personal reminders"
-    )
+    remind_group = app_commands.Group(name="remind", description="Set, list, or cancel personal reminders")
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
@@ -104,7 +102,6 @@ class ReminderCog(commands.Cog):
             recurring=recurring,
         )
 
-
         embed = discord.Embed(
             title="✅ Reminder set",
             description=message,
@@ -126,9 +123,7 @@ class ReminderCog(commands.Cog):
     async def remind_list(self, interaction: discord.Interaction) -> None:
         reminders = reminder_manager.list_for_user(interaction.user.id)
         if not reminders:
-            await interaction.response.send_message(
-                "📭 No pending reminders.", ephemeral=True
-            )
+            await interaction.response.send_message("📭 No pending reminders.", ephemeral=True)
             return
 
         embed = discord.Embed(
@@ -148,13 +143,9 @@ class ReminderCog(commands.Cog):
 
     @remind_group.command(name="cancel", description="Cancel a reminder by ID")
     @app_commands.describe(reminder_id="The 8-character reminder ID")
-    async def remind_cancel(
-        self, interaction: discord.Interaction, reminder_id: str
-    ) -> None:
+    async def remind_cancel(self, interaction: discord.Interaction, reminder_id: str) -> None:
         if reminder_manager.cancel(reminder_id, interaction.user.id):
-            await interaction.response.send_message(
-                f"🗑️ Reminder `{reminder_id}` cancelled.", ephemeral=True
-            )
+            await interaction.response.send_message(f"🗑️ Reminder `{reminder_id}` cancelled.", ephemeral=True)
         else:
             await interaction.response.send_message(
                 f"❌ No reminder with ID `{reminder_id}` found (or it's not yours).",
@@ -168,9 +159,7 @@ class ReminderCog(commands.Cog):
     async def timer(self, interaction: discord.Interaction, duration: str) -> None:
         seconds = _parse_duration_seconds(duration)
         if seconds is None or seconds <= 0:
-            await interaction.response.send_message(
-                "❌ Invalid duration. Try `25m`, `90s`, or `2h`.", ephemeral=True
-            )
+            await interaction.response.send_message("❌ Invalid duration. Try `25m`, `90s`, or `2h`.", ephemeral=True)
             return
 
         end_ts = time.time() + seconds
@@ -183,9 +172,7 @@ class ReminderCog(commands.Cog):
 
         # Wait, then ping the user
         await asyncio.sleep(seconds)
-        await interaction.followup.send(
-            f"⏰ {interaction.user.mention} — your **{duration}** timer is up!"
-        )
+        await interaction.followup.send(f"⏰ {interaction.user.mention} — your **{duration}** timer is up!")
 
 
 async def setup(bot: commands.Bot) -> None:

@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_cmd_misc.py — miscellaneous command handlers."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -38,6 +39,7 @@ def _mock_cli(**kwargs) -> MagicMock:
 # ---------------------------------------------------------------------------
 # _cmd_recall
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_recall_no_history_shows_message(capsys):
     cli = _mock_cli(_PREFS={"cmd_history": []})
@@ -91,6 +93,7 @@ def test_cmd_recall_skips_slash_commands():
 # _cmd_histsearch
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_histsearch_no_query(capsys):
     cli = _mock_cli(_PREFS={})
     with patch.object(mod, "_get_cli_mod", return_value=cli):
@@ -133,6 +136,7 @@ def test_cmd_histsearch_case_insensitive(capsys):
 # ---------------------------------------------------------------------------
 # _cmd_rate
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_rate_no_args():
     cli = _mock_cli()
@@ -189,6 +193,7 @@ def test_cmd_rate_no_response_text(capsys):
 # _cmd_freq
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_freq_no_history(capsys):
     cli = _mock_cli(_PREFS={"cmd_history": []})
     with patch.object(mod, "_get_cli_mod", return_value=cli):
@@ -223,6 +228,7 @@ def test_cmd_freq_ignores_non_slash_entries(capsys):
 # _cmd_tip
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_tip_prints_a_tip(capsys):
     cli = _mock_cli(_OPENCLAW_TIPS=["Use /help for more info."])
     with patch.object(mod, "_get_cli_mod", return_value=cli):
@@ -243,11 +249,11 @@ def test_cmd_tip_returns_continue():
 # _cmd_shortcuts
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_shortcuts_returns_continue(capsys):
     cli = _mock_cli()
     # Need _RichPanel available — mock it
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False):
+    with patch.object(mod, "_get_cli_mod", return_value=cli), patch.object(mod, "_RICH_AVAILABLE", False):
         result = mod._cmd_shortcuts(_ctx(""))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -258,10 +264,10 @@ def test_cmd_shortcuts_returns_continue(capsys):
 # _cmd_changes
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_changes_no_edits(capsys):
     cli = _mock_cli(_PREFS={"session_edits": []})
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("subprocess.run") as mock_run:
+    with patch.object(mod, "_get_cli_mod", return_value=cli), patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout="", stderr="")
         result = mod._cmd_changes(_ctx(""))
     assert result == _CMD_CONTINUE
@@ -271,8 +277,7 @@ def test_cmd_changes_no_edits(capsys):
 
 def test_cmd_changes_lists_edits(capsys):
     cli = _mock_cli(_PREFS={"session_edits": ["src/main.py", "README.md"]})
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("subprocess.run") as mock_run:
+    with patch.object(mod, "_get_cli_mod", return_value=cli), patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout="", stderr="")
         result = mod._cmd_changes(_ctx(""))
     assert result == _CMD_CONTINUE
@@ -283,6 +288,7 @@ def test_cmd_changes_lists_edits(capsys):
 # ---------------------------------------------------------------------------
 # _print_ascii_trophy
 # ---------------------------------------------------------------------------
+
 
 def test_print_ascii_trophy_plain_mode(capsys):
     cli = _mock_cli()
@@ -296,8 +302,7 @@ def test_print_ascii_trophy_plain_mode(capsys):
 def test_print_ascii_trophy_normal_mode(capsys):
     cli = _mock_cli()
     cli._a11y_plain_mode = MagicMock(return_value=False)
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_RICH_AVAILABLE", False):
+    with patch.object(mod, "_get_cli_mod", return_value=cli), patch.object(mod, "_RICH_AVAILABLE", False):
         mod._print_ascii_trophy(3)
     captured = capsys.readouterr()
     assert "Streak" in captured.out or "streak" in captured.out.lower()
@@ -306,6 +311,7 @@ def test_print_ascii_trophy_normal_mode(capsys):
 # ---------------------------------------------------------------------------
 # _cmd_tldr
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_tldr_no_last_response(capsys):
     cli = _mock_cli(_last_response_text="")
@@ -328,6 +334,7 @@ def test_cmd_tldr_sets_tldr_prompt_and_returns_special(capsys):
 # ---------------------------------------------------------------------------
 # _cmd_retry qualifiers
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_retry_no_last_prompt(capsys):
     cli = _mock_cli(_PREFS={})

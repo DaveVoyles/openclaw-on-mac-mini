@@ -37,12 +37,21 @@ def get_active_conversation_count() -> int:
     """Return the current number of active user conversations."""
     return _ACTIVE_CONVERSATION_COUNT
 
+
 _bg_sessions = _SessionManager(timeout=10, name="discord-background")
 
-_SAFE_RESTART_TARGETS = frozenset({
-    "sonarr", "radarr", "lidarr", "prowlarr",
-    "sabnzbd", "qbittorrent", "tautulli", "overseerr",
-})
+_SAFE_RESTART_TARGETS = frozenset(
+    {
+        "sonarr",
+        "radarr",
+        "lidarr",
+        "prowlarr",
+        "sabnzbd",
+        "qbittorrent",
+        "tautulli",
+        "overseerr",
+    }
+)
 _error_re = re.compile(r"error|warn|exception|critical|failed", re.IGNORECASE)
 
 # Tracks last-seen status per container to avoid repeat alerts
@@ -58,6 +67,7 @@ _cookie_alert_sent = False  # only alert once per expiry cycle
 # ---------------------------------------------------------------------------
 # Error monitor
 # ---------------------------------------------------------------------------
+
 
 async def error_monitor_loop(bot) -> None:
     """Fast error pattern check — runs every 5 minutes (optional scan)."""
@@ -92,6 +102,7 @@ async def error_monitor_loop(bot) -> None:
                                 get_recent_outcomes,
                                 record_incident,
                             )
+
                             recent = get_recent_outcomes(hours=1)
                             recent_errors = [e for e in recent if not e.get("success")]
 
@@ -135,7 +146,9 @@ async def error_monitor_loop(bot) -> None:
                                 channel = bot.get_channel(ALERT_CHANNEL_ID)
                                 if channel:
                                     await channel.send(embed=embed)
-                    except Exception as e:  # broad: intentional — auto-diagnosis pipeline spans LLM + Discord + monitoring
+                    except (
+                        Exception
+                    ) as e:  # broad: intentional — auto-diagnosis pipeline spans LLM + Discord + monitoring
                         log.warning("Auto-diagnosis/fix pipeline failed: %s", e)
                 else:
                     log.info(
@@ -179,6 +192,7 @@ async def _post_error_alert(bot, patterns: list[dict]) -> None:
 # ---------------------------------------------------------------------------
 # Container health auto-alerts
 # ---------------------------------------------------------------------------
+
 
 async def container_health_loop(bot) -> None:
     """Check Docker container health every 5 minutes and alert on unhealthy/exited."""
@@ -232,6 +246,7 @@ async def _check_monstervision_cookies(bot) -> None:
         channel = bot.get_channel(ALERT_CHANNEL_ID)
         if channel:
             import discord
+
             embed = discord.Embed(
                 title="🍪 MonsterVision Cookie Expired",
                 description=(
@@ -282,6 +297,7 @@ async def _check_container_health(bot) -> None:
         # Record health check for trend tracking
         try:
             from health_history import record as _hh_record
+
             if is_bad:
                 _hh_record(name, "down" if status_lower.startswith("exited") else "degraded", status)
             else:
@@ -348,6 +364,7 @@ async def _check_container_health(bot) -> None:
 # ---------------------------------------------------------------------------
 # Resource-threshold monitor (every 60 s)
 # ---------------------------------------------------------------------------
+
 
 async def resource_monitor_loop(bot) -> None:
     """Check per-container CPU/memory thresholds and post alerts."""

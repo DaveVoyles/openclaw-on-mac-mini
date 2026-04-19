@@ -85,9 +85,7 @@ async def _export_conversations(days: int | None, filters: dict[str, Any]) -> pd
     conn = sqlite3.connect(str(db_path), timeout=10)
     try:
         # Check if table exists
-        cursor = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='threads'"
-        )
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='threads'")
         if not cursor.fetchone():
             return pd.DataFrame()
 
@@ -126,9 +124,7 @@ async def _export_trends(days: int | None, filters: dict[str, Any]) -> pd.DataFr
     conn = sqlite3.connect(str(db_path), timeout=10)
     try:
         # Check if table exists
-        cursor = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='trend_data'"
-        )
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='trend_data'")
         if not cursor.fetchone():
             return pd.DataFrame()
 
@@ -170,6 +166,7 @@ async def _export_tasks(days: int | None, filters: dict[str, Any]) -> pd.DataFra
         return pd.DataFrame()
 
     import json
+
     with open(SCHEDULE_FILE) as f:
         tasks_data = json.load(f)
 
@@ -200,9 +197,7 @@ async def _export_costs(days: int | None, filters: dict[str, Any]) -> pd.DataFra
     conn = sqlite3.connect(str(db_path), timeout=10)
     try:
         # Check if cost tracking table exists
-        cursor = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='api_costs'"
-        )
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='api_costs'")
         if not cursor.fetchone():
             return pd.DataFrame()
 
@@ -231,9 +226,11 @@ async def _export_api_usage(days: int | None, filters: dict[str, Any]) -> pd.Dat
 
     # Read audit logs and aggregate
     # For now, return placeholder (to be enhanced with actual audit data)
-    return pd.DataFrame({
-        "timestamp": [],
-        "endpoint": [],
-        "status": [],
-        "response_time_ms": [],
-    })
+    return pd.DataFrame(
+        {
+            "timestamp": [],
+            "endpoint": [],
+            "status": [],
+            "response_time_ms": [],
+        }
+    )

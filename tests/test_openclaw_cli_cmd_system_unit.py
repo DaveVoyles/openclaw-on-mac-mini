@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_cmd_system.py — system, prompt, and display handlers."""
+
 from __future__ import annotations
 
 import sys
@@ -49,6 +50,7 @@ def _mock_cli(**kwargs) -> MagicMock:
 # ---------------------------------------------------------------------------
 # _cmd_system
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_system_view_empty(capsys):
     cli = _mock_cli(_PREFS={"system_prompt": ""})
@@ -133,6 +135,7 @@ def test_cmd_system_unknown_sub_command(capsys):
 # _cmd_promptdebug
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_promptdebug_shows_preview(capsys):
     cli = _mock_cli(_PREFS={"system_prompt": "Be concise."})
     with patch.object(mod, "_m", return_value=cli):
@@ -155,6 +158,7 @@ def test_cmd_promptdebug_no_system_prompt(capsys):
 # _cmd_autobold and _cmd_jsonformat (delegate to toggle pref)
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_autobold_delegates_to_toggle():
     cli = _mock_cli()
     cli._handle_simple_toggle_pref.return_value = _CMD_CONTINUE
@@ -176,6 +180,7 @@ def test_cmd_jsonformat_delegates_to_toggle():
 # ---------------------------------------------------------------------------
 # _cmd_separator
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_separator_set_valid(capsys):
     cli = _mock_cli(_PREFS={"separator_style": "gradient"})
@@ -215,6 +220,7 @@ def test_cmd_separator_none_does_not_print_separator(capsys):
 # ---------------------------------------------------------------------------
 # _cmd_palette
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_palette_lists_all_when_no_query(capsys):
     cmd_mock = MagicMock()
@@ -268,6 +274,7 @@ def test_cmd_palette_no_matches(capsys):
 # _cmd_prompt
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_prompt_view_current(capsys):
     cli = _mock_cli(_PREFS={"prompt_format": "openclaw>"})
     with patch.object(mod, "_m", return_value=cli):
@@ -305,6 +312,7 @@ def test_cmd_prompt_too_short(capsys):
 # ---------------------------------------------------------------------------
 # _cmd_alias
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_alias_list_empty(capsys):
     cli = _mock_cli(_PREFS={"aliases": {}})
@@ -368,6 +376,7 @@ def test_cmd_alias_no_expansion_shows_usage(capsys):
 # _cmd_pathhints and _cmd_ratehint (delegates)
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_pathhints_delegates_to_toggle():
     cli = _mock_cli()
     cli._handle_simple_toggle_pref.return_value = _CMD_CONTINUE
@@ -390,12 +399,12 @@ def test_cmd_ratehint_delegates_to_toggle():
 # _cmd_benchmark (smoke test — TCP connection expected to fail in CI)
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_benchmark_returns_continue(capsys):
     cli = _mock_cli()
     ctx = _ctx("1")
     ctx.config = None  # no config; falls back to env
-    with patch.object(mod, "_m", return_value=cli), \
-         patch("socket.create_connection", side_effect=OSError("refused")):
+    with patch.object(mod, "_m", return_value=cli), patch("socket.create_connection", side_effect=OSError("refused")):
         result = mod._cmd_benchmark(ctx)
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()

@@ -41,6 +41,7 @@ import llm_client  # noqa: E402
 # System prompt loading
 # ---------------------------------------------------------------------------
 
+
 class TestSystemPrompt:
     def test_default_prompt_when_file_missing(self, tmp_path, monkeypatch):
         """When the prompt file doesn't exist, fall back to the hardcoded default."""
@@ -76,6 +77,7 @@ class TestSystemPrompt:
         system_file.write_text("v2")
         # Touch to ensure mtime changes
         import os
+
         os.utime(system_file, (time.time() + 1, time.time() + 1))
         assert "v2" in llm._load_system_prompt()
 
@@ -84,28 +86,35 @@ class TestSystemPrompt:
 # _needs_tools heuristic
 # ---------------------------------------------------------------------------
 
+
 class TestNeedsTools:
-    @pytest.mark.parametrize("query", [
-        "restart sonarr container",
-        "show me the container logs",
-        "check the health status",
-        "search the web for news",
-        "what's the weather forecast?",
-        "is plex up?",
-        "send an email to dave",
-        "create a calendar event",
-        "https://example.com",
-        "check zillow listings",
-    ])
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "restart sonarr container",
+            "show me the container logs",
+            "check the health status",
+            "search the web for news",
+            "what's the weather forecast?",
+            "is plex up?",
+            "send an email to dave",
+            "create a calendar event",
+            "https://example.com",
+            "check zillow listings",
+        ],
+    )
     def test_llm_chat_tool_queries_detected(self, query):
         assert llm._needs_tools(query) is True
 
-    @pytest.mark.parametrize("query", [
-        "hi there",
-        "tell me a joke",
-        "what is the meaning of life?",
-        "explain quantum physics",
-    ])
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "hi there",
+            "tell me a joke",
+            "what is the meaning of life?",
+            "explain quantum physics",
+        ],
+    )
     def test_conversational_queries_not_flagged(self, query):
         assert llm._needs_tools(query) is False
 
@@ -113,6 +122,7 @@ class TestNeedsTools:
 # ---------------------------------------------------------------------------
 # _extract_history
 # ---------------------------------------------------------------------------
+
 
 class TestExtractHistory:
     def test_extracts_text_parts(self):
@@ -155,6 +165,7 @@ class TestExtractHistory:
 # is_configured / get_rate_info
 # ---------------------------------------------------------------------------
 
+
 class TestConfigHelpers:
     def test_is_configured_with_api_key(self, monkeypatch):
         monkeypatch.setattr(llm, "GOOGLE_API_KEY", "test-key")
@@ -169,6 +180,7 @@ class TestConfigHelpers:
         monkeypatch.setattr(llm, "GOOGLE_API_KEY", "")
         monkeypatch.setattr(llm, "LOCAL_LLM_ENABLED", False)
         import llm.providers as _providers
+
         monkeypatch.setattr(_providers, "COPILOT_PROXY_ENABLED", False)
         assert llm.is_configured() is False
 
@@ -181,6 +193,7 @@ class TestConfigHelpers:
 # ---------------------------------------------------------------------------
 # Tool declarations integrity
 # ---------------------------------------------------------------------------
+
 
 class TestToolDeclarations:
     def test_tool_declarations_are_nonempty(self):
@@ -212,11 +225,13 @@ class TestToolDeclarations:
 # chat() — Gemini routing and rate limit handling
 # ---------------------------------------------------------------------------
 
+
 class TestChatRouting:
     @pytest.mark.asyncio
     async def test_chat_returns_rate_limit_message_when_exhausted(self, monkeypatch):
         """When rate limit is exhausted, chat returns a warning message."""
         import sys
+
         chat_mod = sys.modules["llm.chat"]
         monkeypatch.setattr(chat_mod, "LOCAL_LLM_ENABLED", False)
         # Exhaust the rate limiter
@@ -231,6 +246,7 @@ class TestChatRouting:
     async def test_chat_returns_tuple_of_three(self, monkeypatch):
         """chat() always returns (text, history, model_used)."""
         import sys
+
         chat_mod = sys.modules["llm.chat"]
         monkeypatch.setattr(chat_mod, "LOCAL_LLM_ENABLED", False)
         rl = llm.RateLimiter(per_minute=1, per_hour=1)

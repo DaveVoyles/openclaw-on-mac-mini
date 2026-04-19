@@ -199,9 +199,7 @@ async def index_vault_to_qmd() -> str:
 
     # Load previous index state
     try:
-        prev_state: dict[str, str] = (
-            json.loads(index_state_file.read_text()) if index_state_file.exists() else {}
-        )
+        prev_state: dict[str, str] = json.loads(index_state_file.read_text()) if index_state_file.exists() else {}
     except (OSError, json.JSONDecodeError, ValueError):
         prev_state = {}
 
@@ -256,10 +254,7 @@ async def index_vault_to_qmd() -> str:
     except OSError as e:
         log.warning("Could not save vault index state: %s", e)
 
-    result = (
-        f"✅ Vault indexed: {indexed} new/updated, {skipped} unchanged "
-        f"({len(md_files)} total notes)"
-    )
+    result = f"✅ Vault indexed: {indexed} new/updated, {skipped} unchanged ({len(md_files)} total notes)"
     log.info(result)
     return result
 

@@ -33,6 +33,7 @@ def test_health_skills_skills_are_callables():
 # Fitbit Tests
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_get_daily_steps_no_token():
     """Test daily steps without access token."""
@@ -152,6 +153,7 @@ async def test_workout_summary_response_structure():
 # ============================================================================
 # Open Food Facts Tests
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_get_nutrition_info_basic():

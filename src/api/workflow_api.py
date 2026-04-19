@@ -60,10 +60,12 @@ async def list_workflows_handler(request: web.Request) -> web.Response:
     try:
         workflows = workflow_engine.list_workflows()
 
-        return web.json_response({
-            "workflows": [w.to_dict() for w in workflows],
-            "count": len(workflows),
-        })
+        return web.json_response(
+            {
+                "workflows": [w.to_dict() for w in workflows],
+                "count": len(workflows),
+            }
+        )
 
     except Exception as e:  # broad: intentional — HTTP handler must return error response; not raise
         log.error("Failed to list workflows: %s", e)
@@ -177,15 +179,17 @@ async def execute_workflow_handler(request: web.Request) -> web.Response:
         # Execute workflow
         execution = await workflow_engine.execute_workflow(workflow_id, context)
 
-        return web.json_response({
-            "execution_id": execution.execution_id,
-            "workflow_id": execution.workflow_id,
-            "status": execution.status,
-            "started_at": execution.started_at,
-            "completed_at": execution.completed_at,
-            "task_results": execution.task_results,
-            "errors": execution.errors,
-        })
+        return web.json_response(
+            {
+                "execution_id": execution.execution_id,
+                "workflow_id": execution.workflow_id,
+                "status": execution.status,
+                "started_at": execution.started_at,
+                "completed_at": execution.completed_at,
+                "task_results": execution.task_results,
+                "errors": execution.errors,
+            }
+        )
 
     except Exception as e:  # broad: intentional — HTTP handler must return error response; not raise
         log.error("Failed to execute workflow: %s", e)
@@ -200,10 +204,12 @@ async def get_templates_handler(request: web.Request) -> web.Response:
     try:
         templates = workflow_engine.get_templates()
 
-        return web.json_response({
-            "templates": templates,
-            "count": len(templates),
-        })
+        return web.json_response(
+            {
+                "templates": templates,
+                "count": len(templates),
+            }
+        )
 
     except Exception as e:  # broad: intentional — HTTP handler must return error response; not raise
         log.error("Failed to get templates: %s", e)

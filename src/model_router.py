@@ -58,6 +58,7 @@ async def is_ollama_alive(url: str = "") -> bool:
         log.info("Ollama health check failed — routing will prefer Gemini")
     return alive
 
+
 # Query type classifications
 _CODE_PATTERN = re.compile(
     r"\b(write|create|generate|fix|debug|refactor|review|explain)\s+(a\s+)?"
@@ -270,6 +271,7 @@ async def chat_openai(  # compat — also in llm.providers
             content = data["choices"][0]["message"]["content"]
             if COPILOT_PROXY_ENABLED:
                 from spending import tracker as spending_tracker
+
                 await spending_tracker.record_copilot(model=model)
             return content
     except Exception as e:  # broad: intentional
@@ -364,7 +366,9 @@ async def chat_anthropic(  # compat — also in llm.providers
     # (the proxy serves Claude models in OpenAI-compatible format)
     if COPILOT_PROXY_ENABLED:
         return await chat_openai(
-            message, history, system_prompt,
+            message,
+            history,
+            system_prompt,
             model=model or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4.5"),
             temperature=temperature,
             max_tokens=max_tokens,
@@ -407,9 +411,7 @@ async def chat_anthropic(  # compat — also in llm.providers
                 return None
             data = await resp.json()
             content_blocks = data.get("content", [])
-            return " ".join(
-                b["text"] for b in content_blocks if b.get("type") == "text"
-            )
+            return " ".join(b["text"] for b in content_blocks if b.get("type") == "text")
     except Exception as e:  # broad: intentional
         log.warning("Anthropic call failed: %s", e)
         return None

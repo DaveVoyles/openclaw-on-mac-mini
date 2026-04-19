@@ -35,18 +35,40 @@ DISAMBIGUATION_HINTS: dict[str, str] = {
 # ---------------------------------------------------------------------------
 
 _CATEGORY_EMOJIS: dict[str, str] = {
-    "Ask": "🤖", "Chat": "💬", "Clear": "🧹",
-    "Docker": "🐳", "Container": "🐳",
-    "Memory": "🧠", "Remember": "🧠", "Recall": "🧠", "Rules": "🧠",
-    "Search": "🎬", "Watch": "🎬", "Queue": "🎬", "Recent": "🎬",
-    "Admin": "⚙️", "Audit": "⚙️", "Spending": "⚙️", "Schedule": "📅",
-    "Analyze": "🔍", "Research": "🔍",
-    "Log": "📋", "Logs": "📋",
-    "System": "💻", "Status": "📊", "Health": "🏥",
-    "Calendar": "📅", "Email": "📧",
-    "Tutorial": "📚", "Help": "❓", "Commands": "📖",
-    "Permissions": "🔐", "Ping": "🏓", "About": "ℹ️",
-    "Whoami": "👤", "General": "🔧",
+    "Ask": "🤖",
+    "Chat": "💬",
+    "Clear": "🧹",
+    "Docker": "🐳",
+    "Container": "🐳",
+    "Memory": "🧠",
+    "Remember": "🧠",
+    "Recall": "🧠",
+    "Rules": "🧠",
+    "Search": "🎬",
+    "Watch": "🎬",
+    "Queue": "🎬",
+    "Recent": "🎬",
+    "Admin": "⚙️",
+    "Audit": "⚙️",
+    "Spending": "⚙️",
+    "Schedule": "📅",
+    "Analyze": "🔍",
+    "Research": "🔍",
+    "Log": "📋",
+    "Logs": "📋",
+    "System": "💻",
+    "Status": "📊",
+    "Health": "🏥",
+    "Calendar": "📅",
+    "Email": "📧",
+    "Tutorial": "📚",
+    "Help": "❓",
+    "Commands": "📖",
+    "Permissions": "🔐",
+    "Ping": "🏓",
+    "About": "ℹ️",
+    "Whoami": "👤",
+    "General": "🔧",
 }
 
 # ---------------------------------------------------------------------------
@@ -248,16 +270,12 @@ class _HelpSelect(discord.ui.Select):
         await inter.response.edit_message(embed=_build_category_embed(cat, cmd_lines))
 
 
-def _build_help_overview(
-    categories: dict[str, list[str]], version: str
-) -> tuple[discord.Embed, discord.ui.View]:
+def _build_help_overview(categories: dict[str, list[str]], version: str) -> tuple[discord.Embed, discord.ui.View]:
     """Build the main help overview embed and dropdown view."""
     total = sum(len(v) for v in categories.values())
     embed = discord.Embed(
         title="📖 OpenClaw Commands",
-        description=(
-            "Choose a category below, or use `/help keyword:<search>` to find a specific command:"
-        ),
+        description=("Choose a category below, or use `/help keyword:<search>` to find a specific command:"),
         color=discord.Color.blurple(),
     )
     for cat_name, cmd_lines in categories.items():
@@ -281,6 +299,7 @@ def _resolve_user_permission_level(interaction: discord.Interaction) -> Permissi
     # back to checking if user is first in ALLOWED_USER_IDS list
     from config import cfg as _cfg
     from permissions import check_permission
+
     owner_id = _cfg.allowed_user_ids[0] if _cfg.allowed_user_ids else None
     if check_permission(PermissionLevel.OWNER, interaction, owner_id=owner_id):
         return PermissionLevel.OWNER
@@ -384,10 +403,7 @@ def _register_utility_commands(bot: commands.Bot) -> None:
     async def help_cmd(interaction: discord.Interaction, keyword: Optional[str] = None):
         if keyword:
             all_cmds = interaction.client.tree.get_commands()
-            scored = [
-                (cmd, _score_command_match(cmd, keyword))
-                for cmd in all_cmds
-            ]
+            scored = [(cmd, _score_command_match(cmd, keyword)) for cmd in all_cmds]
             matches = sorted(
                 [(cmd, s) for cmd, s in scored if s > 0],
                 key=lambda x: x[1],
@@ -397,10 +413,7 @@ def _register_utility_commands(bot: commands.Bot) -> None:
             if not matches:
                 embed = discord.Embed(
                     title="🔍 No Results",
-                    description=(
-                        f"No commands found matching `{keyword}`. "
-                        "Try `/help` to browse all categories."
-                    ),
+                    description=(f"No commands found matching `{keyword}`. Try `/help` to browse all categories."),
                     color=discord.Color.red(),
                 )
                 await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -437,12 +450,14 @@ def _register_utility_commands(bot: commands.Bot) -> None:
 
     @bot.tree.command(name="tutorial", description="Interactive OpenClaw tutorial")
     @app_commands.describe(step="Tutorial action to perform")
-    @app_commands.choices(step=[
-        app_commands.Choice(name="start", value="start"),
-        app_commands.Choice(name="next", value="next"),
-        app_commands.Choice(name="skip", value="skip"),
-        app_commands.Choice(name="restart", value="restart"),
-    ])
+    @app_commands.choices(
+        step=[
+            app_commands.Choice(name="start", value="start"),
+            app_commands.Choice(name="next", value="next"),
+            app_commands.Choice(name="skip", value="skip"),
+            app_commands.Choice(name="restart", value="restart"),
+        ]
+    )
     @require_auth
     async def tutorial_cmd(interaction: discord.Interaction, step: app_commands.Choice[str]):
         manager = OnboardingManager()

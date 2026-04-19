@@ -27,6 +27,7 @@ def isolated_goals(tmp_path, monkeypatch):
 # detect_goal
 # ---------------------------------------------------------------------------
 
+
 class TestDetectGoal:
     def test_detects_looking_for(self):
         assert detect_goal("I'm looking for a new apartment in Portland.") is True
@@ -53,6 +54,7 @@ class TestDetectGoal:
 # ---------------------------------------------------------------------------
 # _load_goals / _save_goals
 # ---------------------------------------------------------------------------
+
 
 class TestLoadSaveGoals:
     def test_goal_tracker_load_returns_empty_when_no_file(self):
@@ -81,6 +83,7 @@ class TestLoadSaveGoals:
 # ---------------------------------------------------------------------------
 # get_active_goals
 # ---------------------------------------------------------------------------
+
 
 class TestGetActiveGoals:
     def test_returns_only_active(self):
@@ -119,6 +122,7 @@ class TestGetActiveGoals:
 # complete_goal
 # ---------------------------------------------------------------------------
 
+
 class TestCompleteGoal:
     def test_complete_marks_as_completed(self):
         _save_goals([{"goal": "Learn Rust", "user_id": 1, "status": "active"}])
@@ -146,6 +150,7 @@ class TestCompleteGoal:
 # dismiss_goal
 # ---------------------------------------------------------------------------
 
+
 class TestDismissGoal:
     def test_dismiss_marks_as_dismissed(self):
         _save_goals([{"goal": "Exercise daily", "user_id": 1, "status": "active"}])
@@ -166,33 +171,35 @@ class TestDismissGoal:
 # format_goals_for_briefing
 # ---------------------------------------------------------------------------
 
+
 class TestFormatGoalsForBriefing:
     def test_empty_goals_returns_empty_string(self):
         assert format_goals_for_briefing() == ""
 
     def test_active_goals_formatted(self):
-        _save_goals([
-            {"goal": "Learn Rust", "user_id": 1, "status": "active", "mention_count": 3},
-        ])
+        _save_goals(
+            [
+                {"goal": "Learn Rust", "user_id": 1, "status": "active", "mention_count": 3},
+            ]
+        )
         result = format_goals_for_briefing()
         assert "Learn Rust" in result
         assert "3x" in result
 
     def test_only_up_to_5_goals_shown(self):
-        goals = [
-            {"goal": f"Goal {i}", "user_id": 1, "status": "active", "mention_count": 1}
-            for i in range(10)
-        ]
+        goals = [{"goal": f"Goal {i}", "user_id": 1, "status": "active", "mention_count": 1} for i in range(10)]
         _save_goals(goals)
         result = format_goals_for_briefing()
         # Only up to 5 goals should appear
         assert result.count("- Goal") == 5
 
     def test_filters_by_user(self):
-        _save_goals([
-            {"goal": "User1 goal", "user_id": 1, "status": "active", "mention_count": 1},
-            {"goal": "User2 goal", "user_id": 2, "status": "active", "mention_count": 1},
-        ])
+        _save_goals(
+            [
+                {"goal": "User1 goal", "user_id": 1, "status": "active", "mention_count": 1},
+                {"goal": "User2 goal", "user_id": 2, "status": "active", "mention_count": 1},
+            ]
+        )
         result = format_goals_for_briefing(user_id=1)
         assert "User1 goal" in result
         assert "User2 goal" not in result

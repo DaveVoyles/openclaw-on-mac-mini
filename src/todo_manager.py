@@ -89,27 +89,19 @@ class TodoManager:
 
     def delete(self, item_id: str, user_id: int) -> bool:
         before = len(self._items)
-        self._items = [
-            i for i in self._items if not (i.id == item_id and i.user_id == user_id)
-        ]
+        self._items = [i for i in self._items if not (i.id == item_id and i.user_id == user_id)]
         if len(self._items) < before:
             self._save()
             return True
         return False
 
-    def list_for_user(
-        self, user_id: int, *, filter_: str = "all"
-    ) -> list[TodoItem]:
+    def list_for_user(self, user_id: int, *, filter_: str = "all") -> list[TodoItem]:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         items = [i for i in self._items if i.user_id == user_id]
         if filter_ == "today":
             items = [i for i in items if i.due_date == today and not i.completed]
         elif filter_ == "overdue":
-            items = [
-                i
-                for i in items
-                if i.due_date and i.due_date < today and not i.completed
-            ]
+            items = [i for i in items if i.due_date and i.due_date < today and not i.completed]
         elif filter_ == "done":
             items = [i for i in items if i.completed]
         elif filter_ == "all":
@@ -118,8 +110,4 @@ class TodoManager:
 
     def list_overdue(self) -> list[TodoItem]:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        return [
-            i
-            for i in self._items
-            if i.due_date and i.due_date < today and not i.completed
-        ]
+        return [i for i in self._items if i.due_date and i.due_date < today and not i.completed]

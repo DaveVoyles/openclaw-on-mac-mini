@@ -59,10 +59,14 @@ class TestCacheKey:
 class TestEvictToolCache:
     def test_evicts_expired(self, monkeypatch):
         now = time.monotonic()
-        monkeypatch.setattr(mod, "_tool_cache", {
-            "fresh": ("data", now),
-            "stale": ("data", now - 60),  # well past 30s TTL
-        })
+        monkeypatch.setattr(
+            mod,
+            "_tool_cache",
+            {
+                "fresh": ("data", now),
+                "stale": ("data", now - 60),  # well past 30s TTL
+            },
+        )
         mod._evict_tool_cache()
         assert "fresh" in mod._tool_cache
         assert "stale" not in mod._tool_cache
@@ -98,10 +102,12 @@ class TestExecuteFunctionCall:
         mock_th = MagicMock()
         mock_th.record = MagicMock()
 
-        with patch("llm_tools.circuit_breaker", mock_cb, create=True), \
-             patch("llm_tools.tool_health", mock_th, create=True), \
-             patch("tool_health.circuit_breaker", mock_cb), \
-             patch("tool_health.tool_health", mock_th):
+        with (
+            patch("llm_tools.circuit_breaker", mock_cb, create=True),
+            patch("llm_tools.tool_health", mock_th, create=True),
+            patch("tool_health.circuit_breaker", mock_cb),
+            patch("tool_health.tool_health", mock_th),
+        ):
             result = await mod._execute_function_call("ping", {})
 
         assert result == "pong"
@@ -114,8 +120,7 @@ class TestExecuteFunctionCall:
         mock_cb = MagicMock()
         mock_cb.is_open = MagicMock(return_value=True)
 
-        with patch("tool_health.circuit_breaker", mock_cb), \
-             patch("tool_health.tool_health", MagicMock()):
+        with patch("tool_health.circuit_breaker", mock_cb), patch("tool_health.tool_health", MagicMock()):
             result = await mod._execute_function_call("broken", {})
 
         assert "circuit open" in result.lower()
@@ -132,8 +137,7 @@ class TestExecuteFunctionCall:
         mock_th = MagicMock()
         mock_th.record = MagicMock()
 
-        with patch("tool_health.circuit_breaker", mock_cb), \
-             patch("tool_health.tool_health", mock_th):
+        with patch("tool_health.circuit_breaker", mock_cb), patch("tool_health.tool_health", mock_th):
             result = await mod._execute_function_call("fail", {})
 
         assert "Error executing fail" in result
@@ -156,8 +160,7 @@ class TestExecuteFunctionCall:
         mock_th = MagicMock()
         mock_th.record = MagicMock()
 
-        with patch("tool_health.circuit_breaker", mock_cb), \
-             patch("tool_health.tool_health", mock_th):
+        with patch("tool_health.circuit_breaker", mock_cb), patch("tool_health.tool_health", mock_th):
             r1 = await mod._execute_function_call("get_system_stats", {})
             r2 = await mod._execute_function_call("get_system_stats", {})
 
@@ -246,7 +249,9 @@ class TestRunToolLoop:
         chat_session.send_message.return_value = next_response
 
         with (
-            patch.object(mod, "_execute_function_call", new_callable=AsyncMock, return_value="sports result") as execute_call,
+            patch.object(
+                mod, "_execute_function_call", new_callable=AsyncMock, return_value="sports result"
+            ) as execute_call,
             patch.object(mod, "_rate_limiter") as mock_rl,
         ):
             mock_rl.record = MagicMock()

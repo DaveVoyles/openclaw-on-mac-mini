@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_types.py — dataclasses and ChatCommandRegistry."""
+
 from __future__ import annotations
 
 import pytest
@@ -15,6 +16,7 @@ from openclaw_cli_types import (
 # ---------------------------------------------------------------------------
 # AskResponse
 # ---------------------------------------------------------------------------
+
 
 class TestAskResponse:
     def test_basic_construction(self):
@@ -34,11 +36,10 @@ class TestAskResponse:
 # LocalLinkValidation
 # ---------------------------------------------------------------------------
 
+
 class TestLocalLinkValidation:
     def test_available_link(self):
-        link = LocalLinkValidation(
-            kind="plan", item_id="p-1", available=True, exists=True, source="db"
-        )
+        link = LocalLinkValidation(kind="plan", item_id="p-1", available=True, exists=True, source="db")
         assert link.available is True
         assert link.exists is True
         assert link.kind == "plan"
@@ -47,7 +48,7 @@ class TestLocalLinkValidation:
         link = LocalLinkValidation(kind="task", item_id="t-99", available=False)
         assert link.available is False
         assert link.exists is False  # default
-        assert link.source == ""     # default
+        assert link.source == ""  # default
 
     def test_frozen_dataclass(self):
         link = LocalLinkValidation(kind="task", item_id="t-1", available=True)
@@ -58,6 +59,7 @@ class TestLocalLinkValidation:
 # ---------------------------------------------------------------------------
 # CliConfig
 # ---------------------------------------------------------------------------
+
 
 class TestCliConfig:
     def test_required_fields(self):
@@ -106,6 +108,7 @@ class TestCliConfig:
 # ChatCommandContext
 # ---------------------------------------------------------------------------
 
+
 class TestChatCommandContext:
     def test_minimal_construction(self):
         ctx = ChatCommandContext(history=[], session_id="s1")
@@ -133,10 +136,12 @@ class TestChatCommandContext:
 # SlashCommand
 # ---------------------------------------------------------------------------
 
+
 class TestSlashCommand:
     def test_basic_command(self):
         def handler(ctx):
             return "ok"
+
         cmd = SlashCommand(name="help", description="Show help", handler=handler)
         assert cmd.name == "help"
         assert cmd.aliases == ()
@@ -144,15 +149,18 @@ class TestSlashCommand:
     def test_command_with_aliases(self):
         def handler(ctx):
             return "ok"
+
         cmd = SlashCommand(name="quit", description="Exit", handler=handler, aliases=("q", "exit"))
         assert "q" in cmd.aliases
         assert "exit" in cmd.aliases
 
     def test_handler_callable(self):
         result = []
+
         def handler(ctx):
             result.append(ctx.args)
             return "done"
+
         cmd = SlashCommand(name="test", description="Test cmd", handler=handler)
         ctx = ChatCommandContext(history=[], session_id="s", args="hello")
         assert cmd.handler(ctx) == "done"
@@ -163,6 +171,7 @@ class TestSlashCommand:
 # ChatCommandRegistry
 # ---------------------------------------------------------------------------
 
+
 class TestChatCommandRegistry:
     def _make_registry(self):
         return ChatCommandRegistry()
@@ -170,6 +179,7 @@ class TestChatCommandRegistry:
     def _make_cmd(self, name, result="ok", aliases=()):
         def handler(ctx):
             return result
+
         return SlashCommand(name=name, description=f"{name} cmd", handler=handler, aliases=aliases)
 
     def test_empty_registry_dispatch_returns_none(self):

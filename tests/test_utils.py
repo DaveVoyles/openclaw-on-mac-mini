@@ -39,6 +39,7 @@ class TestAtomicWrite:
 
         # Make os.fsync raise so the rename never happens
         import os
+
         monkeypatch.setattr(os, "fsync", lambda fd: (_ for _ in ()).throw(OSError("disk full")))
 
         with pytest.raises(OSError, match="disk full"):

@@ -62,12 +62,14 @@ class _SaveToNASView(discord.ui.View):
         audit_log(interaction.user, "save_to_nas", self.filename)
         self.stop()
 
+
 log = logging.getLogger("openclaw.doc_cog")
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 async def _llm_chat(prompt: str) -> str:
     """Send a prompt to the LLM and return the response text."""
@@ -84,9 +86,7 @@ def _parse_json(raw: str):
     return json.loads(text)
 
 
-async def _parse_edit_instructions(
-    content: str, instructions: str, doc_type: str
-) -> dict | list:
+async def _parse_edit_instructions(content: str, instructions: str, doc_type: str) -> dict | list:
     """Use the LLM to convert natural language instructions into structured edits."""
     if doc_type == "word":
         format_spec = (
@@ -146,6 +146,7 @@ async def _generate_sheet_content(instructions: str) -> tuple[str, list[str], li
 # Cog
 # ---------------------------------------------------------------------------
 
+
 class DocCog(commands.Cog, name="Documents"):
     """Read, edit, and create Word and Excel documents."""
 
@@ -165,9 +166,7 @@ class DocCog(commands.Cog, name="Documents"):
     @require_auth()
     async def doc_read(self, interaction: discord.Interaction, file: discord.Attachment) -> None:
         if not file.filename.lower().endswith(".docx"):
-            await interaction.response.send_message(
-                "❌ Please attach a `.docx` file.", ephemeral=True
-            )
+            await interaction.response.send_message("❌ Please attach a `.docx` file.", ephemeral=True)
             return
 
         await interaction.response.defer()
@@ -180,12 +179,8 @@ class DocCog(commands.Cog, name="Documents"):
                 return
 
             if len(text) > 4000:
-                txt_file = discord.File(
-                    io.BytesIO(text.encode()), filename=f"{file.filename}.txt"
-                )
-                await interaction.followup.send(
-                    "📄 Document content (too long for embed):", file=txt_file
-                )
+                txt_file = discord.File(io.BytesIO(text.encode()), filename=f"{file.filename}.txt")
+                await interaction.followup.send("📄 Document content (too long for embed):", file=txt_file)
             else:
                 embed = discord.Embed(
                     title=f"📄 {file.filename}",
@@ -212,9 +207,7 @@ class DocCog(commands.Cog, name="Documents"):
         instructions: str,
     ) -> None:
         if not file.filename.lower().endswith(".docx"):
-            await interaction.response.send_message(
-                "❌ Please attach a `.docx` file.", ephemeral=True
-            )
+            await interaction.response.send_message("❌ Please attach a `.docx` file.", ephemeral=True)
             return
 
         await interaction.response.defer()
@@ -225,17 +218,14 @@ class DocCog(commands.Cog, name="Documents"):
             edits = await _parse_edit_instructions(text, instructions, "word")
             if not isinstance(edits, dict) or not edits:
                 await interaction.followup.send(
-                    "⚠️ Could not determine edits from your instructions. "
-                    "Try being more specific."
+                    "⚠️ Could not determine edits from your instructions. Try being more specific."
                 )
                 return
 
             modified = await edit_word(file_bytes, edits)
             out_file = discord.File(io.BytesIO(modified), filename=file.filename)
 
-            summary = "\n".join(
-                f"• `{k}` → `{v}`" for k, v in edits.items()
-            )
+            summary = "\n".join(f"• `{k}` → `{v}`" for k, v in edits.items())
             embed = discord.Embed(
                 title="✏️ Document Edited",
                 description=f"**Changes applied:**\n{truncate_for_embed(summary, 3000)}",
@@ -292,9 +282,7 @@ class DocCog(commands.Cog, name="Documents"):
     @require_auth()
     async def sheet_read(self, interaction: discord.Interaction, file: discord.Attachment) -> None:
         if not file.filename.lower().endswith(".xlsx"):
-            await interaction.response.send_message(
-                "❌ Please attach an `.xlsx` file.", ephemeral=True
-            )
+            await interaction.response.send_message("❌ Please attach an `.xlsx` file.", ephemeral=True)
             return
 
         await interaction.response.defer()
@@ -307,12 +295,8 @@ class DocCog(commands.Cog, name="Documents"):
                 return
 
             if len(text) > 4000:
-                txt_file = discord.File(
-                    io.BytesIO(text.encode()), filename=f"{file.filename}.txt"
-                )
-                await interaction.followup.send(
-                    "📊 Spreadsheet content (too long for embed):", file=txt_file
-                )
+                txt_file = discord.File(io.BytesIO(text.encode()), filename=f"{file.filename}.txt")
+                await interaction.followup.send("📊 Spreadsheet content (too long for embed):", file=txt_file)
             else:
                 embed = discord.Embed(
                     title=f"📊 {file.filename}",
@@ -339,9 +323,7 @@ class DocCog(commands.Cog, name="Documents"):
         instructions: str,
     ) -> None:
         if not file.filename.lower().endswith(".xlsx"):
-            await interaction.response.send_message(
-                "❌ Please attach an `.xlsx` file.", ephemeral=True
-            )
+            await interaction.response.send_message("❌ Please attach an `.xlsx` file.", ephemeral=True)
             return
 
         await interaction.response.defer()
@@ -352,17 +334,14 @@ class DocCog(commands.Cog, name="Documents"):
             edits = await _parse_edit_instructions(text, instructions, "excel")
             if not isinstance(edits, list) or not edits:
                 await interaction.followup.send(
-                    "⚠️ Could not determine edits from your instructions. "
-                    "Try being more specific."
+                    "⚠️ Could not determine edits from your instructions. Try being more specific."
                 )
                 return
 
             modified = await edit_excel(file_bytes, edits)
             out_file = discord.File(io.BytesIO(modified), filename=file.filename)
 
-            summary = "\n".join(
-                f"• `{e['cell']}` → `{e['value']}`" for e in edits
-            )
+            summary = "\n".join(f"• `{e['cell']}` → `{e['value']}`" for e in edits)
             embed = discord.Embed(
                 title="✏️ Spreadsheet Edited",
                 description=f"**Changes applied:**\n{truncate_for_embed(summary, 3000)}",
@@ -413,9 +392,7 @@ class DocCog(commands.Cog, name="Documents"):
 
     # -- error handler ------------------------------------------------------
 
-    async def cog_app_command_error(
-        self, interaction: discord.Interaction, error: app_commands.AppCommandError
-    ):
+    async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.CheckFailure):
             if interaction.response.is_done():
                 await interaction.followup.send(str(error), ephemeral=True)

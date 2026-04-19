@@ -115,7 +115,9 @@ class ThreadPersistence:
             if saved_at and (time.time() - saved_at) > CONTEXT_TTL:
                 log.info(
                     "Thread '%s' for user %d has expired (TTL=%ds) — treating as stale",
-                    name, user_id, CONTEXT_TTL,
+                    name,
+                    user_id,
+                    CONTEXT_TTL,
                 )
                 return None, (
                     f"⚠️ Thread **{name}** has expired "

@@ -13,6 +13,8 @@ def _parse_utc(dt_str):
     if dt.tzinfo is None:
         return dt.replace(tzinfo=datetime.timezone.utc)
     return dt.astimezone(datetime.timezone.utc)
+
+
 import json
 import logging
 import os
@@ -42,8 +44,8 @@ _RETRY_DELAYS = [300, 900, 2700]  # 5min → 15min → 45min exponential backoff
 class _RetryTask:
     """A failed task queued for retry with exponential backoff."""
 
-    fn: Callable       # zero-arg async callable that re-runs the operation
-    label: str         # human-readable name, e.g. "sched-1/weekly_recap"
+    fn: Callable  # zero-arg async callable that re-runs the operation
+    label: str  # human-readable name, e.g. "sched-1/weekly_recap"
     attempts_left: int
     next_retry_at: float  # time.monotonic() value when next attempt is allowed
 
@@ -53,13 +55,13 @@ class ScheduledTask:
     """A single scheduled task."""
 
     task_id: str
-    action: str          # skill name to invoke
-    args: dict           # arguments for the skill
-    cron_hour: int       # hour (0-23) to run, or -1 for interval-based
-    cron_minute: int     # minute (0-59)
-    interval_minutes: int = 0   # if > 0, run every N minutes instead of daily
-    cron_expression: str = ""   # real cron syntax, e.g. "0 7 * * 1,5" (takes priority)
-    prompt: str = ""            # if set, sends this prompt to LLM instead of calling a skill
+    action: str  # skill name to invoke
+    args: dict  # arguments for the skill
+    cron_hour: int  # hour (0-23) to run, or -1 for interval-based
+    cron_minute: int  # minute (0-59)
+    interval_minutes: int = 0  # if > 0, run every N minutes instead of daily
+    cron_expression: str = ""  # real cron syntax, e.g. "0 7 * * 1,5" (takes priority)
+    prompt: str = ""  # if set, sends this prompt to LLM instead of calling a skill
     enabled: bool = True
     created_by: str = ""
     created_at: str = ""
@@ -67,7 +69,7 @@ class ScheduledTask:
     last_result: str = ""
     run_count: int = 0
     notify_channel_id: int = 0  # if set, post result to this Discord channel after each run
-    alert_only: bool = True     # if True, only post when result contains alert keywords
+    alert_only: bool = True  # if True, only post when result contains alert keywords
 
     @property
     def next_run_str(self) -> str:
@@ -78,8 +80,11 @@ class ScheduledTask:
         if self.cron_expression:
             try:
                 from croniter import croniter
+
                 cron = croniter(self.cron_expression, now)
-                next_dt = cron.get_next(datetime.datetime).astimezone(datetime.timezone.utc).astimezone(datetime.timezone.utc)
+                next_dt = (
+                    cron.get_next(datetime.datetime).astimezone(datetime.timezone.utc).astimezone(datetime.timezone.utc)
+                )
                 return next_dt.strftime("%a %H:%M")
             except (ImportError, ValueError, TypeError):
                 return self.cron_expression
@@ -97,7 +102,9 @@ class ScheduledTask:
                     pass
             return "soon"
         # Daily schedule
-        target = now.replace(hour=self.cron_hour, minute=self.cron_minute, second=0, microsecond=0, tzinfo=datetime.timezone.utc)
+        target = now.replace(
+            hour=self.cron_hour, minute=self.cron_minute, second=0, microsecond=0, tzinfo=datetime.timezone.utc
+        )
         if target <= now:
             target += datetime.timedelta(days=1)
         delta = target - now
@@ -308,13 +315,16 @@ class TaskScheduler:
                     retry_task.next_retry_at = now + _RETRY_DELAYS[min(delay_idx, len(_RETRY_DELAYS) - 1)]
                     log.warning(
                         "Retry failed for %s (%d attempt(s) left): %s",
-                        retry_task.label, retry_task.attempts_left, exc,
+                        retry_task.label,
+                        retry_task.attempts_left,
+                        exc,
                     )
                     still_pending.append(retry_task)
                 else:
                     log.critical(
                         "Task %s exhausted all retries — dropping. Last error: %s",
-                        retry_task.label, exc,
+                        retry_task.label,
+                        exc,
                     )
         self._retry_queue[:] = still_pending
 
@@ -333,6 +343,7 @@ class TaskScheduler:
         if task.cron_expression:
             try:
                 from croniter import croniter
+
                 cron = croniter(task.cron_expression, now - datetime.timedelta(minutes=2))
                 next_run = cron.get_next(datetime.datetime)
                 return abs((next_run - now).total_seconds()) < 120
@@ -370,7 +381,11 @@ class TaskScheduler:
             from metrics_collector import get_collector
             from trace_context import trace_context
 
-            with trace_context(command=task.action or "prompt-job", user_id=task.created_by or 0, channel_id=task.notify_channel_id or 0):
+            with trace_context(
+                command=task.action or "prompt-job",
+                user_id=task.created_by or 0,
+                channel_id=task.notify_channel_id or 0,
+            ):
                 log.info("Executing prompt job %s: %s", task.task_id, task.prompt[:80])
                 start = time.time()
                 success = True
@@ -417,17 +432,21 @@ class TaskScheduler:
 
                     async def _retry_prompt(_p=_captured_prompt):
                         from llm import chat
+
                         await asyncio.wait_for(chat(_p, model_preference="auto"), timeout=300)
 
-                    self._retry_queue.append(_RetryTask(
-                        fn=_retry_prompt,
-                        label=_label,
-                        attempts_left=3,
-                        next_retry_at=time.monotonic() + _RETRY_DELAYS[0],
-                    ))
+                    self._retry_queue.append(
+                        _RetryTask(
+                            fn=_retry_prompt,
+                            label=_label,
+                            attempts_left=3,
+                            next_retry_at=time.monotonic() + _RETRY_DELAYS[0],
+                        )
+                    )
                     log.warning(
                         "Prompt job %s queued for retry (3 attempts, first in %ds)",
-                        task.task_id, _RETRY_DELAYS[0],
+                        task.task_id,
+                        _RETRY_DELAYS[0],
                     )
 
                 # Post result to Discord if configured
@@ -448,7 +467,9 @@ class TaskScheduler:
             from metrics_collector import get_collector
             from trace_context import trace_context
 
-            with trace_context(command=task.action, user_id=task.created_by or 0, channel_id=task.notify_channel_id or 0):
+            with trace_context(
+                command=task.action, user_id=task.created_by or 0, channel_id=task.notify_channel_id or 0
+            ):
                 task.last_result = f"Unknown skill: {task.action}"
                 task.last_run = datetime.datetime.now(datetime.timezone.utc).isoformat()
                 self._save()
@@ -466,6 +487,7 @@ class TaskScheduler:
 
         from metrics_collector import get_collector
         from trace_context import trace_context
+
         with trace_context(command=task.action, user_id=task.created_by or 0, channel_id=task.notify_channel_id or 0):
             log.info("Executing scheduled task %s: %s(%s)", task.task_id, task.action, task.args)
             start = time.time()
@@ -509,15 +531,18 @@ class TaskScheduler:
             async def _retry_skill(_fn=_captured_fn, _args=_captured_args):
                 await asyncio.wait_for(_fn(**_args), timeout=300)
 
-            self._retry_queue.append(_RetryTask(
-                fn=_retry_skill,
-                label=_label,
-                attempts_left=3,
-                next_retry_at=time.monotonic() + _RETRY_DELAYS[0],
-            ))
+            self._retry_queue.append(
+                _RetryTask(
+                    fn=_retry_skill,
+                    label=_label,
+                    attempts_left=3,
+                    next_retry_at=time.monotonic() + _RETRY_DELAYS[0],
+                )
+            )
             log.warning(
                 "Task %s queued for retry (3 attempts, first in %ds)",
-                task.task_id, _RETRY_DELAYS[0],
+                task.task_id,
+                _RETRY_DELAYS[0],
             )
 
         # Post result to Discord if configured
@@ -530,6 +555,8 @@ class TaskScheduler:
                     await self.notify_callback(task.task_id, task.action, result_text, is_alert)
                 except Exception as e:  # broad: intentional — notify_callback wraps arbitrary Discord code
                     log.error("Scheduler notify callback failed for %s: %s", task.task_id, e)
+
+
 # Global instance
 scheduler = TaskScheduler()
 
@@ -575,6 +602,7 @@ async def create_scheduled_task(
     if cron_expression:
         try:
             from croniter import croniter
+
             if not croniter.is_valid(cron_expression):
                 return f"❌ Invalid cron expression `{cron_expression}`. Expected format: minute hour day month weekday (e.g. `0 9 * * 1` for Mondays at 9am)."
         except (ImportError, ValueError, TypeError) as e:
@@ -651,8 +679,7 @@ async def list_scheduled_tasks() -> str:
         if t.prompt:
             action_label = f"💬 {t.action}"
         lines.append(
-            f"{state} `{t.task_id}` — `{action_label}` ({when}) "
-            f"· runs: {t.run_count} · next: {t.next_run_str}"
+            f"{state} `{t.task_id}` — `{action_label}` ({when}) · runs: {t.run_count} · next: {t.next_run_str}"
         )
     return "\n".join(lines)
 
@@ -669,6 +696,7 @@ async def schedule_research_report(topic: str, cron_expression: str = "0 8 * * 0
     # Validate cron expression early
     try:
         from croniter import croniter
+
         croniter(cron_expression)
     except (ImportError, ValueError, TypeError) as exc:
         return f"❌ Invalid cron expression `{cron_expression}`: {exc}"
@@ -687,6 +715,7 @@ async def schedule_research_report(topic: str, cron_expression: str = "0 8 * * 0
         import datetime as _dt
 
         from croniter import croniter as _cron
+
         next_dt = _cron(cron_expression, _dt.datetime.now()).get_next(_dt.datetime)
         next_str = next_dt.strftime("%A %H:%M")
     except (ImportError, ValueError, TypeError, AttributeError):

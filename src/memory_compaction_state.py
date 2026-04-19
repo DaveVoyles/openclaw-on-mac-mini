@@ -40,9 +40,7 @@ def record_memory_compaction_event(
     with _MEMORY_COMPACTION_EVENTS_LOCK:
         _MEMORY_COMPACTION_EVENTS.append(event)
         if len(_MEMORY_COMPACTION_EVENTS) > _MAX_MEMORY_COMPACTION_EVENTS:
-            del _MEMORY_COMPACTION_EVENTS[
-                : len(_MEMORY_COMPACTION_EVENTS) - _MAX_MEMORY_COMPACTION_EVENTS
-            ]
+            del _MEMORY_COMPACTION_EVENTS[: len(_MEMORY_COMPACTION_EVENTS) - _MAX_MEMORY_COMPACTION_EVENTS]
     return dict(event)
 
 

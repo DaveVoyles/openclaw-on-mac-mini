@@ -14,6 +14,7 @@ from plugin_system import PluginMetadata
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_interaction(user_id: int = 111):
     interaction = MagicMock(spec=discord.Interaction)
     interaction.user = MagicMock()
@@ -56,8 +57,7 @@ def _make_registry():
 
 
 def _make_metadata(**kwargs):
-    defaults = dict(name="test-plugin", version="1.0.0", author="Author",
-                    description="A test plugin")
+    defaults = dict(name="test-plugin", version="1.0.0", author="Author", description="A test plugin")
     defaults.update(kwargs)
     return PluginMetadata(**defaults)
 
@@ -65,6 +65,7 @@ def _make_metadata(**kwargs):
 # ---------------------------------------------------------------------------
 # set_plugin_registry
 # ---------------------------------------------------------------------------
+
 
 def test_set_plugin_registry():
     registry = _make_registry()
@@ -77,6 +78,7 @@ def test_set_plugin_registry():
 # /plugin list
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_plugin_list_no_registry(monkeypatch):
     monkeypatch.setattr(plugins_mod, "_plugin_registry", None)
@@ -85,8 +87,10 @@ async def test_plugin_list_no_registry(monkeypatch):
     with _allow_all():
         await _get_plugin_sub(bot, "list").callback(interaction)
     interaction.response.send_message.assert_awaited_once()
-    msg = interaction.response.send_message.await_args.kwargs.get("content") or \
-          interaction.response.send_message.await_args.args[0]
+    msg = (
+        interaction.response.send_message.await_args.kwargs.get("content")
+        or interaction.response.send_message.await_args.args[0]
+    )
     assert "not initialized" in msg.lower()
 
 
@@ -126,6 +130,7 @@ async def test_plugin_list_with_plugins(monkeypatch):
 # /plugin info
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_plugin_info_no_registry(monkeypatch):
     monkeypatch.setattr(plugins_mod, "_plugin_registry", None)
@@ -156,9 +161,13 @@ async def test_plugin_info_found(monkeypatch):
     registry = _make_registry()
     registry.get_plugin_info.return_value = {
         "metadata": {
-            "name": "my-plugin", "version": "1.0.0", "author": "Dev",
-            "description": "Test plugin", "dependencies": ["dep1"],
-            "permissions": ["read"], "homepage": "https://example.com",
+            "name": "my-plugin",
+            "version": "1.0.0",
+            "author": "Dev",
+            "description": "Test plugin",
+            "dependencies": ["dep1"],
+            "permissions": ["read"],
+            "homepage": "https://example.com",
         },
         "loaded": True,
         "enabled": True,
@@ -180,8 +189,13 @@ async def test_plugin_info_disabled(monkeypatch):
     registry = _make_registry()
     registry.get_plugin_info.return_value = {
         "metadata": {
-            "name": "disabled-plugin", "version": "0.1.0", "author": "Dev",
-            "description": "", "dependencies": [], "permissions": [], "homepage": None,
+            "name": "disabled-plugin",
+            "version": "0.1.0",
+            "author": "Dev",
+            "description": "",
+            "dependencies": [],
+            "permissions": [],
+            "homepage": None,
         },
         "loaded": False,
         "enabled": False,
@@ -199,6 +213,7 @@ async def test_plugin_info_disabled(monkeypatch):
 # ---------------------------------------------------------------------------
 # /plugin enable
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_plugin_enable_no_registry(monkeypatch):
@@ -243,6 +258,7 @@ async def test_plugin_enable_failure(monkeypatch):
 # /plugin disable
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_plugin_disable_no_registry(monkeypatch):
     monkeypatch.setattr(plugins_mod, "_plugin_registry", None)
@@ -284,6 +300,7 @@ async def test_plugin_disable_failure(monkeypatch):
 # /plugin reload
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_plugin_reload_no_registry(monkeypatch):
     monkeypatch.setattr(plugins_mod, "_plugin_registry", None)
@@ -322,6 +339,7 @@ async def test_plugin_reload_failure(monkeypatch):
 # ---------------------------------------------------------------------------
 # /plugin install
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_plugin_install_no_registry(monkeypatch):
@@ -378,6 +396,7 @@ async def test_plugin_install_failure(monkeypatch, tmp_path):
 # /plugin uninstall
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_plugin_uninstall_no_registry(monkeypatch):
     monkeypatch.setattr(plugins_mod, "_plugin_registry", None)
@@ -407,10 +426,12 @@ async def test_plugin_uninstall_confirmation_prompt(monkeypatch):
 # Auth gating via require_auth decorator
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_plugin_list_unauthorized(monkeypatch):
     """Unauthorized users get blocked by require_auth."""
     import discord_commands._helpers as helpers_mod
+
     monkeypatch.setattr(helpers_mod, "ALLOWED_USER_IDS", [999])
     monkeypatch.setattr(plugins_mod, "_plugin_registry", _make_registry())
     bot = _make_bot()

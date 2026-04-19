@@ -1,4 +1,5 @@
 """JSON API endpoint handlers for the dashboard."""
+
 from __future__ import annotations
 
 import asyncio
@@ -54,6 +55,7 @@ def _get_perplexity_cache_stats() -> dict:
     """Return Perplexity cache stats without hard-importing at module level."""
     try:
         from skills.search_skills import get_perplexity_cache_stats
+
         return get_perplexity_cache_stats()
     except (ImportError, AttributeError):
         return {"size": 0, "live_entries": 0, "hits": 0, "ttl_seconds": 300}
@@ -63,6 +65,7 @@ def _get_quality_retry_count() -> int:
     """Return quality retry count from answer_policy without hard-importing."""
     try:
         from answer_policy import get_quality_retry_count
+
         return get_quality_retry_count()
     except (ImportError, AttributeError):
         return 0
@@ -219,12 +222,7 @@ def _normalize_quality_failure_category(event_name: str) -> str:
         or "item_coverage" in event
     ):
         return "requested_item_shortfall"
-    if (
-        "source_diversity" in event
-        or "single_source" in event
-        or "mono_source" in event
-        or "one_source" in event
-    ):
+    if "source_diversity" in event or "single_source" in event or "mono_source" in event or "one_source" in event:
         return "source_diversity_shortfall"
     if (
         "partial_coverage" in event
@@ -472,7 +470,11 @@ def _plan_step_counts(steps: list[object]) -> tuple[int, int, dict[str, int]]:
     counts = Counter(str(getattr(step, "status", "pending") or "pending") for step in steps)
     completed = 0
     for step in steps:
-        if bool(getattr(step, "is_complete", False)) or str(getattr(step, "status", "") or "").strip() in {"done", "failed", "skipped"}:
+        if bool(getattr(step, "is_complete", False)) or str(getattr(step, "status", "") or "").strip() in {
+            "done",
+            "failed",
+            "skipped",
+        }:
             completed += 1
     return completed, len(steps), dict(counts)
 
@@ -489,7 +491,9 @@ def _serialize_plan_step(step) -> dict[str, object]:
     }
 
 
-def _serialize_plan(plan, *, detail: bool = False, linked_sessions: list[dict[str, object]] | None = None) -> dict[str, object]:
+def _serialize_plan(
+    plan, *, detail: bool = False, linked_sessions: list[dict[str, object]] | None = None
+) -> dict[str, object]:
     steps = list(getattr(plan, "steps", []) or [])
     lessons = list(getattr(plan, "lessons", []) or [])
     context = getattr(plan, "context", {}) or {}
@@ -519,10 +523,7 @@ def _serialize_plan(plan, *, detail: bool = False, linked_sessions: list[dict[st
     if detail:
         payload["steps"] = [_serialize_plan_step(step) for step in steps]
         payload["lessons"] = [str(item) for item in lessons[:20]]
-        payload["context"] = {
-            str(key): _preview_text(value, limit=400)
-            for key, value in list(context.items())[:20]
-        }
+        payload["context"] = {str(key): _preview_text(value, limit=400) for key, value in list(context.items())[:20]}
     return payload
 
 
@@ -633,7 +634,9 @@ def _serialize_mission_control_task(
         "status_label": _humanize_status(status),
         "status_group": _mission_status_group(status),
         "summary": _preview_text(task.get("description") or last_comment.get("text") or "", limit=180),
-        "description": _preview_text(task.get("description") or "", limit=400) if detail else _preview_text(task.get("description") or "", limit=180),
+        "description": _preview_text(task.get("description") or "", limit=400)
+        if detail
+        else _preview_text(task.get("description") or "", limit=180),
         "priority": str(task.get("priority", "") or ""),
         "priority_label": _humanize_status(task.get("priority", "")) if task.get("priority") else "",
         "created_at": str(task.get("created_at") or task.get("createdAt") or ""),
@@ -686,7 +689,9 @@ def _serialize_scheduler_control_task(
         "status": status,
         "status_label": _humanize_status(status),
         "status_group": "paused" if status == "paused" else ("overdue" if status == "overdue" else "active"),
-        "summary": _preview_text(payload.get("prompt") or payload.get("args") or payload.get("last_result") or "", limit=180),
+        "summary": _preview_text(
+            payload.get("prompt") or payload.get("args") or payload.get("last_result") or "", limit=180
+        ),
         "created_at": str(getattr(task, "created_at", "") or ""),
         "updated_at": str(payload.get("last_run") or getattr(task, "created_at", "") or ""),
         "linked_session_count": len(linked_sessions or []),
@@ -736,7 +741,9 @@ def _resolve_task_status(
         try:
             task = scheduler.get(normalized_id)
             if task is None and hasattr(scheduler, "list_tasks"):
-                task = next((item for item in scheduler.list_tasks() if getattr(item, "task_id", "") == normalized_id), None)
+                task = next(
+                    (item for item in scheduler.list_tasks() if getattr(item, "task_id", "") == normalized_id), None
+                )
         except (AttributeError, RuntimeError, TypeError) as exc:
             log.debug("Failed to resolve scheduled task %s: %s", normalized_id, exc)
             return None
@@ -959,7 +966,9 @@ async def api_approval_decision_handler(request: web.Request) -> web.Response:
         return web.json_response({"ok": False, "error": "Invalid JSON payload"}, status=400)
 
     approved = bool(payload.get("approved"))
-    resolver_name = str(payload.get("resolver_name") or request.headers.get("X-OpenClaw-Actor") or "dashboard").strip()[:120]
+    resolver_name = str(payload.get("resolver_name") or request.headers.get("X-OpenClaw-Actor") or "dashboard").strip()[
+        :120
+    ]
     resolved = approval_store.resolve(
         request_id=request_id,
         approved=approved,
@@ -967,7 +976,9 @@ async def api_approval_decision_handler(request: web.Request) -> web.Response:
         resolver_name=resolver_name or "dashboard",
     )
     if resolved is None:
-        return web.json_response({"ok": False, "reason": "Request was not found, expired, or already resolved"}, status=404)
+        return web.json_response(
+            {"ok": False, "reason": "Request was not found, expired, or already resolved"}, status=404
+        )
 
     now_epoch = int(time.time())
     return web.json_response({"ok": True, "request": _serialize_approval(resolved, now_epoch)})
@@ -1198,10 +1209,7 @@ async def api_agent_session_intervention_handler(request: web.Request) -> web.Re
         )
 
     actor = str(
-        payload.get("actor")
-        or request.headers.get("X-OpenClaw-Actor")
-        or payload.get("resolver_name")
-        or "dashboard"
+        payload.get("actor") or request.headers.get("X-OpenClaw-Actor") or payload.get("resolver_name") or "dashboard"
     ).strip()[:120]
     reason = str(payload.get("reason") or "").strip()[:240]
 
@@ -1242,8 +1250,12 @@ async def api_status_handler(request):
     # Docker
     try:
         proc = await asyncio.create_subprocess_exec(
-            "docker", "info", "--format", "{{.ContainersRunning}}",
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            "docker",
+            "info",
+            "--format",
+            "{{.ContainersRunning}}",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=TIMEOUT_FAST)
         checks["docker"] = {"status": "ok", "containers": stdout.decode().strip()}
@@ -1268,10 +1280,18 @@ async def api_status_handler(request):
     firecrawl_key = cfg.firecrawl_api_key
     tavily_key = cfg.tavily_api_key
     if perplexity_key:
-        cascade = "Perplexity → Firecrawl → Tavily → DDG → Bing Lite" if firecrawl_key else "Perplexity → Tavily → DDG → Bing Lite"
+        cascade = (
+            "Perplexity → Firecrawl → Tavily → DDG → Bing Lite"
+            if firecrawl_key
+            else "Perplexity → Tavily → DDG → Bing Lite"
+        )
         checks["search_provider"] = {"status": "ok", "active": "Perplexity AI", "cascade": cascade}
     elif firecrawl_key:
-        checks["search_provider"] = {"status": "ok", "active": "Firecrawl", "cascade": "Firecrawl → Tavily → DDG → Bing Lite"}
+        checks["search_provider"] = {
+            "status": "ok",
+            "active": "Firecrawl",
+            "cascade": "Firecrawl → Tavily → DDG → Bing Lite",
+        }
     elif tavily_key:
         checks["search_provider"] = {"status": "ok", "active": "Tavily", "cascade": "Tavily → DDG → Bing Lite"}
     else:
@@ -1298,7 +1318,9 @@ async def api_status_handler(request):
             session = await _dashboard_sessions.get()
             token = cfg.copilot_proxy_token
             headers = {"Authorization": f"Bearer {token}"} if token else {}
-            async with session.get(f"{proxy_url}/models", headers=headers, timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST)) as resp:
+            async with session.get(
+                f"{proxy_url}/models", headers=headers, timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST)
+            ) as resp:
                 checks["copilot_proxy"] = {"status": "ok" if resp.status == 200 else "down"}
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             log.debug("Copilot proxy check failed: %s", exc)
@@ -1475,6 +1497,7 @@ async def api_sms_history_handler(request: web.Request) -> web.Response:
 async def api_runs_handler(request: web.Request) -> web.Response:
     """Return recent LLM runs (with explainability context) for dashboard timeline."""
     from error_tracker import get_recent_outcomes
+
     try:
         hours = float(request.query.get("hours", 24))
     except (TypeError, ValueError):
@@ -1490,11 +1513,7 @@ async def api_runs_handler(request: web.Request) -> web.Response:
         scope_mode = e.get("scope_mode") or explainability.get("scope_mode")
         lock_mode = e.get("lock_mode") or explainability.get("lock_mode")
         anchor_id = e.get("anchor_id") or explainability.get("anchor_id")
-        anchor_age_seconds = (
-            e.get("anchor_age")
-            if e.get("anchor_age") is not None
-            else e.get("anchor_age_seconds")
-        )
+        anchor_age_seconds = e.get("anchor_age") if e.get("anchor_age") is not None else e.get("anchor_age_seconds")
         if anchor_age_seconds is None:
             anchor_age_seconds = explainability.get("anchor_age_seconds")
         if anchor_age_seconds is None:
@@ -1618,18 +1637,22 @@ async def api_quality_eval_handler(request: web.Request) -> web.Response:
             for card in chronological
         ]
 
-        calibration_payload = _build_offline_quality_calibration_payload() if include_calibration else {
-            "available": False,
-            "advisory_only": True,
-            "auto_apply": False,
-            "drift": {
-                "baseline_available": False,
-                "status": "disabled",
-                "metrics": {},
-                "severity": {"level": "unknown", "severe": False, "score": 0, "reasons": []},
-            },
-            "recommendations": {"advisory_only": True, "auto_apply": False, "proposals": []},
-        }
+        calibration_payload = (
+            _build_offline_quality_calibration_payload()
+            if include_calibration
+            else {
+                "available": False,
+                "advisory_only": True,
+                "auto_apply": False,
+                "drift": {
+                    "baseline_available": False,
+                    "status": "disabled",
+                    "metrics": {},
+                    "severity": {"level": "unknown", "severe": False, "score": 0, "reasons": []},
+                },
+                "recommendations": {"advisory_only": True, "auto_apply": False, "proposals": []},
+            }
+        )
 
         return web.json_response(
             {
@@ -1715,26 +1738,30 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
         for line in lines:
             parts = [p.strip() for p in line.split("\t") if p.strip()]
             if not parts or len(parts) < 2:
-                parts = [p.strip() for p in re.split(r'\s{2,}', line) if p.strip()]
+                parts = [p.strip() for p in re.split(r"\s{2,}", line) if p.strip()]
 
             if len(parts) >= 2:
                 name = parts[0]
                 status = parts[1]
                 is_up = "Up" in status
-                containers.append({
-                    "name": name,
-                    "status": status,
-                    "is_up": is_up
-                })
+                containers.append({"name": name, "status": status, "is_up": is_up})
 
     # Fetch NAS containers (Synology DS920+)
     try:
         from config import cfg as _net_cfg
+
         proc = await asyncio.create_subprocess_exec(
-            "ssh", "-p", str(_net_cfg.nas_ssh_port), "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
+            "ssh",
+            "-p",
+            str(_net_cfg.nas_ssh_port),
+            "-o",
+            "ConnectTimeout=5",
+            "-o",
+            "StrictHostKeyChecking=no",
             f"{_net_cfg.nas_ssh_user}@{_net_cfg.nas_ip}",
             "/usr/local/bin/docker ps --format '{{.Names}}\t{{.Status}}'",
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
         if proc.returncode == 0:
@@ -1743,11 +1770,13 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
                     continue
                 parts = line.split("\t")
                 if len(parts) >= 2:
-                    containers.append({
-                        "name": f"{parts[0]} (NAS)",
-                        "status": parts[1],
-                        "is_up": "Up" in parts[1],
-                    })
+                    containers.append(
+                        {
+                            "name": f"{parts[0]} (NAS)",
+                            "status": parts[1],
+                            "is_up": "Up" in parts[1],
+                        }
+                    )
     except (OSError, asyncio.TimeoutError) as e:
         log.debug("NAS container fetch failed: %s", e)
 
@@ -1759,14 +1788,16 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
         for sl in stat_lines:
             parts = [p.strip() for p in sl.split("\t") if p.strip()]
             if not parts or len(parts) < 2:
-                parts = [p.strip() for p in re.split(r'\s{2,}', sl) if p.strip()]
+                parts = [p.strip() for p in re.split(r"\s{2,}", sl) if p.strip()]
 
             if len(parts) >= 2:
-                stats_list.append({
-                    "name": parts[0],
-                    "cpu": parts[1] if len(parts) > 1 else "?",
-                    "mem": parts[2] if len(parts) > 2 else "?",
-                })
+                stats_list.append(
+                    {
+                        "name": parts[0],
+                        "cpu": parts[1] if len(parts) > 1 else "?",
+                        "mem": parts[2] if len(parts) > 2 else "?",
+                    }
+                )
 
     # Get server system stats (CPU/MEM/Disk)
     sys_stats_text = await get_system_stats()
@@ -1784,17 +1815,20 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
     # NAS disk space
     try:
         from maintenance_skills import check_nas_health
+
         nas_health = await check_nas_health()
         for line in nas_health.split("\n"):
             if "/volume" in line:
-                match = re.search(r'\*\*(/volume\d+)\*\*:\s+(.+?\s+used)\s*/\s*(.+?\s+total)\s*\((\d+)%\)', line)
+                match = re.search(r"\*\*(/volume\d+)\*\*:\s+(.+?\s+used)\s*/\s*(.+?\s+total)\s*\((\d+)%\)", line)
                 if match:
-                    sys_stats["nas_disks"].append({
-                        "mount": match.group(1),
-                        "used": match.group(2).replace(" used", ""),
-                        "total": match.group(3).replace(" total", ""),
-                        "pct": int(match.group(4)),
-                    })
+                    sys_stats["nas_disks"].append(
+                        {
+                            "mount": match.group(1),
+                            "used": match.group(2).replace(" used", ""),
+                            "total": match.group(3).replace(" total", ""),
+                            "pct": int(match.group(4)),
+                        }
+                    )
     except (OSError, ValueError, AttributeError) as exc:
         log.debug("NAS disk stats for dashboard failed: %s", exc)
 
@@ -1806,32 +1840,36 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
         ontology_facts = fact_lines[:8]
 
     from config import cfg as app_cfg
+
     cfg = _load_config()
     sp = spending_tracker
 
     skills_list = []
     decl_map = {d["name"]: d.get("description", "") for d in _TOOL_DECLARATIONS}
     for name in sorted(SKILLS.keys()):
-        skills_list.append({
-            "name": name,
-            "description": decl_map.get(name, getattr(SKILLS[name], "__doc__", "") or ""),
-        })
+        skills_list.append(
+            {
+                "name": name,
+                "description": decl_map.get(name, getattr(SKILLS[name], "__doc__", "") or ""),
+            }
+        )
 
     # Build categorized skill data for collapsible dashboard display
     from skills import SKILL_CATEGORIES
+
     skill_categories = {}
     for cat_name, cat_skills in SKILL_CATEGORIES.items():
         valid = [n for n in sorted(cat_skills) if n in SKILLS]
         if valid:
             skill_categories[cat_name] = [
-                {"name": n, "description": decl_map.get(n, getattr(SKILLS[n], "__doc__", "") or "")}
-                for n in valid
+                {"name": n, "description": decl_map.get(n, getattr(SKILLS[n], "__doc__", "") or "")} for n in valid
             ]
 
     # Recent activity from audit log
     activity: list[dict] = []
     try:
         from config import cfg as app_cfg
+
         audit_dir = app_cfg.audit_dir
         if audit_dir.exists():
             log_files = sorted(audit_dir.glob("*.jsonl"), reverse=True)
@@ -1853,13 +1891,15 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
                 except OSError:
                     continue
             for entry in raw_entries[:20]:
-                activity.append({
-                    "timestamp": entry.get("ts", ""),
-                    "user": entry.get("user", "unknown"),
-                    "action": entry.get("action", ""),
-                    "detail": entry.get("detail", "")[:100],
-                    "result": entry.get("result", ""),
-                })
+                activity.append(
+                    {
+                        "timestamp": entry.get("ts", ""),
+                        "user": entry.get("user", "unknown"),
+                        "action": entry.get("action", ""),
+                        "detail": entry.get("detail", "")[:100],
+                        "result": entry.get("result", ""),
+                    }
+                )
     except (OSError, ValueError) as exc:
         log.debug("Failed to load recent activity: %s", exc)
 
@@ -1867,6 +1907,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
     model_usage = {}
     try:
         from error_tracker import get_recent_outcomes
+
         outcomes = get_recent_outcomes(hours=7 * 24, limit=5000)
         for entry in outcomes:
             model = entry.get("model_used", "")
@@ -1880,16 +1921,19 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
     daily_tokens: list[dict] = []
     try:
         from datetime import datetime, timedelta
+
         daily_data = sp._data.get("daily", {})
         for i in range(6, -1, -1):
             day = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
             tokens = daily_data.get(day, {})
-            daily_tokens.append({
-                "date": day,
-                "input": tokens.get("input_tokens", 0),
-                "output": tokens.get("output_tokens", 0),
-                "total": tokens.get("input_tokens", 0) + tokens.get("output_tokens", 0),
-            })
+            daily_tokens.append(
+                {
+                    "date": day,
+                    "input": tokens.get("input_tokens", 0),
+                    "output": tokens.get("output_tokens", 0),
+                    "total": tokens.get("input_tokens", 0) + tokens.get("output_tokens", 0),
+                }
+            )
     except (KeyError, AttributeError, TypeError) as exc:
         log.debug("Daily token stats failed: %s", exc)
 
@@ -1904,7 +1948,9 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
         "latency_ms": round(bot.latency * 1000, 1) if bot and bot.latency else 0,
         "python": platform.python_version(),
         "discord_py": discord.__version__,
-        "search_provider": "Perplexity AI" if app_cfg.perplexity_api_key else ("Firecrawl" if app_cfg.firecrawl_api_key else ("Tavily" if app_cfg.tavily_api_key else "DuckDuckGo")),
+        "search_provider": "Perplexity AI"
+        if app_cfg.perplexity_api_key
+        else ("Firecrawl" if app_cfg.firecrawl_api_key else ("Tavily" if app_cfg.tavily_api_key else "DuckDuckGo")),
         "firecrawl_tier": "Free (500 pages/mo)" if app_cfg.firecrawl_api_key else "Not configured",
         "content_extraction": "trafilatura → Jina Reader → Playwright",
         "model": MODEL_NAME,
@@ -1930,7 +1976,9 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
             "calls": sp.calls,
             "daily": sp.daily,
             "perplexity": sp._data.get("perplexity", {"calls": 0, "total_cost_usd": 0.0, "daily": {}}),
-            "firecrawl": sp._data.get("firecrawl", {"calls": 0, "pages_scraped": 0, "total_cost_usd": 0.0, "daily": {}}),
+            "firecrawl": sp._data.get(
+                "firecrawl", {"calls": 0, "pages_scraped": 0, "total_cost_usd": 0.0, "daily": {}}
+            ),
             "copilot": sp._data.get("copilot", {"calls": 0, "daily": {}}),
             "perplexity_cache": _get_perplexity_cache_stats(),
             "quality_retries": _get_quality_retry_count(),
@@ -1958,6 +2006,7 @@ async def api_memories_handler(request: web.Request) -> web.Response:
     # QMD facts (last 50, newest first)
     try:
         from qmd import qmd_store
+
         data["facts"] = list(qmd_store._memory[-50:])
         data["facts"].reverse()
     except (ImportError, AttributeError) as exc:
@@ -1966,6 +2015,7 @@ async def api_memories_handler(request: web.Request) -> web.Response:
     # Learned rules (last 20, newest first)
     try:
         from rules_engine import _load_rules
+
         rules = await _load_rules()
         data["rules"] = rules[-20:]
         data["rules"].reverse()
@@ -1975,6 +2025,7 @@ async def api_memories_handler(request: web.Request) -> web.Response:
     # Vector store collection stats
     try:
         import vector_store
+
         data["stats"] = await vector_store.get_stats()
     except (ImportError, AttributeError, RuntimeError) as exc:
         log.debug("Vector store stats failed: %s", exc)
@@ -2017,10 +2068,12 @@ async def api_channel_memory_inspect_handler(request: web.Request) -> web.Respon
         alerts = summary.get("alerts", {}) if isinstance(summary, dict) else {}
         warnings: dict[str, object] = {}
         if isinstance(alerts, dict) and alerts.get("count", 0):
-            warnings.update({
-                "scoped_recall_alerts": alerts.get("count", 0),
-                "message": "Potential cross-channel/thread recall leakage was blocked recently.",
-            })
+            warnings.update(
+                {
+                    "scoped_recall_alerts": alerts.get("count", 0),
+                    "message": "Potential cross-channel/thread recall leakage was blocked recently.",
+                }
+            )
         compaction = summary.get("compaction", {}) if isinstance(summary, dict) else {}
         if isinstance(compaction, dict):
             warnings["recent_compactions"] = int(compaction.get("count", 0) or 0)
@@ -2207,6 +2260,7 @@ async def api_goals_handler(request):
     """Return active goals for the dashboard."""
     try:
         from goal_tracker import get_active_goals
+
         goals = get_active_goals()
         return web.json_response({"goals": goals})
     except (ImportError, AttributeError, RuntimeError) as exc:
@@ -2218,6 +2272,7 @@ async def api_research_handler(request):
     """Return past research reports for the dashboard."""
     try:
         import vector_store
+
         col = vector_store._get_collection(vector_store.RESEARCH_COLLECTION)
         if col.count() == 0:
             return web.json_response({"reports": []})
@@ -2231,13 +2286,15 @@ async def api_research_handler(request):
         for i, doc_id in enumerate(results.get("ids", [])):
             meta = results["metadatas"][i] if results.get("metadatas") else {}
             text = results["documents"][i][:200] if results.get("documents") else ""
-            reports.append({
-                "id": doc_id,
-                "query": meta.get("query", "Unknown query"),
-                "date": meta.get("added_at", 0),
-                "excerpt": text,
-                "sources": meta.get("sources", ""),
-            })
+            reports.append(
+                {
+                    "id": doc_id,
+                    "query": meta.get("query", "Unknown query"),
+                    "date": meta.get("added_at", 0),
+                    "excerpt": text,
+                    "sources": meta.get("sources", ""),
+                }
+            )
 
         reports.sort(key=lambda r: r.get("date", 0), reverse=True)
         return web.json_response({"reports": reports[:20]})
@@ -2265,18 +2322,18 @@ async def api_threads_handler(request: web.Request) -> web.Response:
                 for msg in history[:5]:
                     if msg.get("role") == "user":
                         parts = msg.get("parts", [])
-                        preview = " ".join(
-                            p for p in parts if isinstance(p, str)
-                        )[:100]
+                        preview = " ".join(p for p in parts if isinstance(p, str))[:100]
                         break
 
-                threads.append({
-                    "name": f.stem,
-                    "messages": len(history),
-                    "preview": preview,
-                    "modified": f.stat().st_mtime,
-                    "size_kb": round(f.stat().st_size / 1024, 1),
-                })
+                threads.append(
+                    {
+                        "name": f.stem,
+                        "messages": len(history),
+                        "preview": preview,
+                        "modified": f.stat().st_mtime,
+                        "size_kb": round(f.stat().st_size / 1024, 1),
+                    }
+                )
             except (json.JSONDecodeError, OSError, KeyError) as exc:
                 log.debug("Thread file parse failed %s: %s", f.name, exc)
                 continue
@@ -2334,7 +2391,9 @@ async def api_schedule_update_handler(request):
             task_id,
             action=str(payload["name"]).strip() if payload.get("name") is not None else None,
             prompt=str(payload["prompt"]).strip() if payload.get("prompt") is not None else None,
-            cron_expression=str(payload["cron_expression"]).strip() if payload.get("cron_expression") is not None else None,
+            cron_expression=str(payload["cron_expression"]).strip()
+            if payload.get("cron_expression") is not None
+            else None,
             interval_minutes=None if interval_raw in (None, "") else int(interval_raw),
             cron_hour=None if cron_hour_raw in (None, "") else int(cron_hour_raw),
             cron_minute=None if cron_minute_raw in (None, "") else int(cron_minute_raw),
@@ -2358,6 +2417,7 @@ async def api_schedule_delete_handler(request):
             return web.json_response({"error": "Missing task_id"}, status=400)
 
         from scheduler import cancel_scheduled_task
+
         result = await cancel_scheduled_task(task_id)
 
         if result.startswith("✅"):
@@ -2373,6 +2433,7 @@ async def api_errors_handler(request):
     """Return error stats for the dashboard."""
     try:
         from error_tracker import get_error_stats
+
         stats = get_error_stats(hours=24)
         return web.json_response(stats)
     except (ImportError, OSError, json.JSONDecodeError) as exc:
@@ -2389,36 +2450,47 @@ async def api_dream_health_handler(request):
     """Return dream/memory health data for the dashboard."""
     try:
         from dream_cycle import DreamCycle, _compute_health, _load_index
+
         cycle = DreamCycle()
         index = _load_index(cycle.index_path)
         health = _compute_health(index, cycle.memory_path)
         entries = index.get("entries", [])
         stats = index.get("stats", {})
-        return web.json_response({
-            "overall": round(health["overall"] * 100, 1),
-            "metrics": health["metrics"],
-            "entry_count": len(entries),
-            "avg_importance": round(stats.get("avgImportance", 0), 2),
-            "last_dream": stats.get("lastDream", None),
-            "health_history": stats.get("healthHistory", [])[-14:],
-        })
+        return web.json_response(
+            {
+                "overall": round(health["overall"] * 100, 1),
+                "metrics": health["metrics"],
+                "entry_count": len(entries),
+                "avg_importance": round(stats.get("avgImportance", 0), 2),
+                "last_dream": stats.get("lastDream", None),
+                "health_history": stats.get("healthHistory", [])[-14:],
+            }
+        )
     except (ImportError, OSError, AttributeError, ValueError) as exc:
         log.debug("Dream health API failed: %s", exc)
-        return web.json_response({
-            "overall": 0, "metrics": {}, "entry_count": 0,
-            "avg_importance": 0, "last_dream": None, "health_history": [],
-        })
+        return web.json_response(
+            {
+                "overall": 0,
+                "metrics": {},
+                "entry_count": 0,
+                "avg_importance": 0,
+                "last_dream": None,
+                "health_history": [],
+            }
+        )
 
 
 async def api_config_status_handler(request):
     """Return configuration status for every key API/service."""
     from config import cfg
+
     return web.json_response({"services": cfg.config_status()})
 
 
 async def api_search_stats_handler(request):
     """Return per-provider search usage statistics."""
     from search_provider import all_stats
+
     return web.json_response(all_stats())
 
 
@@ -2430,6 +2502,7 @@ async def api_quota_status_handler(request):
 async def api_skill_stats_handler(request):
     """Return skill invocation counts."""
     from llm_tools import get_skill_stats
+
     return web.json_response(get_skill_stats())
 
 
@@ -2452,9 +2525,7 @@ def _load_quality_metrics(params: dict) -> dict:
     from metrics_collector import get_quality_event_snapshot
 
     snapshot = get_quality_event_snapshot(limit=params["snapshot_limit"])
-    recent_runs = get_recent_outcomes(
-        hours=params["runtime_hours"], limit=params["runtime_run_limit"]
-    )
+    recent_runs = get_recent_outcomes(hours=params["runtime_hours"], limit=params["runtime_run_limit"])
     if not isinstance(recent_runs, list):
         recent_runs = []
     try:
@@ -2474,22 +2545,13 @@ def _compute_quality_feedback(event_counts: dict, snapshot: dict) -> dict:
     if not isinstance(feedback_snapshot, dict):
         feedback_snapshot = {}
     helpful = int(feedback_snapshot.get("helpful", event_counts.get("ask_feedback_helpful", 0)) or 0)
-    not_helpful = int(
-        feedback_snapshot.get("not_helpful", event_counts.get("ask_feedback_not_helpful", 0)) or 0
-    )
+    not_helpful = int(feedback_snapshot.get("not_helpful", event_counts.get("ask_feedback_not_helpful", 0)) or 0)
     total = helpful + not_helpful
     helpful_rate = round(helpful / total, 3) if total > 0 else None
-    accepted = int(
-        feedback_snapshot.get("accepted", event_counts.get("ask_feedback_accepted", total)) or 0
-    )
-    suppressed = int(
-        feedback_snapshot.get("suppressed", event_counts.get("ask_feedback_suppressed", 0)) or 0
-    )
+    accepted = int(feedback_snapshot.get("accepted", event_counts.get("ask_feedback_accepted", total)) or 0)
+    suppressed = int(feedback_snapshot.get("suppressed", event_counts.get("ask_feedback_suppressed", 0)) or 0)
     suppressed_dedupe = int(
-        feedback_snapshot.get(
-            "suppressed_dedupe", event_counts.get("ask_feedback_suppressed_dedupe", 0)
-        )
-        or 0
+        feedback_snapshot.get("suppressed_dedupe", event_counts.get("ask_feedback_suppressed_dedupe", 0)) or 0
     )
     suppressed_rate_limited = int(
         feedback_snapshot.get(
@@ -2607,17 +2669,12 @@ def _compute_quality_runtime_stats(recent_runs: list, event_counts: dict) -> dic
                     normalized = reason.strip()
                     if not normalized:
                         continue
-                    low_confidence_reason_counts[normalized] = (
-                        low_confidence_reason_counts.get(normalized, 0) + 1
-                    )
+                    low_confidence_reason_counts[normalized] = low_confidence_reason_counts.get(normalized, 0) + 1
             low_confidence_prompt_count += 1
 
         routing_notes = run.get("routing_notes")
         if not low_confidence_from_run and isinstance(routing_notes, list):
-            if any(
-                isinstance(note, str) and "low confidence" in note.lower()
-                for note in routing_notes
-            ):
+            if any(isinstance(note, str) and "low confidence" in note.lower() for note in routing_notes):
                 low_confidence_prompt_count += 1
 
         if retry_meta:
@@ -2758,8 +2815,7 @@ def _build_quality_response(data: dict) -> web.Response:
             "low_confidence": {
                 "prompt_count": int(runtime["low_confidence_prompt_count"]),
                 "top_reasons": [
-                    {"reason": reason, "count": int(count)}
-                    for reason, count in runtime["top_low_confidence_reasons"]
+                    {"reason": reason, "count": int(count)} for reason, count in runtime["top_low_confidence_reasons"]
                 ],
             },
             "retry_outcomes": runtime["retry_outcomes"],
@@ -2863,13 +2919,15 @@ async def api_knowledge_graph_handler(request):
         for e in entries:
             if e.get("archived"):
                 continue
-            nodes.append({
-                "id": e["id"],
-                "summary": e.get("summary", "")[:60],
-                "importance": e.get("importance", 0.5),
-                "tags": e.get("tags", []),
-                "created": e.get("created", ""),
-            })
+            nodes.append(
+                {
+                    "id": e["id"],
+                    "summary": e.get("summary", "")[:60],
+                    "importance": e.get("importance", 0.5),
+                    "tags": e.get("tags", []),
+                    "created": e.get("created", ""),
+                }
+            )
             for rel in e.get("related", []):
                 edges.append({"source": e["id"], "target": rel})
         return web.json_response({"nodes": nodes, "edges": edges})
@@ -2881,6 +2939,7 @@ async def api_knowledge_graph_handler(request):
 async def api_topology_handler(request):
     """Return network topology for visualization."""
     from config import cfg as _topo_cfg
+
     nodes = [
         {"id": "mac-mini", "label": "Mac Mini M4", "type": "host", "ip": _topo_cfg.docker_host_ip, "x": 400, "y": 275},
         {"id": "nas", "label": "Synology NAS", "type": "host", "ip": _topo_cfg.nas_ip, "x": 200, "y": 275},
@@ -2899,6 +2958,7 @@ async def api_topology_handler(request):
 
     try:
         from skills import list_containers
+
         container_text = await list_containers()
         if not container_text.startswith("\u274c"):
             lines = [ln.strip() for ln in container_text.split("\n") if ln.strip() and not ln.startswith("NAMES")]
@@ -2908,18 +2968,23 @@ async def api_topology_handler(request):
             for i, line in enumerate(lines):
                 parts = [p.strip() for p in line.split("\t") if p.strip()]
                 if not parts:
-                    parts = [p.strip() for p in re.split(r'\s{2,}', line) if p.strip()]
+                    parts = [p.strip() for p in re.split(r"\s{2,}", line) if p.strip()]
                 if parts:
                     name = parts[0]
                     is_up = any("Up" in p for p in parts)
                     angle = angle_step * i - (math.pi / 2)
                     x = 400 + math.cos(angle) * radius
                     y = 250 + math.sin(angle) * radius
-                    nodes.append({
-                        "id": name, "label": name, "type": "container",
-                        "status": "up" if is_up else "down",
-                        "x": round(x), "y": round(y),
-                    })
+                    nodes.append(
+                        {
+                            "id": name,
+                            "label": name,
+                            "type": "container",
+                            "status": "up" if is_up else "down",
+                            "x": round(x),
+                            "y": round(y),
+                        }
+                    )
                     edges.append({"source": "mac-mini", "target": name})
     except (OSError, ValueError, RuntimeError) as e:
         log.debug("Topology container fetch failed: %s", e)
@@ -2930,6 +2995,7 @@ async def api_topology_handler(request):
 # ---------------------------------------------------------------------------
 # Agent interaction endpoints (dashboard chat & report generation)
 # ---------------------------------------------------------------------------
+
 
 async def api_agent_ask_handler(request: web.Request) -> web.Response:
     """POST /api/agent/ask — Submit a prompt to OpenClaw and return the response.
@@ -3005,7 +3071,7 @@ async def _execute_agent_ask(
         if on_partial_chunk is None:
             return
         text = str(chunk_text or "")
-        delta = text[len(last_partial):] if last_partial and text.startswith(last_partial) else text
+        delta = text[len(last_partial) :] if last_partial and text.startswith(last_partial) else text
         last_partial = text
         if delta:
             await on_partial_chunk(delta)
@@ -3166,6 +3232,7 @@ async def api_recap_generate_handler(request: web.Request) -> web.Response:
 
     try:
         from llm.chat import chat as llm_chat
+
         result = await llm_chat(
             user_message=prompt,
             user_name="Dashboard",

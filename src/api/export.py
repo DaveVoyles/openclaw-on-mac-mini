@@ -27,6 +27,7 @@ def _error_response(
         body["details"] = details
     return web.json_response(body, status=status)
 
+
 # Simple in-memory API key store (in production, use database)
 API_KEYS = {
     os.getenv("EXPORT_API_KEY", "openclaw_export_key_demo"): {
@@ -61,9 +62,7 @@ def check_rate_limit(api_key: str) -> bool:
 
     # Clean old entries
     if api_key in rate_limit_tracker:
-        rate_limit_tracker[api_key] = [
-            ts for ts in rate_limit_tracker[api_key] if ts > hour_ago
-        ]
+        rate_limit_tracker[api_key] = [ts for ts in rate_limit_tracker[api_key] if ts > hour_ago]
     else:
         rate_limit_tracker[api_key] = []
 
@@ -107,12 +106,15 @@ async def export_conversations_handler(request: web.Request) -> web.Response:
     try:
         if format_type == "csv":
             from exporters import export_to_csv
+
             result = await export_to_csv("conversations", output_path, days=days, filters=filters)
         elif format_type == "json":
             from exporters import export_to_json
+
             result = await export_to_json("conversations", output_path, days=days, filters=filters)
         elif format_type == "parquet":
             from exporters import export_to_parquet
+
             result = await export_to_parquet("conversations", output_path, days=days, filters=filters)
         else:
             return _error_response("INVALID_REQUEST", "Invalid format", status=400)
@@ -165,12 +167,15 @@ async def export_trends_handler(request: web.Request) -> web.Response:
     try:
         if format_type == "csv":
             from exporters import export_to_csv
+
             result = await export_to_csv("trends", output_path, days=days, filters=filters)
         elif format_type == "json":
             from exporters import export_to_json
+
             result = await export_to_json("trends", output_path, days=days, filters=filters)
         elif format_type == "parquet":
             from exporters import export_to_parquet
+
             result = await export_to_parquet("trends", output_path, days=days, filters=filters)
         else:
             return _error_response("INVALID_REQUEST", "Invalid format", status=400)
@@ -254,19 +259,23 @@ async def list_backups_handler(request: web.Request) -> web.Response:
         # List all backups
         backups = []
         for backup in sorted(manager.backup_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
-            backups.append({
-                "name": backup.name,
-                "path": str(backup),
-                "size_bytes": backup.stat().st_size if backup.is_file() else sum(
-                    f.stat().st_size for f in backup.rglob("*") if f.is_file()
-                ),
-                "created_at": backup.stat().st_mtime,
-            })
+            backups.append(
+                {
+                    "name": backup.name,
+                    "path": str(backup),
+                    "size_bytes": backup.stat().st_size
+                    if backup.is_file()
+                    else sum(f.stat().st_size for f in backup.rglob("*") if f.is_file()),
+                    "created_at": backup.stat().st_mtime,
+                }
+            )
 
-        return web.json_response({
-            "backups": backups,
-            "status": status,
-        })
+        return web.json_response(
+            {
+                "backups": backups,
+                "status": status,
+            }
+        )
 
     except Exception as e:  # broad: intentional
         log.error(f"List backups failed: {e}", exc_info=True)

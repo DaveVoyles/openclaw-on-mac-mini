@@ -235,7 +235,9 @@ class IncidentStore:
             return None
 
         parsed_actions = (
-            parse_action_items(action_items) if isinstance(action_items, str) else [str(i).strip()[:300] for i in action_items if str(i).strip()]
+            parse_action_items(action_items)
+            if isinstance(action_items, str)
+            else [str(i).strip()[:300] for i in action_items if str(i).strip()]
         )
         now = resolved_at if resolved_at is not None else time.time()
         self.conn.execute(

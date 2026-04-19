@@ -4,6 +4,7 @@ openclaw_cli_path_utils — File path detection, link formatting, and follow-up 
 Imports from: openclaw_cli_ui_core (ANSI constants, _get_is_tty)
 Does NOT import from: openclaw_cli.py (avoids circular imports)
 """
+
 from __future__ import annotations
 
 import os
@@ -16,7 +17,9 @@ except ImportError:
 
     def _get_is_tty() -> bool:  # type: ignore[misc]
         import sys
+
         return sys.stdout.isatty()
+
 
 try:
     from rich.console import Console as _RichConsole
@@ -32,10 +35,10 @@ except ImportError:
 # Regex constants
 # ---------------------------------------------------------------------------
 
-_URL_PATTERN = re.compile(r'(https?://[^\s\)\]\>\"\']+)', re.IGNORECASE)
+_URL_PATTERN = re.compile(r"(https?://[^\s\)\]\>\"\']+)", re.IGNORECASE)
 
 _FILE_PATH_PATTERN = re.compile(
-    r'(?<!\w)((?:~|\.{1,2})?/[\w\-./]+\.\w{1,8}|(?:src|tests|docs|scripts|config|plugins)/[\w\-./]+\.\w{1,8})',
+    r"(?<!\w)((?:~|\.{1,2})?/[\w\-./]+\.\w{1,8}|(?:src|tests|docs|scripts|config|plugins)/[\w\-./]+\.\w{1,8})",
     re.IGNORECASE,
 )
 
@@ -71,8 +74,8 @@ def _detect_file_paths(text: str) -> list[str]:
 
 # Action verbs that indicate the user wants the CLI to fetch and read a URL
 _URL_ACTION_VERBS = re.compile(
-    r'\b(summarize|summarise|read|explain|describe|analyze|analyse|check|review|'
-    r'what does|what is|tell me about|show me|open|fetch|get|look at)\b',
+    r"\b(summarize|summarise|read|explain|describe|analyze|analyse|check|review|"
+    r"what does|what is|tell me about|show me|open|fetch|get|look at)\b",
     re.IGNORECASE,
 )
 
@@ -95,7 +98,7 @@ def _detect_url_mentions(text: str) -> list[str]:
 
 # Matches @file:/path/to/file, @url:https://..., @dir:/path, @clip injection markers.
 _EXPLICIT_REF_PATTERN = re.compile(
-    r'@(file|url|dir):([^\s\)\]\>\"\']+)|@(clip)\b',
+    r"@(file|url|dir):([^\s\)\]\>\"\']+)|@(clip)\b",
     re.IGNORECASE,
 )
 
@@ -129,7 +132,7 @@ def _strip_explicit_refs(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 _GIT_REF_PATTERN = re.compile(
-    r'@git:(staged|HEAD(?:~\d+)?|log|status|diff)',
+    r"@git:(staged|HEAD(?:~\d+)?|log|status|diff)",
     re.IGNORECASE,
 )
 
@@ -151,6 +154,7 @@ def _detect_git_refs(text: str) -> list[tuple[str, str]]:
 def _resolve_git_ref(variant: str, cwd: str) -> str | None:
     """Run the git command for the given variant and return its output, or None on error."""
     import subprocess
+
     _CAP = 100_000
     variant_lower = variant.lower()
     try:
@@ -168,9 +172,7 @@ def _resolve_git_ref(variant: str, cwd: str) -> str | None:
             cmd = ["git", "diff"]
         else:
             return None
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=15, cwd=cwd
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15, cwd=cwd)
         if result.returncode != 0:
             return None
         output = result.stdout
@@ -190,14 +192,37 @@ def _strip_git_refs(text: str) -> str:
 # @cmd: injection helpers
 # ---------------------------------------------------------------------------
 
-_CMD_ALLOWLIST = frozenset({
-    "git", "ls", "cat", "grep", "find", "head", "tail", "wc", "echo",
-    "pwd", "env", "which", "uname", "date", "python", "python3", "pip",
-    "pip3", "node", "npm", "docker", "kubectl", "curl", "jq",
-})
+_CMD_ALLOWLIST = frozenset(
+    {
+        "git",
+        "ls",
+        "cat",
+        "grep",
+        "find",
+        "head",
+        "tail",
+        "wc",
+        "echo",
+        "pwd",
+        "env",
+        "which",
+        "uname",
+        "date",
+        "python",
+        "python3",
+        "pip",
+        "pip3",
+        "node",
+        "npm",
+        "docker",
+        "kubectl",
+        "curl",
+        "jq",
+    }
+)
 
 _CMD_REF_PATTERN = re.compile(
-    r'@cmd:([^\n@]+?)(?=\s@|\s*$|[,;])',
+    r"@cmd:([^\n@]+?)(?=\s@|\s*$|[,;])",
     re.IGNORECASE,
 )
 
@@ -231,7 +256,7 @@ def _strip_cmd_refs(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 _GH_REF_PATTERN = re.compile(
-    r'@gh:([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#\d+)',
+    r"@gh:([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#\d+)",
     re.IGNORECASE,
 )
 
@@ -254,6 +279,7 @@ def _resolve_gh_ref(ref: str) -> str | None:
     """
     import json as _json
     import subprocess
+
     _CAP = 50_000
 
     try:
@@ -264,9 +290,7 @@ def _resolve_gh_ref(ref: str) -> str | None:
 
     def _run_gh(args: list[str]) -> dict | None:
         try:
-            result = subprocess.run(
-                args, capture_output=True, text=True, timeout=15
-            )
+            result = subprocess.run(args, capture_output=True, text=True, timeout=15)
             if result.returncode != 0:
                 return None
             return _json.loads(result.stdout)
@@ -274,39 +298,47 @@ def _resolve_gh_ref(ref: str) -> str | None:
             return None
 
     # Try issue first
-    issue_data = _run_gh([
-        "gh", "issue", "view", str(num),
-        "--repo", repo_part,
-        "--json", "title,body,state,labels,comments",
-    ])
+    issue_data = _run_gh(
+        [
+            "gh",
+            "issue",
+            "view",
+            str(num),
+            "--repo",
+            repo_part,
+            "--json",
+            "title,body,state,labels,comments",
+        ]
+    )
     if issue_data:
         title = issue_data.get("title", "")
         state = issue_data.get("state", "")
         body = issue_data.get("body", "") or ""
-        labels = ", ".join(
-            lbl.get("name", "") for lbl in (issue_data.get("labels") or [])
-        )
+        labels = ", ".join(lbl.get("name", "") for lbl in (issue_data.get("labels") or []))
         comments = issue_data.get("comments") or []
         comment_md = ""
         for c in comments[:5]:
             author = (c.get("author") or {}).get("login", "unknown")
             cbody = (c.get("body") or "")[:500]
             comment_md += f"\n**{author}:** {cbody}\n"
-        md = (
-            f"# Issue {ref}: {title}\n"
-            f"**State:** {state}  **Labels:** {labels}\n\n"
-            f"{body}\n"
-        )
+        md = f"# Issue {ref}: {title}\n**State:** {state}  **Labels:** {labels}\n\n{body}\n"
         if comment_md:
             md += f"\n## Comments\n{comment_md}"
         return md[:_CAP]
 
     # Fall back to PR
-    pr_data = _run_gh([
-        "gh", "pr", "view", str(num),
-        "--repo", repo_part,
-        "--json", "title,body,state,additions,deletions,files",
-    ])
+    pr_data = _run_gh(
+        [
+            "gh",
+            "pr",
+            "view",
+            str(num),
+            "--repo",
+            repo_part,
+            "--json",
+            "title,body,state,additions,deletions,files",
+        ]
+    )
     if pr_data:
         title = pr_data.get("title", "")
         state = pr_data.get("state", "")
@@ -314,9 +346,7 @@ def _resolve_gh_ref(ref: str) -> str | None:
         additions = pr_data.get("additions", 0)
         deletions = pr_data.get("deletions", 0)
         files = pr_data.get("files") or []
-        file_list = "\n".join(
-            f"- {f.get('path', '')}" for f in files[:20]
-        )
+        file_list = "\n".join(f"- {f.get('path', '')}" for f in files[:20])
         md = (
             f"# PR {ref}: {title}\n"
             f"**State:** {state}  **+{additions}/-{deletions}**\n\n"
@@ -394,7 +424,9 @@ def _linkify_response(text: str, *, prefs: dict | None = None, is_tty: bool | No
     return "\n".join(result)
 
 
-def _print_path_hints(paths: list[str], *, prefs: dict | None = None, is_tty: bool | None = None, rich_available: bool | None = None) -> None:
+def _print_path_hints(
+    paths: list[str], *, prefs: dict | None = None, is_tty: bool | None = None, rich_available: bool | None = None
+) -> None:
     """Print quick-action hints for file paths mentioned in the response."""
     if not (prefs or {}).get("path_hints", True) or _a11y_plain(prefs):
         return
@@ -485,9 +517,7 @@ def _print_predictive_affordances(
         for hint in clean:
             body.append("  • ", style="dim")
             body.append(f"{hint}\n")
-        _RICH_CONSOLE.print(
-            _RichPanel(body, title=f"[bold]{title}[/]", border_style=border_style, padding=(0, 1))
-        )
+        _RICH_CONSOLE.print(_RichPanel(body, title=f"[bold]{title}[/]", border_style=border_style, padding=(0, 1)))
         return
     print(f"{title}:")
     for hint in clean:
@@ -531,16 +561,13 @@ def _print_followup_suggestions(
             sep = "  ·  " if i > 0 else "  "
             cmd = s.split(" — ")[0]
             desc = s.split(" — ")[1] if " — " in s else ""
-            _RICH_CONSOLE.print(
-                f"[dim]{sep}[/][bold cyan]{cmd}[/][dim]{' — ' + desc if desc else ''}[/]", end=""
-            )
+            _RICH_CONSOLE.print(f"[dim]{sep}[/][bold cyan]{cmd}[/][dim]{' — ' + desc if desc else ''}[/]", end="")
         _RICH_CONSOLE.print()
     else:
         print(
             f"\n  {_DM}mode: {mode}{_R} {_DM}|{_R} "
             + "  ·  ".join(
-                f"{_BCY}{s.split(' — ')[0]}{_R}"
-                f"{_DM}{' — ' + s.split(' — ')[1] if ' — ' in s else ''}{_R}"
+                f"{_BCY}{s.split(' — ')[0]}{_R}{_DM}{' — ' + s.split(' — ')[1] if ' — ' in s else ''}{_R}"
                 for s in clean
             )
         )

@@ -18,9 +18,7 @@ log = logging.getLogger(__name__)
 class ExpenseCog(commands.Cog):
     """Log and review personal expenses by category."""
 
-    expense_group = app_commands.Group(
-        name="expense", description="Expense tracking commands"
-    )
+    expense_group = app_commands.Group(name="expense", description="Expense tracking commands")
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
@@ -33,10 +31,7 @@ class ExpenseCog(commands.Cog):
         note="Optional note",
     )
     @app_commands.choices(
-        category=[
-            app_commands.Choice(name=f"{CATEGORY_EMOJIS[c]} {c.title()}", value=c)
-            for c in CATEGORIES
-        ]
+        category=[app_commands.Choice(name=f"{CATEGORY_EMOJIS[c]} {c.title()}", value=c) for c in CATEGORIES]
     )
     async def expense_add(
         self,
@@ -46,9 +41,7 @@ class ExpenseCog(commands.Cog):
         note: str = "",
     ) -> None:
         if amount <= 0:
-            await interaction.response.send_message(
-                "❌ Amount must be positive", ephemeral=True
-            )
+            await interaction.response.send_message("❌ Amount must be positive", ephemeral=True)
             return
 
         user_id = str(interaction.user.id)
@@ -61,16 +54,12 @@ class ExpenseCog(commands.Cog):
 
     @expense_group.command(name="list", description="Show recent expenses")
     @app_commands.describe(days="Number of days to look back (default: 7)")
-    async def expense_list(
-        self, interaction: discord.Interaction, days: int = 7
-    ) -> None:
+    async def expense_list(self, interaction: discord.Interaction, days: int = 7) -> None:
         user_id = str(interaction.user.id)
         expenses = self.tracker.list_for_user(user_id, days)
 
         if not expenses:
-            await interaction.response.send_message(
-                f"No expenses in the last {days} day(s).", ephemeral=True
-            )
+            await interaction.response.send_message(f"No expenses in the last {days} day(s).", ephemeral=True)
             return
 
         lines = []
@@ -83,9 +72,7 @@ class ExpenseCog(commands.Cog):
             date_str = dt.strftime("%m/%d")
             emoji = CATEGORY_EMOJIS.get(e.category, "📦")
             note_str = f" — _{e.note}_" if e.note else ""
-            lines.append(
-                f"`{e.id}` {date_str} {emoji} **${e.amount:.2f}** {e.category}{note_str}"
-            )
+            lines.append(f"`{e.id}` {date_str} {emoji} **${e.amount:.2f}** {e.category}{note_str}")
 
         total = sum(e.amount for e in expenses)
         embed = discord.Embed(
@@ -96,9 +83,7 @@ class ExpenseCog(commands.Cog):
         embed.set_footer(text=f"Total: ${total:.2f}")
         await interaction.response.send_message(embed=embed)
 
-    @expense_group.command(
-        name="summary", description="Category breakdown with totals"
-    )
+    @expense_group.command(name="summary", description="Category breakdown with totals")
     @app_commands.describe(period="Time period: week, month, or year (default: week)")
     @app_commands.choices(
         period=[
@@ -117,9 +102,7 @@ class ExpenseCog(commands.Cog):
         totals = self.tracker.summary_by_period(user_id, period_val)
 
         if not totals:
-            await interaction.response.send_message(
-                f"No expenses this {period_val}.", ephemeral=True
-            )
+            await interaction.response.send_message(f"No expenses this {period_val}.", ephemeral=True)
             return
 
         grand_total = sum(totals.values())
@@ -142,18 +125,12 @@ class ExpenseCog(commands.Cog):
 
     @expense_group.command(name="delete", description="Remove an expense entry")
     @app_commands.describe(expense_id="Expense ID (shown in /expense list)")
-    async def expense_delete(
-        self, interaction: discord.Interaction, expense_id: str
-    ) -> None:
+    async def expense_delete(self, interaction: discord.Interaction, expense_id: str) -> None:
         user_id = str(interaction.user.id)
         if self.tracker.delete(user_id, expense_id):
-            await interaction.response.send_message(
-                f"🗑️ Deleted expense `{expense_id}`"
-            )
+            await interaction.response.send_message(f"🗑️ Deleted expense `{expense_id}`")
         else:
-            await interaction.response.send_message(
-                f"❌ Expense `{expense_id}` not found", ephemeral=True
-            )
+            await interaction.response.send_message(f"❌ Expense `{expense_id}` not found", ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:

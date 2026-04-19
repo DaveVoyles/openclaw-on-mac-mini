@@ -190,7 +190,6 @@ def _save_onboarding_seen() -> None:
 _load_onboarding_seen()
 
 
-
 async def _collect_feedback(
     bot_message: discord.Message,
     query_hash: str,
@@ -208,11 +207,7 @@ async def _collect_feedback(
         return
 
     def check(reaction: discord.Reaction, user: discord.User) -> bool:
-        return (
-            str(reaction.emoji) in ("👍", "👎")
-            and reaction.message.id == bot_message.id
-            and not user.bot
-        )
+        return str(reaction.emoji) in ("👍", "👎") and reaction.message.id == bot_message.id and not user.bot
 
     try:
         reaction, _user = await asyncio.wait_for(
@@ -465,6 +460,7 @@ class OpenClawBot(commands.Bot):
 
         # Start health-check HTTP server
         from discord_web import start_health_server
+
         self._health_runner = await start_health_server(self)
 
         # Start background metrics collector for Prometheus export updates
@@ -489,6 +485,7 @@ class OpenClawBot(commands.Bot):
             log.warning("Provider scan failed: %s", exc)
 
         from llm.providers import start_proxy_health_loop
+
         start_proxy_health_loop()
 
         # Schedule audit log rotation background task (interval via AUDIT_ROTATE_INTERVAL env var)
@@ -499,16 +496,20 @@ class OpenClawBot(commands.Bot):
                 await asyncio.sleep(_AUDIT_ROTATE_INTERVAL)
                 try:
                     await rotate_audit_log()
-                except Exception as exc:  # broad: intentional  # noqa: BLE001 — audit log rotation can fail in many ways
+                except (
+                    Exception
+                ) as exc:  # broad: intentional  # noqa: BLE001 — audit log rotation can fail in many ways
                     log.debug("Audit log rotation failed: %s", exc)
 
         from bg_tasks import managed_task
+
         managed_task(_audit_log_rotation_loop(), name="audit-log-rotation", timeout=None)
 
         # Start Slack bot if configured
         if os.getenv("SLACK_ENABLED", "false").lower() == "true":
             try:
                 from slack_bot import create_slack_handler
+
                 _slack_handler = await create_slack_handler()
                 if _slack_handler:
                     asyncio.create_task(_slack_handler.start_async(), name="slack-socket-mode")
@@ -540,20 +541,31 @@ class OpenClawBot(commands.Bot):
         existing_actions = {t.action for t in scheduler.list_tasks()}
         if "run_maintenance" not in existing_actions:
             scheduler.create(
-                action="run_maintenance", args={}, hour=4, minute=0,
-                created_by="system", notify_channel_id=ALERT_CHANNEL_ID, alert_only=False,
+                action="run_maintenance",
+                args={},
+                hour=4,
+                minute=0,
+                created_by="system",
+                notify_channel_id=ALERT_CHANNEL_ID,
+                alert_only=False,
             )
             log.info("Registered 4:00 AM maintenance cron job")
         if "index_vault_to_qmd" not in existing_actions:
             scheduler.create(
-                action="index_vault_to_qmd", args={}, hour=3, minute=50,
-                created_by="system", notify_channel_id=0, alert_only=False,
+                action="index_vault_to_qmd",
+                args={},
+                hour=3,
+                minute=50,
+                created_by="system",
+                notify_channel_id=0,
+                alert_only=False,
             )
             log.info("Registered 3:50 AM vault indexer cron job")
 
         # Register Patreon monitoring (every 30 minutes)
         patreon_tasks = [t for t in scheduler.list_tasks() if "patreon" in t.action.lower()]
         from patreon_scheduled import scheduled_patreon_health_check, set_discord_client as _set_patreon_client
+
         _set_patreon_client(self)  # Always refresh module-level ref (survives restarts)
         if not patreon_tasks:
             scheduler.register_skills({"patreon_health_check": scheduled_patreon_health_check})
@@ -623,6 +635,7 @@ class OpenClawBot(commands.Bot):
         container_count = len(self.guilds)
         try:
             from skills import list_containers
+
             result = await list_containers()
             container_count = len([ln for ln in result.split("\n") if ln.strip() and not ln.startswith("NAMES")])
         except (ImportError, RuntimeError, ConnectionError):
@@ -790,6 +803,7 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
             exc_info=send_exc,
         )
 
+
 _EMBED_LIMIT = EMBED_SPLIT_LIMIT
 _FILE_THRESHOLD = 8000
 
@@ -853,6 +867,7 @@ async def ask_cmd(
 ) -> None:
     """Main user query handler — routes to Gemini (tool-capable) or Ollama (conversational)."""
     from ask_handler import handle_ask  # lazy to avoid circular import
+
     await handle_ask(interaction, question, attachment, model, scope, reset_context, anchor)
 
 
@@ -860,12 +875,14 @@ async def ask_cmd(
 async def metrics_cmd(interaction: discord.Interaction) -> None:
     """Display a brief routing telemetry summary."""
     from ask_handler import handle_metrics  # lazy to avoid circular import
+
     await handle_metrics(interaction)
 
 
 # ---------------------------------------------------------------------------
 # Thread follow-up listener — treat messages in bot-created threads as /ask
 # ---------------------------------------------------------------------------
+
 
 @bot.event
 async def on_member_join(member: discord.Member) -> None:
@@ -900,6 +917,7 @@ async def on_message(message: discord.Message) -> None:
         except (discord.HTTPException, discord.Forbidden, discord.NotFound):
             pass
     from discord_events import handle_message  # lazy to avoid circular import
+
     await handle_message(message, channel_roles=_CHANNEL_ROLES)
 
 

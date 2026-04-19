@@ -134,6 +134,7 @@ def _step(kind: str, text: str) -> str:
 # Core research agent
 # ---------------------------------------------------------------------------
 
+
 class ResearchAgent:
     """
     Fire-and-forget research agent.
@@ -145,11 +146,9 @@ class ResearchAgent:
                                   on_progress=my_callback)
     """
 
-    def __init__(self,
-                 max_searches: int = 10,
-                 browse_top_n: int = 4,
-                 timeout_seconds: int = 180,
-                 max_concurrent: int = 4):
+    def __init__(
+        self, max_searches: int = 10, browse_top_n: int = 4, timeout_seconds: int = 180, max_concurrent: int = 4
+    ):
         self.max_searches = max_searches
         self.browse_top_n = browse_top_n
         self.timeout_seconds = timeout_seconds
@@ -234,9 +233,8 @@ class ResearchAgent:
         prior_context = ""
         try:
             import vector_store
-            prior = await vector_store.search(
-                vector_store.RESEARCH_COLLECTION, query, top_k=2, threshold=0.6
-            )
+
+            prior = await vector_store.search(vector_store.RESEARCH_COLLECTION, query, top_k=2, threshold=0.6)
             if prior:
                 snippets = []
                 for r in prior:
@@ -279,7 +277,9 @@ class ResearchAgent:
 
         # Inject prior research context if found
         if prior_context:
-            combined_data = f"### Prior Research (for context — build on this, don't repeat)\n{prior_context}\n\n{combined_data}"
+            combined_data = (
+                f"### Prior Research (for context — build on this, don't repeat)\n{prior_context}\n\n{combined_data}"
+            )
 
         if len(combined_data) > 40_000:
             combined_data = combined_data[:40_000] + "\n\n[...truncated for length...]"
@@ -289,7 +289,11 @@ class ResearchAgent:
         # ── Step 4b: Deep research — iterative multi-pass refinement ──────────
         if deep:
             report = await self._deep_research_passes(
-                query, report, raw_results, browsed_pages, post,
+                query,
+                report,
+                raw_results,
+                browsed_pages,
+                post,
             )
 
         await post("done", f"Research complete — {len(raw_results)} searches, {len(browsed_pages)} pages read")
@@ -302,6 +306,7 @@ class ResearchAgent:
         # ── Step 6: Index report in vector store for future recall ────────────
         try:
             import vector_store
+
             source_urls = [u for r in raw_results for u in r["urls"]]
             report_id = await vector_store.add_research_report(query, report, source_urls)
             receipts["vector"] = {
@@ -328,7 +333,7 @@ class ResearchAgent:
         """Execute all sub-queries in parallel using asyncio.gather()."""
         from skills.advanced_skills import search_web
 
-        queries = sub_queries[:self.max_searches]
+        queries = sub_queries[: self.max_searches]
         total = len(queries)
         await post("search", f"Launching {total} parallel search workers\u2026")
 
@@ -348,19 +353,38 @@ class ResearchAgent:
     def _rank_source_quality(url: str) -> int:
         """Rank URL by source quality. Higher = better."""
         domain = urlparse(url).netloc.lower()
-        if any(d in domain for d in ['.gov', '.edu', 'nature.com', 'science.org', 'arxiv.org', 'pubmed']):
+        if any(d in domain for d in [".gov", ".edu", "nature.com", "science.org", "arxiv.org", "pubmed"]):
             return 4  # Academic/official
-        if any(d in domain for d in [
-            '.org', 'reuters.com', 'bbc.com', 'nytimes.com', 'washingtonpost.com',
-            'wsj.com', 'bloomberg.com', 'techcrunch.com', 'arstechnica.com',
-        ]):
+        if any(
+            d in domain
+            for d in [
+                ".org",
+                "reuters.com",
+                "bbc.com",
+                "nytimes.com",
+                "washingtonpost.com",
+                "wsj.com",
+                "bloomberg.com",
+                "techcrunch.com",
+                "arstechnica.com",
+            ]
+        ):
             return 3  # Reputable news/org
-        if any(d in domain for d in ['medium.com', 'substack.com', 'dev.to', 'hackernews', 'wikipedia.org']):
+        if any(d in domain for d in ["medium.com", "substack.com", "dev.to", "hackernews", "wikipedia.org"]):
             return 2  # Quality blogs/wikis
-        if any(d in domain for d in [
-            'reddit.com', 'twitter.com', 'x.com', 'facebook.com', 'youtube.com',
-            'instagram.com', 'tiktok.com', 'pinterest.com',
-        ]):
+        if any(
+            d in domain
+            for d in [
+                "reddit.com",
+                "twitter.com",
+                "x.com",
+                "facebook.com",
+                "youtube.com",
+                "instagram.com",
+                "tiktok.com",
+                "pinterest.com",
+            ]
+        ):
             return 0  # Social media (deprioritize)
         return 1  # Default
 
@@ -373,7 +397,7 @@ class ResearchAgent:
                 seen.add(url)
                 unique.append(url)
         unique.sort(key=self._rank_source_quality, reverse=True)
-        return unique[:self.browse_top_n]
+        return unique[: self.browse_top_n]
 
     async def _fetch_pages(
         self,
@@ -394,6 +418,7 @@ class ResearchAgent:
                         # Index source in vector store for future /sources lookup
                         try:
                             import vector_store
+
                             domain = url.split("/")[2] if url.count("/") >= 2 else url
                             await vector_store.add_document(
                                 vector_store.RESEARCH_COLLECTION,
@@ -432,6 +457,7 @@ class ResearchAgent:
         # Save to Obsidian vault (primary — always attempted)
         try:
             from obsidian_writer import save_to_vault
+
             vault_result = await asyncio.wait_for(
                 save_to_vault(
                     title=f"Research: {query[:60]}",
@@ -446,7 +472,9 @@ class ResearchAgent:
                 vault_path_match = re.search(r"`([^`]+)`", vault_result)
                 receipts["vault"] = {
                     "saved": True,
-                    "location": f"data/vault/{vault_path_match.group(1)}" if vault_path_match else "data/vault/Research",
+                    "location": f"data/vault/{vault_path_match.group(1)}"
+                    if vault_path_match
+                    else "data/vault/Research",
                     "detail": "Auto-saved research markdown",
                 }
             else:
@@ -466,6 +494,7 @@ class ResearchAgent:
         # Also sync to NAS
         try:
             from nas import nas_write_file
+
             nas_result = await asyncio.wait_for(
                 nas_write_file(full_doc, remote_folder="/volume1/documents/research", filename=filename),
                 timeout=20,
@@ -477,6 +506,7 @@ class ResearchAgent:
                     import os as _os
 
                     from gateway import create_google_doc
+
                     if _os.getenv("MATON_API_KEY"):
                         doc_result = await asyncio.wait_for(
                             create_google_doc(title=f"Research: {query[:60]}", content=full_doc),
@@ -541,14 +571,19 @@ class ResearchAgent:
 
             follow_ups = await self._identify_gaps(query, report)
             if not follow_ups:
-                await post("deep", f"Pass {pass_num}/{self._MAX_DEEP_PASSES}: No significant gaps found — stopping early")
+                await post(
+                    "deep", f"Pass {pass_num}/{self._MAX_DEEP_PASSES}: No significant gaps found — stopping early"
+                )
                 break
 
             pass_raw: list[dict] = []
             pass_pages: list[dict] = []
 
             for i, fq in enumerate(follow_ups, 1):
-                await post("deep", f"Pass {pass_num}/{self._MAX_DEEP_PASSES}: Investigating ({i}/{len(follow_ups)}) *{fq[:60]}*…")
+                await post(
+                    "deep",
+                    f"Pass {pass_num}/{self._MAX_DEEP_PASSES}: Investigating ({i}/{len(follow_ups)}) *{fq[:60]}*…",
+                )
 
                 sub_queries = await self._plan_searches(fq)
                 if not sub_queries:
@@ -587,19 +622,28 @@ class ResearchAgent:
             elapsed = round(time.monotonic() - pass_start, 1)
             log.info(
                 "Deep research pass %d/%d complete: %d searches, %d pages, %.1fs",
-                pass_num, self._MAX_DEEP_PASSES, len(pass_raw), len(pass_pages), elapsed,
+                pass_num,
+                self._MAX_DEEP_PASSES,
+                len(pass_raw),
+                len(pass_pages),
+                elapsed,
             )
             all_raw_results.extend(pass_raw)
             all_browsed_pages.extend(pass_pages)
 
-        await post("deep", f"Deep research complete — {total_searches} total searches, {total_pages} total pages across all passes")
+        await post(
+            "deep",
+            f"Deep research complete — {total_searches} total searches, {total_pages} total pages across all passes",
+        )
         return report
 
     async def _identify_gaps(self, query: str, report: str) -> list[str]:
         """Ask Gemini to identify gaps in the current report and return follow-up queries."""
         import json
+
         try:
             from llm import chat_deep
+
             prompt = _GAP_ANALYSIS_PROMPT.format(
                 query=query,
                 report=report[:8000],
@@ -621,6 +665,7 @@ class ResearchAgent:
         """Ask Gemini to merge new research findings into the existing report."""
         try:
             from llm import chat_deep
+
             prompt = _MERGE_PROMPT.format(
                 query=query,
                 existing_report=existing_report,
@@ -635,8 +680,10 @@ class ResearchAgent:
     async def _plan_searches(self, query: str) -> list[str]:
         """Ask Gemini to decompose the query into sub-searches."""
         import json
+
         try:
             from llm import chat_deep
+
             prompt = _PLAN_PROMPT.format(query=query)
             text, _ = await chat_deep(prompt)
             # Extract JSON array from response (tolerate markdown fences)
@@ -676,12 +723,12 @@ class ResearchAgent:
 
             log.debug("Research synthesis → Gemini (%s)", route.reason)
             from llm import chat_deep
+
             text, _ = await chat_deep(prompt)
             return text
         except (ImportError, OSError, ValueError, AttributeError, RuntimeError) as e:
             log.error("Synthesis failed: %s", e)
             return f"❌ Synthesis failed: {e}\n\nRaw data preview:\n{data[:500]}"
-
 
     async def generate_follow_ups(self, query: str, report: str) -> list[str]:
         """Generate 2-3 follow-up research questions based on the completed report."""
@@ -695,16 +742,14 @@ class ResearchAgent:
         )
         try:
             from llm.providers import COPILOT_PROXY_ENABLED, chat_openai
+
             if COPILOT_PROXY_ENABLED:
                 text = await chat_openai(prompt, [], "You are a concise research assistant.")
             else:
                 from llm import chat_deep
+
                 text, _ = await chat_deep(prompt)
-            lines = [
-                ln.strip().lstrip("0123456789.-) ")
-                for ln in (text or "").strip().split("\n")
-                if ln.strip()
-            ]
+            lines = [ln.strip().lstrip("0123456789.-) ") for ln in (text or "").strip().split("\n") if ln.strip()]
             return lines[:3]
         except (ImportError, OSError, ValueError, AttributeError, RuntimeError) as e:
             log.warning("Failed to generate follow-ups: %s", e)
@@ -734,10 +779,7 @@ async def run_scheduled_research(query: str, channel_id: str = "", deep: bool = 
         )
         if previous:
             added_at = previous[0].get("metadata", {}).get("added_at", "unknown")
-            result += (
-                f"\n\n---\n📊 *This is a recurring research update. "
-                f"Previous report was {added_at}.*"
-            )
+            result += f"\n\n---\n📊 *This is a recurring research update. Previous report was {added_at}.*"
     except (ImportError, OSError, AttributeError, ValueError) as exc:
         log.debug("Prior-research annotation skipped: %s", exc)
 
@@ -747,4 +789,5 @@ async def run_scheduled_research(query: str, channel_id: str = "", deep: bool = 
 def _extract_urls(text: str) -> list[str]:
     """Extract http(s) URLs from search result text."""
     import re
+
     return re.findall(r"https?://[^\s\)\]>\"']+", text)

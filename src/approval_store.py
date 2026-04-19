@@ -60,7 +60,10 @@ class ApprovalStore:
         self._pending[request_id] = req
         log.info(
             "Approval request created: %s (%s %s) by %s",
-            request_id, action, target, requester_name,
+            request_id,
+            action,
+            target,
+            requester_name,
         )
         return req
 

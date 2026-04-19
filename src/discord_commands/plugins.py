@@ -269,8 +269,7 @@ def _register_plugin_commands(bot: commands.Bot) -> None:
 
         # Confirmation
         await interaction.response.send_message(
-            f"⚠️ Are you sure you want to uninstall `{name}`? This cannot be undone.\n"
-            "Reply with 'yes' to confirm.",
+            f"⚠️ Are you sure you want to uninstall `{name}`? This cannot be undone.\nReply with 'yes' to confirm.",
             ephemeral=True,
         )
         # Note: Full confirmation flow would require message listener

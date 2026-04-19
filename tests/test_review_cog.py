@@ -1,4 +1,5 @@
 """Tests for cogs/review_cog.py."""
+
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -67,12 +68,14 @@ def _make_attachment(filename="test.txt", content=b"Sample content for review"):
 
 # ── __init__ ──────────────────────────────────────────────────────────────────
 
+
 def test_review_cog_init():
     cog = _make_cog()
     assert cog.bot is not None
 
 
 # ── review_text ───────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_review_text_sends_modal():
@@ -102,6 +105,7 @@ async def test_review_text_quick_mode():
 
 
 # ── review_file ───────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_review_file_txt_success():
@@ -158,8 +162,10 @@ async def test_review_file_docx():
     inter = _make_interaction()
     attachment = _make_attachment("document.docx", b"fake docx bytes")
 
-    with patch("document_skills.read_word", return_value="Document content"), \
-         patch("llm.chat.chat", new=AsyncMock(return_value=("Good work!", [], "gemini"))):
+    with (
+        patch("document_skills.read_word", return_value="Document content"),
+        patch("llm.chat.chat", new=AsyncMock(return_value=("Good work!", [], "gemini"))),
+    ):
         await cog.review_file.callback(cog, inter, file=attachment, mode="writing")
 
     inter.followup.send.assert_awaited_once()

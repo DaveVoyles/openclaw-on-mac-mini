@@ -1,4 +1,5 @@
 """Search provider abstraction — unified interface for all search backends."""
+
 import asyncio
 import logging
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ log = logging.getLogger(__name__)
 @dataclass
 class SearchStats:
     """Tracks per-provider usage statistics."""
+
     provider: str
     total_calls: int = 0
     total_successes: int = 0

@@ -100,9 +100,7 @@ def _config_hint(provider: str) -> str:
 _DEFAULT_SSL_CONTEXT = ssl.create_default_context()
 
 
-def _imap_read_inbox(
-    user: str, password: str, imap_host: str, count: int
-) -> list[dict]:
+def _imap_read_inbox(user: str, password: str, imap_host: str, count: int) -> list[dict]:
     """Fetch the last `count` message headers from INBOX via IMAP SSL."""
     messages: list[dict] = []
     with imaplib.IMAP4_SSL(imap_host, 993, ssl_context=_DEFAULT_SSL_CONTEXT) as imap:
@@ -111,9 +109,7 @@ def _imap_read_inbox(
         _, data = imap.search(None, "ALL")
         msg_nums = data[0].split()[-count:] if data[0] else []
         for num in reversed(msg_nums):
-            _, msg_data = imap.fetch(
-                num, "(BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE)])"
-            )
+            _, msg_data = imap.fetch(num, "(BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE)])")
             if msg_data and msg_data[0]:
                 raw = msg_data[0][1]
                 msg = email.message_from_bytes(raw)
@@ -127,9 +123,7 @@ def _imap_read_inbox(
     return messages
 
 
-def _imap_search(
-    user: str, password: str, imap_host: str, query: str, provider: str
-) -> list[dict]:
+def _imap_search(user: str, password: str, imap_host: str, query: str, provider: str) -> list[dict]:
     """Search INBOX for messages containing `query` in subject or body."""
     # Sanitize to prevent IMAP command injection
     safe_query = query.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "").replace("\r", "")
@@ -140,9 +134,7 @@ def _imap_search(
         _, data = imap.search(None, f'TEXT "{safe_query}"')
         msg_nums = (data[0].split() if data[0] else [])[-15:]
         for num in reversed(msg_nums):
-            _, msg_data = imap.fetch(
-                num, "(BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE)])"
-            )
+            _, msg_data = imap.fetch(num, "(BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE)])")
             if msg_data and msg_data[0]:
                 raw = msg_data[0][1]
                 msg = email.message_from_bytes(raw)
@@ -254,16 +246,14 @@ async def search_emails(query: str, provider: str = "gmail") -> str:
     return _truncate("\n".join(lines), 1900)
 
 
-async def send_email(
-    to: str, subject: str, body: str, provider: str = "gmail"
-) -> str:
+async def send_email(to: str, subject: str, body: str, provider: str = "gmail") -> str:
     """Send an email via Gmail or Outlook."""
     creds = _provider_creds(provider)
     if not creds:
         return _config_hint(provider)
 
     # Validate recipient email address
-    if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', to.strip()):
+    if not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", to.strip()):
         return "❌ Invalid recipient email address."
 
     user, password, _, smtp_host, smtp_port = creds
@@ -322,26 +312,16 @@ def _imap_fetch_one(provider: str, msg_id: str) -> str:
             body = ""
             if msg.is_multipart():
                 for part in msg.walk():
-                    if (
-                        part.get_content_type() == "text/plain"
-                        and not part.get("Content-Disposition")
-                    ):
+                    if part.get_content_type() == "text/plain" and not part.get("Content-Disposition"):
                         charset = part.get_content_charset() or "utf-8"
-                        body = part.get_payload(decode=True).decode(
-                            charset, errors="replace"
-                        )
+                        body = part.get_payload(decode=True).decode(charset, errors="replace")
                         break
             else:
                 if msg.get_content_type() == "text/plain":
                     charset = msg.get_content_charset() or "utf-8"
                     body = msg.get_payload(decode=True).decode(charset, errors="replace")
 
-            return (
-                f"**From:** {from_addr}\n"
-                f"**Subject:** {subject}\n"
-                f"**Date:** {date}\n\n"
-                f"{body.strip()}"
-            )
+            return f"**From:** {from_addr}\n**Subject:** {subject}\n**Date:** {date}\n\n{body.strip()}"
     except imaplib.IMAP4.error as e:
         return f"❌ IMAP error: {e}"
     except (OSError, ConnectionError) as e:

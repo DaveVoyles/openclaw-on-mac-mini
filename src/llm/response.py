@@ -34,8 +34,12 @@ log = logging.getLogger(__name__)
 
 
 SUPPORTED_IMAGE_MIMES = {
-    "image/png", "image/jpeg", "image/webp",
-    "image/heic", "image/heif", "image/gif",
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+    "image/gif",
 }
 
 
@@ -52,8 +56,11 @@ async def analyze_image(
 
     if _needs_tools(prompt):
         text, _ = await analyze_image_with_tools(
-            image_bytes, mime_type, prompt,
-            history=history, on_tool_call=on_tool_call,
+            image_bytes,
+            mime_type,
+            prompt,
+            history=history,
+            on_tool_call=on_tool_call,
         )
         return text
 
@@ -77,9 +84,7 @@ async def analyze_image(
         return "❌ GOOGLE_API_KEY not configured."
 
     try:
-        image_part = genai.types.Part(
-            inline_data=genai.types.Blob(mime_type=mime_type, data=image_bytes)
-        )
+        image_part = genai.types.Part(inline_data=genai.types.Blob(mime_type=mime_type, data=image_bytes))
         text_part = genai.types.Part(text=prompt)
 
         response = await asyncio.to_thread(
@@ -127,12 +132,12 @@ async def analyze_image_with_tools(
     gemini_history = [_to_content(msg) for msg in history]
 
     chat_session = _client.chats.create(
-        model=model.model_name, config=model.config, history=gemini_history,
+        model=model.model_name,
+        config=model.config,
+        history=gemini_history,
     )
 
-    image_part = genai.types.Part(
-        inline_data=genai.types.Blob(mime_type=mime_type, data=image_bytes)
-    )
+    image_part = genai.types.Part(inline_data=genai.types.Blob(mime_type=mime_type, data=image_bytes))
     text_part = genai.types.Part(text=prompt)
     multimodal_parts = [image_part, text_part]
 
@@ -140,16 +145,15 @@ async def analyze_image_with_tools(
     _rate_limiter.record()
 
     try:
-        response = await loop.run_in_executor(
-            None, lambda: chat_session.send_message(multimodal_parts)
-        )
+        response = await loop.run_in_executor(None, lambda: chat_session.send_message(multimodal_parts))
         await _record_usage(response)
     except Exception as e:  # broad: intentional
         log.error("Image analysis with tools failed: %s", e)
         return f"❌ Image analysis failed: {e}", history
 
     response, rounds = await _run_tool_loop(
-        chat_session, response,
+        chat_session,
+        response,
         max_rounds=MAX_TOOL_ROUNDS,
         on_tool_call=on_tool_call,
         parallel=True,

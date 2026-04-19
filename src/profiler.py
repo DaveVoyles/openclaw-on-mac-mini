@@ -16,6 +16,7 @@ from typing import Optional
 
 try:
     from memory_profiler import profile as memory_profile
+
     MEMORY_PROFILER_AVAILABLE = True
 except ImportError:
     MEMORY_PROFILER_AVAILABLE = False
@@ -42,6 +43,7 @@ class Profiler:
         self._is_profiling = True
 
         import time
+
         self._profile_start_time = time.time()
 
         logger.info("CPU profiling started")
@@ -55,6 +57,7 @@ class Profiler:
         self._is_profiling = False
 
         import time
+
         duration = time.time() - self._profile_start_time if self._profile_start_time else 0
 
         # Create stats
@@ -169,6 +172,7 @@ class Profiler:
 
 
 # Memory profiling decorators
+
 
 def profile_memory(func):
     """Decorator for memory profiling (requires memory_profiler)."""

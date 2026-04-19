@@ -88,9 +88,7 @@ async def extract_and_store_goal(
                 existing_words = set(existing["goal"].lower().split())
                 new_words = set(goal_text.lower().split())
                 if existing_words and new_words:
-                    overlap = len(existing_words & new_words) / max(
-                        len(existing_words), len(new_words)
-                    )
+                    overlap = len(existing_words & new_words) / max(len(existing_words), len(new_words))
                     if overlap > 0.6:
                         log.debug(
                             "Goal duplicate detected (%.0f%% overlap): %s",

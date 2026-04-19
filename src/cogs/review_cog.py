@@ -129,9 +129,7 @@ async def _do_review(interaction: discord.Interaction, text: str, mode: str, fil
     if len(text) > 8000:
         text = text[:8000] + "\n\n[Text truncated to 8000 characters]"
 
-    response_text, _, model = await chat(
-        prompt_template.format(text=text), model_preference="auto"
-    )
+    response_text, _, model = await chat(prompt_template.format(text=text), model_preference="auto")
 
     embed = discord.Embed(
         title=f"📋 Review: {filename[:50]}",
@@ -212,9 +210,11 @@ class ReviewCog(commands.Cog):
 
             if name_lower.endswith(".docx"):
                 from document_skills import read_word
+
                 extracted = read_word(raw_bytes)
             elif name_lower.endswith(".xlsx"):
                 from document_skills import read_excel
+
                 extracted = read_excel(raw_bytes)
             elif any(name_lower.endswith(ext) for ext in (".txt", ".md", ".py", ".json", ".csv")):
                 extracted = raw_bytes.decode("utf-8", errors="replace")
@@ -223,10 +223,9 @@ class ReviewCog(commands.Cog):
                     import io
 
                     import pdfplumber
+
                     with pdfplumber.open(io.BytesIO(raw_bytes)) as pdf:
-                        extracted = "\n".join(
-                            page.extract_text() or "" for page in pdf.pages
-                        )
+                        extracted = "\n".join(page.extract_text() or "" for page in pdf.pages)
                 except ImportError:
                     extracted = raw_bytes.decode("utf-8", errors="replace")
             else:

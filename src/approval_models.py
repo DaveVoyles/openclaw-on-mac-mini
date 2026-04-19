@@ -14,18 +14,19 @@ APPROVAL_TTL = 300  # 5 minutes
 
 
 class RiskLevel(Enum):
-    LOW = "LOW"          # Auto-execute, no approval
-    MEDIUM = "MEDIUM"    # Execute with enhanced logging
-    HIGH = "HIGH"        # Requires explicit approval via buttons
+    LOW = "LOW"  # Auto-execute, no approval
+    MEDIUM = "MEDIUM"  # Execute with enhanced logging
+    HIGH = "HIGH"  # Requires explicit approval via buttons
     CRITICAL = "CRITICAL"  # Requires approval + shows dry-run preview
 
 
 @dataclass
 class ApprovalRequest:
     """A single pending action awaiting approval."""
+
     request_id: str
-    action: str                  # e.g. "restart_container"
-    target: str                  # e.g. "sonarr"
+    action: str  # e.g. "restart_container"
+    target: str  # e.g. "sonarr"
     risk_level: RiskLevel
     requester_id: int
     requester_name: str
@@ -35,7 +36,7 @@ class ApprovalRequest:
     approved: bool = False
     resolver_id: int | None = None
     resolver_name: str | None = None
-    detail: str = ""             # Extra context (dry-run output, etc.)
+    detail: str = ""  # Extra context (dry-run output, etc.)
     session_id: str = ""
     plan_id: str = ""
     task_id: str = ""

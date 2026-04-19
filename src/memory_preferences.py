@@ -46,6 +46,7 @@ def _save_prefs(user_id: int, prefs: dict) -> None:
 def get_model_preference(user_id: int) -> str:
     """Return the user's sticky model preference (default from config: 'auto')."""
     from config import cfg
+
     return _load_prefs(user_id).get("model_preference", cfg.default_model_preference)
 
 

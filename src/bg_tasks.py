@@ -51,6 +51,7 @@ def managed_task(
         timeout: Seconds before task is cancelled (None = unlimited).
         error_callback: Optional callable(exc) called on task failure.
     """
+
     async def _wrapped() -> None:
         try:
             if timeout is not None:
@@ -116,14 +117,16 @@ def _build_background_task_factories(bot) -> dict[str, Callable[[], Awaitable[No
         "reminder": lambda: _me.reminder_loop(bot),
     }
     if ALERT_CHANNEL_ID:
-        factories.update({
-            "morning_briefing": lambda: _me.morning_briefing_loop(bot),
-            "evening_digest": lambda: _me.evening_digest_loop(bot),
-            "proactive_insight": lambda: _me.proactive_insight_loop(bot),
-            "error_monitor": lambda: _me.error_monitor_loop(bot),
-            "container_health": lambda: _me.container_health_loop(bot),
-            "resource_monitor": lambda: _me.resource_monitor_loop(bot),
-        })
+        factories.update(
+            {
+                "morning_briefing": lambda: _me.morning_briefing_loop(bot),
+                "evening_digest": lambda: _me.evening_digest_loop(bot),
+                "proactive_insight": lambda: _me.proactive_insight_loop(bot),
+                "error_monitor": lambda: _me.error_monitor_loop(bot),
+                "container_health": lambda: _me.container_health_loop(bot),
+                "resource_monitor": lambda: _me.resource_monitor_loop(bot),
+            }
+        )
     return factories
 
 
@@ -179,7 +182,9 @@ async def _run_supervised_background_task(
     cancelled = False
 
     try:
-        with trace_context(command=f"background:{task_name}", user_id=0, channel_id=ALERT_CHANNEL_ID, component="background"):
+        with trace_context(
+            command=f"background:{task_name}", user_id=0, channel_id=ALERT_CHANNEL_ID, component="background"
+        ):
             await task_factory()
         # Task completed cleanly — notify backoff tracker
         _BACKGROUND_BACKOFF.setdefault(task_name, _BackoffTracker()).mark_clean()

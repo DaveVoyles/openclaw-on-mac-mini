@@ -5,6 +5,7 @@ Extracted from openclaw_cli.py.  Handlers that still need things that live
 only in openclaw_cli are reached via the lazy _get_cli_mod() accessor to
 avoid circular imports and to remain compatible with test monkeypatching.
 """
+
 from __future__ import annotations
 
 import re
@@ -42,12 +43,14 @@ _CMD_QUIT: str = "quit"
 def _get_cli_mod():
     """Lazy import of main module for monkeypatch-safe back-references."""
     import openclaw_cli as _m
+
     return _m
 
 
 # ---------------------------------------------------------------------------
 # _cmd_watch
 # ---------------------------------------------------------------------------
+
 
 def _cmd_watch(ctx: ChatCommandContext) -> str:
     """/watch [status|history|retry-limit N|intervene TEXT] — inspect or control an active watch session."""
@@ -66,9 +69,13 @@ def _cmd_watch(ctx: ChatCommandContext) -> str:
     if sub in ("status", ""):
         if state is None:
             if m._RICH_AVAILABLE and m._IS_TTY:
-                m._RICH_CONSOLE.print("[dim]No active watch session.[/]  Start one with [cyan]openclaw watch --goal …[/]")
+                m._RICH_CONSOLE.print(
+                    "[dim]No active watch session.[/]  Start one with [cyan]openclaw watch --goal …[/]"
+                )
             else:
-                print("No active watch session. State stays local-only until a watch starts. Use /session to confirm the current recovery snapshot. Start one with: openclaw watch --goal …")
+                print(
+                    "No active watch session. State stays local-only until a watch starts. Use /session to confirm the current recovery snapshot. Start one with: openclaw watch --goal …"
+                )
             return _CMD_CONTINUE
         _print_watch_status(state)
 
@@ -111,6 +118,7 @@ def _cmd_watch(ctx: ChatCommandContext) -> str:
         import uuid as _uuid_mod
         from datetime import datetime as _dt
         from datetime import timezone as _tz
+
         interventions = list(state.get("interventions") or [])
         note_entry = {
             "request_id": _uuid_mod.uuid4().hex[:10],
@@ -140,6 +148,7 @@ def _cmd_watch(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_plan
 # ---------------------------------------------------------------------------
+
 
 def _cmd_plan(ctx: ChatCommandContext) -> str:
     """/plan [<id> | status | focus | unlink] — show, link, focus, or unlink a plan for this session."""
@@ -176,19 +185,24 @@ def _cmd_plan(ctx: ChatCommandContext) -> str:
         if m._RICH_AVAILABLE and m._IS_TTY:
             from rich.panel import Panel as _RichPanel
             from rich.table import Table as _RichTable
+
             grid = _RichTable.grid(padding=(0, 2))
             grid.add_column(style="dim", min_width=10)
             grid.add_column()
             grid.add_row("plan id", f"[yellow]{session.plan_id}[/]")
             if validation.summary:
                 grid.add_row("goal", f"[bold]{validation.summary[:100]}[/]")
-            status_str = "✅ found" if validation.exists else "⚠ not found locally" if validation.available else "unavailable"
+            status_str = (
+                "✅ found" if validation.exists else "⚠ not found locally" if validation.available else "unavailable"
+            )
             grid.add_row("status", status_str)
             if validation.source:
                 grid.add_row("file", f"[dim]{validation.source}[/]")
             if session.task_id:
                 grid.add_row("task", f"[magenta]{session.task_id}[/]")
-            m._RICH_CONSOLE.print(_RichPanel(grid, title="[bold cyan]📋 Plan Status[/]", border_style="cyan", padding=(0, 1)))
+            m._RICH_CONSOLE.print(
+                _RichPanel(grid, title="[bold cyan]📋 Plan Status[/]", border_style="cyan", padding=(0, 1))
+            )
         else:
             print(f"Plan: {session.plan_id}")
             if validation.summary:
@@ -239,12 +253,15 @@ def _cmd_plan(ctx: ChatCommandContext) -> str:
         if m._RICH_AVAILABLE and m._IS_TTY:
             from rich.markdown import Markdown as _RichMarkdown
             from rich.panel import Panel as _RichPanel
-            m._RICH_CONSOLE.print(_RichPanel(
-                _RichMarkdown("\n".join(focus_lines)),
-                title=f"[bold cyan]📋 Plan Focus — {session.plan_id}[/]",
-                border_style="cyan",
-                padding=(0, 1),
-            ))
+
+            m._RICH_CONSOLE.print(
+                _RichPanel(
+                    _RichMarkdown("\n".join(focus_lines)),
+                    title=f"[bold cyan]📋 Plan Focus — {session.plan_id}[/]",
+                    border_style="cyan",
+                    padding=(0, 1),
+                )
+            )
         else:
             for fl in focus_lines:
                 print(fl)
@@ -305,6 +322,7 @@ def _cmd_plan(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_task
 # ---------------------------------------------------------------------------
+
 
 def _cmd_task(ctx: ChatCommandContext) -> str:
     """/task [<id> | unlink] — show, link, or unlink a task for this session."""
@@ -384,6 +402,7 @@ def _cmd_task(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_risk
 # ---------------------------------------------------------------------------
+
 
 def _cmd_risk(ctx: ChatCommandContext) -> str:
     """/risk [list|add LEVEL TEXT|clear INDEX] — track blocking risks for handoffs."""
@@ -469,6 +488,7 @@ def _cmd_risk(ctx: ChatCommandContext) -> str:
 # _cmd_incident
 # ---------------------------------------------------------------------------
 
+
 def _cmd_incident(ctx: ChatCommandContext) -> str:
     """/incident [list|log TEXT|resolve INDEX] — track operator incidents for the current session."""
     m = _get_cli_mod()
@@ -543,6 +563,7 @@ def _cmd_incident(ctx: ChatCommandContext) -> str:
 # _cmd_workspace
 # ---------------------------------------------------------------------------
 
+
 def _cmd_workspace(ctx: ChatCommandContext) -> str:
     """/workspace [status|save|list|restore NAME] — manage workspace recovery capsules."""
     m = _get_cli_mod()
@@ -581,7 +602,17 @@ def _cmd_workspace(ctx: ChatCommandContext) -> str:
             return _CMD_CONTINUE
         if m._RICH_AVAILABLE and m._IS_TTY:
             from rich.table import Table as _RichTable
-            tbl = _RichTable("Capsule", "Session", "Files", "Outputs", "Watch", "Created", border_style="dim", header_style="bold cyan")
+
+            tbl = _RichTable(
+                "Capsule",
+                "Session",
+                "Files",
+                "Outputs",
+                "Watch",
+                "Created",
+                border_style="dim",
+                header_style="bold cyan",
+            )
             for item in handoffs:
                 capsule = item.get("workspace_capsule") if isinstance(item.get("workspace_capsule"), dict) else {}
                 tbl.add_row(
@@ -638,9 +669,11 @@ def _cmd_workspace(ctx: ChatCommandContext) -> str:
 # _cmd_macro
 # ---------------------------------------------------------------------------
 
+
 def _cmd_macro(ctx: ChatCommandContext) -> str:
     """Manage named command macros. Sub-commands: list, save, show, rm, run."""
     import re as _re
+
     m = _get_cli_mod()
 
     args = (ctx.args or "").strip()
@@ -656,6 +689,7 @@ def _cmd_macro(ctx: ChatCommandContext) -> str:
         if m._RICH_AVAILABLE and is_tty:
             from rich.panel import Panel as _RichPanel
             from rich.table import Table as _RichTable
+
             grid = _RichTable.grid(padding=(0, 2))
             grid.add_column(style="cyan", no_wrap=True)
             grid.add_column(style="dim")
@@ -664,12 +698,14 @@ def _cmd_macro(ctx: ChatCommandContext) -> str:
                     grid.add_row(name, f"{len(cmds)} command{'s' if len(cmds) != 1 else ''}")
             else:
                 grid.add_row(f"{m._e('🔧', '')} (no macros defined)", "")
-            m._RICH_CONSOLE.print(_RichPanel(
-                grid,
-                title=f"{m._e('🔧', '')} Macros",
-                border_style="cyan",
-                padding=(0, 1),
-            ))
+            m._RICH_CONSOLE.print(
+                _RichPanel(
+                    grid,
+                    title=f"{m._e('🔧', '')} Macros",
+                    border_style="cyan",
+                    padding=(0, 1),
+                )
+            )
         else:
             print(f"{_B}Macros:{_R}")
             if macros:
@@ -687,10 +723,8 @@ def _cmd_macro(ctx: ChatCommandContext) -> str:
             return _CMD_CONTINUE
 
         macro_name = save_parts[0]
-        if not _re.match(r'^[A-Za-z0-9_-]{1,40}$', macro_name):
-            m._print_error(
-                "Macro name must be 1-40 alphanumeric characters, hyphens, or underscores."
-            )
+        if not _re.match(r"^[A-Za-z0-9_-]{1,40}$", macro_name):
+            m._print_error("Macro name must be 1-40 alphanumeric characters, hyphens, or underscores.")
             return _CMD_CONTINUE
 
         n = 5
@@ -740,18 +774,21 @@ def _cmd_macro(ctx: ChatCommandContext) -> str:
             from rich.console import Group as _RichGroup
             from rich.panel import Panel as _RichPanel
             from rich.text import Text as _RichText
+
             lines = []
             for i, cmd in enumerate(cmds, start=1):
                 line = _RichText()
                 line.append(f"  {i:>2}  ", style="dim")
                 line.append(cmd, style="bold cyan")
                 lines.append(line)
-            m._RICH_CONSOLE.print(_RichPanel(
-                _RichGroup(*lines),
-                title=f"{m._e('🔧', '')} Macro: {name}",
-                border_style="cyan",
-                padding=(0, 1),
-            ))
+            m._RICH_CONSOLE.print(
+                _RichPanel(
+                    _RichGroup(*lines),
+                    title=f"{m._e('🔧', '')} Macro: {name}",
+                    border_style="cyan",
+                    padding=(0, 1),
+                )
+            )
         else:
             print(f"{_B}Macro '{name}':{_R}")
             for i, cmd in enumerate(cmds, start=1):
@@ -787,6 +824,7 @@ def _cmd_macro(ctx: ChatCommandContext) -> str:
 # _cmd_macrostatus
 # ---------------------------------------------------------------------------
 
+
 def _cmd_macrostatus(ctx: ChatCommandContext) -> str:  # noqa: ARG001
     """/macrostatus — show saved macros with step counts."""
     m = _get_cli_mod()
@@ -803,6 +841,7 @@ def _cmd_macrostatus(ctx: ChatCommandContext) -> str:  # noqa: ARG001
     if m._RICH_AVAILABLE and is_tty:
         from rich.box import SIMPLE as _RICH_BOX_SIMPLE
         from rich.table import Table as _RichTableLocal
+
         tbl = _RichTableLocal(box=_RICH_BOX_SIMPLE, show_header=True, header_style="bold cyan")
         tbl.add_column("Macro", style="bold green")
         tbl.add_column("Steps", justify="right")
@@ -835,6 +874,7 @@ def _cmd_macrostatus(ctx: ChatCommandContext) -> str:  # noqa: ARG001
 # ---------------------------------------------------------------------------
 # _cmd_workflow
 # ---------------------------------------------------------------------------
+
 
 def _cmd_workflow(ctx: ChatCommandContext) -> str:
     """/workflow — manage previewable workflows backed by the macro store."""
@@ -887,6 +927,7 @@ def _cmd_workflow(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_dashboard
 # ---------------------------------------------------------------------------
+
 
 def _cmd_dashboard(ctx: ChatCommandContext) -> str:  # noqa: ARG001
     """/dashboard — show the power dashboard: sessions, stats, pins, and system status."""
@@ -986,7 +1027,9 @@ def _cmd_dashboard(ctx: ChatCommandContext) -> str:  # noqa: ARG001
         if not recent:
             activity_tbl.add_row("[dim]No history yet[/]", "")
 
-        activity_panel = Panel(activity_tbl, title="[bold cyan]🕐 Recent Activity[/]", border_style="dim", padding=(0, 1))
+        activity_panel = Panel(
+            activity_tbl, title="[bold cyan]🕐 Recent Activity[/]", border_style="dim", padding=(0, 1)
+        )
         m._RICH_CONSOLE.print(activity_panel)
 
         # Row 3: Quick reference
@@ -1003,9 +1046,9 @@ def _cmd_dashboard(ctx: ChatCommandContext) -> str:  # noqa: ARG001
 
     else:
         # Plain-text dashboard
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"  🦞 OpenClaw Dashboard  [{m._CLI_BUILD}]")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"  Prompts:      {total_prompts}")
         print(f"  Commands:     {total_commands}")
         print(f"  Ratings:      {total_ratings}  (avg: {avg_rating:.1f})")
@@ -1019,7 +1062,7 @@ def _cmd_dashboard(ctx: ChatCommandContext) -> str:  # noqa: ARG001
             for k, v in list(pins.items())[:5]:
                 print(f"     {k}: {str(v)[:40]}")
         print("\n  Type /help for full reference.")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
     return _CMD_CONTINUE
 
@@ -1027,6 +1070,7 @@ def _cmd_dashboard(ctx: ChatCommandContext) -> str:  # noqa: ARG001
 # ---------------------------------------------------------------------------
 # _cmd_alerts
 # ---------------------------------------------------------------------------
+
 
 def _cmd_alerts(ctx: ChatCommandContext) -> str:
     """/alerts [list|acknowledge INDEX] — inspect computed operator alerts."""
@@ -1069,6 +1113,7 @@ def _cmd_alerts(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_fleet
 # ---------------------------------------------------------------------------
+
 
 def _cmd_fleet(ctx: ChatCommandContext) -> str:
     """/fleet [status|health] — show cross-session automation health summaries."""

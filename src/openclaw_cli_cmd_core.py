@@ -13,6 +13,7 @@ All openclaw_cli.py globals and functions are accessed via _get_cli_mod() to
 respect test monkeypatching.  Direct imports are only taken from leaf modules
 that have no circular dependency on openclaw_cli.
 """
+
 from __future__ import annotations
 
 import shlex
@@ -79,12 +80,14 @@ _CMD_QUIT: str = "quit"
 def _get_cli_mod() -> Any:
     """Lazy import of main module for monkeypatch-safe back-references."""
     import openclaw_cli as _m  # noqa: PLC0415
+
     return _m
 
 
 # ---------------------------------------------------------------------------
 # _cmd_exporttemplates
 # ---------------------------------------------------------------------------
+
 
 def _cmd_exporttemplates(ctx: ChatCommandContext) -> str:
     """/exporttemplates [list|show <name>] — inspect built-in runbook/export templates."""
@@ -132,6 +135,7 @@ def _cmd_exporttemplates(ctx: ChatCommandContext) -> str:
 # _cmd_runbook
 # ---------------------------------------------------------------------------
 
+
 def _cmd_runbook(ctx: ChatCommandContext) -> str:
     """/runbook [template] [save <path>] — render a long-form session runbook."""
     m = _get_cli_mod()
@@ -175,6 +179,7 @@ def _cmd_runbook(ctx: ChatCommandContext) -> str:
 # _cmd_help
 # ---------------------------------------------------------------------------
 
+
 def _cmd_help(ctx: ChatCommandContext) -> str:
     m = _get_cli_mod()
     token = ctx.args.strip().lower()
@@ -188,6 +193,7 @@ def _cmd_help(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_clear
 # ---------------------------------------------------------------------------
+
 
 def _cmd_clear(ctx: ChatCommandContext) -> str:
     m = _get_cli_mod()
@@ -208,6 +214,7 @@ def _cmd_clear(ctx: ChatCommandContext) -> str:
 # _cmd_context
 # ---------------------------------------------------------------------------
 
+
 def _cmd_context(ctx: ChatCommandContext) -> str:
     """/context [last] — show the effective local grounding for the active session."""
     m = _get_cli_mod()
@@ -216,7 +223,9 @@ def _cmd_context(ctx: ChatCommandContext) -> str:
         last_block = m._PREFS.get("_last_grounding_block")
         if not last_block:
             if _RICH_AVAILABLE and _IS_TTY:
-                _RICH_CONSOLE.print("[dim]No grounding block recorded yet — run /analyze, /research, or /write first.[/]")
+                _RICH_CONSOLE.print(
+                    "[dim]No grounding block recorded yet — run /analyze, /research, or /write first.[/]"
+                )
             else:
                 print("  No grounding block recorded yet — run /analyze, /research, or /write first.")
         else:
@@ -228,7 +237,9 @@ def _cmd_context(ctx: ChatCommandContext) -> str:
                 grid.add_row("Query / subject:", str(last_block.get("query") or "(none)"))
                 grid.add_row("Confidence boost:", "yes" if last_block.get("grounded") else "none")
                 grid.add_row("Rationale:", str(last_block.get("rationale") or "(none)")[:300])
-                _RICH_CONSOLE.print(_RichPanel(grid, title="[bold cyan]Last Grounding Block[/]", border_style="dim", padding=(0, 1)))
+                _RICH_CONSOLE.print(
+                    _RichPanel(grid, title="[bold cyan]Last Grounding Block[/]", border_style="dim", padding=(0, 1))
+                )
             else:
                 print("  Last grounding block (analyze/research/write):")
                 print(f"    Type: {last_block.get('type') or '(unknown)'}")
@@ -281,19 +292,25 @@ def _cmd_context(ctx: ChatCommandContext) -> str:
         detail_lines.append("next send guardrail: injected context is queued for one message only")
     if sys_prompt or pending_inject:
         extra_chars = len(sys_prompt) + len(pending_inject)
-        detail_lines.append(f"next send extras: ~{max(1, extra_chars // 4) if extra_chars else 0} est. tokens before your next typed message")
+        detail_lines.append(
+            f"next send extras: ~{max(1, extra_chars // 4) if extra_chars else 0} est. tokens before your next typed message"
+        )
     if int(pressure["pct_next"]) >= 50:
         detail_lines.append(
             f"context pressure: ~{int(pressure['next_tokens']):,} est. tokens on the next send ({int(pressure['pct_next_raw'])}% of {pressure['limit_label']})"
         )
         if bool(pressure["overflow"]):
-            detail_lines.append("overflow cue: next send likely exceeds the resolved window — trim hidden context before retrying")
+            detail_lines.append(
+                "overflow cue: next send likely exceeds the resolved window — trim hidden context before retrying"
+            )
         elif int(pressure["pct_next"]) >= 80:
             detail_lines.append("recovery guardrail: save /bookmark before /clear if you need a lighter restart")
         else:
             detail_lines.append("staleness cue: /tokeninfo can confirm whether context pressure is causing drift")
     if pressure["hidden_pressure"] and int(pressure["pct_next"]) >= 80:
-        detail_lines.append("hidden context cue: system or queued inject content pushes the next send closer to capacity")
+        detail_lines.append(
+            "hidden context cue: system or queued inject content pushes the next send closer to capacity"
+        )
     if pressure["has_pending_inject"]:
         detail_lines.append("recovery cue: /inject clear drops the queued one-shot context before a retry")
     action_lines = []
@@ -330,6 +347,7 @@ def _cmd_context(ctx: ChatCommandContext) -> str:
 # _cmd_cwd
 # ---------------------------------------------------------------------------
 
+
 def _cmd_cwd(ctx: ChatCommandContext) -> str:
     """/cwd [path] — show or switch the session working directory."""
     m = _get_cli_mod()
@@ -364,6 +382,7 @@ def _cmd_cwd(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_files
 # ---------------------------------------------------------------------------
+
 
 def _cmd_files(ctx: ChatCommandContext) -> str:
     """/files [add <path> | rm <path>] — list, add, or remove tracked files."""
@@ -454,6 +473,7 @@ def _cmd_files(ctx: ChatCommandContext) -> str:
 # _cmd_routing
 # ---------------------------------------------------------------------------
 
+
 def _cmd_routing(ctx: ChatCommandContext) -> str:
     """/routing [suggest|analyze] — inspect learned routing hints from past ratings."""
     m = _get_cli_mod()
@@ -481,13 +501,16 @@ def _cmd_routing(ctx: ChatCommandContext) -> str:
     print("Routing quality lanes")
     print("---------------------")
     for entry in rows[:5]:
-        print(f"  /{entry['route']:<12} avg {entry['avg']:.1f}/5  ratings {entry['count']:<2}  high-rate {entry['high_rate']}%")
+        print(
+            f"  /{entry['route']:<12} avg {entry['avg']:.1f}/5  ratings {entry['count']:<2}  high-rate {entry['high_rate']}%"
+        )
     return _CMD_CONTINUE
 
 
 # ---------------------------------------------------------------------------
 # _cmd_why
 # ---------------------------------------------------------------------------
+
 
 def _cmd_why(ctx: ChatCommandContext) -> str:
     """/why — explain the last routing or tool decision from session history."""
@@ -511,13 +534,22 @@ def _cmd_why(ctx: ChatCommandContext) -> str:
         grid.add_row("Why:", str(snapshot.get("rationale") or "")[:300])
         if snapshot.get("route_reason"):
             grid.add_row("Route reason:", str(snapshot.get("route_reason") or "")[:300])
-        grid.add_row("Confidence:", f"[{snapshot.get('conf_color', 'dim')}]{snapshot.get('conf_label', '(unknown)')}[/]")
+        grid.add_row(
+            "Confidence:", f"[{snapshot.get('conf_color', 'dim')}]{snapshot.get('conf_label', '(unknown)')}[/]"
+        )
         if snapshot.get("target_text"):
             grid.add_row("Target:", str(snapshot.get("target_text") or "")[:120])
         if snapshot.get("args_text"):
             grid.add_row("Args:", str(snapshot.get("args_text") or "")[:120])
         grid.add_row("When:", str(snapshot.get("ts") or ""))
-        _RICH_CONSOLE.print(_RichPanel(grid, title="[bold cyan]Last Decision[/]", border_style=str(snapshot.get("border_style") or "dim"), padding=(0, 1)))
+        _RICH_CONSOLE.print(
+            _RichPanel(
+                grid,
+                title="[bold cyan]Last Decision[/]",
+                border_style=str(snapshot.get("border_style") or "dim"),
+                padding=(0, 1),
+            )
+        )
     else:
         print(f"  What happened: {str(snapshot.get('what_happened') or '')}")
         print(f"  Why:           {str(snapshot.get('rationale') or '')[:300]}")
@@ -535,6 +567,7 @@ def _cmd_why(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_trace
 # ---------------------------------------------------------------------------
+
 
 def _cmd_trace(ctx: ChatCommandContext) -> str:
     """/trace — show the latest routing trace plus the current quality context."""
@@ -556,12 +589,21 @@ def _cmd_trace(ctx: ChatCommandContext) -> str:
         grid.add_column()
         grid.add_row("Route:", str(snapshot.get("what_happened") or ""))
         grid.add_row("Rationale:", str(snapshot.get("rationale") or "")[:300])
-        grid.add_row("Confidence:", f"[{snapshot.get('conf_color', 'dim')}]{snapshot.get('conf_label', '(unknown)')}[/]")
+        grid.add_row(
+            "Confidence:", f"[{snapshot.get('conf_color', 'dim')}]{snapshot.get('conf_label', '(unknown)')}[/]"
+        )
         if snapshot.get("latest_rating"):
             grid.add_row("Latest rating:", str(snapshot.get("latest_rating") or ""))
         grid.add_row("Ratings logged:", str(snapshot.get("rating_count") or 0))
         grid.add_row("When:", str(snapshot.get("ts") or ""))
-        _RICH_CONSOLE.print(_RichPanel(grid, title="[bold cyan]Trace Snapshot[/]", border_style=str(snapshot.get("border_style") or "dim"), padding=(0, 1)))
+        _RICH_CONSOLE.print(
+            _RichPanel(
+                grid,
+                title="[bold cyan]Trace Snapshot[/]",
+                border_style=str(snapshot.get("border_style") or "dim"),
+                padding=(0, 1),
+            )
+        )
     else:
         print("Trace Snapshot")
         print(f"  Route:         {str(snapshot.get('what_happened') or '')}")
@@ -577,6 +619,7 @@ def _cmd_trace(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_autoroute
 # ---------------------------------------------------------------------------
+
 
 def _cmd_autoroute(ctx: ChatCommandContext) -> str:
     """/autoroute [on|off] — show or set session-level REPL auto-routing."""
@@ -620,6 +663,7 @@ def _cmd_autoroute(ctx: ChatCommandContext) -> str:
 # _cmd_snapshot
 # ---------------------------------------------------------------------------
 
+
 def _cmd_snapshot(ctx: ChatCommandContext) -> str:
     """/snapshot [name] — save current git HEAD as a named restore point."""
     m = _get_cli_mod()
@@ -629,7 +673,9 @@ def _cmd_snapshot(ctx: ChatCommandContext) -> str:
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
-            capture_output=True, text=True, timeout=5
+            capture_output=True,
+            text=True,
+            timeout=5,
             # Security: shell=False, timeout=5, hardcoded command with no user input interpolation
         )
         sha = result.stdout.strip()[:12]
@@ -644,6 +690,7 @@ def _cmd_snapshot(ctx: ChatCommandContext) -> str:
 
         snapshots = m._PREFS.get("snapshots", {})
         import datetime  # noqa: PLC0415
+
         ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
         snapshots[name] = {"sha": sha, "ts": ts}
         m._prefs_set("snapshots", snapshots)
@@ -664,6 +711,7 @@ def _cmd_snapshot(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_rollback
 # ---------------------------------------------------------------------------
+
 
 def _cmd_rollback(ctx: ChatCommandContext) -> str:
     """/rollback [last|list|<name>] — restore latest checkpoint, list git snapshots, or preview/exec a git snapshot rollback."""
@@ -717,11 +765,15 @@ def _cmd_rollback(ctx: ChatCommandContext) -> str:
         if status == "restored":
             restored_files = [str(item) for item in outcome.get("restored_files") or []]
             if _RICH_AVAILABLE and _IS_TTY:
-                _RICH_CONSOLE.print(f"[green]✓[/] rolled back [dim]{action_kind}[/] via checkpoint [dim]{checkpoint_id}[/]  [cyan]({len(restored_files)} file(s) restored)[/]")
+                _RICH_CONSOLE.print(
+                    f"[green]✓[/] rolled back [dim]{action_kind}[/] via checkpoint [dim]{checkpoint_id}[/]  [cyan]({len(restored_files)} file(s) restored)[/]"
+                )
                 for path in restored_files[:5]:
                     _RICH_CONSOLE.print(f"  [dim]↩ {path}[/]")
             else:
-                print(f"Rolled back last routed {action_kind} action via checkpoint {checkpoint_id}. Restored {len(restored_files)} file(s).")
+                print(
+                    f"Rolled back last routed {action_kind} action via checkpoint {checkpoint_id}. Restored {len(restored_files)} file(s)."
+                )
                 for path in restored_files[:5]:
                     print(f"  restored: {path}")
             m._set_command_result(ctx, ok=True, summary=f"rolled back checkpoint {checkpoint_id}")
@@ -736,19 +788,27 @@ def _cmd_rollback(ctx: ChatCommandContext) -> str:
         if status == "unsupported":
             workspace_signature = str(checkpoint.get("workspace_signature") or "").strip()
             if _RICH_AVAILABLE and _IS_TTY:
-                _RICH_CONSOLE.print(f"[yellow]⚠[/] rollback unavailable for [dim]{checkpoint_id}[/]: {reason or 'manual recovery required'}")
+                _RICH_CONSOLE.print(
+                    f"[yellow]⚠[/] rollback unavailable for [dim]{checkpoint_id}[/]: {reason or 'manual recovery required'}"
+                )
                 if workspace_signature:
                     _RICH_CONSOLE.print(f"  [dim]workspace before action:[/] {workspace_signature}")
             else:
-                print(f"Checkpoint {checkpoint_id} recorded the last routed {action_kind} action, but automatic rollback is unavailable: {reason or 'manual recovery required.'}")
+                print(
+                    f"Checkpoint {checkpoint_id} recorded the last routed {action_kind} action, but automatic rollback is unavailable: {reason or 'manual recovery required.'}"
+                )
                 if workspace_signature:
                     print(f"workspace signature before action: {workspace_signature}")
             m._set_command_result(ctx, ok=False, summary=f"rollback unavailable for {checkpoint_id}")
             return _CMD_CONTINUE
         if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print(f"[red]✗[/] rollback failed for [dim]{checkpoint_id}[/]: {reason or 'unable to restore the latest routed action'}")
+            _RICH_CONSOLE.print(
+                f"[red]✗[/] rollback failed for [dim]{checkpoint_id}[/]: {reason or 'unable to restore the latest routed action'}"
+            )
         else:
-            print(f"Rollback failed for checkpoint {checkpoint_id}: {reason or 'unable to restore the latest routed action.'}")
+            print(
+                f"Rollback failed for checkpoint {checkpoint_id}: {reason or 'unable to restore the latest routed action.'}"
+            )
         m._set_command_result(ctx, ok=False, summary=f"rollback failed for {checkpoint_id}")
         return _CMD_CONTINUE
 
@@ -769,6 +829,7 @@ def _cmd_rollback(ctx: ChatCommandContext) -> str:
     sha = snapshots[snap_name].get("sha", "")
     # Security: validate sha is a hex git SHA (alphanumeric only) to prevent argument injection
     import re as _re
+
     if not _re.fullmatch(r"[0-9a-f]{1,40}", sha or ""):
         msg = f"Invalid snapshot SHA '{sha}': must be a hex git SHA."
         if _RICH_AVAILABLE and is_tty:
@@ -781,7 +842,9 @@ def _cmd_rollback(ctx: ChatCommandContext) -> str:
         try:
             result = subprocess.run(
                 ["git", "checkout", sha],
-                capture_output=True, text=True, timeout=10
+                capture_output=True,
+                text=True,
+                timeout=10,
                 # Security: shell=False, timeout=10, sha validated as hex git SHA above
             )
             if result.returncode == 0:
@@ -803,14 +866,18 @@ def _cmd_rollback(ctx: ChatCommandContext) -> str:
         try:
             result = subprocess.run(
                 ["git", "diff", "--stat", f"{sha}..HEAD"],
-                capture_output=True, text=True, timeout=10
+                capture_output=True,
+                text=True,
+                timeout=10,
                 # Security: shell=False, timeout=10, sha validated as hex git SHA above
             )
             diff_stat = result.stdout.strip() or "(no differences)"
             if _RICH_AVAILABLE and is_tty:
                 _RICH_CONSOLE.print(f"\n[bold cyan]📸 Rollback Preview:[/] [bold]{snap_name}[/] → current HEAD\n")
                 _RICH_CONSOLE.print(f"[dim]{diff_stat}[/]")
-                _RICH_CONSOLE.print(f"\n[yellow]⚠️  Use /rollback {snap_name} --exec to actually rollback (DESTRUCTIVE)[/]\n")
+                _RICH_CONSOLE.print(
+                    f"\n[yellow]⚠️  Use /rollback {snap_name} --exec to actually rollback (DESTRUCTIVE)[/]\n"
+                )
             else:
                 print(f"\n📸 Rollback Preview: {snap_name} → HEAD\n{diff_stat}")
                 print(f"\n⚠️  Use /rollback {snap_name} --exec to rollback (DESTRUCTIVE)\n")
@@ -826,6 +893,7 @@ def _cmd_rollback(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_analyze
 # ---------------------------------------------------------------------------
+
 
 def _cmd_analyze(ctx: ChatCommandContext) -> str:
     """/analyze <goal> — run an analysis using the current session context."""
@@ -882,6 +950,7 @@ def _cmd_analyze(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_research
 # ---------------------------------------------------------------------------
+
 
 def _cmd_research(ctx: ChatCommandContext) -> str:
     """/research <query> — run the research agent using the current session context."""
@@ -945,7 +1014,8 @@ def _cmd_research(ctx: ChatCommandContext) -> str:
         _RESET = "\033[0m" if sys.stdout.isatty() else ""
         word_count = len(report.split())
         import re as _re  # noqa: PLC0415
-        source_count = len(set(_re.findall(r'\[\d+\]', report))) or report.count("http")
+
+        source_count = len(set(_re.findall(r"\[\d+\]", report))) or report.count("http")
         print(f"  {_DIM}✓ Research complete — {word_count} words, {source_count} sources{_RESET}")
     return _CMD_CONTINUE
 
@@ -953,6 +1023,7 @@ def _cmd_research(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_write
 # ---------------------------------------------------------------------------
+
 
 def _cmd_write(ctx: ChatCommandContext) -> str:
     """/write <task> — generate a markdown document using the current session context."""
@@ -1007,6 +1078,7 @@ def _cmd_write(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_exec
 # ---------------------------------------------------------------------------
+
 
 def _cmd_exec(ctx: ChatCommandContext) -> str:
     """/exec [--] <command> — run a shell command with session tracking and approval."""
@@ -1092,6 +1164,7 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
     try:
         if _use_animation:
             import subprocess as _sp  # noqa: PLC0415
+
             _proc = _sp.Popen(
                 command_parts,
                 cwd=_exec_cwd,
@@ -1106,6 +1179,7 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
                 reduced_motion=m._a11y_reduced_motion(),
             )
             from openclaw_cli_actions import ShellCommandResult, normalize_cwd  # noqa: PLC0415
+
             result = ShellCommandResult(
                 command=shlex.join(command_parts),
                 cwd=str(normalize_cwd(_exec_cwd)),
@@ -1157,6 +1231,7 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_edit
 # ---------------------------------------------------------------------------
+
 
 def _cmd_edit(ctx: ChatCommandContext) -> str:
     """/edit <path> [--content <text> | --append <text> | --replace OLD NEW] — inspect or write a file."""
@@ -1347,9 +1422,11 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
 # _cmd_update
 # ---------------------------------------------------------------------------
 
+
 def _cmd_update(ctx: ChatCommandContext) -> str:  # noqa: ARG001
     """/update — self-upgrade openclaw via pip without leaving the REPL."""
     import argparse as _argparse  # noqa: PLC0415
+
     install_dir = _standalone_install_dir()
     if install_dir and ctx.config is not None:
         _update_standalone_install(install_dir, current=cli_version(), base_url=ctx.config.base_url)
@@ -1365,6 +1442,7 @@ def _cmd_update(ctx: ChatCommandContext) -> str:  # noqa: ARG001
 # ---------------------------------------------------------------------------
 # _cmd_version
 # ---------------------------------------------------------------------------
+
 
 def _cmd_version(ctx: ChatCommandContext) -> str:  # noqa: ARG001
     """/version — show the running CLI version and build stamp."""
@@ -1385,6 +1463,7 @@ def _cmd_version(ctx: ChatCommandContext) -> str:  # noqa: ARG001
 # ---------------------------------------------------------------------------
 # _cmd_tokeninfo
 # ---------------------------------------------------------------------------
+
 
 def _cmd_tokeninfo(ctx: ChatCommandContext) -> str:
     """/tokeninfo — show estimated token usage for this session."""
@@ -1433,13 +1512,7 @@ def _cmd_tokeninfo(ctx: ChatCommandContext) -> str:
         for role, details in role_rows[:4]:
             role_tokens = int(details["tokens"])
             share = round((role_tokens / est_tokens) * 100) if est_tokens else 0
-            print(
-                "  "
-                f"{role:<10}"
-                f"{details['messages']:>2} msgs"
-                f"  ~{role_tokens:>6,} tok"
-                f"  {share:>3}%"
-            )
+            print(f"  {role:<10}{details['messages']:>2} msgs  ~{role_tokens:>6,} tok  {share:>3}%")
         top_role, top_details = role_rows[0]
         top_share = round((int(top_details["tokens"]) / est_tokens) * 100) if est_tokens else 0
         print(f"\n  {_DM}Largest share: {top_role} ({top_share}% of estimated tokens).{_R}")
@@ -1449,10 +1522,14 @@ def _cmd_tokeninfo(ctx: ChatCommandContext) -> str:
             print(f"  system prompt: ~{sys_tokens:,} tok ({len(sys_prompt):,} chars)")
         if inject_tokens:
             print(f"  pending inject: ~{inject_tokens:,} tok ({len(pending_inject):,} chars)")
-        print(f"  next request est.: ~{next_turn_tokens:,} tok total ({pct_next_turn_raw}% of {pressure['limit_label']})")
+        print(
+            f"  next request est.: ~{next_turn_tokens:,} tok total ({pct_next_turn_raw}% of {pressure['limit_label']})"
+        )
         print(f"  {_DM}Trust cue: use /promptdebug to preview exactly what will be sent next.{_R}")
     if bool(pressure["overflow"]):
-        print(f"\n  {_RE}⚠  Next request likely exceeds the resolved window — trim /inject or /system content, then /bookmark and /clear if needed.{_R}")
+        print(
+            f"\n  {_RE}⚠  Next request likely exceeds the resolved window — trim /inject or /system content, then /bookmark and /clear if needed.{_R}"
+        )
     elif pct_history >= 90:
         print(f"\n  {_RE}⚠  Context is near capacity — use /bookmark before /clear so you can resume cleanly.{_R}")
     elif pct_history >= 80:
@@ -1460,7 +1537,9 @@ def _cmd_tokeninfo(ctx: ChatCommandContext) -> str:
     elif pct_history >= 50:
         print(f"\n  {_DM}Tip: If responses feel stale, save a /bookmark and use /clear to refresh context.{_R}")
     if pct_next_turn >= 90 and pct_history < 90 and not bool(pressure["overflow"]):
-        print(f"  {_RE}⚠  Hidden context will push the next request near capacity — verify /context or /promptdebug before sending.{_R}")
+        print(
+            f"  {_RE}⚠  Hidden context will push the next request near capacity — verify /context or /promptdebug before sending.{_R}"
+        )
     elif inject_tokens:
         print(f"  {_DM}Recovery cue: /inject clear removes the queued one-shot context if it is no longer needed.{_R}")
     print()
@@ -1470,6 +1549,7 @@ def _cmd_tokeninfo(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_draft
 # ---------------------------------------------------------------------------
+
 
 def _cmd_draft(ctx: ChatCommandContext) -> str:
     """Handler for /draft — save, load, clear, or restore a draft prompt."""
@@ -1508,7 +1588,7 @@ def _cmd_draft(ctx: ChatCommandContext) -> str:
         return _CMD_CONTINUE
 
     if sub == "multiline":
-        rest = (parts[1].strip().lower() if len(parts) > 1 else "")
+        rest = parts[1].strip().lower() if len(parts) > 1 else ""
         if rest == "on":
             m._multiline_mode = True
             print(f"  {_GR}Multiline mode: ON{_R} — type \\end on its own line to submit")
@@ -1530,6 +1610,7 @@ def _cmd_draft(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_template
 # ---------------------------------------------------------------------------
+
 
 def _cmd_template(ctx: ChatCommandContext) -> str:
     """Handler for /template — manage reusable prompt templates."""
@@ -1580,7 +1661,7 @@ def _cmd_template(ctx: ChatCommandContext) -> str:
         return _CMD_CONTINUE
 
     if sub == "use":
-        name = (parts[1].strip() if len(parts) > 1 else "")
+        name = parts[1].strip() if len(parts) > 1 else ""
         if not name:
             print(f"  {_DM}Usage: /template use <name>{_R}")
             return _CMD_CONTINUE
@@ -1593,7 +1674,7 @@ def _cmd_template(ctx: ChatCommandContext) -> str:
         return _CMD_CONTINUE
 
     if sub == "delete":
-        name = (parts[1].strip() if len(parts) > 1 else "")
+        name = parts[1].strip() if len(parts) > 1 else ""
         if not name:
             print(f"  {_DM}Usage: /template delete <name>{_R}")
             return _CMD_CONTINUE
@@ -1605,13 +1686,16 @@ def _cmd_template(ctx: ChatCommandContext) -> str:
         print(f"  {_GR}Template '{name}' deleted.{_R}")
         return _CMD_CONTINUE
 
-    m._print_error(f"Unknown /template subcommand '{sub}'. Usage: list | use <name> | save <name> <text> | delete <name>")
+    m._print_error(
+        f"Unknown /template subcommand '{sub}'. Usage: list | use <name> | save <name> <text> | delete <name>"
+    )
     return _CMD_CONTINUE
 
 
 # ---------------------------------------------------------------------------
 # _cmd_inject
 # ---------------------------------------------------------------------------
+
 
 def _cmd_inject(ctx: ChatCommandContext) -> str:
     """/inject — inject file or URL content as context prefix for the next message."""

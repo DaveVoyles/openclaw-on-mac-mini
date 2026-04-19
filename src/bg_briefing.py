@@ -42,6 +42,7 @@ _OWNER_USER_ID = int(os.getenv("OWNER_USER_ID", os.getenv("BOT_OWNER_ID", "0")))
 def _owner_local_now() -> datetime.datetime:
     """Return the current datetime in the bot owner's configured timezone (default UTC)."""
     from notification_prefs import get_user_timezone
+
     tz_str = get_user_timezone(_OWNER_USER_ID) if _OWNER_USER_ID else "UTC"
     try:
         tz = zoneinfo.ZoneInfo(tz_str)
@@ -53,6 +54,7 @@ def _owner_local_now() -> datetime.datetime:
 # ---------------------------------------------------------------------------
 # Morning briefing
 # ---------------------------------------------------------------------------
+
 
 async def morning_briefing_loop(bot) -> None:
     """Post a morning briefing to ALERT_CHANNEL_ID each day at ~8:00 AM."""
@@ -117,6 +119,7 @@ async def send_morning_briefing(bot, channel_override=None) -> None:
 
         try:
             from calendar_skills import get_upcoming_events
+
             calendar = await asyncio.wait_for(get_upcoming_events(days=1), timeout=8)
         except (ImportError, asyncio.TimeoutError, OSError, ValueError) as exc:
             log.debug("Calendar fetch failed for briefing: %s", exc)
@@ -125,6 +128,7 @@ async def send_morning_briefing(bot, channel_override=None) -> None:
         goals_section = ""
         try:
             from goal_tracker import format_goals_for_briefing
+
             goals_section = format_goals_for_briefing()
         except (ImportError, AttributeError, ValueError, TypeError) as exc:
             log.debug("Goal tracker unavailable for briefing: %s", exc)
@@ -132,6 +136,7 @@ async def send_morning_briefing(bot, channel_override=None) -> None:
         error_stats_section = ""
         try:
             from error_tracker import get_error_stats
+
             stats = get_error_stats(hours=24)
             if stats["total"] > 0:
                 error_stats_section = (
@@ -140,10 +145,8 @@ async def send_morning_briefing(bot, channel_override=None) -> None:
                     f"{stats['failures']} failures, avg latency {stats['avg_latency_ms']}ms"
                 )
                 if stats["failures"] > 0:
-                    error_stats_section += (
-                        " | Recent errors: " + "; ".join(
-                            e["error"][:50] for e in stats["recent_errors"][:3]
-                        )
+                    error_stats_section += " | Recent errors: " + "; ".join(
+                        e["error"][:50] for e in stats["recent_errors"][:3]
                     )
         except (ImportError, KeyError, AttributeError, TypeError, ValueError) as exc:
             log.debug("Error stats unavailable for briefing: %s", exc)
@@ -151,6 +154,7 @@ async def send_morning_briefing(bot, channel_override=None) -> None:
         overseerr_section = ""
         try:
             from overseerr import get_request_stats
+
             overseerr_section = await asyncio.wait_for(get_request_stats(), timeout=10)
         except (ImportError, asyncio.TimeoutError, OSError, ConnectionError, ValueError) as exc:
             log.debug("Briefing: overseerr stats failed: %s", exc)
@@ -183,6 +187,7 @@ async def send_morning_briefing(bot, channel_override=None) -> None:
         embed.set_footer(text="🤖 OpenClaw Autonomous Briefing")
         try:
             from health_history import predict_full as _hh_predict
+
             prediction = _hh_predict("/")
             if prediction.get("days_until_full") and prediction["days_until_full"] < 30:
                 embed.add_field(
@@ -203,6 +208,7 @@ async def send_morning_briefing(bot, channel_override=None) -> None:
 # ---------------------------------------------------------------------------
 # Evening digest
 # ---------------------------------------------------------------------------
+
 
 async def evening_digest_loop(bot) -> None:
     """Post an end-of-day digest to ALERT_CHANNEL_ID each day at ~9:00 PM."""
@@ -248,19 +254,13 @@ async def send_evening_digest(bot, channel_override=None) -> None:
         today_str = datetime.date.today().isoformat()
         audit_file = Path(f"/app/audit/{today_str}.jsonl")
         if audit_file.exists():
-            entries = [
-                json.loads(line)
-                for line in audit_file.read_text().splitlines()
-                if line.strip()
-            ]
+            entries = [json.loads(line) for line in audit_file.read_text().splitlines() if line.strip()]
             cmd_count = len(entries)
             action_counts: dict[str, int] = {}
             for entry in entries:
                 action = entry.get("action", "unknown")
                 action_counts[action] = action_counts.get(action, 0) + 1
-            top_actions = sorted(
-                action_counts.items(), key=lambda x: x[1], reverse=True
-            )[:5]
+            top_actions = sorted(action_counts.items(), key=lambda x: x[1], reverse=True)[:5]
             actions_text = "\n".join(f"• `{a}`: {c}" for a, c in top_actions)
             embed.add_field(
                 name=f"📋 Activity ({cmd_count} actions)",
@@ -277,13 +277,10 @@ async def send_evening_digest(bot, channel_override=None) -> None:
         fired_today = [
             r
             for r in reminder_manager._reminders
-            if r.fired
-            and datetime.date.fromtimestamp(r.fire_at) == datetime.date.today()
+            if r.fired and datetime.date.fromtimestamp(r.fire_at) == datetime.date.today()
         ]
         if fired_today:
-            reminder_text = "\n".join(
-                f"• ✅ {r.message}" for r in fired_today[:5]
-            )
+            reminder_text = "\n".join(f"• ✅ {r.message}" for r in fired_today[:5])
             embed.add_field(
                 name=f"⏰ Reminders ({len(fired_today)})",
                 value=reminder_text,

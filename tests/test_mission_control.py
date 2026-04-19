@@ -69,6 +69,7 @@ def setup_tasks_file(tmp_path, monkeypatch):
 # _load_tasks
 # ---------------------------------------------------------------------------
 
+
 class TestLoadTasks:
     def test_loads_tasks_from_file(self):
         data = mc._load_tasks()
@@ -96,6 +97,7 @@ class TestLoadTasks:
 # Status & priority emoji
 # ---------------------------------------------------------------------------
 
+
 class TestEmojis:
     def test_all_statuses_have_emoji(self):
         for status in ("permanent", "backlog", "in_progress", "review", "done"):
@@ -109,6 +111,7 @@ class TestEmojis:
 # ---------------------------------------------------------------------------
 # get_mission_tasks
 # ---------------------------------------------------------------------------
+
 
 class TestGetMissionTasks:
     @pytest.mark.asyncio
@@ -144,6 +147,7 @@ class TestGetMissionTasks:
 # get_task_detail
 # ---------------------------------------------------------------------------
 
+
 class TestGetTaskDetail:
     @pytest.mark.asyncio
     async def test_returns_task_info(self):
@@ -177,6 +181,7 @@ class TestGetTaskDetail:
 # update_task_status
 # ---------------------------------------------------------------------------
 
+
 class TestUpdateTaskStatus:
     @pytest.mark.asyncio
     async def test_rejects_invalid_status(self):
@@ -195,6 +200,7 @@ class TestUpdateTaskStatus:
 # ---------------------------------------------------------------------------
 # MISSION_CONTROL_SKILLS dict
 # ---------------------------------------------------------------------------
+
 
 class TestSkillsDict:
     def test_skill_dict_contains_expected_skills(self):

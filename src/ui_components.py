@@ -12,11 +12,12 @@ from discord import ui
 
 class EmbedColors:
     """Consistent color palette for all embeds across the bot."""
+
     SUCCESS = 0x00FF00  # Green - successful operations
-    INFO = 0x3498DB     # Blue - informational messages
+    INFO = 0x3498DB  # Blue - informational messages
     WARNING = 0xFF9900  # Orange - warnings and cautions
-    ERROR = 0xFF0000    # Red - errors and failures
-    AI = 0x9B59B6       # Purple - AI-generated content
+    ERROR = 0xFF0000  # Red - errors and failures
+    AI = 0x9B59B6  # Purple - AI-generated content
 
 
 # ---------------------------------------------------------------------------

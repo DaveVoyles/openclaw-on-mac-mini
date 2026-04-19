@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_actions helpers."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -31,6 +32,7 @@ except ImportError:
 # normalize_cwd
 # ---------------------------------------------------------------------------
 
+
 def test_normalize_cwd_defaults_to_cwd(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = normalize_cwd()
@@ -57,6 +59,7 @@ def test_normalize_cwd_file_raises(tmp_path):
 # ---------------------------------------------------------------------------
 # infer_command_risk
 # ---------------------------------------------------------------------------
+
 
 def test_infer_command_risk_rm_is_critical():
     assert infer_command_risk(["rm", "-rf", "/"]) == RiskLevel.CRITICAL
@@ -94,6 +97,7 @@ def test_infer_command_risk_git_reset_hard_is_critical():
 # infer_file_edit_risk
 # ---------------------------------------------------------------------------
 
+
 def test_infer_file_edit_risk_env_file():
     assert infer_file_edit_risk(".env") == RiskLevel.CRITICAL
 
@@ -122,6 +126,7 @@ def test_infer_file_edit_risk_regular_file():
 # risk_level_from_name
 # ---------------------------------------------------------------------------
 
+
 def test_risk_level_from_name_high():
     assert risk_level_from_name("high", default=RiskLevel.LOW) == RiskLevel.HIGH
 
@@ -147,6 +152,7 @@ def test_risk_level_from_name_case_insensitive():
 # atomic_write
 # ---------------------------------------------------------------------------
 
+
 def test_openclaw_cli_actions_unit_atomic_write_creates_file(tmp_path):
     target = tmp_path / "out.txt"
     atomic_write(target, "hello")
@@ -170,6 +176,7 @@ def test_openclaw_cli_actions_unit_atomic_write_overwrites_existing(tmp_path):
 # render_diff
 # ---------------------------------------------------------------------------
 
+
 def test_render_diff_produces_unified_diff(tmp_path):
     p = tmp_path / "test.py"
     diff = render_diff(p, "line1\nline2\n", "line1\nchanged\n")
@@ -186,6 +193,7 @@ def test_render_diff_no_change_empty(tmp_path):
 # ---------------------------------------------------------------------------
 # replace_text_in_file
 # ---------------------------------------------------------------------------
+
 
 def test_replace_text_in_file_basic(tmp_path):
     f = tmp_path / "f.txt"
@@ -223,6 +231,7 @@ def test_replace_text_in_file_on_directory_raises(tmp_path):
 # write_text_file
 # ---------------------------------------------------------------------------
 
+
 def test_write_text_file_creates(tmp_path):
     f = tmp_path / "new.txt"
     result = write_text_file(f, content="created")
@@ -247,6 +256,7 @@ def test_write_text_file_dry_run_no_change(tmp_path):
 # ---------------------------------------------------------------------------
 # format_shell_result
 # ---------------------------------------------------------------------------
+
 
 def test_format_shell_result_basic():
     r = ShellCommandResult(command="ls", cwd="/tmp", returncode=0, stdout="file.py\n", stderr="")
@@ -273,6 +283,7 @@ def test_format_shell_result_no_stdout_no_stderr():
 # preview_file_result
 # ---------------------------------------------------------------------------
 
+
 def test_preview_file_result_with_diff():
     r = FileEditResult(path="/f.py", changed=True, diff="--- a\n+++ b", summary="Updated.")
     text = preview_file_result(r)
@@ -291,23 +302,22 @@ def test_preview_file_result_no_diff():
 # request_cli_approval — auto-approve and non-interactive paths
 # ---------------------------------------------------------------------------
 
+
 def test_request_cli_approval_low_risk_auto_approved():
-    result = request_cli_approval(
-        action="read", target="file.py", risk_level=RiskLevel.LOW
-    )
+    result = request_cli_approval(action="read", target="file.py", risk_level=RiskLevel.LOW)
     assert result is True
 
 
 def test_request_cli_approval_medium_risk_auto_approved():
-    result = request_cli_approval(
-        action="run", target="pytest", risk_level=RiskLevel.MEDIUM
-    )
+    result = request_cli_approval(action="run", target="pytest", risk_level=RiskLevel.MEDIUM)
     assert result is True
 
 
 def test_request_cli_approval_high_risk_auto_approve_flag():
     result = request_cli_approval(
-        action="delete", target="file.py", risk_level=RiskLevel.HIGH,
+        action="delete",
+        target="file.py",
+        risk_level=RiskLevel.HIGH,
         auto_approve=True,
     )
     assert result is True
@@ -317,7 +327,9 @@ def test_request_cli_approval_critical_non_interactive():
     with patch("sys.stdin") as mock_stdin:
         mock_stdin.isatty.return_value = False
         result = request_cli_approval(
-            action="rm", target="/", risk_level=RiskLevel.CRITICAL,
+            action="rm",
+            target="/",
+            risk_level=RiskLevel.CRITICAL,
         )
     assert result is False
 
@@ -330,7 +342,9 @@ def test_request_cli_approval_high_prompt_yes():
         mock_stdin.isatty.return_value = True
         mock_stdout.isatty.return_value = False
         result = request_cli_approval(
-            action="delete", target="file.py", risk_level=RiskLevel.HIGH,
+            action="delete",
+            target="file.py",
+            risk_level=RiskLevel.HIGH,
             input_func=lambda _: "y",
         )
     assert result is True
@@ -344,7 +358,9 @@ def test_request_cli_approval_high_prompt_no():
         mock_stdin.isatty.return_value = True
         mock_stdout.isatty.return_value = False
         result = request_cli_approval(
-            action="delete", target="file.py", risk_level=RiskLevel.HIGH,
+            action="delete",
+            target="file.py",
+            risk_level=RiskLevel.HIGH,
             input_func=lambda _: "n",
         )
     assert result is False

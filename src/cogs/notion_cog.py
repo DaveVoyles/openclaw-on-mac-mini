@@ -19,9 +19,7 @@ from discord_error import build_error_embed
 
 log = logging.getLogger("openclaw")
 
-_NO_KEY_MSG = (
-    "❌ Notion not configured. Set MATON_API_KEY and connect Notion at maton.ai"
-)
+_NO_KEY_MSG = "❌ Notion not configured. Set MATON_API_KEY and connect Notion at maton.ai"
 
 
 async def _notion_request(path: str, method: str = "GET", body: dict | None = None):
@@ -63,9 +61,7 @@ class NotionCog(commands.Cog):
             await interaction.followup.send(_NO_KEY_MSG, ephemeral=True)
             return
         try:
-            data = await _notion_request(
-                "v1/search", "POST", {"query": query, "page_size": 10}
-            )
+            data = await _notion_request("v1/search", "POST", {"query": query, "page_size": 10})
             results = data.get("results", [])
             if not results:
                 embed = discord.Embed(
@@ -111,16 +107,12 @@ class NotionCog(commands.Cog):
         try:
             body = {
                 "parent": {"type": "workspace", "workspace": True},
-                "properties": {
-                    "title": {"title": [{"text": {"content": title}}]}
-                },
+                "properties": {"title": {"title": [{"text": {"content": title}}]}},
                 "children": [
                     {
                         "object": "block",
                         "type": "paragraph",
-                        "paragraph": {
-                            "rich_text": [{"text": {"content": content}}]
-                        },
+                        "paragraph": {"rich_text": [{"text": {"content": content}}]},
                     }
                 ],
             }
@@ -159,8 +151,7 @@ class NotionCog(commands.Cog):
             databases = search_result.get("results", [])
             if not databases:
                 await interaction.followup.send(
-                    "❌ No todo database found in Notion. "
-                    "Create a database named 'Todo' or 'Tasks' first.",
+                    "❌ No todo database found in Notion. Create a database named 'Todo' or 'Tasks' first.",
                     ephemeral=True,
                 )
                 return
@@ -168,9 +159,7 @@ class NotionCog(commands.Cog):
             db_id = databases[0]["id"]
             body = {
                 "parent": {"database_id": db_id},
-                "properties": {
-                    "Name": {"title": [{"text": {"content": item}}]}
-                },
+                "properties": {"Name": {"title": [{"text": {"content": item}}]}},
             }
             await _notion_request("v1/pages", "POST", body)
             audit_log(interaction.user, "notion_todo_add", item)

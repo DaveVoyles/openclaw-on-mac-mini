@@ -37,9 +37,7 @@ def require_auth(func):
     @functools.wraps(func)
     async def wrapper(interaction: discord.Interaction, *args, **kwargs):
         if not is_allowed(interaction):
-            await interaction.response.send_message(
-                "🔒 You are not authorized to use this command.", ephemeral=True
-            )
+            await interaction.response.send_message("🔒 You are not authorized to use this command.", ephemeral=True)
             return
         return await func(interaction, *args, **kwargs)
 
@@ -83,11 +81,11 @@ def _load_permissions() -> dict:
 
 
 class PermissionLevel(Enum):
-    PUBLIC = 0   # Anyone can use
-    MEMBER = 1   # Server members only (no DMs)
+    PUBLIC = 0  # Anyone can use
+    MEMBER = 1  # Server members only (no DMs)
     TRUSTED = 2  # Users with a specific role
-    ADMIN = 3    # Server administrators
-    OWNER = 4    # Bot owner only
+    ADMIN = 3  # Server administrators
+    OWNER = 4  # Bot owner only
 
 
 _DEFAULT_PLUGIN_LEVEL = PermissionLevel.MEMBER

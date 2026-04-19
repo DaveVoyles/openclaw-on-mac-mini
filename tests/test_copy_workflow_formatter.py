@@ -1,4 +1,5 @@
 """Tests for copy_workflow_formatter.py — markdown stripping and payload building."""
+
 from __future__ import annotations
 
 from copy_workflow_formatter import build_copy_workflow_payload, strip_discord_markdown_noise
@@ -6,6 +7,7 @@ from copy_workflow_formatter import build_copy_workflow_payload, strip_discord_m
 # ===========================================================================
 # strip_discord_markdown_noise
 # ===========================================================================
+
 
 class TestStripDiscordMarkdownNoise:
     def test_copy_workflow_formatter_empty_returns_empty(self):
@@ -88,6 +90,7 @@ class TestStripDiscordMarkdownNoise:
 # ===========================================================================
 # build_copy_workflow_payload
 # ===========================================================================
+
 
 class TestBuildCopyWorkflowPayload:
     def test_copy_workflow_formatter_empty_returns_empty_v2(self):

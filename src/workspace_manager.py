@@ -26,6 +26,7 @@ DB_PATH = Path("/memory/workspaces.db")
 
 class WorkspaceRole(Enum):
     """Workspace-specific role"""
+
     OWNER = "owner"  # Workspace owner (all permissions)
     ADMIN = "admin"  # Admin within workspace
     MEMBER = "member"  # Standard member
@@ -48,19 +49,21 @@ class WorkspaceRole(Enum):
 # Data models
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class Workspace:
     """Team workspace with shared resources"""
-    id: int                          # Internal workspace ID
-    name: str                        # Workspace name (unique)
-    owner_id: int                    # User ID of workspace owner
-    created_at: float                # Unix timestamp
-    description: str = ""            # Workspace description
+
+    id: int  # Internal workspace ID
+    name: str  # Workspace name (unique)
+    owner_id: int  # User ID of workspace owner
+    created_at: float  # Unix timestamp
+    description: str = ""  # Workspace description
     settings: dict[str, Any] = None  # Workspace settings
-    api_quota_daily: int = 500       # Shared daily API quota
-    api_quota_used: int = 0          # Quota used today
-    quota_reset_at: float = 0.0      # When quota resets
-    is_active: bool = True           # Workspace active/archived
+    api_quota_daily: int = 500  # Shared daily API quota
+    api_quota_used: int = 0  # Quota used today
+    quota_reset_at: float = 0.0  # When quota resets
+    is_active: bool = True  # Workspace active/archived
 
     def __post_init__(self):
         if self.settings is None:
@@ -87,6 +90,7 @@ class Workspace:
 @dataclass
 class WorkspaceMember:
     """Workspace membership with role"""
+
     workspace_id: int
     user_id: int
     role: WorkspaceRole
@@ -106,6 +110,7 @@ class WorkspaceMember:
 # ---------------------------------------------------------------------------
 # Database schema
 # ---------------------------------------------------------------------------
+
 
 def _init_db(conn: sqlite3.Connection) -> None:
     """Initialize database schema"""
@@ -176,6 +181,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
 # ---------------------------------------------------------------------------
 # Workspace Manager
 # ---------------------------------------------------------------------------
+
 
 class WorkspaceManager:
     """Manages team workspaces and membership"""
@@ -269,9 +275,7 @@ class WorkspaceManager:
                 (user_id,),
             ).fetchall()
         else:
-            rows = self.conn.execute(
-                "SELECT * FROM workspaces WHERE is_active = 1 ORDER BY created_at DESC"
-            ).fetchall()
+            rows = self.conn.execute("SELECT * FROM workspaces WHERE is_active = 1 ORDER BY created_at DESC").fetchall()
 
         return [Workspace.from_row(row) for row in rows]
 
@@ -436,6 +440,7 @@ class WorkspaceManager:
     def _reset_quota(self, workspace_id: int) -> None:
         """Reset daily quota for workspace"""
         import datetime
+
         now = datetime.datetime.now()
         tomorrow = now.replace(hour=0, minute=0, second=0, microsecond=0) + datetime.timedelta(days=1)
         reset_at = tomorrow.timestamp()
@@ -493,7 +498,9 @@ class WorkspaceManager:
 
         log.info(
             "Saved resource '%s' (type=%s) to workspace %d",
-            resource_name, resource_type, workspace_id,
+            resource_name,
+            resource_type,
+            workspace_id,
         )
         return cursor.lastrowid
 
@@ -545,16 +552,18 @@ class WorkspaceManager:
 
         resources = []
         for row in rows:
-            resources.append({
-                "id": row["id"],
-                "workspace_id": row["workspace_id"],
-                "type": row["resource_type"],
-                "name": row["resource_name"],
-                "data": json.loads(row["resource_data"]),
-                "created_by": row["created_by"],
-                "created_at": row["created_at"],
-                "updated_at": row["updated_at"],
-            })
+            resources.append(
+                {
+                    "id": row["id"],
+                    "workspace_id": row["workspace_id"],
+                    "type": row["resource_type"],
+                    "name": row["resource_name"],
+                    "data": json.loads(row["resource_data"]),
+                    "created_by": row["created_by"],
+                    "created_at": row["created_at"],
+                    "updated_at": row["updated_at"],
+                }
+            )
 
         return resources
 

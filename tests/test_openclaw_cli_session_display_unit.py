@@ -36,6 +36,7 @@ import openclaw_cli_session_display as sd
 # _parse_utc_timestamp
 # ---------------------------------------------------------------------------
 
+
 def test_parse_utc_timestamp_valid_iso():
     result = sd._parse_utc_timestamp("2024-01-15T10:30:00+00:00")
     assert result is not None
@@ -65,6 +66,7 @@ def test_openclaw_cli_session_display_unit_parse_utc_timestamp_invalid():
 # ---------------------------------------------------------------------------
 # _format_elapsed_compact
 # ---------------------------------------------------------------------------
+
 
 def test_openclaw_cli_session_display_unit_format_elapsed_compact_sub_second():
     assert sd._format_elapsed_compact(0.5) == "0.5s"
@@ -106,6 +108,7 @@ def test_format_elapsed_compact_none():
 # _single_line_excerpt
 # ---------------------------------------------------------------------------
 
+
 def test_single_line_excerpt_short():
     assert sd._single_line_excerpt("hello world", max_chars=50) == "hello world"
 
@@ -131,6 +134,7 @@ def test_single_line_excerpt_empty():
 # _format_byte_count
 # ---------------------------------------------------------------------------
 
+
 def test_format_byte_count_bytes():
     assert sd._format_byte_count(512) == "512 B"
 
@@ -150,7 +154,7 @@ def test_format_byte_count_zero():
 
 
 def test_format_byte_count_gb():
-    result = sd._format_byte_count(1024 ** 3)
+    result = sd._format_byte_count(1024**3)
     assert "GB" in result
 
 
@@ -158,25 +162,29 @@ def test_format_byte_count_gb():
 # _status_family
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("status,expected", [
-    ("ok", "complete"),
-    ("done", "complete"),
-    ("success", "complete"),
-    ("running", "active"),
-    ("in_progress", "active"),
-    ("pending", "waiting"),
-    ("idle", "idle"),
-    ("error", "error"),
-    ("failed", "error"),
-    ("warn", "warn"),
-    ("retry", "retry"),
-    ("blocked", "blocked"),
-    ("paused", "paused"),
-    ("info", "info"),
-    ("stale", "stale"),
-    ("", "unknown"),
-    ("totally_unknown_xyz", "unknown"),
-])
+
+@pytest.mark.parametrize(
+    "status,expected",
+    [
+        ("ok", "complete"),
+        ("done", "complete"),
+        ("success", "complete"),
+        ("running", "active"),
+        ("in_progress", "active"),
+        ("pending", "waiting"),
+        ("idle", "idle"),
+        ("error", "error"),
+        ("failed", "error"),
+        ("warn", "warn"),
+        ("retry", "retry"),
+        ("blocked", "blocked"),
+        ("paused", "paused"),
+        ("info", "info"),
+        ("stale", "stale"),
+        ("", "unknown"),
+        ("totally_unknown_xyz", "unknown"),
+    ],
+)
 def test_status_family(status, expected):
     assert sd._status_family(status) == expected
 
@@ -193,11 +201,15 @@ def test_status_family_case_insensitive():
 # _status_text
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("status,expected", [
-    ("done", "COMPLETE"),
-    ("failed", "ERROR"),
-    ("xyz_unknown", "STATUS"),
-])
+
+@pytest.mark.parametrize(
+    "status,expected",
+    [
+        ("done", "COMPLETE"),
+        ("failed", "ERROR"),
+        ("xyz_unknown", "STATUS"),
+    ],
+)
 def test_status_text(status, expected):
     assert sd._status_text(status) == expected
 
@@ -206,11 +218,15 @@ def test_status_text(status, expected):
 # _status_style
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("status,expected", [
-    ("complete", "green"),
-    ("error", "bold red"),
-    ("xyz_unknown", "dim"),
-])
+
+@pytest.mark.parametrize(
+    "status,expected",
+    [
+        ("complete", "green"),
+        ("error", "bold red"),
+        ("xyz_unknown", "dim"),
+    ],
+)
 def test_status_style(status, expected):
     assert sd._status_style(status) == expected
 
@@ -218,6 +234,7 @@ def test_status_style(status, expected):
 # ---------------------------------------------------------------------------
 # _status_cell
 # ---------------------------------------------------------------------------
+
 
 def test_status_cell_plain():
     result = sd._status_cell("done")
@@ -239,6 +256,7 @@ def test_status_cell_rich_false():
 # ---------------------------------------------------------------------------
 # _progress_cell
 # ---------------------------------------------------------------------------
+
 
 def test_progress_cell_no_status():
     result = sd._progress_cell("files", "3")
@@ -300,7 +318,9 @@ def test_print_session_summary_surfaces_pending_inject_recovery_cues(monkeypatch
     )
     captured = {}
 
-    monkeypatch.setattr(sd, "load_conversation_history", lambda session_id, limit_turns=0: [{"role": "user", "content": "x" * 410_000}])
+    monkeypatch.setattr(
+        sd, "load_conversation_history", lambda session_id, limit_turns=0: [{"role": "user", "content": "x" * 410_000}]
+    )
     monkeypatch.setattr(sd, "load_watch_state", lambda session_id: None)
     monkeypatch.setattr(sd, "build_collaboration_snapshot", lambda session_id, limit=3: {})
     monkeypatch.setattr(sd, "build_session_storyline", lambda session_id, limit=4: {})
@@ -308,14 +328,19 @@ def test_print_session_summary_surfaces_pending_inject_recovery_cues(monkeypatch
     monkeypatch.setattr(sd, "_session_operator_snapshot", lambda *args, **kwargs: {})
     monkeypatch.setattr(sd, "_operator_snapshot_lines", lambda snapshot: [])
     monkeypatch.setattr(sd, "_session_age_label", lambda session: "just now")
-    monkeypatch.setattr(sd, "_print_dashboard_surface", lambda title, **kwargs: captured.update({"title": title, **kwargs}))
+    monkeypatch.setattr(
+        sd, "_print_dashboard_surface", lambda title, **kwargs: captured.update({"title": title, **kwargs})
+    )
 
     sd._print_session_summary(session, pending_inject="Queued workspace recap")
 
     assert captured["title"] == "Session Dashboard"
     assert any("context pressure" in line for line in captured["detail_lines"])
     assert any("recovery cue: /inject clear" in line for line in captured["detail_lines"])
-    assert any("/inject clear to drop the queued one-shot context before your next send" in line for line in captured["action_lines"])
+    assert any(
+        "/inject clear to drop the queued one-shot context before your next send" in line
+        for line in captured["action_lines"]
+    )
 
 
 def test_progress_cell_empty_status():
@@ -326,6 +351,7 @@ def test_progress_cell_empty_status():
 # ---------------------------------------------------------------------------
 # watch_retry_delay_seconds
 # ---------------------------------------------------------------------------
+
 
 def test_watch_retry_delay_attempt_1():
     assert sd.watch_retry_delay_seconds(1) == 1
@@ -345,6 +371,7 @@ def test_watch_retry_delay_capped():
 # _watch_retry_delay_total
 # ---------------------------------------------------------------------------
 
+
 def test_watch_retry_delay_total_empty():
     assert sd._watch_retry_delay_total({}) == 0
 
@@ -362,6 +389,7 @@ def test_watch_retry_delay_total_with_history():
 # ---------------------------------------------------------------------------
 # normalize_watch_state
 # ---------------------------------------------------------------------------
+
 
 def test_normalize_watch_state_empty():
     result = sd.normalize_watch_state({})
@@ -397,6 +425,7 @@ def test_normalize_watch_state_filters_non_dicts():
 # _dedupe_preserve_order
 # ---------------------------------------------------------------------------
 
+
 def test_openclaw_cli_session_display_unit_dedupe_preserve_order_basic():
     result = sd._dedupe_preserve_order(["a", "b", "a", "c"])
     assert result == ["a", "b", "c"]
@@ -416,6 +445,7 @@ def test_dedupe_preserve_order_empty_input():
 # ---------------------------------------------------------------------------
 # _resolve_runbook_template
 # ---------------------------------------------------------------------------
+
 
 def test_resolve_runbook_template_operator():
     result = sd._resolve_runbook_template("operator")
@@ -447,6 +477,7 @@ def test_resolve_runbook_template_default_operator():
 # _format_collaboration_entry
 # ---------------------------------------------------------------------------
 
+
 def test_openclaw_cli_session_display_unit_format_collaboration_entry_basic():
     entry = {"actor": "alice", "summary": "finished the task"}
     result = sd._format_collaboration_entry(entry)
@@ -477,6 +508,7 @@ def test_format_collaboration_entry_empty():
 # _dashboard_section_lines
 # ---------------------------------------------------------------------------
 
+
 def test_dashboard_section_lines_basic():
     result = sd._dashboard_section_lines("Summary", ["line one", "line two"])
     assert result[0] == "Summary:"
@@ -497,6 +529,7 @@ def test_dashboard_section_lines_skips_blank():
 # ---------------------------------------------------------------------------
 # _session_is_stale
 # ---------------------------------------------------------------------------
+
 
 def _make_session(**kwargs):
     defaults = {
@@ -551,6 +584,7 @@ def test_session_is_stale_invalid_date():
 # _session_mood_cell
 # ---------------------------------------------------------------------------
 
+
 def test_session_mood_cell_empty_snapshot():
     result = sd._session_mood_cell({})
     assert result == ""
@@ -590,6 +624,7 @@ def test_session_mood_brief_truncates_dense_list_copy():
 # ---------------------------------------------------------------------------
 # _operator_snapshot_lines
 # ---------------------------------------------------------------------------
+
 
 def test_operator_snapshot_lines_basic():
     snapshot = {
@@ -632,6 +667,7 @@ def test_operator_snapshot_lines_decision_truncation():
 # _session_mood_snapshot — basic paths
 # ---------------------------------------------------------------------------
 
+
 def test_session_mood_snapshot_empty_returns_empty():
     session = _make_session()
     result = sd._session_mood_snapshot(session)
@@ -671,12 +707,15 @@ def test_session_mood_snapshot_retrying():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("text,expected", [
-    ("a" * 400, 100),
-    ("", 0),
-    (None, 0),
-    ("hi", 0),
-])
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("a" * 400, 100),
+        ("", 0),
+        (None, 0),
+        ("hi", 0),
+    ],
+)
 def test_estimate_token_count(text, expected):
     assert sd._estimate_token_count(text) == expected
 

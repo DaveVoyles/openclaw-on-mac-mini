@@ -19,32 +19,34 @@ _ollama_sessions = _SessionManager(timeout=TIMEOUT_LONG, name="ollama-tools")
 log = logging.getLogger(__name__)
 
 # Subset of tools safe for local execution (read-only, no approvals needed)
-OLLAMA_TOOL_ALLOWLIST = frozenset({
-    # System monitoring (safe, read-only)
-    "get_system_stats",
-    "get_docker_stats",
-    "get_uptime",
-    "list_containers",
-    "get_container_status",
-    "get_container_logs",
-    # Media monitoring (read-only)
-    "check_arr_health",
-    "check_download_clients",
-    "check_plex_status",
-    "get_plex_activity",
-    "get_download_queue",
-    "get_recent_additions",
-    # Network (read-only)
-    "get_network_status",
-    "get_tailscale_status",
-    # Memory (read-only recall)
-    "recall_fact",
-    "list_memories",
-    # Weather
-    "get_weather",
-    # Code execution (sandboxed)
-    "execute_python_code",
-})
+OLLAMA_TOOL_ALLOWLIST = frozenset(
+    {
+        # System monitoring (safe, read-only)
+        "get_system_stats",
+        "get_docker_stats",
+        "get_uptime",
+        "list_containers",
+        "get_container_status",
+        "get_container_logs",
+        # Media monitoring (read-only)
+        "check_arr_health",
+        "check_download_clients",
+        "check_plex_status",
+        "get_plex_activity",
+        "get_download_queue",
+        "get_recent_additions",
+        # Network (read-only)
+        "get_network_status",
+        "get_tailscale_status",
+        # Memory (read-only recall)
+        "recall_fact",
+        "list_memories",
+        # Weather
+        "get_weather",
+        # Code execution (sandboxed)
+        "execute_python_code",
+    }
+)
 
 # Max tool rounds for Ollama (keep low — local model is less reliable)
 OLLAMA_MAX_TOOL_ROUNDS = 3
@@ -174,10 +176,12 @@ async def chat_ollama_with_tools(
             tool_calls_made.append((fn_name, fn_args, result))
 
             # Add tool result as a tool response message
-            messages.append({
-                "role": "tool",
-                "content": result,
-            })
+            messages.append(
+                {
+                    "role": "tool",
+                    "content": result,
+                }
+            )
 
     # Hit max rounds — try to get a final response without tools
     try:

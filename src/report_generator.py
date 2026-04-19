@@ -35,6 +35,7 @@ class ReportGenerator:
         """
         if templates_dir is None:
             import os
+
             templates_dir = Path(os.getenv("TEMPLATES_DIR", "templates")) / "reports"
 
         self.templates_dir = Path(templates_dir)
@@ -98,12 +99,14 @@ class ReportGenerator:
                 return {"success": False, "error": f"Unknown report type: {report_type}"}
 
             # Add common metadata
-            report_data.update({
-                "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "start_date": start_date.strftime("%Y-%m-%d"),
-                "end_date": end_date.strftime("%Y-%m-%d"),
-                "report_type": report_type,
-            })
+            report_data.update(
+                {
+                    "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "start_date": start_date.strftime("%Y-%m-%d"),
+                    "end_date": end_date.strftime("%Y-%m-%d"),
+                    "report_type": report_type,
+                }
+            )
 
             # Render template
             template = self.env.get_template(template_name)
@@ -160,8 +163,7 @@ class ReportGenerator:
             conn = sqlite3.connect(str(db_path), timeout=10)
             try:
                 tables = {
-                    row[0]
-                    for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+                    row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
                 }
 
                 if "trend_data" in tables:
@@ -257,17 +259,21 @@ class ReportGenerator:
         if total_requests == 0:
             total_requests = len(journal_entries)
 
-        data.update({
-            "total_requests": total_requests,
-            "total_cost": round(total_cost, 4),
-            "requests_by_api": dict(sorted(
-                requests_by_api.items(),
-                key=lambda item: (-self._safe_int(item[1].get("requests")), item[0]),
-            )),
-            "error_rate": round((total_failures / len(journal_entries)) * 100, 1) if journal_entries else 0.0,
-            "rate_limit_hits": rate_limit_hits,
-            "top_endpoints": self._build_endpoint_rows(endpoint_usage, key="requests"),
-        })
+        data.update(
+            {
+                "total_requests": total_requests,
+                "total_cost": round(total_cost, 4),
+                "requests_by_api": dict(
+                    sorted(
+                        requests_by_api.items(),
+                        key=lambda item: (-self._safe_int(item[1].get("requests")), item[0]),
+                    )
+                ),
+                "error_rate": round((total_failures / len(journal_entries)) * 100, 1) if journal_entries else 0.0,
+                "rate_limit_hits": rate_limit_hits,
+                "top_endpoints": self._build_endpoint_rows(endpoint_usage, key="requests"),
+            }
+        )
 
         data.update(custom_data)
         return data
@@ -340,10 +346,14 @@ class ReportGenerator:
             }
 
         period_seconds = max((end_date - start_date).total_seconds(), 1.0)
-        uptime_percentage = round(
-            min(100.0, (live_metrics["uptime_seconds"] / period_seconds) * 100),
-            1,
-        ) if live_metrics["uptime_seconds"] > 0 else 0.0
+        uptime_percentage = (
+            round(
+                min(100.0, (live_metrics["uptime_seconds"] / period_seconds) * 100),
+                1,
+            )
+            if live_metrics["uptime_seconds"] > 0
+            else 0.0
+        )
 
         total_commands = sum(command_counts.values()) or len(journal_entries) or live_metrics["total_commands"]
         error_count = audit_failures if audit_entries else journal_failures
@@ -352,14 +362,16 @@ class ReportGenerator:
 
         avg_response_time_ms = int(round(sum(latency_values) / len(latency_values))) if latency_values else 0
 
-        data.update({
-            "uptime_percentage": uptime_percentage,
-            "avg_response_time_ms": avg_response_time_ms,
-            "total_commands": total_commands,
-            "commands_by_type": dict(sorted(command_counts.items(), key=lambda item: (-item[1], item[0]))),
-            "error_count": error_count,
-            "slowest_endpoints": self._build_endpoint_rows(endpoint_usage, key="avg_latency", limit=10),
-        })
+        data.update(
+            {
+                "uptime_percentage": uptime_percentage,
+                "avg_response_time_ms": avg_response_time_ms,
+                "total_commands": total_commands,
+                "commands_by_type": dict(sorted(command_counts.items(), key=lambda item: (-item[1], item[0]))),
+                "error_count": error_count,
+                "slowest_endpoints": self._build_endpoint_rows(endpoint_usage, key="avg_latency", limit=10),
+            }
+        )
 
         data.update(custom_data)
         return data
@@ -552,11 +564,7 @@ class ReportGenerator:
 
     def _extract_endpoints(self, entry: dict[str, Any]) -> list[str]:
         """Extract endpoint/tool names from a journal entry."""
-        endpoints = [
-            str(tool).strip()
-            for tool in (entry.get("tools_called") or [])
-            if str(tool).strip()
-        ]
+        endpoints = [str(tool).strip() for tool in (entry.get("tools_called") or []) if str(tool).strip()]
         if endpoints:
             return endpoints
 
@@ -575,23 +583,23 @@ class ReportGenerator:
         for name, stats in endpoint_usage.items():
             if not name:
                 continue
-            avg_latency = (
-                stats["latency_total_ms"] / stats["latency_samples"]
-                if stats.get("latency_samples")
-                else 0.0
+            avg_latency = stats["latency_total_ms"] / stats["latency_samples"] if stats.get("latency_samples") else 0.0
+            rows.append(
+                {
+                    "name": name,
+                    "requests": int(stats.get("requests", 0)),
+                    "errors": int(stats.get("errors", 0)),
+                    "avg_latency_ms": int(round(avg_latency)),
+                    "time_ms": int(round(avg_latency)),
+                }
             )
-            rows.append({
-                "name": name,
-                "requests": int(stats.get("requests", 0)),
-                "errors": int(stats.get("errors", 0)),
-                "avg_latency_ms": int(round(avg_latency)),
-                "time_ms": int(round(avg_latency)),
-            })
 
         if key == "avg_latency":
+
             def sort_key(item: dict[str, Any]) -> tuple[int, int, str]:
                 return (-item["avg_latency_ms"], -item["requests"], item["name"])
         else:
+
             def sort_key(item: dict[str, Any]) -> tuple[int, int, str]:
                 return (-item["requests"], -item["avg_latency_ms"], item["name"])
 
@@ -624,8 +632,7 @@ class ReportGenerator:
                 for name, count in (collector_stats.get("command_counts") or {}).items()
             }
             metrics["error_count"] = sum(
-                self._safe_int(count)
-                for count in (collector_stats.get("error_counts") or {}).values()
+                self._safe_int(count) for count in (collector_stats.get("error_counts") or {}).values()
             )
             metrics["uptime_seconds"] = self._safe_float(collector_stats.get("uptime_seconds"))
 
@@ -675,11 +682,7 @@ class ReportGenerator:
             "user_id": custom_data.get("user_id", "Unknown"),
             "period": custom_data.get("period", "weekly"),
             "portfolio": custom_data.get("portfolio", []),
-            "summary": custom_data.get("summary", {
-                "total_value": 0,
-                "total_gain_loss": 0,
-                "gain_loss_percent": 0
-            }),
+            "summary": custom_data.get("summary", {"total_value": 0, "total_gain_loss": 0, "gain_loss_percent": 0}),
             "chart_paths": custom_data.get("chart_paths", []),
             "bot_version": cfg.version,
         }
@@ -692,7 +695,7 @@ class ReportGenerator:
             f"Portfolio contains {portfolio_count} different assets",
             f"{'+' if gain_loss_pct >= 0 else ''}{gain_loss_pct:.2f}% return this period",
             "Risk Level: Moderate (based on asset allocation)",
-            "Recommendation: Continue monitoring and rebalance as needed"
+            "Recommendation: Continue monitoring and rebalance as needed",
         ]
 
         return data
@@ -718,7 +721,7 @@ class ReportGenerator:
             "Consider caching frequently accessed data",
             "Monitor Gemini API usage - largest cost center",
             "Set up alerts when approaching budget limits",
-            "Review API call patterns monthly"
+            "Review API call patterns monthly",
         ]
 
         return data
@@ -731,9 +734,7 @@ async def generate_weekly_report(output_path: Path | str) -> dict[str, Any]:
     return await gen.generate_report("weekly_summary", output_path)
 
 
-async def generate_api_usage_report(
-    output_path: Path | str, *, month: str | None = None
-) -> dict[str, Any]:
+async def generate_api_usage_report(output_path: Path | str, *, month: str | None = None) -> dict[str, Any]:
     """Generate API usage report for a specific month."""
     gen = ReportGenerator()
 
@@ -745,9 +746,7 @@ async def generate_api_usage_report(
         end_date = datetime.now()
         start_date = end_date - timedelta(days=30)
 
-    return await gen.generate_report(
-        "api_usage", output_path, start_date=start_date, end_date=end_date
-    )
+    return await gen.generate_report("api_usage", output_path, start_date=start_date, end_date=end_date)
 
 
 async def generate_performance_report(output_path: Path | str) -> dict[str, Any]:
@@ -806,13 +805,7 @@ async def generate_financial_report(
     end_date = datetime.now()
     start_date = end_date - timedelta(days=period_days)
 
-    return await gen.generate_report(
-        "financial",
-        output_path,
-        data=data,
-        start_date=start_date,
-        end_date=end_date
-    )
+    return await gen.generate_report("financial", output_path, data=data, start_date=start_date, end_date=end_date)
 
 
 async def generate_cost_report(
@@ -857,10 +850,4 @@ async def generate_cost_report(
     end_date = datetime.now()
     start_date = end_date - timedelta(days=period_days)
 
-    return await gen.generate_report(
-        "cost_analysis",
-        output_path,
-        data=data,
-        start_date=start_date,
-        end_date=end_date
-    )
+    return await gen.generate_report("cost_analysis", output_path, data=data, start_date=start_date, end_date=end_date)

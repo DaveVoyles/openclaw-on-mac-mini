@@ -1,4 +1,5 @@
 """Tests for cogs/analytics_cog.py."""
+
 import datetime
 import json
 import os
@@ -61,6 +62,7 @@ def _make_cog():
 
 # ── __init__ ──────────────────────────────────────────────────────────────────
 
+
 def test_analytics_cog_init():
     cog = _make_cog()
     assert cog.bot is not None
@@ -68,9 +70,11 @@ def test_analytics_cog_init():
 
 # ── cog_command_error ─────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_analytics_cog_cog_command_error_not_done():
     from discord import app_commands
+
     cog = _make_cog()
     inter = _make_interaction(done=False)
     err = app_commands.AppCommandError("Analytics error")
@@ -82,6 +86,7 @@ async def test_analytics_cog_cog_command_error_not_done():
 @pytest.mark.asyncio
 async def test_analytics_cog_cog_command_error_done():
     from discord import app_commands
+
     cog = _make_cog()
     inter = _make_interaction(done=True)
     err = app_commands.AppCommandError("Analytics error")
@@ -91,13 +96,13 @@ async def test_analytics_cog_cog_command_error_done():
 
 # ── spending_cmd ──────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_spending_cmd_summary():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.analytics_cog.spending_tracker") as mock_tracker, \
-         patch("cogs.analytics_cog.audit_log"):
+    with patch("cogs.analytics_cog.spending_tracker") as mock_tracker, patch("cogs.analytics_cog.audit_log"):
         mock_tracker.summary.return_value = "Total: $1.23"
         mock_tracker.is_over_budget = False
         mock_tracker.budget_limit = 10.0
@@ -113,8 +118,7 @@ async def test_spending_cmd_breakdown():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.analytics_cog.spending_tracker") as mock_tracker, \
-         patch("cogs.analytics_cog.audit_log"):
+    with patch("cogs.analytics_cog.spending_tracker") as mock_tracker, patch("cogs.analytics_cog.audit_log"):
         mock_tracker.daily_breakdown.return_value = "Day 1: $0.50\nDay 2: $0.73"
         mock_tracker.is_over_budget = False
         mock_tracker.budget_limit = 10.0
@@ -130,8 +134,7 @@ async def test_spending_cmd_over_budget():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.analytics_cog.spending_tracker") as mock_tracker, \
-         patch("cogs.analytics_cog.audit_log"):
+    with patch("cogs.analytics_cog.spending_tracker") as mock_tracker, patch("cogs.analytics_cog.audit_log"):
         mock_tracker.summary.return_value = "Over budget!"
         mock_tracker.is_over_budget = True
         mock_tracker.budget_limit = 5.0
@@ -142,6 +145,7 @@ async def test_spending_cmd_over_budget():
 
 
 # ── auditlog_cmd ──────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_auditlog_cmd_no_file(tmp_path, monkeypatch):
@@ -164,7 +168,9 @@ async def test_auditlog_cmd_with_entries(tmp_path, monkeypatch):
     today = datetime.date.today().isoformat()
     audit_file = tmp_path / f"{today}.jsonl"
     entries = [
-        json.dumps({"ts": "2024-01-01T10:00:00", "user": "alice", "action": "search", "detail": "q", "result": "success"}),
+        json.dumps(
+            {"ts": "2024-01-01T10:00:00", "user": "alice", "action": "search", "detail": "q", "result": "success"}
+        ),
         json.dumps({"ts": "2024-01-01T11:00:00", "user": "bob", "action": "ask", "detail": "x", "result": "success"}),
     ]
     audit_file.write_text("\n".join(entries))
@@ -176,6 +182,7 @@ async def test_auditlog_cmd_with_entries(tmp_path, monkeypatch):
 
 
 # ── audit_summary_cmd ─────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_audit_summary_cmd_no_file(tmp_path, monkeypatch):
@@ -198,7 +205,9 @@ async def test_audit_summary_cmd_with_entries(tmp_path, monkeypatch):
     today = datetime.date.today().isoformat()
     audit_file = tmp_path / f"{today}.jsonl"
     entries = [
-        json.dumps({"ts": "2024-01-01T10:00:00", "user": "alice", "action": "search", "detail": "", "result": "success"}),
+        json.dumps(
+            {"ts": "2024-01-01T10:00:00", "user": "alice", "action": "search", "detail": "", "result": "success"}
+        ),
         json.dumps({"ts": "2024-01-01T10:30:00", "user": "bob", "action": "search", "detail": "", "result": "error"}),
         json.dumps({"ts": "2024-01-01T11:00:00", "user": "alice", "action": "ask", "detail": "", "result": "success"}),
     ]

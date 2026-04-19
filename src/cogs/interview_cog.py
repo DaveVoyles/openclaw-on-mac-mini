@@ -33,6 +33,7 @@ def _evict_oldest_session():
 
 # ── LLM helpers ───────────────────────────────────────────────────────────────
 
+
 async def _generate_questions(goal: str) -> list[str]:
     prompt = (
         f'You are a skilled interviewer. The user wants to accomplish this goal: "{goal}"\n'
@@ -46,6 +47,7 @@ async def _generate_questions(goal: str) -> list[str]:
 
 
 # ── Save-to-vault view ────────────────────────────────────────────────────────
+
 
 class _InterviewOutputView(discord.ui.View):
     def __init__(self, *, output: str, goal: str) -> None:
@@ -76,6 +78,7 @@ class _InterviewOutputView(discord.ui.View):
 
 # ── Modal ─────────────────────────────────────────────────────────────────────
 
+
 class InterviewModal(discord.ui.Modal):
     def __init__(
         self,
@@ -102,9 +105,7 @@ class InterviewModal(discord.ui.Modal):
     async def on_submit(self, interaction: discord.Interaction) -> None:
         session = _sessions.get(self.user_id)
         if not session:
-            await interaction.response.send_message(
-                "Session expired. Please run /interview again.", ephemeral=True
-            )
+            await interaction.response.send_message("Session expired. Please run /interview again.", ephemeral=True)
             return
 
         session["answers"].append(self.answer_input.value)
@@ -147,6 +148,7 @@ class InterviewModal(discord.ui.Modal):
 
 # ── Cog ───────────────────────────────────────────────────────────────────────
 
+
 class InterviewCog(commands.Cog):
     def __init__(self, bot) -> None:
         self.bot = bot
@@ -168,9 +170,7 @@ class InterviewCog(commands.Cog):
         name="interview",
         description="Bot asks you questions then produces tailored output",
     )
-    @app_commands.describe(
-        goal="What do you want to create or decide? E.g. 'write my bio', 'plan my week'"
-    )
+    @app_commands.describe(goal="What do you want to create or decide? E.g. 'write my bio', 'plan my week'")
     async def interview(self, interaction: discord.Interaction, goal: str) -> None:
         # Clear any existing session for this user and start fresh
         if interaction.user.id in _sessions:
@@ -178,9 +178,7 @@ class InterviewCog(commands.Cog):
 
         questions = await _generate_questions(goal)
         if not questions:
-            await interaction.response.send_message(
-                "❌ Failed to generate questions.", ephemeral=True
-            )
+            await interaction.response.send_message("❌ Failed to generate questions.", ephemeral=True)
             return
 
         _evict_oldest_session()  # Ensure we don't exceed capacity

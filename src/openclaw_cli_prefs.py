@@ -61,10 +61,10 @@ _PREFS_FILE: Path = _OPENCLAW_DIR / "prefs.json"
 # Preference defaults
 # ---------------------------------------------------------------------------
 _PREFS: dict[str, Any] = {
-    "theme": "default",   # separator / accent colour
-    "emoji": True,         # show emoji in UI (False → ASCII fallbacks)
+    "theme": "default",  # separator / accent colour
+    "emoji": True,  # show emoji in UI (False → ASCII fallbacks)
     "emoji_pack": "classic",  # "classic" | "minimal" | "ascii"
-    "layout": "normal",   # "compact" | "normal" | "verbose" | "plain"
+    "layout": "normal",  # "compact" | "normal" | "verbose" | "plain"
     "layout_preset": "",  # "" | "focus" | "watch-monitor" | "handoff"
     "layout_focus": "primary",  # "primary" | "supporting"
     "interactive_overlays": False,  # opt-in interactive pickers for supported list commands
@@ -74,20 +74,20 @@ _PREFS: dict[str, Any] = {
 # ---------------------------------------------------------------------------
 # Accessibility mode keys in _PREFS
 # ---------------------------------------------------------------------------
-_A11Y_REDUCED_MOTION = "reduced_motion"   # bool: disable spinner/animations
-_A11Y_PLAIN_MODE = "plain_mode"            # bool: simplify chrome to plain text
-_A11Y_HIGH_CONTRAST = "high_contrast"     # bool: high-contrast colour palette
+_A11Y_REDUCED_MOTION = "reduced_motion"  # bool: disable spinner/animations
+_A11Y_PLAIN_MODE = "plain_mode"  # bool: simplify chrome to plain text
+_A11Y_HIGH_CONTRAST = "high_contrast"  # bool: high-contrast colour palette
 
 # ---------------------------------------------------------------------------
 # Themes
 # ---------------------------------------------------------------------------
 _THEMES: dict[str, tuple[str, str]] = {
-    "default":  ("dim blue",    "\033[2;34m"),
-    "green":    ("dim green",   "\033[2;32m"),
-    "yellow":   ("dim yellow",  "\033[2;33m"),
-    "magenta":  ("dim magenta", "\033[2;35m"),
-    "cyan":     ("dim cyan",    "\033[2;36m"),
-    "mono":     ("dim",         "\033[2m"),
+    "default": ("dim blue", "\033[2;34m"),
+    "green": ("dim green", "\033[2;32m"),
+    "yellow": ("dim yellow", "\033[2;33m"),
+    "magenta": ("dim magenta", "\033[2;35m"),
+    "cyan": ("dim cyan", "\033[2;36m"),
+    "mono": ("dim", "\033[2m"),
 }
 
 _THEME_ORDER: tuple[str, ...] = tuple(_THEMES.keys())
@@ -142,6 +142,7 @@ _EMOJI_PACKS: dict[str, dict[str, str]] = {
 # ---------------------------------------------------------------------------
 # Functions
 # ---------------------------------------------------------------------------
+
 
 def _prefs_dir_path() -> Path:
     """Return the preference directory, honoring test overrides when present."""

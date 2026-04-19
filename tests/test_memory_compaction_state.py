@@ -190,9 +190,14 @@ def test_get_events_returns_recorded():
     from memory_compaction_state import get_memory_compaction_events, record_memory_compaction_event
 
     record_memory_compaction_event(
-        collection="c1", channel_id=200, thread_id=None,
-        retention_class="standard", memory_budget_items=200,
-        before_count=10, after_count=5, pruned_count=5,
+        collection="c1",
+        channel_id=200,
+        thread_id=None,
+        retention_class="standard",
+        memory_budget_items=200,
+        before_count=10,
+        after_count=5,
+        pruned_count=5,
     )
     events = get_memory_compaction_events(channel_id=200)
     assert len(events) == 1
@@ -202,14 +207,24 @@ def test_get_events_filtered_by_channel():
     from memory_compaction_state import get_memory_compaction_events, record_memory_compaction_event
 
     record_memory_compaction_event(
-        collection="c1", channel_id=201, thread_id=None,
-        retention_class="standard", memory_budget_items=200,
-        before_count=10, after_count=5, pruned_count=5,
+        collection="c1",
+        channel_id=201,
+        thread_id=None,
+        retention_class="standard",
+        memory_budget_items=200,
+        before_count=10,
+        after_count=5,
+        pruned_count=5,
     )
     record_memory_compaction_event(
-        collection="c2", channel_id=202, thread_id=None,
-        retention_class="standard", memory_budget_items=200,
-        before_count=10, after_count=5, pruned_count=5,
+        collection="c2",
+        channel_id=202,
+        thread_id=None,
+        retention_class="standard",
+        memory_budget_items=200,
+        before_count=10,
+        after_count=5,
+        pruned_count=5,
     )
     events = get_memory_compaction_events(channel_id=201)
     assert len(events) == 1
@@ -220,14 +235,24 @@ def test_get_events_filtered_by_thread():
     from memory_compaction_state import get_memory_compaction_events, record_memory_compaction_event
 
     record_memory_compaction_event(
-        collection="t1", channel_id=203, thread_id=2030,
-        retention_class="standard", memory_budget_items=200,
-        before_count=10, after_count=5, pruned_count=5,
+        collection="t1",
+        channel_id=203,
+        thread_id=2030,
+        retention_class="standard",
+        memory_budget_items=200,
+        before_count=10,
+        after_count=5,
+        pruned_count=5,
     )
     record_memory_compaction_event(
-        collection="t2", channel_id=203, thread_id=2031,
-        retention_class="standard", memory_budget_items=200,
-        before_count=10, after_count=5, pruned_count=5,
+        collection="t2",
+        channel_id=203,
+        thread_id=2031,
+        retention_class="standard",
+        memory_budget_items=200,
+        before_count=10,
+        after_count=5,
+        pruned_count=5,
     )
     events = get_memory_compaction_events(channel_id=203, thread_id=2030)
     assert len(events) == 1
@@ -238,15 +263,25 @@ def test_get_events_sorted_newest_first():
     from memory_compaction_state import get_memory_compaction_events, record_memory_compaction_event
 
     record_memory_compaction_event(
-        collection="old", channel_id=204, thread_id=None,
-        retention_class="standard", memory_budget_items=200,
-        before_count=10, after_count=5, pruned_count=5,
+        collection="old",
+        channel_id=204,
+        thread_id=None,
+        retention_class="standard",
+        memory_budget_items=200,
+        before_count=10,
+        after_count=5,
+        pruned_count=5,
     )
     time.sleep(0.01)
     record_memory_compaction_event(
-        collection="new", channel_id=204, thread_id=None,
-        retention_class="standard", memory_budget_items=200,
-        before_count=10, after_count=5, pruned_count=5,
+        collection="new",
+        channel_id=204,
+        thread_id=None,
+        retention_class="standard",
+        memory_budget_items=200,
+        before_count=10,
+        after_count=5,
+        pruned_count=5,
     )
     events = get_memory_compaction_events(channel_id=204)
     assert events[0]["collection"] == "new"
@@ -257,9 +292,14 @@ def test_get_events_limit_respected():
 
     for i in range(10):
         record_memory_compaction_event(
-            collection=f"col{i}", channel_id=205, thread_id=None,
-            retention_class="standard", memory_budget_items=200,
-            before_count=i, after_count=i, pruned_count=0,
+            collection=f"col{i}",
+            channel_id=205,
+            thread_id=None,
+            retention_class="standard",
+            memory_budget_items=200,
+            before_count=i,
+            after_count=i,
+            pruned_count=0,
         )
     events = get_memory_compaction_events(channel_id=205, limit=3)
     assert len(events) == 3
@@ -269,14 +309,24 @@ def test_get_events_no_filter_returns_all():
     from memory_compaction_state import get_memory_compaction_events, record_memory_compaction_event
 
     record_memory_compaction_event(
-        collection="a", channel_id=206, thread_id=None,
-        retention_class="standard", memory_budget_items=200,
-        before_count=0, after_count=0, pruned_count=0,
+        collection="a",
+        channel_id=206,
+        thread_id=None,
+        retention_class="standard",
+        memory_budget_items=200,
+        before_count=0,
+        after_count=0,
+        pruned_count=0,
     )
     record_memory_compaction_event(
-        collection="b", channel_id=207, thread_id=None,
-        retention_class="standard", memory_budget_items=200,
-        before_count=0, after_count=0, pruned_count=0,
+        collection="b",
+        channel_id=207,
+        thread_id=None,
+        retention_class="standard",
+        memory_budget_items=200,
+        before_count=0,
+        after_count=0,
+        pruned_count=0,
     )
     events = get_memory_compaction_events()
     assert len(events) >= 2
@@ -294,9 +344,14 @@ def test_get_events_limit_capped_at_100():
     from memory_compaction_state import get_memory_compaction_events, record_memory_compaction_event
 
     record_memory_compaction_event(
-        collection="x", channel_id=208, thread_id=None,
-        retention_class="standard", memory_budget_items=200,
-        before_count=0, after_count=0, pruned_count=0,
+        collection="x",
+        channel_id=208,
+        thread_id=None,
+        retention_class="standard",
+        memory_budget_items=200,
+        before_count=0,
+        after_count=0,
+        pruned_count=0,
     )
     # limit=0 should return at least 1 (clamped internally)
     events = get_memory_compaction_events(channel_id=208, limit=0)
@@ -318,9 +373,14 @@ def test_max_events_enforced():
 
     for i in range(_MAX_MEMORY_COMPACTION_EVENTS + 20):
         record_memory_compaction_event(
-            collection=f"col{i}", channel_id=300, thread_id=None,
-            retention_class="standard", memory_budget_items=200,
-            before_count=i, after_count=i, pruned_count=0,
+            collection=f"col{i}",
+            channel_id=300,
+            thread_id=None,
+            retention_class="standard",
+            memory_budget_items=200,
+            before_count=i,
+            after_count=i,
+            pruned_count=0,
         )
 
     with _MEMORY_COMPACTION_EVENTS_LOCK:

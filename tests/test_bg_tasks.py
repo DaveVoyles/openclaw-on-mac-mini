@@ -10,6 +10,7 @@ import pytest
 # Module-level stubs (must run before importing bg_tasks)
 # ---------------------------------------------------------------------------
 
+
 class _FakeFooter:
     def __init__(self, text=""):
         self.text = text
@@ -17,6 +18,7 @@ class _FakeFooter:
 
 class _FakeEmbed:
     """Minimal discord.Embed stub that preserves constructor kwargs as attributes."""
+
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
         self.footer = _FakeFooter()
@@ -30,9 +32,14 @@ class _FakeEmbed:
     def add_field(self, **kwargs):
         self.fields.append(kwargs)
 
-    def set_author(self, **kwargs): pass
-    def set_image(self, **kwargs): pass
-    def set_thumbnail(self, **kwargs): pass
+    def set_author(self, **kwargs):
+        pass
+
+    def set_image(self, **kwargs):
+        pass
+
+    def set_thumbnail(self, **kwargs):
+        pass
 
 
 import importlib as _importlib
@@ -61,10 +68,18 @@ if "discord" not in sys.modules:
 
 # Stub other heavy dependencies only when not installed in the environment.
 for _mod in [
-    "google", "google.genai", "google.genai.types",
-    "aiohttp", "pandas", "scipy", "scipy.stats",
-    "psutil", "prometheus_client", "metrics_collector",
-    "skills", "skills.advanced_skills",
+    "google",
+    "google.genai",
+    "google.genai.types",
+    "aiohttp",
+    "pandas",
+    "scipy",
+    "scipy.stats",
+    "psutil",
+    "prometheus_client",
+    "metrics_collector",
+    "skills",
+    "skills.advanced_skills",
 ]:
     _try_stub(_mod)
 
@@ -538,8 +553,10 @@ class TestReminderLoop:
         mock_rm.mark_fired = MagicMock()
         mock_reminder_manager_mod = MagicMock(reminder_manager=mock_rm)
 
-        with patch("bg_tasks.asyncio.sleep", new_callable=AsyncMock), \
-             patch.dict("sys.modules", {"reminder_manager": mock_reminder_manager_mod}):
+        with (
+            patch("bg_tasks.asyncio.sleep", new_callable=AsyncMock),
+            patch.dict("sys.modules", {"reminder_manager": mock_reminder_manager_mod}),
+        ):
             await bg_tasks.reminder_loop(bot)
 
         bot.fetch_user.assert_awaited_with(12345)
@@ -564,8 +581,10 @@ class TestReminderLoop:
         mock_rm.mark_fired = MagicMock()
         mock_reminder_manager_mod = MagicMock(reminder_manager=mock_rm)
 
-        with patch("bg_tasks.asyncio.sleep", new_callable=AsyncMock), \
-             patch.dict("sys.modules", {"reminder_manager": mock_reminder_manager_mod}):
+        with (
+            patch("bg_tasks.asyncio.sleep", new_callable=AsyncMock),
+            patch.dict("sys.modules", {"reminder_manager": mock_reminder_manager_mod}),
+        ):
             await bg_tasks.reminder_loop(bot)
 
         mock_rm.mark_fired.assert_called_with("r2")
@@ -579,8 +598,10 @@ class TestReminderLoop:
         mock_rm.get_due = MagicMock(return_value=[])
         mock_reminder_manager_mod = MagicMock(reminder_manager=mock_rm)
 
-        with patch("bg_tasks.asyncio.sleep", new_callable=AsyncMock), \
-             patch.dict("sys.modules", {"reminder_manager": mock_reminder_manager_mod}):
+        with (
+            patch("bg_tasks.asyncio.sleep", new_callable=AsyncMock),
+            patch.dict("sys.modules", {"reminder_manager": mock_reminder_manager_mod}),
+        ):
             await bg_tasks.reminder_loop(bot)
 
         bot.fetch_user.assert_not_awaited()
@@ -595,10 +616,11 @@ class TestReminderLoop:
         mock_rm.get_due = MagicMock(side_effect=Exception("db error"))
         mock_reminder_manager_mod = MagicMock(reminder_manager=mock_rm)
 
-        with patch("bg_tasks.asyncio.sleep", new_callable=AsyncMock), \
-             patch.dict("sys.modules", {"reminder_manager": mock_reminder_manager_mod}):
+        with (
+            patch("bg_tasks.asyncio.sleep", new_callable=AsyncMock),
+            patch.dict("sys.modules", {"reminder_manager": mock_reminder_manager_mod}),
+        ):
             await bg_tasks.reminder_loop(bot)
-
 
     async def test_recurring_reminder_shown_in_embed(self, monkeypatch):
         """Recurring reminder has recurrence in embed footer."""
@@ -629,8 +651,10 @@ class TestReminderLoop:
 
         mock_user.send = capture_send
 
-        with patch("bg_tasks.asyncio.sleep", new_callable=AsyncMock), \
-             patch.dict("sys.modules", {"reminder_manager": mock_reminder_manager_mod}):
+        with (
+            patch("bg_tasks.asyncio.sleep", new_callable=AsyncMock),
+            patch.dict("sys.modules", {"reminder_manager": mock_reminder_manager_mod}),
+        ):
             await bg_tasks.reminder_loop(bot)
 
         assert sent_embeds

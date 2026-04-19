@@ -76,20 +76,29 @@ def clean_db(tmp_path):
         # Weather (uncorrelated)
         weather_volume = 50 + (i % 7) * 10  # Weekly pattern
 
-        conn.execute("""
+        conn.execute(
+            """
             INSERT INTO trend_data (timestamp, topic, category, volume, sentiment, sources)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (timestamp, "AI", "news", ai_volume, 0.6, "source1"))
+        """,
+            (timestamp, "AI", "news", ai_volume, 0.6, "source1"),
+        )
 
-        conn.execute("""
+        conn.execute(
+            """
             INSERT INTO trend_data (timestamp, topic, category, volume, sentiment, sources)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (timestamp, "NVDA", "finance", nvda_volume, 0.65, "source2"))
+        """,
+            (timestamp, "NVDA", "finance", nvda_volume, 0.65, "source2"),
+        )
 
-        conn.execute("""
+        conn.execute(
+            """
             INSERT INTO trend_data (timestamp, topic, category, volume, sentiment, sources)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (timestamp, "rain", "weather", weather_volume, 0.5, "source3"))
+        """,
+            (timestamp, "rain", "weather", weather_volume, 0.5, "source3"),
+        )
 
     conn.commit()
     conn.close()
@@ -222,9 +231,7 @@ def test_generate_insight_positive(clean_db):
     """Test insight generation for positive correlation."""
     engine = CorrelationEngine(db_path=clean_db)
 
-    insight = engine._generate_insight(
-        "news/AI", "finance/NVDA", 0.75, "strong", "positive"
-    )
+    insight = engine._generate_insight("news/AI", "finance/NVDA", 0.75, "strong", "positive")
 
     assert "positive" in insight.lower()
     assert "increases" in insight.lower()
@@ -234,9 +241,7 @@ def test_generate_insight_negative(clean_db):
     """Test insight generation for negative correlation."""
     engine = CorrelationEngine(db_path=clean_db)
 
-    insight = engine._generate_insight(
-        "news/AI", "weather/rain", -0.6, "moderate", "negative"
-    )
+    insight = engine._generate_insight("news/AI", "weather/rain", -0.6, "moderate", "negative")
 
     assert "negative" in insight.lower()
     assert "decrease" in insight.lower()
@@ -246,9 +251,7 @@ def test_generate_insight_none(clean_db):
     """Test insight generation for no correlation."""
     engine = CorrelationEngine(db_path=clean_db)
 
-    insight = engine._generate_insight(
-        "news/AI", "weather/rain", 0.1, "none", "none"
-    )
+    insight = engine._generate_insight("news/AI", "weather/rain", 0.1, "none", "none")
 
     assert "no" in insight.lower()
 
@@ -329,8 +332,7 @@ async def test_correlation_caching(clean_db):
     # Check cache
     conn = sqlite3.connect(clean_db)
     cursor = conn.execute(
-        "SELECT * FROM correlation_cache WHERE metric_a = ? AND metric_b = ?",
-        ("news/AI", "finance/NVDA")
+        "SELECT * FROM correlation_cache WHERE metric_a = ? AND metric_b = ?", ("news/AI", "finance/NVDA")
     )
     cached = cursor.fetchone()
     conn.close()
@@ -344,14 +346,10 @@ async def test_correlation_methods(clean_db):
     engine = CorrelationEngine(db_path=clean_db)
 
     # Pearson (linear)
-    result_pearson = await engine.find_correlations(
-        "news/AI", "finance/NVDA", method="pearson"
-    )
+    result_pearson = await engine.find_correlations("news/AI", "finance/NVDA", method="pearson")
 
     # Spearman (rank-based)
-    result_spearman = await engine.find_correlations(
-        "news/AI", "finance/NVDA", method="spearman"
-    )
+    result_spearman = await engine.find_correlations("news/AI", "finance/NVDA", method="spearman")
 
     # Both should return valid results
     assert isinstance(result_pearson.correlation, float)

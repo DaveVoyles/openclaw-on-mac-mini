@@ -21,15 +21,20 @@ for _mod in ["slack_bolt", "slack_bolt.async_app", "aiohttp"]:
     if _mod not in sys.modules:
         _stub = types.ModuleType(_mod)
         if _mod == "slack_bolt.async_app":
+
             class _AsyncApp:
                 def __init__(self, *a, **kw):
                     pass
+
                 def event(self, *a, **kw):
                     return lambda f: f
+
                 def command(self, *a, **kw):
                     return lambda f: f
+
                 def action(self, *a, **kw):
                     return lambda f: f
+
             _stub.AsyncApp = _AsyncApp
         sys.modules[_mod] = _stub
 
@@ -45,8 +50,8 @@ import slack_bot as sb  # noqa: E402
 # _clean_for_slack
 # ---------------------------------------------------------------------------
 
-class TestCleanForSlack(unittest.TestCase):
 
+class TestCleanForSlack(unittest.TestCase):
     def test_bold_markdown_converted(self):
         result = sb._clean_for_slack("Hello **world**!")
         assert result == "Hello *world*!"
@@ -78,8 +83,8 @@ class TestCleanForSlack(unittest.TestCase):
 # _parse_model_flag
 # ---------------------------------------------------------------------------
 
-class TestParseModelFlag(unittest.TestCase):
 
+class TestParseModelFlag(unittest.TestCase):
     def test_no_flag_returns_auto(self):
         text, model = sb._parse_model_flag("summarize this document")
         assert model == "auto"
@@ -105,8 +110,8 @@ class TestParseModelFlag(unittest.TestCase):
 # _mimetype_for
 # ---------------------------------------------------------------------------
 
-class TestMimetypeFor(unittest.TestCase):
 
+class TestMimetypeFor(unittest.TestCase):
     def test_docx(self):
         mt = sb._mimetype_for("report.docx")
         assert "wordprocessingml" in mt
@@ -135,8 +140,8 @@ class TestMimetypeFor(unittest.TestCase):
 # _register_bot_message  (registry + pruning)
 # ---------------------------------------------------------------------------
 
-class TestRegisterBotMessage(unittest.TestCase):
 
+class TestRegisterBotMessage(unittest.TestCase):
     def setUp(self):
         sb._bot_message_registry.clear()
 
@@ -168,8 +173,8 @@ class TestRegisterBotMessage(unittest.TestCase):
 # _slack_is_configured
 # ---------------------------------------------------------------------------
 
-class TestSlackIsConfigured(unittest.TestCase):
 
+class TestSlackIsConfigured(unittest.TestCase):
     def _check(self, enabled, bot_token, app_token):
         with (
             patch.object(sb, "SLACK_ENABLED", enabled),
@@ -201,10 +206,11 @@ class TestSlackIsConfigured(unittest.TestCase):
 # _load_personas / _save_personas  (file I/O)
 # ---------------------------------------------------------------------------
 
-class TestLoadSavePersonas(unittest.TestCase):
 
+class TestLoadSavePersonas(unittest.TestCase):
     def test_load_from_existing_file(self, tmp_path=None):
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "personas.json"
             payload = {"U001": {"name": "Aria", "tone": "friendly"}}
@@ -220,6 +226,7 @@ class TestLoadSavePersonas(unittest.TestCase):
 
     def test_load_missing_file_leaves_empty(self):
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "nonexistent.json"
             orig_path = sb._PERSONAS_PATH
@@ -233,6 +240,7 @@ class TestLoadSavePersonas(unittest.TestCase):
 
     def test_load_corrupt_file_logs_and_resets(self):
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "personas.json"
             p.write_text("not-valid-json{{{")
@@ -250,10 +258,11 @@ class TestLoadSavePersonas(unittest.TestCase):
 # _load_file_history / _save_file_history  (file I/O)
 # ---------------------------------------------------------------------------
 
-class TestLoadSaveFileHistory(unittest.TestCase):
 
+class TestLoadSaveFileHistory(unittest.TestCase):
     def test_round_trip(self):
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "file_history.json"
             payload = {"U001": [{"name": "report.pdf", "size": 1024}]}
@@ -275,6 +284,7 @@ class TestLoadSaveFileHistory(unittest.TestCase):
 
     def test_load_missing_file_stays_empty(self):
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "no_history.json"
             orig_path = sb._FILE_HISTORY_PATH

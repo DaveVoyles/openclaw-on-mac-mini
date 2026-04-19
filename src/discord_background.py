@@ -7,7 +7,6 @@ The implementation has been split into focused sub-modules:
   bg_tasks      — task lifecycle (start/stop/restart/supervise)
 """
 
-
 from bg_briefing import (
     evening_digest_loop,
     morning_briefing_loop,

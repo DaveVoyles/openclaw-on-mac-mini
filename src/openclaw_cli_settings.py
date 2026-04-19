@@ -39,4 +39,5 @@ the overlay tests are refactored to patch at the module boundary instead of the
 openclaw_cli namespace, or when a settings-specific sys/tty abstraction is
 introduced in openclaw_cli_ui_core.
 """
+
 from __future__ import annotations

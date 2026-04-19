@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_update.py — version checking and self-update."""
+
 from __future__ import annotations
 
 import json
@@ -23,6 +24,7 @@ from openclaw_cli_update import (
 # Constants
 # ---------------------------------------------------------------------------
 
+
 class TestConstants:
     def test_default_base_url(self):
         assert "localhost" in DEFAULT_BASE_URL or "http" in DEFAULT_BASE_URL
@@ -39,6 +41,7 @@ class TestConstants:
 # ---------------------------------------------------------------------------
 # cli_version()
 # ---------------------------------------------------------------------------
+
 
 class TestCliVersion:
     def test_openclaw_cli_update_unit_returns_string(self):
@@ -70,6 +73,7 @@ class TestCliVersion:
 # _version_tuple()
 # ---------------------------------------------------------------------------
 
+
 class TestVersionTuple:
     def test_simple_semver(self):
         assert _version_tuple("1.2.3") == (1, 2, 3)
@@ -98,6 +102,7 @@ class TestVersionTuple:
 # ---------------------------------------------------------------------------
 # _fetch_latest_pypi_version()
 # ---------------------------------------------------------------------------
+
 
 class TestFetchLatestPypiVersion:
     def test_returns_version_string_on_success(self):
@@ -130,6 +135,7 @@ class TestFetchLatestPypiVersion:
 # ---------------------------------------------------------------------------
 # _find_pip()
 # ---------------------------------------------------------------------------
+
 
 class TestFindPip:
     def test_returns_list_when_pip_available(self):
@@ -178,6 +184,7 @@ class TestFindPip:
 # _standalone_install_dir()
 # ---------------------------------------------------------------------------
 
+
 class TestStandaloneInstallDir:
     def test_returns_none_in_site_packages(self, tmp_path):
         fake_file = tmp_path / "site-packages" / "openclaw" / "openclaw_cli_update.py"
@@ -210,6 +217,7 @@ class TestStandaloneInstallDir:
 # ---------------------------------------------------------------------------
 # check_for_update()
 # ---------------------------------------------------------------------------
+
 
 class TestCheckForUpdate:
     def test_sets_latest_version_on_success(self):

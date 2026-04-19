@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_cli_parser.py — argument parser construction."""
+
 from __future__ import annotations
 
 import pytest
@@ -12,6 +13,7 @@ from openclaw_cli_cli_parser import (
 # ---------------------------------------------------------------------------
 # Module-level constants
 # ---------------------------------------------------------------------------
+
 
 class TestConstants:
     def test_default_model(self):
@@ -28,12 +30,14 @@ class TestConstants:
 # build_parser() — top-level parser
 # ---------------------------------------------------------------------------
 
+
 class TestBuildParser:
     def setup_method(self):
         self.parser = build_parser()
 
     def test_returns_argument_parser(self):
         import argparse
+
         assert isinstance(self.parser, argparse.ArgumentParser)
 
     def test_version_flag(self):
@@ -114,6 +118,7 @@ class TestBuildParser:
 # ask subcommand
 # ---------------------------------------------------------------------------
 
+
 class TestAskSubparser:
     def setup_method(self):
         self.parser = build_parser()
@@ -132,6 +137,7 @@ class TestAskSubparser:
 # ---------------------------------------------------------------------------
 # auth subcommand
 # ---------------------------------------------------------------------------
+
 
 class TestAuthSubparser:
     def setup_method(self):
@@ -163,6 +169,7 @@ class TestAuthSubparser:
 # analyze subcommand
 # ---------------------------------------------------------------------------
 
+
 class TestAnalyzeSubparser:
     def setup_method(self):
         self.parser = build_parser()
@@ -188,6 +195,7 @@ class TestAnalyzeSubparser:
 # ---------------------------------------------------------------------------
 # watch subcommand
 # ---------------------------------------------------------------------------
+
 
 class TestWatchSubparser:
     def setup_method(self):
@@ -218,6 +226,7 @@ class TestWatchSubparser:
 # exec subcommand
 # ---------------------------------------------------------------------------
 
+
 class TestExecSubparser:
     def setup_method(self):
         self.parser = build_parser()
@@ -240,6 +249,7 @@ class TestExecSubparser:
 # ---------------------------------------------------------------------------
 # session subcommand
 # ---------------------------------------------------------------------------
+
 
 class TestSessionSubparser:
     def setup_method(self):
@@ -272,6 +282,7 @@ class TestSessionSubparser:
 # ---------------------------------------------------------------------------
 # edit subcommand
 # ---------------------------------------------------------------------------
+
 
 class TestEditSubparser:
     def setup_method(self):

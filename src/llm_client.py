@@ -105,6 +105,7 @@ def _load_tool_declarations() -> list[dict[str, Any]]:
         log.error("tools.yaml not found — no tools will be available")
         return []
     import yaml
+
     with open(tools_file) as f:
         declarations = yaml.safe_load(f)
     log.info("Loaded %d tool declarations from %s", len(declarations), tools_file)
@@ -144,14 +145,18 @@ def _convert_schema(schema: dict) -> dict:
 def _build_tools(tool_declarations: list[dict[str, Any]] | None = None) -> list:
     """Build the Gemini tools list from declarations."""
     declarations = tool_declarations if tool_declarations is not None else _TOOL_DECLARATIONS
-    return [genai.types.Tool(function_declarations=[
-        genai.types.FunctionDeclaration(
-            name=d["name"],
-            description=d["description"],
-            parameters=genai.types.Schema(**_convert_schema(d["parameters"])),
+    return [
+        genai.types.Tool(
+            function_declarations=[
+                genai.types.FunctionDeclaration(
+                    name=d["name"],
+                    description=d["description"],
+                    parameters=genai.types.Schema(**_convert_schema(d["parameters"])),
+                )
+                for d in declarations
+            ]
         )
-        for d in declarations
-    ])]
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +167,7 @@ def _build_tools(tool_declarations: list[dict[str, Any]] | None = None) -> list:
 @dataclasses.dataclass
 class _ModelConfig:
     """Holds model name + generation config (replaces old GenerativeModel)."""
+
     model_name: str
     config: genai.types.GenerateContentConfig
 
@@ -321,6 +327,7 @@ async def quick_generate(
             COPILOT_PROXY_ENABLED,
             chat_openai,  # local import
         )
+
         if COPILOT_PROXY_ENABLED:
             reply = await chat_openai(
                 prompt,

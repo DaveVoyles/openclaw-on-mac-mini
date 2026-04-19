@@ -36,7 +36,9 @@ class DreamCog(commands.Cog, name="Dream"):
             await interaction.response.send_message(msg, ephemeral=True)
 
     # ── /dream ────────────────────────────────────────────────────────
-    @app_commands.command(name="dream", description="Run a memory dream cycle — consolidate, score, and organize knowledge")
+    @app_commands.command(
+        name="dream", description="Run a memory dream cycle — consolidate, score, and organize knowledge"
+    )
     @require_auth()
     async def dream_cmd(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
@@ -98,6 +100,7 @@ class DreamCog(commands.Cog, name="Dream"):
         bundle: dict = {"exported_at": None, "index": None, "memory_md": None}
 
         import datetime
+
         bundle["exported_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
         index_path = data_dir / "index.json"

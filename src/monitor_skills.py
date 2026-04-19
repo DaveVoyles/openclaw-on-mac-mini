@@ -53,6 +53,7 @@ close_session = _sessions.close
 # Snapshot storage
 # ---------------------------------------------------------------------------
 
+
 def _load_snapshots() -> dict[str, dict]:
     """Load URL snapshot records from disk."""
     if _SNAPSHOTS_FILE.exists():
@@ -110,6 +111,7 @@ def _content_hash(text: str) -> str:
 # ---------------------------------------------------------------------------
 # Skills
 # ---------------------------------------------------------------------------
+
 
 async def snapshot_url(url: str, label: str = "") -> str:
     """

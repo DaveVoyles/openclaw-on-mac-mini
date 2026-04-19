@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 
 DIGEST_PREFS_DIR = Path("/memory/preferences/digests")
 
+
 def _ensure_digest_dir() -> None:
     """Ensure digest preferences directory exists."""
     try:
@@ -184,10 +185,7 @@ class DigestManager:
             List of user IDs
         """
         try:
-            return [
-                p.stem for p in DIGEST_PREFS_DIR.glob("*.json")
-                if p.is_file()
-            ]
+            return [p.stem for p in DIGEST_PREFS_DIR.glob("*.json") if p.is_file()]
         except OSError as exc:
             log.error("Failed to list digest users: %s", exc)
             return []
@@ -212,12 +210,14 @@ class DigestManager:
             return "⚠️ Your digest is currently disabled. Use !digest_enable to turn it back on."
 
         # Check if user has any preferences set
-        has_prefs = any([
-            prefs.get("topics"),
-            prefs.get("stocks"),
-            prefs.get("teams"),
-            prefs.get("keywords"),
-        ])
+        has_prefs = any(
+            [
+                prefs.get("topics"),
+                prefs.get("stocks"),
+                prefs.get("teams"),
+                prefs.get("keywords"),
+            ]
+        )
 
         if not has_prefs:
             return (
@@ -266,8 +266,10 @@ class DigestManager:
         )
 
         if preview:
-            sections.append("\n*This is a preview. Your actual digest will be delivered at "
-                          f"{prefs.get('delivery_time', '08:00')} {prefs.get('timezone', 'UTC')}*")
+            sections.append(
+                "\n*This is a preview. Your actual digest will be delivered at "
+                f"{prefs.get('delivery_time', '08:00')} {prefs.get('timezone', 'UTC')}*"
+            )
 
         return "\n".join(sections)
 
@@ -299,19 +301,18 @@ class DigestManager:
 
             for term in search_terms:
                 try:
-                    result = await asyncio.wait_for(
-                        news_skills.search_news(term, max_results=5),
-                        timeout=15
-                    )
+                    result = await asyncio.wait_for(news_skills.search_news(term, max_results=5), timeout=15)
 
                     # Parse articles from result (assuming it's markdown or structured)
                     # This is a simplified parser - adjust based on actual return format
                     if result and not result.startswith("❌"):
-                        articles.append({
-                            "title": term,
-                            "content": result[:200],
-                            "relevance": self._calculate_relevance(result, topics, keywords),
-                        })
+                        articles.append(
+                            {
+                                "title": term,
+                                "content": result[:200],
+                                "relevance": self._calculate_relevance(result, topics, keywords),
+                            }
+                        )
                 except asyncio.TimeoutError:
                     log.warning("News search timed out for: %s", term)
                 except Exception as exc:  # broad: intentional — external skill calls can fail in many ways
@@ -322,10 +323,7 @@ class DigestManager:
 
             # Filter out excluded topics
             if exclude:
-                articles = [
-                    a for a in articles
-                    if not any(ex.lower() in a["content"].lower() for ex in exclude)
-                ]
+                articles = [a for a in articles if not any(ex.lower() in a["content"].lower() for ex in exclude)]
 
             # Sort by relevance and take top items
             articles.sort(key=lambda x: x.get("relevance", 0), reverse=True)
@@ -366,10 +364,7 @@ class DigestManager:
 
             for symbol in stocks[:10]:  # Limit to 10 stocks
                 try:
-                    result = await asyncio.wait_for(
-                        finance_skills.get_stock_quote(symbol),
-                        timeout=10
-                    )
+                    result = await asyncio.wait_for(finance_skills.get_stock_quote(symbol), timeout=10)
 
                     if result and not result.startswith("❌"):
                         stock_data.append(f"• {result}")
@@ -415,10 +410,7 @@ class DigestManager:
 
             for team in teams[:5]:  # Limit to 5 teams
                 try:
-                    result = await asyncio.wait_for(
-                        sports_skills.get_team_schedule(team, days=1),
-                        timeout=10
-                    )
+                    result = await asyncio.wait_for(sports_skills.get_team_schedule(team, days=1), timeout=10)
 
                     if result and not result.startswith("❌"):
                         team_updates.append(f"• {team}: {result[:200]}")

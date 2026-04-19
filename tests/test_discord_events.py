@@ -29,6 +29,7 @@ if "discord_events" not in sys.modules:
     for name, mock in _mocks.items():
         sys.modules[name] = mock
     import discord_events as de  # noqa: E402
+
     # Restore originals so other test files in this worker see the real modules.
     for name, original in _saved.items():
         if original is not None:
@@ -41,6 +42,7 @@ else:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_thread(*, owner_id, parent_id, archived=False, locked=False):
     thread = MagicMock(spec=discord.Thread)
@@ -76,6 +78,7 @@ def make_dm_channel(channel_id=999):
 # _is_user_allowed
 # ---------------------------------------------------------------------------
 
+
 class TestIsUserAllowed:
     def test_empty_allow_list_allows_all(self, monkeypatch):
         monkeypatch.setattr(de, "ALLOWED_USER_IDS", [])
@@ -98,6 +101,7 @@ class TestIsUserAllowed:
 # ---------------------------------------------------------------------------
 # _should_send_message_content_hint
 # ---------------------------------------------------------------------------
+
 
 class TestShouldSendMessageContentHint:
     def setup_method(self):
@@ -135,6 +139,7 @@ class TestShouldSendMessageContentHint:
 # _default_ask_thread_cache_key
 # ---------------------------------------------------------------------------
 
+
 class TestDefaultAskThreadCacheKey:
     def test_with_guild_returns_guild_channel_user(self):
         channel = make_guild_channel(channel_id=10, guild_id=20)
@@ -157,6 +162,7 @@ class TestDefaultAskThreadCacheKey:
 # _default_ask_thread_user_tag
 # ---------------------------------------------------------------------------
 
+
 class TestDefaultAskThreadUserTag:
     def test_formats_user_id(self):
         assert de._default_ask_thread_user_tag(12345) == "u12345"
@@ -168,6 +174,7 @@ class TestDefaultAskThreadUserTag:
 # ---------------------------------------------------------------------------
 # _build_default_ask_thread_name
 # ---------------------------------------------------------------------------
+
 
 class TestBuildDefaultAskThreadName:
     def test_includes_emoji(self):
@@ -204,6 +211,7 @@ class TestBuildDefaultAskThreadName:
 # ---------------------------------------------------------------------------
 # _is_reusable_bot_thread
 # ---------------------------------------------------------------------------
+
 
 class TestIsReusableBotThread:
     BOT_ID = 777
@@ -253,6 +261,7 @@ class TestIsReusableBotThread:
 # _pick_most_recent_thread
 # ---------------------------------------------------------------------------
 
+
 class TestPickMostRecentThread:
     def _make_thread_with_msg_id(self, tid, last_msg_id):
         t = MagicMock(spec=discord.Thread)
@@ -281,6 +290,7 @@ class TestPickMostRecentThread:
 # ---------------------------------------------------------------------------
 # _bot_can_read_channel
 # ---------------------------------------------------------------------------
+
 
 class TestBotCanReadChannel:
     def test_dm_channel_returns_true(self, monkeypatch):

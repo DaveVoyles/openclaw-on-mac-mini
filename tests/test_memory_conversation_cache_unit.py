@@ -11,11 +11,14 @@ from memory_helpers import CONTEXT_TTL, MIN_MESSAGES_TO_SUMMARIZE
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_cache_with_conv(user_id=1, channel_id=100, user_name="TestUser"):
     """Return (cache, conv) with one pre-populated conversation."""
     cache = ConversationCache()
-    with patch("memory_session._load_last_summary", return_value=""), \
-         patch("memory_session.load_last_handover", return_value=""):
+    with (
+        patch("memory_session._load_last_summary", return_value=""),
+        patch("memory_session.load_last_handover", return_value=""),
+    ):
         conv = cache.get(user_id, channel_id, user_name)
     return cache, conv
 
@@ -24,55 +27,70 @@ def _make_cache_with_conv(user_id=1, channel_id=100, user_name="TestUser"):
 # get — creates new conversation
 # ---------------------------------------------------------------------------
 
+
 class TestConversationCacheGet:
     def test_creates_new_conversation_when_absent(self):
-        with patch("memory_session._load_last_summary", return_value=""), \
-             patch("memory_session.load_last_handover", return_value=""):
+        with (
+            patch("memory_session._load_last_summary", return_value=""),
+            patch("memory_session.load_last_handover", return_value=""),
+        ):
             cache = ConversationCache()
             conv = cache.get(1, 100, "Alice")
         assert conv is not None
         assert isinstance(conv, Conversation)
 
     def test_returns_same_instance_on_repeated_call(self):
-        with patch("memory_session._load_last_summary", return_value=""), \
-             patch("memory_session.load_last_handover", return_value=""):
+        with (
+            patch("memory_session._load_last_summary", return_value=""),
+            patch("memory_session.load_last_handover", return_value=""),
+        ):
             cache = ConversationCache()
             conv1 = cache.get(1, 100, "Alice")
             conv2 = cache.get(1, 100, "Alice")
         assert conv1 is conv2
 
     def test_different_channel_produces_different_conversation(self):
-        with patch("memory_session._load_last_summary", return_value=""), \
-             patch("memory_session.load_last_handover", return_value=""):
+        with (
+            patch("memory_session._load_last_summary", return_value=""),
+            patch("memory_session.load_last_handover", return_value=""),
+        ):
             cache = ConversationCache()
             conv1 = cache.get(1, 100)
             conv2 = cache.get(1, 200)
         assert conv1 is not conv2
 
     def test_recall_injected_when_summary_exists(self):
-        with patch("memory_conversation_cache._load_last_summary", return_value="We discussed X"), \
-             patch("memory_conversation_cache.load_last_handover", return_value=""):
+        with (
+            patch("memory_conversation_cache._load_last_summary", return_value="We discussed X"),
+            patch("memory_conversation_cache.load_last_handover", return_value=""),
+        ):
             cache = ConversationCache()
             conv = cache.get(1, 100)
         assert any("Recall from last session" in str(m) for m in conv.history)
 
     def test_handover_injected_when_handover_exists(self):
-        with patch("memory_conversation_cache._load_last_summary", return_value=""), \
-             patch("memory_conversation_cache.load_last_handover", return_value="Pending: fix bug"):
+        with (
+            patch("memory_conversation_cache._load_last_summary", return_value=""),
+            patch("memory_conversation_cache.load_last_handover", return_value="Pending: fix bug"),
+        ):
             cache = ConversationCache()
             conv = cache.get(1, 100)
         assert any("handover" in str(m).lower() for m in conv.history)
 
     def test_no_injection_when_both_empty(self):
-        with patch("memory_session._load_last_summary", return_value=""), \
-             patch("memory_session.load_last_handover", return_value=""):
+        with (
+            patch("memory_session._load_last_summary", return_value=""),
+            patch("memory_session.load_last_handover", return_value=""),
+        ):
             cache = ConversationCache()
             conv = cache.get(1, 100)
         assert conv.history == []
 
     def test_expired_conversation_replaced_with_new(self):
-        with patch("memory_session._load_last_summary", return_value=""), \
-             patch("memory_session.load_last_handover", return_value=""):
+        with (
+            patch("memory_session._load_last_summary", return_value=""),
+            patch("memory_session.load_last_handover", return_value=""),
+        ):
             cache = ConversationCache()
             conv1 = cache.get(1, 100)
             # Force expiry
@@ -85,6 +103,7 @@ class TestConversationCacheGet:
 # set
 # ---------------------------------------------------------------------------
 
+
 class TestConversationCacheSet:
     def test_set_stores_conversation(self):
         cache = ConversationCache()
@@ -96,6 +115,7 @@ class TestConversationCacheSet:
 # ---------------------------------------------------------------------------
 # clear_user
 # ---------------------------------------------------------------------------
+
 
 class TestConversationCacheClearUser:
     def test_clear_user_resets_history(self):
@@ -113,6 +133,7 @@ class TestConversationCacheClearUser:
 # clear_all
 # ---------------------------------------------------------------------------
 
+
 class TestConversationCacheClearAll:
     def test_clear_all_empties_dict(self):
         cache, _ = _make_cache_with_conv()
@@ -123,6 +144,7 @@ class TestConversationCacheClearAll:
 # ---------------------------------------------------------------------------
 # active_count
 # ---------------------------------------------------------------------------
+
 
 class TestConversationCacheActiveCount:
     def test_memory_conversation_cache_unit_active_count_counts_non_expired(self):
@@ -143,6 +165,7 @@ class TestConversationCacheActiveCount:
 # stats
 # ---------------------------------------------------------------------------
 
+
 class TestConversationCacheStats:
     def test_memory_conversation_cache_unit_stats_returns_string(self):
         cache, _ = _make_cache_with_conv()
@@ -159,6 +182,7 @@ class TestConversationCacheStats:
 # ---------------------------------------------------------------------------
 # cleanup_expired
 # ---------------------------------------------------------------------------
+
 
 class TestConversationCacheCleanupExpired:
     def test_expired_conversations_removed(self):

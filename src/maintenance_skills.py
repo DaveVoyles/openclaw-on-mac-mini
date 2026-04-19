@@ -61,6 +61,7 @@ async def restart_gateway() -> str:
 
     try:
         import llm as _llm
+
         await _llm.close_sessions()
         # Reset cached model instances so they reinitialize next call
         _llm._reset_models()
@@ -71,6 +72,7 @@ async def restart_gateway() -> str:
 
     try:
         import http_session as _hs
+
         await _hs.close()
         log.info("Maintenance: HTTP sessions closed")
         results.append("HTTP sessions closed")
@@ -107,8 +109,11 @@ async def backup_config_to_nas() -> str:
     # -- 1. config/ (YAML, prompts, permissions) ------------------------------
     rc2, _, err2 = await _run(
         [
-            "rsync", "-az", "--delete",
-            "-e", rsync_ssh,
+            "rsync",
+            "-az",
+            "--delete",
+            "-e",
+            rsync_ssh,
             str(CONFIG_DIR) + "/",
             f"{NAS_SSH_USER}@{NAS_HOST}:{remote_dest}/config/",
         ],
@@ -120,8 +125,15 @@ async def backup_config_to_nas() -> str:
     tasks_file = Path("/app/data/tasks.json")
     if tasks_file.exists():
         rc3, _, err3 = await _run(
-            ["scp", "-O", f"-P{NAS_SSH_PORT}", "-o", "BatchMode=yes",
-             str(tasks_file), f"{NAS_SSH_USER}@{NAS_HOST}:{remote_dest}/tasks.json"],
+            [
+                "scp",
+                "-O",
+                f"-P{NAS_SSH_PORT}",
+                "-o",
+                "BatchMode=yes",
+                str(tasks_file),
+                f"{NAS_SSH_USER}@{NAS_HOST}:{remote_dest}/tasks.json",
+            ],
             timeout=30,
         )
         results.append("tasks ✅" if rc3 == 0 else f"tasks ❌ {err3[:60]}")
@@ -130,16 +142,22 @@ async def backup_config_to_nas() -> str:
     env_file = Path("/app/.env")
     if env_file.exists():
         rc4, _, err4 = await _run(
-            ["scp", "-O", f"-P{NAS_SSH_PORT}", "-o", "BatchMode=yes",
-             str(env_file), f"{NAS_SSH_USER}@{NAS_HOST}:{remote_dest}/dot-env"],
+            [
+                "scp",
+                "-O",
+                f"-P{NAS_SSH_PORT}",
+                "-o",
+                "BatchMode=yes",
+                str(env_file),
+                f"{NAS_SSH_USER}@{NAS_HOST}:{remote_dest}/dot-env",
+            ],
             timeout=30,
         )
         results.append("env ✅" if rc4 == 0 else f"env ❌ {err4[:60]}")
         # Restrict permissions on the remote copy
         if rc4 == 0:
             await _run(
-                ["ssh"] + ssh_opts + [f"{NAS_SSH_USER}@{NAS_HOST}",
-                 f"chmod 600 {remote_dest}/dot-env"],
+                ["ssh"] + ssh_opts + [f"{NAS_SSH_USER}@{NAS_HOST}", f"chmod 600 {remote_dest}/dot-env"],
                 timeout=10,
             )
 
@@ -148,8 +166,10 @@ async def backup_config_to_nas() -> str:
     if memory_dir.is_dir():
         rc5, _, err5 = await _run(
             [
-                "rsync", "-az",
-                "-e", rsync_ssh,
+                "rsync",
+                "-az",
+                "-e",
+                rsync_ssh,
                 str(memory_dir) + "/",
                 f"{NAS_SSH_USER}@{NAS_HOST}:{remote_dest}/memory/",
             ],
@@ -162,8 +182,10 @@ async def backup_config_to_nas() -> str:
     if vault_dir.is_dir():
         rc6, _, err6 = await _run(
             [
-                "rsync", "-az",
-                "-e", rsync_ssh,
+                "rsync",
+                "-az",
+                "-e",
+                rsync_ssh,
                 str(vault_dir) + "/",
                 f"{NAS_SSH_USER}@{NAS_HOST}:{remote_dest}/vault/",
             ],
@@ -176,8 +198,10 @@ async def backup_config_to_nas() -> str:
     if audit_dir.is_dir():
         rc7, _, err7 = await _run(
             [
-                "rsync", "-az",
-                "-e", rsync_ssh,
+                "rsync",
+                "-az",
+                "-e",
+                rsync_ssh,
                 str(audit_dir) + "/",
                 f"{NAS_SSH_USER}@{NAS_HOST}:{remote_dest}/audit/",
             ],
@@ -212,8 +236,11 @@ async def backup_vault_to_nas() -> str:
 
     rc, _, err = await _run(
         [
-            "rsync", "-avz", "--delete",
-            "-e", rsync_ssh,
+            "rsync",
+            "-avz",
+            "--delete",
+            "-e",
+            rsync_ssh,
             f"{vault_dir}/",
             f"{NAS_SSH_USER}@{NAS_HOST}:{remote_path}",
         ],
@@ -282,12 +309,12 @@ async def run_memory_decay() -> str:
         import vector_store
 
         total_decayed = 0
-        for collection in [vector_store.MEMORIES_COLLECTION,
-                           vector_store.CONVERSATIONS_COLLECTION,
-                           vector_store.RESEARCH_COLLECTION]:
-            candidates = await vector_store.get_decayed_documents(
-                collection, max_age_days=30, min_access_count=2
-            )
+        for collection in [
+            vector_store.MEMORIES_COLLECTION,
+            vector_store.CONVERSATIONS_COLLECTION,
+            vector_store.RESEARCH_COLLECTION,
+        ]:
+            candidates = await vector_store.get_decayed_documents(collection, max_age_days=30, min_access_count=2)
             if candidates:
                 ids = [c["id"] for c in candidates]
                 count = await vector_store.mark_decayed(collection, ids)
@@ -330,6 +357,7 @@ async def run_memory_consolidation() -> str:
 
         import vector_store
         from llm import chat
+
         week_ago = time.time() - (7 * 86400)
         results = await vector_store.search(
             vector_store.CONVERSATIONS_COLLECTION,
@@ -371,10 +399,7 @@ async def run_memory_consolidation() -> str:
 # ---------------------------------------------------------------------------
 
 # qBittorrent download path auto-fix constants
-QBIT_CONFIG_PATH = os.getenv(
-    "QBIT_CONFIG_PATH",
-    "/volume1/docker/qbittorrent/config/qBittorrent/qBittorrent.conf"
-)
+QBIT_CONFIG_PATH = os.getenv("QBIT_CONFIG_PATH", "/volume1/docker/qbittorrent/config/qBittorrent/qBittorrent.conf")
 QBIT_EXPECTED_SAVE_PATH = "/downloads"
 
 
@@ -438,6 +463,7 @@ async def fix_arr_remote_path() -> str:
 
         if "✅ Fixed" in qbit_result or "✅ qBittorrent download path is correct" in qbit_result:
             from skills import restart_container
+
             for svc in ["sonarr", "radarr"]:
                 try:
                     result = await restart_container(svc)
@@ -447,6 +473,7 @@ async def fix_arr_remote_path() -> str:
 
             # Verify health after restart
             import asyncio
+
             await asyncio.sleep(15)
             new_health = await check_arr_health()
             issues.append(f"\n**Health after fix:**\n{new_health}")
@@ -465,7 +492,9 @@ async def check_gluetun_vpn() -> str:
 
     # Check container health
     rc, out, err = await _run(
-        ["ssh"] + ssh_opts + [ssh_target, "/usr/local/bin/docker inspect gluetun --format '{{.State.Health.Status}} {{.State.Status}}'"],
+        ["ssh"]
+        + ssh_opts
+        + [ssh_target, "/usr/local/bin/docker inspect gluetun --format '{{.State.Health.Status}} {{.State.Status}}'"],
         timeout=15,
     )
     if rc != 0:

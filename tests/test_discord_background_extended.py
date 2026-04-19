@@ -25,6 +25,7 @@ import discord_background as mod
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_bot(channel=None):
     bot = MagicMock()
     bot.get_channel = MagicMock(return_value=channel or MagicMock(send=AsyncMock()))
@@ -43,6 +44,7 @@ def _close_coro_task(coro):
 # ===========================================================================
 # audit_writer_loop
 # ===========================================================================
+
 
 class TestAuditWriterLoop:
     @pytest.mark.asyncio
@@ -113,8 +115,7 @@ class TestAuditWriterLoop:
             if call_count >= 2:
                 raise asyncio.CancelledError()
 
-        with patch("bg_healing.asyncio.sleep", fake_sleep), \
-             patch("builtins.open", side_effect=OSError("disk full")):
+        with patch("bg_healing.asyncio.sleep", fake_sleep), patch("builtins.open", side_effect=OSError("disk full")):
             with pytest.raises(asyncio.CancelledError):
                 await mod.audit_writer_loop()
 
@@ -122,6 +123,7 @@ class TestAuditWriterLoop:
 # ===========================================================================
 # background_cleanup_loop
 # ===========================================================================
+
 
 class TestBackgroundCleanupLoop:
     @pytest.mark.asyncio
@@ -140,10 +142,12 @@ class TestBackgroundCleanupLoop:
         mock_approval = MagicMock()
         mock_collector = MagicMock()
 
-        with patch("bg_healing.asyncio.sleep", fake_sleep), \
-             patch("bg_healing.conversation_store", mock_conv), \
-             patch("bg_healing.approval_store", mock_approval), \
-             patch("bg_healing.get_collector", return_value=mock_collector):
+        with (
+            patch("bg_healing.asyncio.sleep", fake_sleep),
+            patch("bg_healing.conversation_store", mock_conv),
+            patch("bg_healing.approval_store", mock_approval),
+            patch("bg_healing.get_collector", return_value=mock_collector),
+        ):
             with pytest.raises(asyncio.CancelledError):
                 await mod.background_cleanup_loop()
 
@@ -167,9 +171,11 @@ class TestBackgroundCleanupLoop:
         mock_conv.cleanup_expired.side_effect = RuntimeError("db error")
         mock_collector = MagicMock()
 
-        with patch("bg_healing.asyncio.sleep", fake_sleep), \
-             patch("bg_healing.conversation_store", mock_conv), \
-             patch("bg_healing.get_collector", return_value=mock_collector):
+        with (
+            patch("bg_healing.asyncio.sleep", fake_sleep),
+            patch("bg_healing.conversation_store", mock_conv),
+            patch("bg_healing.get_collector", return_value=mock_collector),
+        ):
             with pytest.raises(asyncio.CancelledError):
                 await mod.background_cleanup_loop()
 
@@ -182,6 +188,7 @@ class TestBackgroundCleanupLoop:
 # ===========================================================================
 # morning_briefing_loop
 # ===========================================================================
+
 
 class TestMorningBriefingLoop:
     @pytest.mark.asyncio
@@ -203,10 +210,12 @@ class TestMorningBriefingLoop:
         fake_now = datetime.datetime(2024, 1, 1, 8, 0, 0)
         mock_briefing = AsyncMock()
 
-        with patch("bg_briefing.asyncio.sleep", fake_sleep), \
-             patch("bg_briefing.datetime") as mock_dt, \
-             patch("bg_briefing.send_morning_briefing", mock_briefing), \
-             patch("bg_briefing.asyncio.create_task", side_effect=_close_coro_task) as mock_create_task:
+        with (
+            patch("bg_briefing.asyncio.sleep", fake_sleep),
+            patch("bg_briefing.datetime") as mock_dt,
+            patch("bg_briefing.send_morning_briefing", mock_briefing),
+            patch("bg_briefing.asyncio.create_task", side_effect=_close_coro_task) as mock_create_task,
+        ):
             mock_dt.datetime.now.return_value = fake_now
             mock_dt.date = datetime.date
             with pytest.raises(asyncio.CancelledError):
@@ -230,9 +239,11 @@ class TestMorningBriefingLoop:
 
         fake_now = datetime.datetime(2024, 1, 1, 10, 0, 0)  # 10 AM, not 8 AM
 
-        with patch("bg_briefing.asyncio.sleep", fake_sleep), \
-             patch("bg_briefing.datetime") as mock_dt, \
-             patch("bg_briefing.asyncio.create_task", side_effect=_close_coro_task) as mock_create_task:
+        with (
+            patch("bg_briefing.asyncio.sleep", fake_sleep),
+            patch("bg_briefing.datetime") as mock_dt,
+            patch("bg_briefing.asyncio.create_task", side_effect=_close_coro_task) as mock_create_task,
+        ):
             mock_dt.datetime.now.return_value = fake_now
             mock_dt.date = datetime.date
             with pytest.raises(asyncio.CancelledError):
@@ -245,18 +256,23 @@ class TestMorningBriefingLoop:
 # send_morning_briefing
 # ===========================================================================
 
+
 class TestSendMorningBriefing:
     @pytest.mark.asyncio
     async def test_posts_embed_to_channel(self, monkeypatch):
         channel = MagicMock(send=AsyncMock())
 
-        with patch("bg_briefing.check_arr_health", AsyncMock(return_value="ok")), \
-             patch("bg_briefing.get_download_queue", AsyncMock(return_value="none")), \
-             patch("bg_briefing.get_weather", AsyncMock(return_value="sunny")), \
-             patch("bg_briefing.get_system_stats", AsyncMock(return_value="CPU 10%")), \
-             patch("bg_briefing.llm_chat", AsyncMock(return_value=("Good morning!", None, None))), \
-             patch("bg_briefing.audit_log"), \
-             patch("bg_briefing.asyncio.gather", new_callable=AsyncMock, return_value=("ok", "none", "sunny", "CPU 10%")):
+        with (
+            patch("bg_briefing.check_arr_health", AsyncMock(return_value="ok")),
+            patch("bg_briefing.get_download_queue", AsyncMock(return_value="none")),
+            patch("bg_briefing.get_weather", AsyncMock(return_value="sunny")),
+            patch("bg_briefing.get_system_stats", AsyncMock(return_value="CPU 10%")),
+            patch("bg_briefing.llm_chat", AsyncMock(return_value=("Good morning!", None, None))),
+            patch("bg_briefing.audit_log"),
+            patch(
+                "bg_briefing.asyncio.gather", new_callable=AsyncMock, return_value=("ok", "none", "sunny", "CPU 10%")
+            ),
+        ):
             # Use channel_override to avoid channel lookup
             await mod.send_morning_briefing(MagicMock(), channel_override=channel)
 
@@ -289,8 +305,10 @@ class TestSendMorningBriefing:
     async def test_handles_llm_exception(self, monkeypatch):
         channel = MagicMock(send=AsyncMock())
 
-        with patch("bg_briefing.asyncio.gather", new_callable=AsyncMock, return_value=("ok", "none", "sunny", "CPU")), \
-             patch("bg_briefing.llm_chat", AsyncMock(side_effect=Exception("LLM down"))):
+        with (
+            patch("bg_briefing.asyncio.gather", new_callable=AsyncMock, return_value=("ok", "none", "sunny", "CPU")),
+            patch("bg_briefing.llm_chat", AsyncMock(side_effect=Exception("LLM down"))),
+        ):
             # Should not propagate the exception
             await mod.send_morning_briefing(MagicMock(), channel_override=channel)
 
@@ -300,14 +318,23 @@ class TestSendMorningBriefing:
     async def test_with_full_optional_sections(self, monkeypatch):
         channel = MagicMock(send=AsyncMock())
 
-        mock_stats = {"total": 5, "successes": 4, "failures": 1, "success_rate": 0.8,
-                      "avg_latency_ms": 100, "recent_errors": [{"error": "oops"}]}
+        mock_stats = {
+            "total": 5,
+            "successes": 4,
+            "failures": 1,
+            "success_rate": 0.8,
+            "avg_latency_ms": 100,
+            "recent_errors": [{"error": "oops"}],
+        }
 
-        with patch("bg_briefing.asyncio.gather", new_callable=AsyncMock, return_value=("ok", "none", "sunny", "CPU 10%")), \
-             patch("bg_briefing.llm_chat", AsyncMock(return_value=("Morning!", None, None))), \
-             patch("bg_briefing.audit_log"), \
-             patch("bg_briefing.asyncio.wait_for", new_callable=AsyncMock, return_value="calendar ok"):
-
+        with (
+            patch(
+                "bg_briefing.asyncio.gather", new_callable=AsyncMock, return_value=("ok", "none", "sunny", "CPU 10%")
+            ),
+            patch("bg_briefing.llm_chat", AsyncMock(return_value=("Morning!", None, None))),
+            patch("bg_briefing.audit_log"),
+            patch("bg_briefing.asyncio.wait_for", new_callable=AsyncMock, return_value="calendar ok"),
+        ):
             # Patch optional imports
             mock_cal = MagicMock(return_value=AsyncMock(return_value="Calendar stuff"))
             mock_goals = MagicMock(return_value="goal1")
@@ -316,6 +343,7 @@ class TestSendMorningBriefing:
             mock_predict = MagicMock(return_value={"days_until_full": 10, "percent_used": 95})
 
             import sys
+
             # Mock calendar_skills module
             fake_cal_mod = MagicMock()
             fake_cal_mod.get_upcoming_events = AsyncMock(return_value="today's events")
@@ -328,13 +356,16 @@ class TestSendMorningBriefing:
             fake_health_mod = MagicMock()
             fake_health_mod.predict_full = MagicMock(return_value={"days_until_full": 10, "percent_used": 95})
 
-            with patch.dict(sys.modules, {
-                "calendar_skills": fake_cal_mod,
-                "goal_tracker": fake_goal_mod,
-                "error_tracker": fake_err_mod,
-                "overseerr": fake_overseerr_mod,
-                "health_history": fake_health_mod,
-            }):
+            with patch.dict(
+                sys.modules,
+                {
+                    "calendar_skills": fake_cal_mod,
+                    "goal_tracker": fake_goal_mod,
+                    "error_tracker": fake_err_mod,
+                    "overseerr": fake_overseerr_mod,
+                    "health_history": fake_health_mod,
+                },
+            ):
                 await mod.send_morning_briefing(MagicMock(), channel_override=channel)
 
         # Should still attempt to send
@@ -344,6 +375,7 @@ class TestSendMorningBriefing:
 # ===========================================================================
 # evening_digest_loop
 # ===========================================================================
+
 
 class TestEveningDigestLoop:
     @pytest.mark.asyncio
@@ -362,9 +394,11 @@ class TestEveningDigestLoop:
 
         fake_now = datetime.datetime(2024, 1, 1, 21, 0, 0)
 
-        with patch("bg_briefing.asyncio.sleep", fake_sleep), \
-             patch("bg_briefing.datetime") as mock_dt, \
-             patch("bg_briefing.asyncio.create_task", side_effect=_close_coro_task) as mock_create_task:
+        with (
+            patch("bg_briefing.asyncio.sleep", fake_sleep),
+            patch("bg_briefing.datetime") as mock_dt,
+            patch("bg_briefing.asyncio.create_task", side_effect=_close_coro_task) as mock_create_task,
+        ):
             mock_dt.datetime.now.return_value = fake_now
             mock_dt.date = datetime.date
             with pytest.raises(asyncio.CancelledError):
@@ -376,6 +410,7 @@ class TestEveningDigestLoop:
 # ===========================================================================
 # send_evening_digest
 # ===========================================================================
+
 
 class TestSendEveningDigest:
     @pytest.mark.asyncio
@@ -395,10 +430,12 @@ class TestSendEveningDigest:
     async def test_posts_embed(self, monkeypatch):
         channel = MagicMock(send=AsyncMock())
 
-        with patch("bg_briefing.get_system_stats", AsyncMock(return_value="CPU 5%")), \
-             patch("bg_briefing.get_download_queue", AsyncMock(return_value="2 active downloads")), \
-             patch("bg_briefing.asyncio.wait_for", new_callable=AsyncMock, side_effect=lambda coro, timeout: coro), \
-             patch("bg_briefing.audit_log"):
+        with (
+            patch("bg_briefing.get_system_stats", AsyncMock(return_value="CPU 5%")),
+            patch("bg_briefing.get_download_queue", AsyncMock(return_value="2 active downloads")),
+            patch("bg_briefing.asyncio.wait_for", new_callable=AsyncMock, side_effect=lambda coro, timeout: coro),
+            patch("bg_briefing.audit_log"),
+        ):
             await mod.send_evening_digest(MagicMock(), channel_override=channel)
 
         channel.send.assert_awaited_once()
@@ -412,20 +449,29 @@ class TestSendEveningDigest:
         audit_file = tmp_path / f"audit/{today}.jsonl"
         audit_file.parent.mkdir(parents=True, exist_ok=True)
         audit_file.write_text(
-            json.dumps({"action": "ask"}) + "\n" +
-            json.dumps({"action": "ask"}) + "\n" +
-            json.dumps({"action": "status"}) + "\n"
+            json.dumps({"action": "ask"})
+            + "\n"
+            + json.dumps({"action": "ask"})
+            + "\n"
+            + json.dumps({"action": "status"})
+            + "\n"
         )
 
-        with patch("bg_briefing.get_system_stats", AsyncMock(return_value="CPU 5%")), \
-             patch("bg_briefing.get_download_queue", AsyncMock(return_value="none")), \
-             patch("bg_briefing.asyncio.wait_for", new_callable=AsyncMock,
-                   side_effect=lambda coro, timeout: asyncio.coroutine(lambda: "stats ok")()), \
-             patch("bg_briefing.audit_log"), \
-             patch("pathlib.Path.exists", return_value=True), \
-             patch("pathlib.Path.read_text", return_value=(
-                 json.dumps({"action": "ask"}) + "\n" + json.dumps({"action": "status"}) + "\n"
-             )):
+        with (
+            patch("bg_briefing.get_system_stats", AsyncMock(return_value="CPU 5%")),
+            patch("bg_briefing.get_download_queue", AsyncMock(return_value="none")),
+            patch(
+                "bg_briefing.asyncio.wait_for",
+                new_callable=AsyncMock,
+                side_effect=lambda coro, timeout: asyncio.coroutine(lambda: "stats ok")(),
+            ),
+            patch("bg_briefing.audit_log"),
+            patch("pathlib.Path.exists", return_value=True),
+            patch(
+                "pathlib.Path.read_text",
+                return_value=(json.dumps({"action": "ask"}) + "\n" + json.dumps({"action": "status"}) + "\n"),
+            ),
+        ):
             await mod.send_evening_digest(MagicMock(), channel_override=channel)
 
         channel.send.assert_awaited_once()
@@ -434,10 +480,12 @@ class TestSendEveningDigest:
     async def test_handles_all_section_exceptions(self, monkeypatch):
         channel = MagicMock(send=AsyncMock())
 
-        with patch("bg_briefing.get_system_stats", AsyncMock(side_effect=Exception("down"))), \
-             patch("bg_briefing.get_download_queue", AsyncMock(side_effect=Exception("down"))), \
-             patch("bg_briefing.asyncio.wait_for", new_callable=AsyncMock, side_effect=Exception("timeout")), \
-             patch("bg_briefing.audit_log"):
+        with (
+            patch("bg_briefing.get_system_stats", AsyncMock(side_effect=Exception("down"))),
+            patch("bg_briefing.get_download_queue", AsyncMock(side_effect=Exception("down"))),
+            patch("bg_briefing.asyncio.wait_for", new_callable=AsyncMock, side_effect=Exception("timeout")),
+            patch("bg_briefing.audit_log"),
+        ):
             await mod.send_evening_digest(MagicMock(), channel_override=channel)
 
         # Should still send (embed may be empty but not crash)
@@ -447,6 +495,7 @@ class TestSendEveningDigest:
 # ===========================================================================
 # _check_quality_drift_alert — additional early-return paths
 # ===========================================================================
+
 
 class TestCheckQualityDriftAlertEdgeCases:
     @pytest.mark.asyncio
@@ -459,6 +508,7 @@ class TestCheckQualityDriftAlertEdgeCases:
     async def test_discord_background_extended_import_failure_returns_false(self, monkeypatch):
         monkeypatch.setattr(bg_healing, "ALERT_CHANNEL_ID", 123)
         import sys
+
         # Use patch.dict to safely hide dashboard modules during the test.
         # patch.dict will restore sys.modules to its original state after the block,
         # preserving any previously imported references.
@@ -476,8 +526,10 @@ class TestCheckQualityDriftAlertEdgeCases:
     @pytest.mark.asyncio
     async def test_discord_background_extended_non_dict_drift_returns_false(self, monkeypatch):
         monkeypatch.setattr(bg_healing, "ALERT_CHANNEL_ID", 123)
-        with patch("dashboard.api_handlers._build_offline_quality_calibration_payload",
-                   return_value={"drift": "string not dict"}):
+        with patch(
+            "dashboard.api_handlers._build_offline_quality_calibration_payload",
+            return_value={"drift": "string not dict"},
+        ):
             result = await bg_healing._check_quality_drift_alert(MagicMock())
         assert result is False
 
@@ -498,6 +550,7 @@ class TestCheckQualityDriftAlertEdgeCases:
     @pytest.mark.asyncio
     async def test_discord_background_extended_channel_not_found_returns_false(self, monkeypatch):
         from alert_manager import reset_bounded_alert_cache
+
         reset_bounded_alert_cache()
 
         monkeypatch.setattr(bg_healing, "ALERT_CHANNEL_ID", 123)
@@ -518,6 +571,7 @@ class TestCheckQualityDriftAlertEdgeCases:
     @pytest.mark.asyncio
     async def test_non_dict_severity_still_works(self, monkeypatch):
         from alert_manager import reset_bounded_alert_cache
+
         reset_bounded_alert_cache()
 
         monkeypatch.setattr(bg_healing, "ALERT_CHANNEL_ID", 123)
@@ -541,24 +595,29 @@ class TestCheckQualityDriftAlertEdgeCases:
 # _gather_system_signals
 # ===========================================================================
 
+
 class TestGatherSystemSignals:
     @pytest.mark.asyncio
     async def test_discord_background_extended_returns_none_when_all_clean(self):
-        with patch("bg_healing.check_arr_health", AsyncMock(return_value="OK healthy")), \
-             patch("bg_healing.check_download_clients", AsyncMock(return_value="OK")), \
-             patch("bg_healing.check_plex_status", AsyncMock(return_value="online")), \
-             patch("bg_healing.get_system_stats", AsyncMock(return_value="Disk 50%")), \
-             patch("bg_healing.get_container_logs", AsyncMock(return_value="")):
+        with (
+            patch("bg_healing.check_arr_health", AsyncMock(return_value="OK healthy")),
+            patch("bg_healing.check_download_clients", AsyncMock(return_value="OK")),
+            patch("bg_healing.check_plex_status", AsyncMock(return_value="online")),
+            patch("bg_healing.get_system_stats", AsyncMock(return_value="Disk 50%")),
+            patch("bg_healing.get_container_logs", AsyncMock(return_value="")),
+        ):
             result = await bg_healing._gather_system_signals()
         assert result is None
 
     @pytest.mark.asyncio
     async def test_discord_background_extended_returns_summary_when_errors_found(self):
-        with patch("bg_healing.check_arr_health", AsyncMock(return_value="error: connection refused")), \
-             patch("bg_healing.check_download_clients", AsyncMock(return_value="OK")), \
-             patch("bg_healing.check_plex_status", AsyncMock(return_value="OK")), \
-             patch("bg_healing.get_system_stats", AsyncMock(return_value="Disk 50%")), \
-             patch("bg_healing.get_container_logs", AsyncMock(return_value="")):
+        with (
+            patch("bg_healing.check_arr_health", AsyncMock(return_value="error: connection refused")),
+            patch("bg_healing.check_download_clients", AsyncMock(return_value="OK")),
+            patch("bg_healing.check_plex_status", AsyncMock(return_value="OK")),
+            patch("bg_healing.get_system_stats", AsyncMock(return_value="Disk 50%")),
+            patch("bg_healing.get_container_logs", AsyncMock(return_value="")),
+        ):
             result = await bg_healing._gather_system_signals()
         assert result is not None
         summary, log_snippets = result
@@ -566,34 +625,40 @@ class TestGatherSystemSignals:
 
     @pytest.mark.asyncio
     async def test_returns_summary_when_log_anomalies(self):
-        with patch("bg_healing.check_arr_health", AsyncMock(return_value="healthy")), \
-             patch("bg_healing.check_download_clients", AsyncMock(return_value="OK")), \
-             patch("bg_healing.check_plex_status", AsyncMock(return_value="OK")), \
-             patch("bg_healing.get_system_stats", AsyncMock(return_value="Disk 50%")), \
-             patch("bg_healing.get_container_logs",
-                   AsyncMock(return_value="ERROR: connection failed")):
+        with (
+            patch("bg_healing.check_arr_health", AsyncMock(return_value="healthy")),
+            patch("bg_healing.check_download_clients", AsyncMock(return_value="OK")),
+            patch("bg_healing.check_plex_status", AsyncMock(return_value="OK")),
+            patch("bg_healing.get_system_stats", AsyncMock(return_value="Disk 50%")),
+            patch("bg_healing.get_container_logs", AsyncMock(return_value="ERROR: connection failed")),
+        ):
             result = await bg_healing._gather_system_signals()
         assert result is not None
 
     @pytest.mark.asyncio
     async def test_disk_alert_from_sys_stats(self):
-        with patch("bg_healing.check_arr_health", AsyncMock(return_value="healthy")), \
-             patch("bg_healing.check_download_clients", AsyncMock(return_value="OK")), \
-             patch("bg_healing.check_plex_status", AsyncMock(return_value="OK")), \
-             patch("bg_healing.get_system_stats", AsyncMock(return_value="Disk (95% used)")), \
-             patch("bg_healing.get_container_logs", AsyncMock(return_value="")):
+        with (
+            patch("bg_healing.check_arr_health", AsyncMock(return_value="healthy")),
+            patch("bg_healing.check_download_clients", AsyncMock(return_value="OK")),
+            patch("bg_healing.check_plex_status", AsyncMock(return_value="OK")),
+            patch("bg_healing.get_system_stats", AsyncMock(return_value="Disk (95% used)")),
+            patch("bg_healing.get_container_logs", AsyncMock(return_value="")),
+        ):
             result = await bg_healing._gather_system_signals()
         # disk_alert=True → not all clean
         assert result is not None
 
     @pytest.mark.asyncio
     async def test_handles_nas_disk_red_status(self):
-        with patch("bg_healing.check_arr_health", AsyncMock(return_value="healthy")), \
-             patch("bg_healing.check_download_clients", AsyncMock(return_value="OK")), \
-             patch("bg_healing.check_plex_status", AsyncMock(return_value="OK")), \
-             patch("bg_healing.get_system_stats", AsyncMock(return_value="Disk 50%")), \
-             patch("bg_healing.get_container_logs", AsyncMock(return_value="")):
+        with (
+            patch("bg_healing.check_arr_health", AsyncMock(return_value="healthy")),
+            patch("bg_healing.check_download_clients", AsyncMock(return_value="OK")),
+            patch("bg_healing.check_plex_status", AsyncMock(return_value="OK")),
+            patch("bg_healing.get_system_stats", AsyncMock(return_value="Disk 50%")),
+            patch("bg_healing.get_container_logs", AsyncMock(return_value="")),
+        ):
             import sys
+
             fake_maintenance = MagicMock()
             fake_maintenance.check_nas_health = AsyncMock(return_value="🔴 RAID degraded")
             fake_maintenance.check_gluetun_vpn = AsyncMock(return_value="VPN ok")
@@ -605,9 +670,10 @@ class TestGatherSystemSignals:
     @pytest.mark.asyncio
     async def test_handles_exception_results(self):
         exc = Exception("timeout")
-        with patch("bg_healing.asyncio.gather", new_callable=AsyncMock,
-                   return_value=(exc, exc, exc, exc)), \
-             patch("bg_healing.get_container_logs", AsyncMock(return_value="")):
+        with (
+            patch("bg_healing.asyncio.gather", new_callable=AsyncMock, return_value=(exc, exc, exc, exc)),
+            patch("bg_healing.get_container_logs", AsyncMock(return_value="")),
+        ):
             result = await bg_healing._gather_system_signals()
         # all exceptions → all_clean check skips non-str → may be clean or not
         # just ensure no crash
@@ -617,15 +683,16 @@ class TestGatherSystemSignals:
 # _execute_self_healing — additional action paths
 # ===========================================================================
 
+
 class TestExecuteSelfHealingActions:
     @pytest.mark.asyncio
     async def test_discord_background_extended_fix_qbit_download_path(self):
         analysis = "SELF_HEAL: fix_qbit_download_path"
         import sys
+
         fake_maintenance = MagicMock()
         fake_maintenance.fix_qbit_download_path = AsyncMock(return_value="fixed!")
-        with patch.dict(sys.modules, {"maintenance_skills": fake_maintenance}), \
-             patch("bg_healing.audit_log"):
+        with patch.dict(sys.modules, {"maintenance_skills": fake_maintenance}), patch("bg_healing.audit_log"):
             cleaned, results = await bg_healing._execute_self_healing(analysis)
         assert any("qBittorrent" in r or "qbit" in r.lower() for r in results)
 
@@ -633,10 +700,10 @@ class TestExecuteSelfHealingActions:
     async def test_discord_background_extended_fix_arr_remote_path(self):
         analysis = "SELF_HEAL: fix_arr_remote_path"
         import sys
+
         fake_maintenance = MagicMock()
         fake_maintenance.fix_arr_remote_path = AsyncMock(return_value="arr paths fixed")
-        with patch.dict(sys.modules, {"maintenance_skills": fake_maintenance}), \
-             patch("bg_healing.audit_log"):
+        with patch.dict(sys.modules, {"maintenance_skills": fake_maintenance}), patch("bg_healing.audit_log"):
             cleaned, results = await bg_healing._execute_self_healing(analysis)
         assert any("arr" in r.lower() or "path" in r.lower() for r in results)
 
@@ -644,10 +711,10 @@ class TestExecuteSelfHealingActions:
     async def test_discord_background_extended_auto_cleanup_disk(self):
         analysis = "SELF_HEAL: auto_cleanup_disk"
         import sys
+
         fake_maintenance = MagicMock()
         fake_maintenance.auto_cleanup_disk = AsyncMock(return_value="3GB freed")
-        with patch.dict(sys.modules, {"maintenance_skills": fake_maintenance}), \
-             patch("bg_healing.audit_log"):
+        with patch.dict(sys.modules, {"maintenance_skills": fake_maintenance}), patch("bg_healing.audit_log"):
             cleaned, results = await bg_healing._execute_self_healing(analysis)
         assert any("cleanup" in r.lower() or "disk" in r.lower() for r in results)
 
@@ -660,10 +727,11 @@ class TestExecuteSelfHealingActions:
 
     @pytest.mark.asyncio
     async def test_action_exception_produces_error_entry(self):
-        with patch.object(bg_healing, "_parse_heal_actions",
-                          return_value=[("restart_container", "sonarr")]), \
-             patch("bg_healing.restart_container", AsyncMock(side_effect=Exception("fail!"))), \
-             patch("bg_healing.audit_log"):
+        with (
+            patch.object(bg_healing, "_parse_heal_actions", return_value=[("restart_container", "sonarr")]),
+            patch("bg_healing.restart_container", AsyncMock(side_effect=Exception("fail!"))),
+            patch("bg_healing.audit_log"),
+        ):
             cleaned, results = await bg_healing._execute_self_healing("SELF_HEAL: restart_container sonarr")
         assert any("❌" in r for r in results)
 
@@ -671,10 +739,10 @@ class TestExecuteSelfHealingActions:
     async def test_strips_self_heal_lines_from_display(self):
         analysis = "Analysis text\nSELF_HEAL: fix_qbit_download_path\nMore text"
         import sys
+
         fake_maintenance = MagicMock()
         fake_maintenance.fix_qbit_download_path = AsyncMock(return_value="ok")
-        with patch.dict(sys.modules, {"maintenance_skills": fake_maintenance}), \
-             patch("bg_healing.audit_log"):
+        with patch.dict(sys.modules, {"maintenance_skills": fake_maintenance}), patch("bg_healing.audit_log"):
             cleaned, results = await bg_healing._execute_self_healing(analysis)
         assert "SELF_HEAL" not in cleaned
 
@@ -682,6 +750,7 @@ class TestExecuteSelfHealingActions:
 # ===========================================================================
 # _CopilotFixView
 # ===========================================================================
+
 
 class TestCopilotFixView:
     @pytest.mark.asyncio
@@ -783,11 +852,11 @@ class TestCopilotFixView:
         interaction.channel.send = AsyncMock(return_value=MagicMock(edit=AsyncMock()))
 
         import sys
+
         fake_maintenance = MagicMock()
         fake_maintenance.copilot_fix = AsyncMock(return_value="Fix applied!")
 
-        with patch.dict(sys.modules, {"maintenance_skills": fake_maintenance}), \
-             patch("bg_healing.audit_log"):
+        with patch.dict(sys.modules, {"maintenance_skills": fake_maintenance}), patch("bg_healing.audit_log"):
             await view.approve_button.callback(interaction)
 
         assert interaction.channel.send.await_count >= 1
@@ -796,6 +865,7 @@ class TestCopilotFixView:
 # ===========================================================================
 # _run_proactive_scan
 # ===========================================================================
+
 
 class TestRunProactiveScan:
     @pytest.mark.asyncio
@@ -815,8 +885,10 @@ class TestRunProactiveScan:
         channel = MagicMock(send=AsyncMock())
         bot = _make_bot(channel)
 
-        with patch.object(bg_healing, "_gather_system_signals", AsyncMock(return_value=("summary text", {}))), \
-             patch("bg_healing.llm_chat", AsyncMock(return_value=("NO_ALERT", None, None))):
+        with (
+            patch.object(bg_healing, "_gather_system_signals", AsyncMock(return_value=("summary text", {}))),
+            patch("bg_healing.llm_chat", AsyncMock(return_value=("NO_ALERT", None, None))),
+        ):
             await bg_healing._run_proactive_scan(bot)
 
         channel.send.assert_not_awaited()
@@ -827,10 +899,12 @@ class TestRunProactiveScan:
         channel = MagicMock(send=AsyncMock(return_value=MagicMock(edit=AsyncMock())))
         bot = _make_bot(channel)
 
-        with patch.object(bg_healing, "_gather_system_signals", AsyncMock(return_value=("errors found", {}))), \
-             patch("bg_healing.llm_chat", AsyncMock(return_value=("Container sonarr is down!", None, None))), \
-             patch.object(bg_healing, "_execute_self_healing", AsyncMock(return_value=("insight text", []))), \
-             patch("bg_healing.audit_log"):
+        with (
+            patch.object(bg_healing, "_gather_system_signals", AsyncMock(return_value=("errors found", {}))),
+            patch("bg_healing.llm_chat", AsyncMock(return_value=("Container sonarr is down!", None, None))),
+            patch.object(bg_healing, "_execute_self_healing", AsyncMock(return_value=("insight text", []))),
+            patch("bg_healing.audit_log"),
+        ):
             await bg_healing._run_proactive_scan(bot)
 
         channel.send.assert_awaited_once()
@@ -841,10 +915,17 @@ class TestRunProactiveScan:
         channel = MagicMock(send=AsyncMock(return_value=MagicMock(edit=AsyncMock())))
         bot = _make_bot(channel)
 
-        with patch.object(bg_healing, "_gather_system_signals", AsyncMock(return_value=("errors", {}))), \
-             patch("bg_healing.llm_chat", AsyncMock(return_value=("Found issues\nSELF_HEAL: restart_container sonarr", None, None))), \
-             patch.object(bg_healing, "_execute_self_healing", AsyncMock(return_value=("Found issues", ["🔧 sonarr: restarted"]))), \
-             patch("bg_healing.audit_log"):
+        with (
+            patch.object(bg_healing, "_gather_system_signals", AsyncMock(return_value=("errors", {}))),
+            patch(
+                "bg_healing.llm_chat",
+                AsyncMock(return_value=("Found issues\nSELF_HEAL: restart_container sonarr", None, None)),
+            ),
+            patch.object(
+                bg_healing, "_execute_self_healing", AsyncMock(return_value=("Found issues", ["🔧 sonarr: restarted"]))
+            ),
+            patch("bg_healing.audit_log"),
+        ):
             await bg_healing._run_proactive_scan(bot)
 
         channel.send.assert_awaited_once()
@@ -854,8 +935,10 @@ class TestRunProactiveScan:
         monkeypatch.setattr(bg_healing, "ALERT_CHANNEL_ID", 123)
         bot = _make_bot()
 
-        with patch.object(bg_healing, "_gather_system_signals", AsyncMock(return_value=("errors", {}))), \
-             patch("bg_healing.llm_chat", AsyncMock(side_effect=asyncio.TimeoutError)):
+        with (
+            patch.object(bg_healing, "_gather_system_signals", AsyncMock(return_value=("errors", {}))),
+            patch("bg_healing.llm_chat", AsyncMock(side_effect=asyncio.TimeoutError)),
+        ):
             await bg_healing._run_proactive_scan(bot)  # Should not raise
 
     @pytest.mark.asyncio
@@ -864,9 +947,11 @@ class TestRunProactiveScan:
         bot = MagicMock()
         bot.get_channel = MagicMock(return_value=None)
 
-        with patch.object(bg_healing, "_gather_system_signals", AsyncMock(return_value=("errors", {}))), \
-             patch("bg_healing.llm_chat", AsyncMock(return_value=("Issue found!", None, None))), \
-             patch.object(bg_healing, "_execute_self_healing", AsyncMock(return_value=("Issue found!", []))):
+        with (
+            patch.object(bg_healing, "_gather_system_signals", AsyncMock(return_value=("errors", {}))),
+            patch("bg_healing.llm_chat", AsyncMock(return_value=("Issue found!", None, None))),
+            patch.object(bg_healing, "_execute_self_healing", AsyncMock(return_value=("Issue found!", []))),
+        ):
             await bg_healing._run_proactive_scan(bot)
 
     @pytest.mark.asyncio
@@ -878,11 +963,17 @@ class TestRunProactiveScan:
         bot = _make_bot(channel)
 
         analysis = "Issue found!\nSELF_HEAL: copilot_fix check the logs"
-        with patch.object(bg_healing, "_gather_system_signals", AsyncMock(return_value=("errors", {}))), \
-             patch("bg_healing.llm_chat", AsyncMock(return_value=(analysis, None, None))), \
-             patch.object(bg_healing, "_execute_self_healing", AsyncMock(return_value=("Issue found!", ["🤖 Copilot fix pending"]))), \
-             patch("bg_healing.audit_log"), \
-             patch("llm_ratelimit.background_quota_guard.check_background_allowed", return_value=True):
+        with (
+            patch.object(bg_healing, "_gather_system_signals", AsyncMock(return_value=("errors", {}))),
+            patch("bg_healing.llm_chat", AsyncMock(return_value=(analysis, None, None))),
+            patch.object(
+                bg_healing,
+                "_execute_self_healing",
+                AsyncMock(return_value=("Issue found!", ["🤖 Copilot fix pending"])),
+            ),
+            patch("bg_healing.audit_log"),
+            patch("llm_ratelimit.background_quota_guard.check_background_allowed", return_value=True),
+        ):
             await bg_healing._run_proactive_scan(bot)
 
         msg.edit.assert_awaited_once()
@@ -891,6 +982,7 @@ class TestRunProactiveScan:
 # ===========================================================================
 # _post_error_alert
 # ===========================================================================
+
 
 class TestPostErrorAlert:
     @pytest.mark.asyncio
@@ -944,6 +1036,7 @@ class TestPostErrorAlert:
 # error_monitor_loop
 # ===========================================================================
 
+
 class TestErrorMonitorLoop:
     @pytest.mark.asyncio
     async def test_posts_alert_on_critical_patterns(self, monkeypatch):
@@ -961,18 +1054,23 @@ class TestErrorMonitorLoop:
 
         patterns = [{"severity": "critical", "type": "db_error", "detail": "Connection lost"}]
         import sys
+
         fake_err_tracker = MagicMock()
         fake_err_tracker.check_error_patterns = MagicMock(return_value=patterns)
         fake_err_tracker.diagnose_error_pattern = AsyncMock(
             return_value={"cause": "DB down", "confidence": 0.9, "explanation": "DB is down"}
         )
-        fake_err_tracker.execute_fix = AsyncMock(return_value={"success": True, "action_taken": "restart", "detail": "done"})
+        fake_err_tracker.execute_fix = AsyncMock(
+            return_value={"success": True, "action_taken": "restart", "detail": "done"}
+        )
         fake_err_tracker.record_incident = AsyncMock()
         fake_err_tracker.get_recent_outcomes = MagicMock(return_value=[])
 
-        with patch("bg_monitoring.asyncio.sleep", fake_sleep), \
-             patch.dict(sys.modules, {"error_tracker": fake_err_tracker}), \
-             patch("bg_monitoring.audit_log"):
+        with (
+            patch("bg_monitoring.asyncio.sleep", fake_sleep),
+            patch.dict(sys.modules, {"error_tracker": fake_err_tracker}),
+            patch("bg_monitoring.audit_log"),
+        ):
             with pytest.raises(asyncio.CancelledError):
                 await mod.error_monitor_loop(bot)
 
@@ -991,14 +1089,17 @@ class TestErrorMonitorLoop:
 
         patterns = [{"severity": "warning", "type": "high_latency", "detail": "slow"}]
         import sys
+
         fake_err_tracker = MagicMock()
         fake_err_tracker.check_error_patterns = MagicMock(return_value=patterns)
 
         channel = MagicMock(send=AsyncMock())
         bot = _make_bot(channel)
 
-        with patch("bg_monitoring.asyncio.sleep", fake_sleep), \
-             patch.dict(sys.modules, {"error_tracker": fake_err_tracker}):
+        with (
+            patch("bg_monitoring.asyncio.sleep", fake_sleep),
+            patch.dict(sys.modules, {"error_tracker": fake_err_tracker}),
+        ):
             with pytest.raises(asyncio.CancelledError):
                 await mod.error_monitor_loop(bot)
 
@@ -1016,14 +1117,17 @@ class TestErrorMonitorLoop:
                 raise asyncio.CancelledError()
 
         import sys
+
         fake_err_tracker = MagicMock()
         fake_err_tracker.check_error_patterns = MagicMock(return_value=[])
 
         channel = MagicMock(send=AsyncMock())
         bot = _make_bot(channel)
 
-        with patch("bg_monitoring.asyncio.sleep", fake_sleep), \
-             patch.dict(sys.modules, {"error_tracker": fake_err_tracker}):
+        with (
+            patch("bg_monitoring.asyncio.sleep", fake_sleep),
+            patch.dict(sys.modules, {"error_tracker": fake_err_tracker}),
+        ):
             with pytest.raises(asyncio.CancelledError):
                 await mod.error_monitor_loop(bot)
 
@@ -1033,6 +1137,7 @@ class TestErrorMonitorLoop:
 # ===========================================================================
 # _check_container_health
 # ===========================================================================
+
 
 class TestCheckContainerHealth:
     @pytest.mark.asyncio
@@ -1052,11 +1157,11 @@ class TestCheckContainerHealth:
         docker_output = "sonarr\tunhealthy\nradarr\tUp 2 hours\n"
 
         import sys
+
         fake_subprocess = MagicMock()
         fake_subprocess.run = AsyncMock(return_value=(0, docker_output, ""))
 
-        with patch.dict(sys.modules, {"subprocess_utils": fake_subprocess}), \
-             patch("bg_monitoring.audit_log"):
+        with patch.dict(sys.modules, {"subprocess_utils": fake_subprocess}), patch("bg_monitoring.audit_log"):
             await bg_monitoring._check_container_health(bot)
 
         channel.send.assert_awaited_once()
@@ -1073,11 +1178,11 @@ class TestCheckContainerHealth:
         docker_output = "sabnzbd\tExited (1) 5 minutes ago\n"
 
         import sys
+
         fake_subprocess = MagicMock()
         fake_subprocess.run = AsyncMock(return_value=(0, docker_output, ""))
 
-        with patch.dict(sys.modules, {"subprocess_utils": fake_subprocess}), \
-             patch("bg_monitoring.audit_log"):
+        with patch.dict(sys.modules, {"subprocess_utils": fake_subprocess}), patch("bg_monitoring.audit_log"):
             await bg_monitoring._check_container_health(bot)
 
         channel.send.assert_awaited_once()
@@ -1095,12 +1200,15 @@ class TestCheckContainerHealth:
         docker_output = "sonarr\tunhealthy\n"
 
         import sys
+
         fake_subprocess = MagicMock()
         fake_subprocess.run = AsyncMock(return_value=(0, docker_output, ""))
 
-        with patch.dict(sys.modules, {"subprocess_utils": fake_subprocess}), \
-             patch("bg_monitoring.restart_container", AsyncMock(return_value="restarted")), \
-             patch("bg_monitoring.audit_log"):
+        with (
+            patch.dict(sys.modules, {"subprocess_utils": fake_subprocess}),
+            patch("bg_monitoring.restart_container", AsyncMock(return_value="restarted")),
+            patch("bg_monitoring.audit_log"),
+        ):
             await bg_monitoring._check_container_health(bot)
 
         channel.send.assert_awaited()
@@ -1117,6 +1225,7 @@ class TestCheckContainerHealth:
         docker_output = "sonarr\tUp 5 minutes (healthy)\n"
 
         import sys
+
         fake_subprocess = MagicMock()
         fake_subprocess.run = AsyncMock(return_value=(0, docker_output, ""))
 
@@ -1131,6 +1240,7 @@ class TestCheckContainerHealth:
         monkeypatch.setattr(bg_monitoring, "ALERT_CHANNEL_ID", 123)
 
         import sys
+
         fake_subprocess = MagicMock()
         fake_subprocess.run = AsyncMock(return_value=(1, "", "error"))
 
@@ -1149,6 +1259,7 @@ class TestCheckContainerHealth:
         docker_output = "sonarr\tUp 2 hours (healthy)\nradarr\tUp 1 hour\n"
 
         import sys
+
         fake_subprocess = MagicMock()
         fake_subprocess.run = AsyncMock(return_value=(0, docker_output, ""))
 
@@ -1161,6 +1272,7 @@ class TestCheckContainerHealth:
 # ===========================================================================
 # _check_monstervision_cookies
 # ===========================================================================
+
 
 class TestCheckMonstervisionCookies:
     @pytest.mark.asyncio
@@ -1193,8 +1305,7 @@ class TestCheckMonstervisionCookies:
         fake_config.cfg.docker_host_ip = "192.168.1.1"
         fake_config.cfg.monstervision_port = 8080
 
-        with patch.dict(sys.modules, {"config": fake_config}), \
-             patch("bg_monitoring._bg_sessions", mock_bg_sessions):
+        with patch.dict(sys.modules, {"config": fake_config}), patch("bg_monitoring._bg_sessions", mock_bg_sessions):
             await bg_monitoring._check_monstervision_cookies(MagicMock())
 
         assert bg_monitoring._cookie_alert_sent is False
@@ -1222,8 +1333,10 @@ class TestCheckMonstervisionCookies:
         fake_config.cfg.docker_host_ip = "192.168.1.1"
         fake_config.cfg.monstervision_port = 8080
 
-        with patch.dict(sys.modules, {"config": fake_config, "subprocess_utils": fake_subprocess}), \
-             patch("bg_monitoring._bg_sessions", mock_bg_sessions):
+        with (
+            patch.dict(sys.modules, {"config": fake_config, "subprocess_utils": fake_subprocess}),
+            patch("bg_monitoring._bg_sessions", mock_bg_sessions),
+        ):
             await bg_monitoring._check_monstervision_cookies(bot)
 
         channel.send.assert_awaited_once()
@@ -1249,8 +1362,10 @@ class TestCheckMonstervisionCookies:
         fake_config.cfg.docker_host_ip = "192.168.1.1"
         fake_config.cfg.monstervision_port = 8080
 
-        with patch.dict(sys.modules, {"config": fake_config, "subprocess_utils": fake_subprocess}), \
-             patch("bg_monitoring._bg_sessions", mock_bg_sessions):
+        with (
+            patch.dict(sys.modules, {"config": fake_config, "subprocess_utils": fake_subprocess}),
+            patch("bg_monitoring._bg_sessions", mock_bg_sessions),
+        ):
             await bg_monitoring._check_monstervision_cookies(MagicMock())
 
         assert bg_monitoring._cookie_alert_sent is False
@@ -1259,6 +1374,7 @@ class TestCheckMonstervisionCookies:
 # ===========================================================================
 # reminder_loop
 # ===========================================================================
+
 
 class TestReminderLoop:
     @pytest.mark.asyncio
@@ -1286,13 +1402,16 @@ class TestReminderLoop:
         reminder.recurring = None
 
         import sys
+
         fake_reminder_mgr = MagicMock()
         fake_reminder_mgr.reminder_manager = MagicMock()
         fake_reminder_mgr.reminder_manager.get_due = MagicMock(return_value=[reminder])
         fake_reminder_mgr.reminder_manager.mark_fired = MagicMock()
 
-        with patch("bg_tasks.asyncio.sleep", fake_sleep), \
-             patch.dict(sys.modules, {"reminder_manager": fake_reminder_mgr}):
+        with (
+            patch("bg_tasks.asyncio.sleep", fake_sleep),
+            patch.dict(sys.modules, {"reminder_manager": fake_reminder_mgr}),
+        ):
             with pytest.raises(asyncio.CancelledError):
                 await mod.reminder_loop(bot)
 
@@ -1321,13 +1440,16 @@ class TestReminderLoop:
         reminder.recurring = "daily"
 
         import sys
+
         fake_reminder_mgr = MagicMock()
         fake_reminder_mgr.reminder_manager = MagicMock()
         fake_reminder_mgr.reminder_manager.get_due = MagicMock(return_value=[reminder])
         fake_reminder_mgr.reminder_manager.mark_fired = MagicMock()
 
-        with patch("bg_tasks.asyncio.sleep", fake_sleep), \
-             patch.dict(sys.modules, {"reminder_manager": fake_reminder_mgr}):
+        with (
+            patch("bg_tasks.asyncio.sleep", fake_sleep),
+            patch.dict(sys.modules, {"reminder_manager": fake_reminder_mgr}),
+        ):
             with pytest.raises(asyncio.CancelledError):
                 await mod.reminder_loop(bot)
 
@@ -1338,6 +1460,7 @@ class TestReminderLoop:
 # ===========================================================================
 # resource_monitor_loop
 # ===========================================================================
+
 
 class TestResourceMonitorLoop:
     @pytest.mark.asyncio
@@ -1361,13 +1484,16 @@ class TestResourceMonitorLoop:
         violations = [(threshold, stats)]
 
         import sys
+
         fake_resource_monitor = MagicMock()
         fake_resource_monitor.resource_monitor = MagicMock()
         fake_resource_monitor.resource_monitor.check_all = AsyncMock(return_value=violations)
 
-        with patch.dict(sys.modules, {"resource_monitor": fake_resource_monitor}), \
-             patch("bg_monitoring.audit_log"), \
-             patch("bg_monitoring.asyncio.sleep", AsyncMock()):
+        with (
+            patch.dict(sys.modules, {"resource_monitor": fake_resource_monitor}),
+            patch("bg_monitoring.audit_log"),
+            patch("bg_monitoring.asyncio.sleep", AsyncMock()),
+        ):
             await mod.resource_monitor_loop(bot)
 
         channel.send.assert_awaited()
@@ -1376,6 +1502,7 @@ class TestResourceMonitorLoop:
 # ===========================================================================
 # _build_background_task_factories
 # ===========================================================================
+
 
 class TestBuildBackgroundTaskFactories:
     def test_always_includes_core_tasks(self, monkeypatch):
@@ -1405,6 +1532,7 @@ class TestBuildBackgroundTaskFactories:
 # ===========================================================================
 # _handle_background_task_done
 # ===========================================================================
+
 
 class TestHandleBackgroundTaskDone:
     def test_discord_background_extended_no_op_when_stopping(self, monkeypatch):
@@ -1466,6 +1594,7 @@ class TestHandleBackgroundTaskDone:
 # _restart_background_task
 # ===========================================================================
 
+
 class TestRestartBackgroundTask:
     def test_discord_background_extended_no_op_when_stopping_v2(self, monkeypatch):
         monkeypatch.setattr(bg_tasks, "_BACKGROUND_STOPPING", True)
@@ -1495,6 +1624,7 @@ class TestRestartBackgroundTask:
 # container_health_loop
 # ===========================================================================
 
+
 class TestContainerHealthLoop:
     @pytest.mark.asyncio
     async def test_calls_health_and_cookie_checks(self, monkeypatch):
@@ -1509,9 +1639,11 @@ class TestContainerHealthLoop:
         mock_health = AsyncMock()
         mock_cookies = AsyncMock()
 
-        with patch("bg_monitoring.asyncio.sleep", fake_sleep), \
-             patch.object(bg_monitoring, "_check_container_health", mock_health), \
-             patch.object(bg_monitoring, "_check_monstervision_cookies", mock_cookies):
+        with (
+            patch("bg_monitoring.asyncio.sleep", fake_sleep),
+            patch.object(bg_monitoring, "_check_container_health", mock_health),
+            patch.object(bg_monitoring, "_check_monstervision_cookies", mock_cookies),
+        ):
             with pytest.raises(asyncio.CancelledError):
                 await mod.container_health_loop(MagicMock())
 

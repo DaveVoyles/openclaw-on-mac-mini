@@ -134,7 +134,9 @@ class ResearchCog(commands.Cog, name="Research"):
 
     # ── /browse ───────────────────────────────────────────────────────
     @app_commands.command(name="browse", description="Fetch and read the content of a web page")
-    @app_commands.describe(url="URL to fetch (must start with http:// or https://)", question="Optional: what to focus on")
+    @app_commands.describe(
+        url="URL to fetch (must start with http:// or https://)", question="Optional: what to focus on"
+    )
     @require_auth()
     async def browse_cmd(self, interaction: discord.Interaction, url: str, question: str = "") -> None:
         from llm import analyze_document as llm_analyze_document
@@ -142,9 +144,8 @@ class ResearchCog(commands.Cog, name="Research"):
 
         if not url.startswith(("http://", "https://")):
             await interaction.response.send_message(
-                "❌ URL must start with `http://` or `https://`\n"
-                "💡 Example: `/browse url:https://example.com`",
-                ephemeral=True
+                "❌ URL must start with `http://` or `https://`\n💡 Example: `/browse url:https://example.com`",
+                ephemeral=True,
             )
             return
         await interaction.response.defer(thinking=True)  # Progress indicator
@@ -167,7 +168,9 @@ class ResearchCog(commands.Cog, name="Research"):
         audit_log(interaction.user, "browse", detail=url)
 
     # ── /research ─────────────────────────────────────────────────────
-    @app_commands.command(name="research", description="Autonomous multi-step research — searches, reads sources, synthesizes a report")
+    @app_commands.command(
+        name="research", description="Autonomous multi-step research — searches, reads sources, synthesizes a report"
+    )
     @app_commands.describe(
         query="What you want researched (be specific for best results)",
         deep="Enable deep research: 2-3 iterative passes that refine based on gaps (slower but more thorough)",
@@ -193,9 +196,7 @@ class ResearchCog(commands.Cog, name="Research"):
             return
 
         if not llm_is_configured():
-            await interaction.response.send_message(
-                "⚠️ LLM not configured. Set `GOOGLE_API_KEY`.", ephemeral=True
-            )
+            await interaction.response.send_message("⚠️ LLM not configured. Set `GOOGLE_API_KEY`.", ephemeral=True)
             return
 
         mode_label = "🔬 **Deep research started**" if deep else "🔍 **Research started**"
@@ -262,9 +263,7 @@ class ResearchCog(commands.Cog, name="Research"):
                 else:
                     await interaction.followup.send(embed=embed)
 
-        session_location = (
-            f"discord-thread:{thread.id}" if thread else f"discord-channel:{interaction.channel_id}"
-        )
+        session_location = f"discord-thread:{thread.id}" if thread else f"discord-channel:{interaction.channel_id}"
         receipts = agent.get_last_receipts()
         receipts["session"] = {
             "saved": True,
@@ -303,9 +302,8 @@ class ResearchCog(commands.Cog, name="Research"):
 
         try:
             import vector_store
-            results = await vector_store.search(
-                vector_store.RESEARCH_COLLECTION, query, top_k=5
-            )
+
+            results = await vector_store.search(vector_store.RESEARCH_COLLECTION, query, top_k=5)
             if results:
                 for r in results:
                     meta = r.get("metadata", {})
@@ -333,8 +331,11 @@ class ResearchCog(commands.Cog, name="Research"):
 
         try:
             import vector_store
+
             results = await vector_store.search(
-                vector_store.RESEARCH_COLLECTION, query, top_k=10,
+                vector_store.RESEARCH_COLLECTION,
+                query,
+                top_k=10,
                 where={"type": "source"},
             )
             if results:

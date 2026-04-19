@@ -101,9 +101,7 @@ class TestTwilioProvider:
         assert "messaging_service_sid" not in fake_client.messages.calls[0]
 
     async def test_send_sms_uses_messaging_service_sid_when_set(self):
-        cfg = mod.TwilioSMSConfig.from_config(
-            _base_cfg(twilio_from_number="", twilio_messaging_service_sid="MG123")
-        )
+        cfg = mod.TwilioSMSConfig.from_config(_base_cfg(twilio_from_number="", twilio_messaging_service_sid="MG123"))
         fake_client = _FakeClient()
         provider = mod.TwilioSMSProvider(cfg, client_factory=lambda *_: fake_client)
 

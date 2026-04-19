@@ -52,6 +52,7 @@ async def _summarize_and_store(user_id: int, user_name: str, history: list[dict]
     """
     try:
         from llm import summarize_conversation
+
         summary = await summarize_conversation(history)
         if not summary:
             return
@@ -68,6 +69,7 @@ async def _summarize_and_store(user_id: int, user_name: str, history: list[dict]
 
         try:
             from qmd import remember_fact
+
             await remember_fact(
                 content=f"[Session summary for {user_name}] {summary}",
                 tags=f"session,{user_name.split('#')[0].lower().replace(' ', '_')}",
@@ -77,18 +79,15 @@ async def _summarize_and_store(user_id: int, user_name: str, history: list[dict]
 
         try:
             import vector_store
-            await vector_store.add_conversation_summary(
-                user_id, f"session_{user_name}", summary
-            )
+
+            await vector_store.add_conversation_summary(user_id, f"session_{user_name}", summary)
         except Exception as e:  # broad: intentional — vector store can fail in many ways
             log.debug("Vector embed for summary failed (non-critical): %s", e)
     except Exception as e:  # broad: intentional — LLM summarization spans multiple backends
         log.warning("Session summarization failed: %s", e)
 
 
-async def create_session_handover(
-    user_id: int, user_name: str, history: list[dict]
-) -> str | None:
+async def create_session_handover(user_id: int, user_name: str, history: list[dict]) -> str | None:
     """Generate a proactive handover when a conversation goes idle.
 
     Unlike the summary (a brief recap), the handover captures:
@@ -104,6 +103,7 @@ async def create_session_handover(
 
     try:
         from llm import chat
+
         transcript_lines = []
         for msg in history[-20:]:
             role = "User" if msg.get("role") == "user" else "Bot"
@@ -140,6 +140,7 @@ async def create_session_handover(
 
         try:
             import vector_store
+
             await vector_store.add_document(
                 vector_store.CONVERSATIONS_COLLECTION,
                 doc_id=f"handover_{user_id}_{int(time.time())}",

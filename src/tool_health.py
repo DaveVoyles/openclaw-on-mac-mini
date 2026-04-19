@@ -38,6 +38,7 @@ log = logging.getLogger(__name__)
 # Circuit Breaker — fast fail on repeatedly broken tools
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class _ToolState:
     failures: int = 0
@@ -86,7 +87,9 @@ class CircuitBreaker:
             state.opened_at = time.monotonic()
             log.warning(
                 "Circuit OPEN for %s (%d consecutive failures, cooldown %.0fs)",
-                tool_name, state.failures, self._cooldown,
+                tool_name,
+                state.failures,
+                self._cooldown,
             )
 
     def status(self) -> dict[str, dict[str, Any]]:

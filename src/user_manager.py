@@ -23,8 +23,10 @@ log = logging.getLogger(__name__)
 
 DB_PATH = Path("/memory/users.db")
 
+
 class UserRole(Enum):
     """User role hierarchy: admin > member > viewer"""
+
     ADMIN = "admin"
     MEMBER = "member"
     VIEWER = "viewer"
@@ -45,20 +47,22 @@ class UserRole(Enum):
 # Data models
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class User:
     """User account with profile and settings"""
-    id: int                          # Internal user ID (autoincrement)
-    discord_id: int                  # Discord user ID
-    username: str                    # Discord username
-    role: UserRole                   # User role (admin/member/viewer)
-    created_at: float                # Unix timestamp
-    last_active: float               # Last activity timestamp
-    settings: dict[str, Any]         # User preferences/settings
-    api_quota_daily: int = 100       # Daily API call quota
-    api_quota_used: int = 0          # Quota used today
-    quota_reset_at: float = 0.0      # When quota resets
-    is_active: bool = True           # Account active/suspended
+
+    id: int  # Internal user ID (autoincrement)
+    discord_id: int  # Discord user ID
+    username: str  # Discord username
+    role: UserRole  # User role (admin/member/viewer)
+    created_at: float  # Unix timestamp
+    last_active: float  # Last activity timestamp
+    settings: dict[str, Any]  # User preferences/settings
+    api_quota_daily: int = 100  # Daily API call quota
+    api_quota_used: int = 0  # Quota used today
+    quota_reset_at: float = 0.0  # When quota resets
+    is_active: bool = True  # Account active/suspended
     session_token: Optional[str] = None  # Current session token
 
     def to_dict(self) -> dict[str, Any]:
@@ -90,6 +94,7 @@ class User:
 # ---------------------------------------------------------------------------
 # Database schema
 # ---------------------------------------------------------------------------
+
 
 def _init_db(conn: sqlite3.Connection) -> None:
     """Initialize database schema"""
@@ -143,6 +148,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
 # ---------------------------------------------------------------------------
 # User Manager
 # ---------------------------------------------------------------------------
+
 
 class UserManager:
     """Manages user accounts, authentication, and profiles"""
@@ -239,9 +245,7 @@ class UserManager:
                 (role.value,),
             ).fetchall()
         else:
-            rows = self.conn.execute(
-                "SELECT * FROM users ORDER BY created_at DESC"
-            ).fetchall()
+            rows = self.conn.execute("SELECT * FROM users ORDER BY created_at DESC").fetchall()
 
         return [User.from_row(row) for row in rows]
 
@@ -362,6 +366,7 @@ class UserManager:
         """Reset daily quota for user"""
         # Reset at midnight tomorrow
         import datetime
+
         now = datetime.datetime.now()
         tomorrow = now.replace(hour=0, minute=0, second=0, microsecond=0) + datetime.timedelta(days=1)
         reset_at = tomorrow.timestamp()

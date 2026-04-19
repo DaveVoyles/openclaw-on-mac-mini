@@ -6,6 +6,7 @@ Tests exercise the live call paths (not just unit behaviour), covering:
   3. Draft badge in _make_prompt() return value
   4. Watch retry message printed by handle_watch_command() retry loop
 """
+
 from __future__ import annotations
 
 import argparse

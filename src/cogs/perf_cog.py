@@ -42,6 +42,7 @@ class PerfCog(commands.Cog):
             endpoints = ["cpu", "mem", "load", "fs", "processcount"]
 
             async with aiohttp.ClientSession() as session:
+
                 async def fetch(ep: str):
                     async with session.get(f"{base}/api/3/{ep}", timeout=aiohttp.ClientTimeout(total=5)) as r:
                         r.raise_for_status()
@@ -65,7 +66,9 @@ class PerfCog(commands.Cog):
             cpu_line = f"**CPU:** {cpu_total:.1f}% total (user: {cpu_user:.1f}%, sys: {cpu_sys:.1f}%)"
 
             # Load line
-            load_line = f"**Load:** 1m={load.get('min1', 0):.2f}  5m={load.get('min5', 0):.2f}  15m={load.get('min15', 0):.2f}"
+            load_line = (
+                f"**Load:** 1m={load.get('min1', 0):.2f}  5m={load.get('min5', 0):.2f}  15m={load.get('min15', 0):.2f}"
+            )
 
             # Memory line
             mem_pct = mem.get("percent", 0)

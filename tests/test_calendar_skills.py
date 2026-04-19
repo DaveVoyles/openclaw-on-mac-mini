@@ -1,4 +1,5 @@
 """Tests for calendar_skills.py — Google Calendar OAuth2 skill."""
+
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -9,6 +10,7 @@ import calendar_skills
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_resp(status=200, json_data=None, text_data=""):
     resp = AsyncMock()
@@ -32,6 +34,7 @@ def _make_session(resp):
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def patch_creds(monkeypatch):
     """Ensure OAuth creds are present and token cache is clean for every test."""
@@ -46,6 +49,7 @@ def patch_creds(monkeypatch):
 # _not_configured
 # ---------------------------------------------------------------------------
 
+
 def test_not_configured_message():
     result = calendar_skills._not_configured()
     assert "❌" in result
@@ -55,6 +59,7 @@ def test_not_configured_message():
 # ---------------------------------------------------------------------------
 # _fmt_event_time
 # ---------------------------------------------------------------------------
+
 
 def test_fmt_event_time_datetime():
     result = calendar_skills._fmt_event_time({"dateTime": "2026-03-25T14:00:00Z"})
@@ -87,6 +92,7 @@ def test_fmt_event_time_no_T_returns_raw():
 # ---------------------------------------------------------------------------
 # _get_access_token
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_get_access_token_not_configured(monkeypatch):
@@ -131,6 +137,7 @@ async def test_get_access_token_network_exception_returns_none():
 # ---------------------------------------------------------------------------
 # get_upcoming_events
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_get_upcoming_events_not_configured(monkeypatch):
@@ -218,6 +225,7 @@ async def test_get_upcoming_events_clamps_days():
 # create_calendar_event
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_create_event_not_configured(monkeypatch):
     monkeypatch.setattr(calendar_skills, "GOOGLE_REFRESH_TOKEN", "")
@@ -290,6 +298,7 @@ async def test_create_event_exception():
 # get_todays_events
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_todays_events_not_configured(monkeypatch):
     monkeypatch.setattr(calendar_skills, "GOOGLE_CLIENT_SECRET", "")
@@ -361,6 +370,7 @@ async def test_get_todays_events_exception():
 # ---------------------------------------------------------------------------
 # delete_calendar_event
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_delete_event_not_configured(monkeypatch):

@@ -12,6 +12,7 @@ from memory_thread_persistence import ThreadPersistence
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_conv(history=None, user_name="TestUser"):
     conv = MagicMock()
     conv.history = history if history is not None else [{"role": "user", "parts": ["hi"]}]
@@ -29,6 +30,7 @@ def _write_thread_file(threads_dir: Path, filename: str, payload: dict) -> Path:
 # ---------------------------------------------------------------------------
 # _thread_path
 # ---------------------------------------------------------------------------
+
 
 class TestThreadPath:
     def test_returns_path_under_threads_dir(self, tmp_path, monkeypatch):
@@ -60,6 +62,7 @@ class TestThreadPath:
 # ---------------------------------------------------------------------------
 # save_thread
 # ---------------------------------------------------------------------------
+
 
 class TestSaveThread:
     def test_memory_thread_persistence_unit_invalid_name_returns_error(self):
@@ -101,6 +104,7 @@ class TestSaveThread:
 # ---------------------------------------------------------------------------
 # load_thread
 # ---------------------------------------------------------------------------
+
 
 class TestLoadThread:
     def test_memory_thread_persistence_unit_invalid_name_returns_error_v2(self):
@@ -160,6 +164,7 @@ class TestLoadThread:
 # auto_save_thread
 # ---------------------------------------------------------------------------
 
+
 class TestAutoSaveThread:
     def test_no_conv_does_nothing(self, tmp_path, monkeypatch):
         threads = tmp_path / "threads"
@@ -193,6 +198,7 @@ class TestAutoSaveThread:
 # ---------------------------------------------------------------------------
 # list_threads
 # ---------------------------------------------------------------------------
+
 
 class TestListThreads:
     def test_no_threads_returns_empty_message(self, tmp_path, monkeypatch):
@@ -229,6 +235,7 @@ class TestListThreads:
 # ---------------------------------------------------------------------------
 # delete_thread
 # ---------------------------------------------------------------------------
+
 
 class TestDeleteThread:
     def test_memory_thread_persistence_unit_invalid_name_returns_error_v3(self):

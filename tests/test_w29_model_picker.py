@@ -1,4 +1,5 @@
 """Tests for Wave 29: expanded Copilot model picker and context limits."""
+
 import os
 import sys
 from unittest.mock import patch
@@ -11,6 +12,7 @@ from model_router import copilot_model_for_message
 # ---------------------------------------------------------------------------
 # copilot_model_for_message tests
 # ---------------------------------------------------------------------------
+
 
 class TestCopilotModelForMessage:
     def test_code_query_returns_claude_default(self):
@@ -81,6 +83,7 @@ class TestCopilotModelForMessage:
 # ---------------------------------------------------------------------------
 # context_limits tests
 # ---------------------------------------------------------------------------
+
 
 class TestContextLimits:
     def test_gpt4o_context_window(self):

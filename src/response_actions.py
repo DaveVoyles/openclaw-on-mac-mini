@@ -30,12 +30,15 @@ from runtime_state import (
 try:
     from quality_helpers import _record_quality_metric
 except ImportError:
+
     def _record_quality_metric(event: str, context: str = "ask") -> None:
         try:
             from metrics_collector import get_collector
+
             get_collector().record_quality_event(event=event, context=context)
         except (ImportError, AttributeError, RuntimeError):
             pass
+
 
 log = logging.getLogger(__name__)
 
@@ -49,12 +52,13 @@ def _b(name: str, local_val: Any) -> Any:
     orig = _ORIG.get(name)
     if orig is not None and local_val is not orig:
         return local_val  # this module was patched
-    bot_mod = _sys.modules.get('bot')
+    bot_mod = _sys.modules.get("bot")
     if bot_mod is not None:
         bot_val = getattr(bot_mod, name, _SENTINEL)
         if bot_val is not _SENTINEL:
             return bot_val
     return local_val
+
 
 _EMBED_LIMIT = EMBED_SPLIT_LIMIT
 _FILE_THRESHOLD = 8000
@@ -63,6 +67,7 @@ _FILE_THRESHOLD = 8000
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _resolve_channel_thread_scope(
     channel: Any,
@@ -95,6 +100,7 @@ def _resolve_channel_thread_scope(
 # ---------------------------------------------------------------------------
 # Reaction-based action buttons on responses
 # ---------------------------------------------------------------------------
+
 
 class ResponseActions(discord.ui.View):
     """Buttons attached to /ask responses: Save, Regenerate, Email."""
@@ -151,7 +157,9 @@ class ResponseActions(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self._user_id:
-            await interaction.response.send_message("Only the original requester can use these buttons.", ephemeral=True)
+            await interaction.response.send_message(
+                "Only the original requester can use these buttons.", ephemeral=True
+            )
             return False
         return True
 
@@ -169,9 +177,7 @@ class ResponseActions(discord.ui.View):
         await interaction.response.defer(ephemeral=True)
         try:
             fact = self._response_text[:500]
-            result = await _b("remember_fact", remember_fact)(
-                f"Saved from /ask: {self._question[:100]}", fact
-            )
+            result = await _b("remember_fact", remember_fact)(f"Saved from /ask: {self._question[:100]}", fact)
             await interaction.followup.send(f"📌 Saved to memory.\n{result}", ephemeral=True)
         except Exception as e:  # broad: intentional
             await interaction.followup.send(f"❌ Save failed: {e}", ephemeral=True)
@@ -241,7 +247,9 @@ class ResponseActions(discord.ui.View):
             thread_id=scoped_thread_id,
         )
         await interaction.response.send_message(
-            "🧵 Context locked to this thread." if scoped_thread_id else "ℹ️ Not in a thread. Locked to channel instead.",
+            "🧵 Context locked to this thread."
+            if scoped_thread_id
+            else "ℹ️ Not in a thread. Locked to channel instead.",
             ephemeral=True,
         )
 
@@ -292,12 +300,16 @@ class ResponseActions(discord.ui.View):
                 user_name=str(interaction.user.display_name),
             )
             try:
-                scoped_channel_id, scoped_thread_id = _b("_resolve_channel_thread_scope", _resolve_channel_thread_scope)(
+                scoped_channel_id, scoped_thread_id = _b(
+                    "_resolve_channel_thread_scope", _resolve_channel_thread_scope
+                )(
                     interaction.channel,
                     self._channel_id,
                     user_id=self._user_id,
                 )
-                with request_context(channel_id=scoped_channel_id, thread_id=scoped_thread_id, user_id=str(self._user_id)):
+                with request_context(
+                    channel_id=scoped_channel_id, thread_id=scoped_thread_id, user_id=str(self._user_id)
+                ):
                     response_text, updated_history, model_used = await _b("llm_chat", llm_chat)(
                         user_message=follow_up_question,
                         history=conv.history,
@@ -309,7 +321,9 @@ class ResponseActions(discord.ui.View):
                     color=discord.Color.purple(),
                 )
                 embed.set_footer(text=f"💬 Follow-up | via {model_used}")
-                new_follow_ups = await _b("_generate_follow_ups", _generate_follow_ups)(follow_up_question, response_text)
+                new_follow_ups = await _b("_generate_follow_ups", _generate_follow_ups)(
+                    follow_up_question, response_text
+                )
                 view = ResponseActions(
                     response_text=response_text,
                     question=follow_up_question,
@@ -322,6 +336,7 @@ class ResponseActions(discord.ui.View):
                 await interaction.followup.send(embed=embed, view=view)
             except Exception as e:  # broad: intentional
                 await interaction.followup.send(f"❌ Follow-up failed: {e}")
+
         return callback
 
     async def _go_deeper_callback(self, interaction: discord.Interaction):
@@ -360,6 +375,7 @@ class ResponseActions(discord.ui.View):
         try:
             import datetime as _dt
             import io as _io
+
             ts = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
             buf = _io.BytesIO(self._response_text.encode("utf-8"))
             file = discord.File(buf, filename=f"openclaw-response-{ts}.txt")
@@ -369,9 +385,7 @@ class ResponseActions(discord.ui.View):
 
     async def _record_feedback(self, interaction: discord.Interaction, rating: str) -> None:
         normalized_rating = (
-            "helpful"
-            if str(rating).strip().lower() in {"helpful", "positive", "up", "thumbs_up"}
-            else "not_helpful"
+            "helpful" if str(rating).strip().lower() in {"helpful", "positive", "up", "thumbs_up"} else "not_helpful"
         )
         channel_id = getattr(interaction.channel, "id", None)
         message_id = getattr(interaction.message, "id", None)
@@ -426,7 +440,8 @@ class ResponseActions(discord.ui.View):
             )
             emoji = "👍" if normalized_rating == "helpful" else "👎"
             await interaction.response.send_message(
-                f"{emoji} Feedback recorded — thanks!", ephemeral=True,
+                f"{emoji} Feedback recorded — thanks!",
+                ephemeral=True,
             )
         except (OSError, ValueError, discord.HTTPException, discord.Forbidden) as e:
             log.debug("Feedback capture failed: %s", e)
@@ -440,6 +455,7 @@ async def _generate_follow_ups(question: str, response: str) -> list[str]:
     """Generate up to 3 short follow-up questions based on the Q&A exchange."""
     try:
         from llm.chat import chat
+
         prompt = (
             f"Based on this Q&A exchange, suggest up to 3 short follow-up questions "
             f"the user might want to ask next.\n"
@@ -472,7 +488,8 @@ async def _generate_follow_ups(question: str, response: str) -> list[str]:
                 continue
             # Filter vapid filler suggestions
             import re as _re
-            if _re.match(r'^(explain more|can you)\b', line_lower) and len(line) < 40:
+
+            if _re.match(r"^(explain more|can you)\b", line_lower) and len(line) < 40:
                 continue
             filtered.append(line)
         return filtered[:3]
@@ -484,18 +501,20 @@ async def _generate_follow_ups(question: str, response: str) -> list[str]:
 # ---------------------------------------------------------------------------
 # Originals registry for _b() patch detection
 # ---------------------------------------------------------------------------
-_ORIG.update({
-    "remember_fact": remember_fact,
-    "send_agent_mail": send_agent_mail,
-    "set_context_lock": set_context_lock,
-    "reset_context_lock": reset_context_lock,
-    "reset_anchor_state": reset_anchor_state,
-    "resolve_context_lock": resolve_context_lock,
-    "get_anchor_state": get_anchor_state,
-    "llm_chat": llm_chat,
-    "conversation_store": conversation_store,
-    "_resolve_channel_thread_scope": _resolve_channel_thread_scope,
-    "_generate_follow_ups": _generate_follow_ups,
-    "_apply_feedback_guardrails": _apply_feedback_guardrails,
-    "_record_quality_metric": _record_quality_metric,
-})
+_ORIG.update(
+    {
+        "remember_fact": remember_fact,
+        "send_agent_mail": send_agent_mail,
+        "set_context_lock": set_context_lock,
+        "reset_context_lock": reset_context_lock,
+        "reset_anchor_state": reset_anchor_state,
+        "resolve_context_lock": resolve_context_lock,
+        "get_anchor_state": get_anchor_state,
+        "llm_chat": llm_chat,
+        "conversation_store": conversation_store,
+        "_resolve_channel_thread_scope": _resolve_channel_thread_scope,
+        "_generate_follow_ups": _generate_follow_ups,
+        "_apply_feedback_guardrails": _apply_feedback_guardrails,
+        "_record_quality_metric": _record_quality_metric,
+    }
+)

@@ -56,13 +56,13 @@ class TestPingHostValidation:
         """A valid IPv4 address should proceed past validation (subprocess mocked)."""
         mock_proc = AsyncMock()
         mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(return_value=(
-            b"PING 192.168.1.1: 56 data bytes\nround-trip min/avg/max = 1.2/1.5/2.0 ms", b""
-        ))
+        mock_proc.communicate = AsyncMock(
+            return_value=(b"PING 192.168.1.1: 56 data bytes\nround-trip min/avg/max = 1.2/1.5/2.0 ms", b"")
+        )
         with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc)):
-            with patch("asyncio.wait_for", new=AsyncMock(return_value=(
-                b"round-trip min/avg/max = 1.2/1.5/2.0 ms\n", b""
-            ))):
+            with patch(
+                "asyncio.wait_for", new=AsyncMock(return_value=(b"round-trip min/avg/max = 1.2/1.5/2.0 ms\n", b""))
+            ):
                 result = await ping_host("192.168.1.1")
                 # Must not return the "Invalid hostname" error
                 assert "Invalid hostname" not in result
@@ -73,9 +73,7 @@ class TestPingHostValidation:
         mock_proc.returncode = 0
         mock_proc.communicate = AsyncMock(return_value=(b"PING ok\nrtt min/avg/max = 1/2/3 ms", b""))
         with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc)):
-            with patch("asyncio.wait_for", new=AsyncMock(return_value=(
-                b"rtt min/avg/max = 1/2/3 ms\n", b""
-            ))):
+            with patch("asyncio.wait_for", new=AsyncMock(return_value=(b"rtt min/avg/max = 1/2/3 ms\n", b""))):
                 result = await ping_host("google.com")
                 assert "Invalid hostname" not in result
 

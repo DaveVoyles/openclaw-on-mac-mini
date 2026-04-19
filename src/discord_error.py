@@ -1,4 +1,5 @@
 """Shared Discord error formatting for consistent error UX across all cogs."""
+
 import logging
 import uuid
 

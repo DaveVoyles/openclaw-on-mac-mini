@@ -55,6 +55,7 @@ _CORRECTION_PATTERNS: list[re.Pattern] = [
 
 async def _load_rules() -> list[dict]:
     """Read the rules JSON file, returning an empty list on any error."""
+
     def _read():
         if not RULES_FILE.exists():
             return []
@@ -70,6 +71,7 @@ async def _load_rules() -> list[dict]:
 
 async def _save_rules(rules: list[dict]) -> None:
     """Atomically write the rules list to disk."""
+
     def _write():
         RULES_FILE.parent.mkdir(parents=True, exist_ok=True)
         RULES_FILE.write_text(

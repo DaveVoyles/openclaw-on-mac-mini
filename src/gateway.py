@@ -67,6 +67,7 @@ def _api_key_hint() -> str:
 # Async HTTP helper
 # ---------------------------------------------------------------------------
 
+
 async def _http_request(
     url: str,
     method: str = "GET",
@@ -84,7 +85,7 @@ async def _http_request(
         try:
             async with session.request(method, url, json=body, headers=headers) as resp:
                 if resp.status >= 500 and attempt < retries:
-                    await asyncio.sleep(2 ** attempt)
+                    await asyncio.sleep(2**attempt)
                     continue
                 if resp.status >= 400:
                     text = await resp.text()
@@ -93,7 +94,7 @@ async def _http_request(
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             last_exc = e
             if attempt < retries:
-                await asyncio.sleep(2 ** attempt)
+                await asyncio.sleep(2**attempt)
                 continue
             raise RuntimeError(str(e)) from e
     # Unreachable in practice, but satisfies type checkers
@@ -103,6 +104,7 @@ async def _http_request(
 # ---------------------------------------------------------------------------
 # Skills
 # ---------------------------------------------------------------------------
+
 
 async def gateway_request(
     app: str,
@@ -154,6 +156,7 @@ async def gateway_request(
     if len(app) > 100:
         return "❌ App name too long (max 100 characters)."
     import re as _re
+
     if not _re.match(r"^[a-z0-9][a-z0-9-]*$", app.lower()):
         return "❌ Invalid app name. Only lowercase letters, digits, and hyphens are allowed."
 
@@ -323,10 +326,7 @@ async def create_google_doc(title: str, content: str) -> str:
             f"Doc ID: `{doc_id}` — open at https://docs.google.com/document/d/{doc_id}/edit"
         )
 
-    return (
-        f"✅ Google Doc created: **{title}**\n"
-        f"🔗 https://docs.google.com/document/d/{doc_id}/edit"
-    )
+    return f"✅ Google Doc created: **{title}**\n🔗 https://docs.google.com/document/d/{doc_id}/edit"
 
 
 async def create_onedrive_file(
@@ -383,10 +383,7 @@ async def create_onedrive_file(
 
     file_url = result.get("webUrl", "")
     name = result.get("name", filename)
-    return (
-        f"✅ Saved to OneDrive: **{name}** in `{folder_path}`\n"
-        + (f"🔗 {file_url}" if file_url else "")
-    )
+    return f"✅ Saved to OneDrive: **{name}** in `{folder_path}`\n" + (f"🔗 {file_url}" if file_url else "")
 
 
 # ---------------------------------------------------------------------------

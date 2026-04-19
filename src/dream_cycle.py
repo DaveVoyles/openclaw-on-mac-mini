@@ -25,8 +25,16 @@ log = logging.getLogger(__name__)
 MAX_DREAM_SECONDS = 600
 
 CATEGORIES = [
-    "identity", "user", "projects", "business", "people",
-    "strategy", "decisions", "lessons", "environment", "threads",
+    "identity",
+    "user",
+    "projects",
+    "business",
+    "people",
+    "strategy",
+    "decisions",
+    "lessons",
+    "environment",
+    "threads",
 ]
 
 
@@ -109,9 +117,7 @@ class DreamCycle:
         items: list[dict] = []
 
         # Run async collectors concurrently
-        results = await asyncio.gather(
-            *(coro for _, coro in collectors), return_exceptions=True
-        )
+        results = await asyncio.gather(*(coro for _, coro in collectors), return_exceptions=True)
         for (label, _), result in zip(collectors, results):
             if isinstance(result, Exception):
                 log.warning("Collect %s failed: %s", label, result)
@@ -137,9 +143,7 @@ class DreamCycle:
             return []
 
         loop = asyncio.get_running_loop()
-        results = await loop.run_in_executor(
-            None, lambda: col.get(include=["metadatas", "documents"])
-        )
+        results = await loop.run_in_executor(None, lambda: col.get(include=["metadatas", "documents"]))
 
         items = []
         for i, doc_id in enumerate(results.get("ids", [])):
@@ -147,14 +151,16 @@ class DreamCycle:
             meta = (results.get("metadatas") or [{}])[i] if results.get("metadatas") else {}
             if not text.strip():
                 continue
-            items.append({
-                "source": "chromadb:memories",
-                "source_id": doc_id,
-                "text": text,
-                "metadata": meta,
-                "category": _classify_category(text, meta),
-                "type": _classify_type(text, meta),
-            })
+            items.append(
+                {
+                    "source": "chromadb:memories",
+                    "source_id": doc_id,
+                    "text": text,
+                    "metadata": meta,
+                    "category": _classify_category(text, meta),
+                    "type": _classify_type(text, meta),
+                }
+            )
         return items
 
     async def _collect_chromadb_conversations(self) -> list[dict]:
@@ -174,14 +180,16 @@ class DreamCycle:
         for r in results:
             added = r.get("metadata", {}).get("added_at", 0)
             if added > week_ago or not added:
-                items.append({
-                    "source": "chromadb:conversations",
-                    "source_id": r["id"],
-                    "text": r["text"],
-                    "metadata": r.get("metadata", {}),
-                    "category": "threads",
-                    "type": "fact",
-                })
+                items.append(
+                    {
+                        "source": "chromadb:conversations",
+                        "source_id": r["id"],
+                        "text": r["text"],
+                        "metadata": r.get("metadata", {}),
+                        "category": "threads",
+                        "type": "fact",
+                    }
+                )
         return items
 
     async def _collect_qmd_facts(self) -> list[dict]:
@@ -192,14 +200,16 @@ class DreamCycle:
         async with qmd_store._lock:
             for entry in qmd_store._memory:
                 content = entry.get("content", "")
-                items.append({
-                    "source": "qmd",
-                    "source_id": f"qmd_{hash(content) % 100000}",
-                    "text": content,
-                    "metadata": {"tags": entry.get("tags", []), "ts": entry.get("ts", "")},
-                    "category": _classify_category(content, {}),
-                    "type": "fact",
-                })
+                items.append(
+                    {
+                        "source": "qmd",
+                        "source_id": f"qmd_{hash(content) % 100000}",
+                        "text": content,
+                        "metadata": {"tags": entry.get("tags", []), "ts": entry.get("ts", "")},
+                        "category": _classify_category(content, {}),
+                        "type": "fact",
+                    }
+                )
         return items
 
     def _collect_user_profile(self) -> list[dict]:
@@ -210,34 +220,40 @@ class DreamCycle:
         items: list[dict] = []
 
         for k, v in (profile.get("preferences") or {}).items():
-            items.append({
-                "source": "user_profile",
-                "source_id": f"pref_{k}",
-                "text": f"User preference: {k} = {v}",
-                "metadata": {"type": "preference"},
-                "category": "user",
-                "type": "preference",
-            })
+            items.append(
+                {
+                    "source": "user_profile",
+                    "source_id": f"pref_{k}",
+                    "text": f"User preference: {k} = {v}",
+                    "metadata": {"type": "preference"},
+                    "category": "user",
+                    "type": "preference",
+                }
+            )
 
         if profile.get("interests"):
-            items.append({
-                "source": "user_profile",
-                "source_id": "interests",
-                "text": f"User interests: {', '.join(profile['interests'])}",
-                "metadata": {"type": "interest"},
-                "category": "user",
-                "type": "preference",
-            })
+            items.append(
+                {
+                    "source": "user_profile",
+                    "source_id": "interests",
+                    "text": f"User interests: {', '.join(profile['interests'])}",
+                    "metadata": {"type": "interest"},
+                    "category": "user",
+                    "type": "preference",
+                }
+            )
 
         for i, note in enumerate(profile.get("context_notes") or []):
-            items.append({
-                "source": "user_profile",
-                "source_id": f"note_{i}",
-                "text": note,
-                "metadata": {"type": "context_note"},
-                "category": "user",
-                "type": "fact",
-            })
+            items.append(
+                {
+                    "source": "user_profile",
+                    "source_id": f"note_{i}",
+                    "text": note,
+                    "metadata": {"type": "context_note"},
+                    "category": "user",
+                    "type": "fact",
+                }
+            )
 
         return items
 
@@ -270,14 +286,16 @@ class DreamCycle:
                     action = record.get("action", "")
                     detail = record.get("detail", "")
                     if action and detail:
-                        items.append({
-                            "source": "audit",
-                            "source_id": f"audit_{f.stem}_{action}_{hash(detail) % 10000}",
-                            "text": f"[{action}] {detail}",
-                            "metadata": record,
-                            "category": _classify_category(f"[{action}] {detail}", {}),
-                            "type": "fact",
-                        })
+                        items.append(
+                            {
+                                "source": "audit",
+                                "source_id": f"audit_{f.stem}_{action}_{hash(detail) % 10000}",
+                                "text": f"[{action}] {detail}",
+                                "metadata": record,
+                                "category": _classify_category(f"[{action}] {detail}", {}),
+                                "type": "fact",
+                            }
+                        )
             except OSError as exc:
                 log.debug("Failed to read audit file %s: %s", f, exc)
 
@@ -350,9 +368,7 @@ class DreamCycle:
         """Append a procedural item to procedures.md if not already present."""
         self.procedures_path.parent.mkdir(parents=True, exist_ok=True)
         if not self.procedures_path.exists():
-            self.procedures_path.write_text(
-                "# Procedures — How I Do Things\n\n---\n\n"
-            )
+            self.procedures_path.write_text("# Procedures — How I Do Things\n\n---\n\n")
         existing = self.procedures_path.read_text()
         if text[:80] in existing:
             return
@@ -366,9 +382,15 @@ class DreamCycle:
             self.memory_path.write_text("# MEMORY.md — Long-Term Memory\n\n---\n\n")
 
         emoji = {
-            "identity": "🧠", "user": "👤", "projects": "🏗️",
-            "business": "💰", "people": "👥", "strategy": "🎯",
-            "decisions": "📌", "lessons": "💡", "environment": "🔧",
+            "identity": "🧠",
+            "user": "👤",
+            "projects": "🏗️",
+            "business": "💰",
+            "people": "👥",
+            "strategy": "🎯",
+            "decisions": "📌",
+            "lessons": "💡",
+            "environment": "🔧",
             "threads": "🌊",
         }.get(entry.get("category", ""), "📝")
 
@@ -437,8 +459,7 @@ class DreamCycle:
         self.archive_path.parent.mkdir(parents=True, exist_ok=True)
         if not self.archive_path.exists():
             self.archive_path.write_text(
-                "# Memory Archive\n\n"
-                "_Compressed entries that fell below importance threshold._\n\n---\n\n"
+                "# Memory Archive\n\n_Compressed entries that fell below importance threshold._\n\n---\n\n"
             )
         line = (
             f"- `{entry['id']}` ({entry.get('category', '?')}) "
@@ -452,9 +473,7 @@ class DreamCycle:
         """Append a dream report to dream-log.md."""
         self.dream_log_path.parent.mkdir(parents=True, exist_ok=True)
         if not self.dream_log_path.exists():
-            self.dream_log_path.write_text(
-                "# Dream Log\n\n_Auto-Dream consolidation reports. Append-only._\n\n---\n\n"
-            )
+            self.dream_log_path.write_text("# Dream Log\n\n_Auto-Dream consolidation reports. Append-only._\n\n---\n\n")
         async with aiofiles.open(self.dream_log_path, "a") as f:
             await f.write(f"\n{report}\n")
 
@@ -474,8 +493,11 @@ _DEFAULT_INDEX = {
         "lastPruned": None,
         "healthScore": 0,
         "healthMetrics": {
-            "freshness": 0, "coverage": 0, "coherence": 0,
-            "efficiency": 0, "reachability": 0,
+            "freshness": 0,
+            "coverage": 0,
+            "coherence": 0,
+            "efficiency": 0,
+            "reachability": 0,
         },
         "insights": [],
         "healthHistory": [],
@@ -564,9 +586,7 @@ def _compute_health(index: dict, memory_path: Path | None = None) -> dict:
     fresh = 0
     for e in entries:
         try:
-            d = (today - datetime.date.fromisoformat(
-                e.get("lastReferenced", e.get("created", ""))
-            )).days
+            d = (today - datetime.date.fromisoformat(e.get("lastReferenced", e.get("created", "")))).days
             if d <= 30:
                 fresh += 1
         except (ValueError, TypeError):
@@ -577,9 +597,7 @@ def _compute_health(index: dict, memory_path: Path | None = None) -> dict:
     recent_cats: set[str] = set()
     for e in entries:
         try:
-            d = (today - datetime.date.fromisoformat(
-                e.get("lastReferenced", e.get("created", ""))
-            )).days
+            d = (today - datetime.date.fromisoformat(e.get("lastReferenced", e.get("created", "")))).days
             if d <= 14:
                 recent_cats.add(e.get("category", ""))
         except (ValueError, TypeError):
@@ -661,9 +679,7 @@ async def _generate_insights(index: dict, changes: dict) -> list[str]:
     cat_summary = ", ".join(f"{k}: {v}" for k, v in sorted(cats.items()))
 
     recent = sorted(entries, key=lambda e: e.get("lastReferenced", ""), reverse=True)[:10]
-    recent_text = "\n".join(
-        f"- [{e['id']}] ({e['category']}) {e['text'][:100]}" for e in recent
-    )
+    recent_text = "\n".join(f"- [{e['id']}] ({e['category']}) {e['text'][:100]}" for e in recent)
 
     prompt = (
         "You are a memory consolidation system. Analyze this memory state and produce "
@@ -679,6 +695,7 @@ async def _generate_insights(index: dict, changes: dict) -> list[str]:
 
     try:
         from llm import chat
+
         response, _, _ = await chat(prompt, model_preference="auto")
         insights = []
         for line in response.strip().splitlines():
@@ -829,9 +846,15 @@ def _extract_tags(text: str, meta: dict) -> list[str]:
 
     lower = text.lower()
     kw_tags = {
-        "docker": "docker", "nas": "nas", "discord": "discord",
-        "gemini": "gemini", "chromadb": "chromadb", "openclaw": "openclaw",
-        "research": "research", "plex": "plex", "traefik": "traefik",
+        "docker": "docker",
+        "nas": "nas",
+        "discord": "discord",
+        "gemini": "gemini",
+        "chromadb": "chromadb",
+        "openclaw": "openclaw",
+        "research": "research",
+        "plex": "plex",
+        "traefik": "traefik",
     }
     for keyword, tag in kw_tags.items():
         if keyword in lower:
@@ -842,15 +865,25 @@ def _extract_tags(text: str, meta: dict) -> list[str]:
 def _is_procedural(text: str) -> bool:
     lower = text.lower()
     signals = [
-        "how to", "steps:", "workflow:", "procedure:",
-        "always do", "when you", "make sure to", "first, then",
+        "how to",
+        "steps:",
+        "workflow:",
+        "procedure:",
+        "always do",
+        "when you",
+        "make sure to",
+        "first, then",
         "run the command",
     ]
     return any(s in lower for s in signals)
 
 
 def _build_report(
-    index: dict, changes: dict, health: dict, insights: list[str], archived: int,
+    index: dict,
+    changes: dict,
+    health: dict,
+    insights: list[str],
+    archived: int,
 ) -> str:
     today = datetime.date.today().isoformat()
     lines = [

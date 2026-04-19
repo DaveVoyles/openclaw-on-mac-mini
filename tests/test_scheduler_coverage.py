@@ -803,16 +803,12 @@ class TestScheduleResearchReport:
 
     @pytest.mark.asyncio
     async def test_invalid_cron_returns_error(self, global_sched):
-        result = await schedule_research_report(
-            topic="AI trends", cron_expression="invalid-cron"
-        )
+        result = await schedule_research_report(topic="AI trends", cron_expression="invalid-cron")
         assert "❌" in result
 
     @pytest.mark.asyncio
     async def test_valid_topic_creates_task(self, global_sched):
-        result = await schedule_research_report(
-            topic="AI trends in 2025", cron_expression="0 8 * * 0"
-        )
+        result = await schedule_research_report(topic="AI trends in 2025", cron_expression="0 8 * * 0")
         assert "✅" in result
         assert "AI trends in 2025" in result
         assert "0 8 * * 0" in result

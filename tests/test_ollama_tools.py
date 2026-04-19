@@ -113,6 +113,7 @@ def _tool_call_message(fn_name, fn_args=None):
 # the real http_session module was already imported by another test file.
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _patch_ollama_sessions():
     """Replace the module-level SessionManager with a plain MagicMock for every test."""
@@ -293,9 +294,11 @@ class TestChatOllamaWithToolsSuccess:
 
         tool_call_resp = AsyncMock()
         tool_call_resp.status = 200
-        tool_call_resp.json = AsyncMock(return_value={
-            "message": _tool_call_message(ALLOWED_TOOL, {"host": "server1"}),
-        })
+        tool_call_resp.json = AsyncMock(
+            return_value={
+                "message": _tool_call_message(ALLOWED_TOOL, {"host": "server1"}),
+            }
+        )
         tool_call_resp.__aenter__ = AsyncMock(return_value=tool_call_resp)
         tool_call_resp.__aexit__ = AsyncMock(return_value=False)
 
@@ -326,9 +329,11 @@ class TestChatOllamaWithToolsSuccess:
         bad_tool = "delete_all_data"
         tool_call_resp = AsyncMock()
         tool_call_resp.status = 200
-        tool_call_resp.json = AsyncMock(return_value={
-            "message": _tool_call_message(bad_tool, {}),
-        })
+        tool_call_resp.json = AsyncMock(
+            return_value={
+                "message": _tool_call_message(bad_tool, {}),
+            }
+        )
         tool_call_resp.__aenter__ = AsyncMock(return_value=tool_call_resp)
         tool_call_resp.__aexit__ = AsyncMock(return_value=False)
 
@@ -420,9 +425,11 @@ class TestChatOllamaWithToolsErrors:
 
         tool_call_resp = AsyncMock()
         tool_call_resp.status = 200
-        tool_call_resp.json = AsyncMock(return_value={
-            "message": _tool_call_message(ALLOWED_TOOL, {}),
-        })
+        tool_call_resp.json = AsyncMock(
+            return_value={
+                "message": _tool_call_message(ALLOWED_TOOL, {}),
+            }
+        )
         tool_call_resp.__aenter__ = AsyncMock(return_value=tool_call_resp)
         tool_call_resp.__aexit__ = AsyncMock(return_value=False)
 
@@ -445,12 +452,15 @@ class TestChatOllamaWithToolsErrors:
 
     async def test_max_rounds_fallback_response(self):
         """When every round returns tool_calls, fallback request is made."""
+
         def _make_tool_call_resp():
             r = AsyncMock()
             r.status = 200
-            r.json = AsyncMock(return_value={
-                "message": _tool_call_message(ALLOWED_TOOL, {}),
-            })
+            r.json = AsyncMock(
+                return_value={
+                    "message": _tool_call_message(ALLOWED_TOOL, {}),
+                }
+            )
             r.__aenter__ = AsyncMock(return_value=r)
             r.__aexit__ = AsyncMock(return_value=False)
             return r
@@ -481,12 +491,15 @@ class TestChatOllamaWithToolsErrors:
 
     async def test_max_rounds_fallback_http_error_returns_none(self):
         """If fallback request also fails, return None."""
+
         def _tc_resp():
             r = AsyncMock()
             r.status = 200
-            r.json = AsyncMock(return_value={
-                "message": _tool_call_message(ALLOWED_TOOL, {}),
-            })
+            r.json = AsyncMock(
+                return_value={
+                    "message": _tool_call_message(ALLOWED_TOOL, {}),
+                }
+            )
             r.__aenter__ = AsyncMock(return_value=r)
             r.__aexit__ = AsyncMock(return_value=False)
             return r

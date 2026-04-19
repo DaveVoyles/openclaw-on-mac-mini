@@ -50,13 +50,13 @@ async def send_agent_mail(to: str, subject: str, body: str) -> str:
     try:
         session = await _get_session()
         async with session.post(url, headers=headers, json=payload) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    return f"✅ AgentMail sent successfully! (ID: {data.get('id', 'unknown')})"
+            if resp.status == 200:
+                data = await resp.json()
+                return f"✅ AgentMail sent successfully! (ID: {data.get('id', 'unknown')})"
 
-                error_data = await resp.text()
-                log.error("AgentMail API error: %s", error_data)
-                return f"❌ Failed to send AgentMail: (Status {resp.status}) - {error_data}"
+            error_data = await resp.text()
+            log.error("AgentMail API error: %s", error_data)
+            return f"❌ Failed to send AgentMail: (Status {resp.status}) - {error_data}"
 
     except asyncio.TimeoutError:
         return "❌ AgentMail request timed out (15s)."

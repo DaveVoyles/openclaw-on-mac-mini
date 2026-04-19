@@ -36,6 +36,7 @@ except (OSError, PermissionError):
 
 class TaskStatus(str, Enum):
     """Status of a workflow task."""
+
     PENDING = "pending"
     RUNNING = "running"
     SUCCESS = "success"
@@ -45,6 +46,7 @@ class TaskStatus(str, Enum):
 
 class WorkflowStatus(str, Enum):
     """Status of a workflow execution."""
+
     PENDING = "pending"
     RUNNING = "running"
     SUCCESS = "success"
@@ -55,6 +57,7 @@ class WorkflowStatus(str, Enum):
 @dataclass
 class WorkflowTask:
     """A single task in a workflow."""
+
     task_id: str
     action: str  # skill name or function to call
     args: dict[str, Any]
@@ -70,6 +73,7 @@ class WorkflowTask:
 @dataclass
 class Workflow:
     """A complete workflow definition."""
+
     workflow_id: str
     name: str
     description: str
@@ -120,6 +124,7 @@ class Workflow:
 @dataclass
 class WorkflowExecution:
     """Record of a workflow execution."""
+
     execution_id: str
     workflow_id: str
     started_at: str
@@ -400,24 +405,21 @@ class WorkflowEngine:
             exec_args = {**context, **task.args}
             signature = inspect.signature(skill_fn)
             accepts_var_kwargs = any(
-                param.kind == inspect.Parameter.VAR_KEYWORD
-                for param in signature.parameters.values()
+                param.kind == inspect.Parameter.VAR_KEYWORD for param in signature.parameters.values()
             )
             if accepts_var_kwargs:
                 call_args = exec_args
             else:
-                call_args = {
-                    key: value
-                    for key, value in exec_args.items()
-                    if key in signature.parameters
-                }
+                call_args = {key: value for key, value in exec_args.items() if key in signature.parameters}
 
             result = await asyncio.wait_for(skill_fn(**call_args), timeout=300)
 
             task.end_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
             task.duration_ms = int(
-                (datetime.datetime.fromisoformat(task.end_time) -
-                 datetime.datetime.fromisoformat(task.start_time)).total_seconds() * 1000
+                (
+                    datetime.datetime.fromisoformat(task.end_time) - datetime.datetime.fromisoformat(task.start_time)
+                ).total_seconds()
+                * 1000
             )
             task.result = result or "OK"
             task.status = TaskStatus.SUCCESS
@@ -614,8 +616,7 @@ async def list_workflows_skill() -> str:
         }.get(wf.status, "❓")
 
         lines.append(
-            f"{status_emoji} `{wf.workflow_id}` — **{wf.name}** "
-            f"({len(wf.tasks)} tasks) · runs: {wf.run_count}"
+            f"{status_emoji} `{wf.workflow_id}` — **{wf.name}** ({len(wf.tasks)} tasks) · runs: {wf.run_count}"
         )
 
     return "\n".join(lines)

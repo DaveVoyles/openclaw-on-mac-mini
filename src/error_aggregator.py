@@ -25,7 +25,7 @@ _RE_HEX_IDS = re.compile(r"[0-9a-f]{8,}", re.IGNORECASE)
 
 def _fingerprint(service: str, error_msg: str) -> str:
     """Normalise an error message so similar errors share a fingerprint."""
-    normalised = _RE_HEX_IDS.sub("ID", error_msg)   # hex IDs first
+    normalised = _RE_HEX_IDS.sub("ID", error_msg)  # hex IDs first
     normalised = _RE_LONG_NUMBERS.sub("N", normalised)
     return f"{service}:{normalised[:100]}"
 
@@ -109,10 +109,7 @@ class ErrorAggregator:
                     lines.append(f"⚠️ {bucket.first_message}")
                 else:
                     age_min = int(bucket.age_seconds // 60) or 1
-                    lines.append(
-                        f"⚠️ {bucket.first_message} "
-                        f"(**{bucket.count}x** in last {age_min}m)"
-                    )
+                    lines.append(f"⚠️ {bucket.first_message} (**{bucket.count}x** in last {age_min}m)")
 
             self._buckets.clear()
             return lines

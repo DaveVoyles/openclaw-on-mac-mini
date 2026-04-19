@@ -41,6 +41,7 @@ def get_quality_retry_count() -> int:
     """Return the number of quality retries fired this session."""
     return _quality_retry_count
 
+
 # ---------------------------------------------------------------------------
 # Gemma hallucination patterns
 # ---------------------------------------------------------------------------
@@ -90,6 +91,7 @@ _DIRECT_RETURN_MARKERS: dict[str, list[str]] = {
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def response_seems_valid(reply: str, *, provider: str) -> bool:
     """Return True if *reply* should be accepted as a real answer for *provider*.

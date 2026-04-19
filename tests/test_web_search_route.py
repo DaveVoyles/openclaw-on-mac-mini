@@ -32,9 +32,7 @@ class TestSelectWebSearchRoutePatterns:
         assert decision.prefer_search is True
 
     def test_property_query_prefers_search(self):
-        decision = select_web_search_route(
-            "find homes for sale in Broomall PA under 450000"
-        )
+        decision = select_web_search_route("find homes for sale in Broomall PA under 450000")
         assert decision.prefer_search is True
 
     def test_entertainment_query_prefers_search(self):
@@ -47,9 +45,7 @@ class TestSelectWebSearchRoutePatterns:
         assert decision.prefer_search is True
 
     def test_coding_question_does_not_prefer_search(self):
-        decision = select_web_search_route(
-            "write a Python function to sort a list"
-        )
+        decision = select_web_search_route("write a Python function to sort a list")
         assert decision.prefer_search is False
 
     def test_empty_string_does_not_prefer_search(self):

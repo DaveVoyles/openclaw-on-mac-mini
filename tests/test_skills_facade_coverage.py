@@ -28,6 +28,7 @@ class TestGetSkill:
 
     def test_returns_same_as_dict_lookup(self):
         from skills_facade import SKILLS
+
         names = list(SKILLS.keys())
         if not names:
             pytest.skip("No skills registered")
@@ -49,6 +50,7 @@ class TestListSkills:
 
     def test_matches_skills_dict_keys(self):
         from skills_facade import SKILLS
+
         assert set(list_skills()) == set(SKILLS.keys())
 
 
@@ -77,4 +79,5 @@ class TestSkillExists:
         with patch.object(mod, "SKILLS", fake_skills):
             # Directly check the dict since the facade reads SKILLS at call time
             from skills_facade import SKILLS as S
+
             assert "my_fake_skill" in S

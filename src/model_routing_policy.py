@@ -54,9 +54,7 @@ def _parse_ab_split(env_val: str) -> list[tuple[str, float]]:
         return []
 
 
-_ROUTING_AB_SPLIT: list[tuple[str, float]] = _parse_ab_split(
-    _os.getenv("ROUTING_AB_SPLIT", "")
-)
+_ROUTING_AB_SPLIT: list[tuple[str, float]] = _parse_ab_split(_os.getenv("ROUTING_AB_SPLIT", ""))
 
 
 def _sample_ab_profile() -> str | None:
@@ -620,7 +618,6 @@ def select_coding_route(query: str) -> CodingRouteDecision:
     )
 
 
-
 @dataclass(frozen=True, slots=True)
 class ResearchSynthesisRouteDecision:
     """Routing decision for long-form research synthesis tasks."""
@@ -629,9 +626,7 @@ class ResearchSynthesisRouteDecision:
     reason: str
 
 
-def select_research_synthesis_route(
-    *, copilot_available: bool
-) -> ResearchSynthesisRouteDecision:
+def select_research_synthesis_route(*, copilot_available: bool) -> ResearchSynthesisRouteDecision:
     """Choose the best provider for research synthesis (no tool-calling needed).
 
     Long-form synthesis is a text-generation task that does not require
@@ -790,6 +785,7 @@ def clear_classify_cache() -> None:
     """Clear the query classification cache. Used in tests and /admin commands."""
     _classify_cache.clear()
 
+
 # ---------------------------------------------------------------------------
 # Mini-model eval logging (MINI_MODEL_EVAL=1)
 # ---------------------------------------------------------------------------
@@ -894,6 +890,7 @@ async def classify_query_llm(text: str) -> str | None:
 # ---------------------------------------------------------------------------
 # ModelRoute — routing decision envelope
 # ---------------------------------------------------------------------------
+
 
 class ModelRoute:
     """Represents a model routing decision produced by :func:`classify_query`.

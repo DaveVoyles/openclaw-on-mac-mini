@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_session_cmds helpers."""
+
 from __future__ import annotations
 
 import pytest
@@ -17,18 +18,34 @@ from openclaw_cli_session_cmds import (
 # _format_elapsed_compact
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("seconds,expected", [
-    (0, "0.0s"),
-    (0.5, "0.5s"),
-    (45, "45s"),
-    (5, "5.0s"),
-    (90, "1m 30s"),
-    (120, "2m"),
-    (3600, "1h"),
-    (3660, "1h 1m"),
-    ("bad", "0s"),
-    (None, "0s"),
-], ids=["zero", "sub_second", "seconds", "short_seconds", "minutes", "full_minutes", "hours", "hours_and_minutes", "invalid", "none"])
+
+@pytest.mark.parametrize(
+    "seconds,expected",
+    [
+        (0, "0.0s"),
+        (0.5, "0.5s"),
+        (45, "45s"),
+        (5, "5.0s"),
+        (90, "1m 30s"),
+        (120, "2m"),
+        (3600, "1h"),
+        (3660, "1h 1m"),
+        ("bad", "0s"),
+        (None, "0s"),
+    ],
+    ids=[
+        "zero",
+        "sub_second",
+        "seconds",
+        "short_seconds",
+        "minutes",
+        "full_minutes",
+        "hours",
+        "hours_and_minutes",
+        "invalid",
+        "none",
+    ],
+)
 def test_elapsed_compact(seconds, expected):
     assert _format_elapsed_compact(seconds) == expected
 
@@ -36,6 +53,7 @@ def test_elapsed_compact(seconds, expected):
 # ---------------------------------------------------------------------------
 # _build_event_label
 # ---------------------------------------------------------------------------
+
 
 def test_build_event_label_uses_summary():
     ev = {"metadata": {"summary": "Did something"}, "content": "raw", "kind": ""}
@@ -71,6 +89,7 @@ def test_build_event_label_error_suffix():
 # _highlight_ansi
 # ---------------------------------------------------------------------------
 
+
 def test_highlight_ansi_found():
     result = _highlight_ansi("Hello World", "world", "world", "[HL]", "[/HL]")
     assert "[HL]" in result
@@ -91,6 +110,7 @@ def test_highlight_ansi_case_insensitive():
 # _highlight_rich
 # ---------------------------------------------------------------------------
 
+
 def test_highlight_rich_wraps_match():
     result = _highlight_rich("git status", "git")
     assert "[bold yellow]git[/]" in result
@@ -104,6 +124,7 @@ def test_highlight_rich_case_insensitive():
 # ---------------------------------------------------------------------------
 # _build_plan_focus_lines
 # ---------------------------------------------------------------------------
+
 
 def test_build_plan_focus_lines_basic():
     lines = ["- [ ] task 1", "  detail here", "- [ ] task 2"]
@@ -132,6 +153,7 @@ def test_build_plan_focus_lines_single_task():
 # ---------------------------------------------------------------------------
 # _build_handoff_check_lines
 # ---------------------------------------------------------------------------
+
 
 def test_build_handoff_check_lines_basic():
     check = {
@@ -172,6 +194,7 @@ def test_build_handoff_check_lines_open_incidents():
 # _build_workspace_capsule_plain_lines
 # ---------------------------------------------------------------------------
 
+
 def test_workspace_capsule_plain_lines_minimal():
     capsule = {"cwd": "/home/user", "tracked_files": [], "bookmarks": [], "recent_outputs": []}
     lines = _build_workspace_capsule_plain_lines(capsule)
@@ -181,7 +204,10 @@ def test_workspace_capsule_plain_lines_minimal():
 
 def test_workspace_capsule_plain_lines_watch_status():
     capsule = {
-        "cwd": "/home", "tracked_files": [], "bookmarks": [], "recent_outputs": [],
+        "cwd": "/home",
+        "tracked_files": [],
+        "bookmarks": [],
+        "recent_outputs": [],
         "watch_status": "active",
     }
     lines = _build_workspace_capsule_plain_lines(capsule)
@@ -190,7 +216,9 @@ def test_workspace_capsule_plain_lines_watch_status():
 
 def test_workspace_capsule_plain_lines_recent_outputs():
     capsule = {
-        "cwd": "/", "tracked_files": [], "bookmarks": [],
+        "cwd": "/",
+        "tracked_files": [],
+        "bookmarks": [],
         "recent_outputs": [{"name": "out1"}, {"name": "out2"}],
     }
     lines = _build_workspace_capsule_plain_lines(capsule)
@@ -199,8 +227,12 @@ def test_workspace_capsule_plain_lines_recent_outputs():
 
 def test_workspace_capsule_plain_lines_plan_task():
     capsule = {
-        "cwd": "/", "tracked_files": [], "bookmarks": [], "recent_outputs": [],
-        "plan_id": "plan-42", "task_id": "task-7",
+        "cwd": "/",
+        "tracked_files": [],
+        "bookmarks": [],
+        "recent_outputs": [],
+        "plan_id": "plan-42",
+        "task_id": "task-7",
     }
     lines = _build_workspace_capsule_plain_lines(capsule)
     assert any("plan-42" in line for line in lines)

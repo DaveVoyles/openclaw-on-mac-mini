@@ -103,12 +103,7 @@ class MLTrendAnalyzer:
         except sqlite3.Error as e:
             log.warning("Could not ensure tables: %s", e)
 
-    def _get_time_series_data(
-        self,
-        topic: str,
-        category: str,
-        days: int = 30
-    ) -> pd.DataFrame:
+    def _get_time_series_data(self, topic: str, category: str, days: int = 30) -> pd.DataFrame:
         """
         Get time series data for a topic.
 
@@ -134,15 +129,11 @@ class MLTrendAnalyzer:
                     WHERE topic = ? AND category = ? AND timestamp >= ?
                     ORDER BY timestamp ASC
                 """
-                df = pd.read_sql_query(
-                    query,
-                    conn,
-                    params=(topic, category, cutoff)
-                )
+                df = pd.read_sql_query(query, conn, params=(topic, category, cutoff))
 
                 if not df.empty:
-                    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
-                    df.set_index('timestamp', inplace=True)
+                    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
+                    df.set_index("timestamp", inplace=True)
 
                 return df
         except (sqlite3.Error, ValueError) as e:
@@ -150,11 +141,7 @@ class MLTrendAnalyzer:
             return pd.DataFrame()
 
     async def forecast_trend(
-        self,
-        topic: str,
-        category: str,
-        forecast_days: int = 7,
-        history_days: int = 30
+        self, topic: str, category: str, forecast_days: int = 7, history_days: int = 30
     ) -> ForecastResult:
         """
         Forecast future trend using ARIMA model.
@@ -182,7 +169,7 @@ class MLTrendAnalyzer:
                 )
 
             # Use volume for forecasting
-            series = df['volume'].asfreq('D', fill_value=0)
+            series = df["volume"].asfreq("D", fill_value=0)
 
             # Fit ARIMA model (p=1, d=1, q=1 as default)
             # p: autoregressive order
@@ -199,8 +186,7 @@ class MLTrendAnalyzer:
             forecast_conf = fitted.get_forecast(steps=forecast_days)
             conf_int = forecast_conf.conf_int()
             confidence_intervals = [
-                (float(conf_int.iloc[i, 0]), float(conf_int.iloc[i, 1]))
-                for i in range(len(conf_int))
+                (float(conf_int.iloc[i, 0]), float(conf_int.iloc[i, 1])) for i in range(len(conf_int))
             ]
 
             # Determine trend direction
@@ -236,11 +222,7 @@ class MLTrendAnalyzer:
             )
 
     async def detect_anomalies(
-        self,
-        topic: str,
-        category: str,
-        days: int = 30,
-        contamination: float = 0.1
+        self, topic: str, category: str, days: int = 30, contamination: float = 0.1
     ) -> AnomalyResult:
         """
         Detect anomalies in trend data using Isolation Forest.
@@ -267,17 +249,14 @@ class MLTrendAnalyzer:
                 )
 
             # Prepare features: volume and sentiment
-            X = df[['volume', 'sentiment']].values
+            X = df[["volume", "sentiment"]].values
 
             # Standardize features
             scaler = StandardScaler()
             X_scaled = scaler.fit_transform(X)
 
             # Fit Isolation Forest
-            iso_forest = IsolationForest(
-                contamination=contamination,
-                random_state=42
-            )
+            iso_forest = IsolationForest(contamination=contamination, random_state=42)
             predictions = iso_forest.fit_predict(X_scaled)
 
             # Extract anomalies (predictions == -1)
@@ -286,12 +265,14 @@ class MLTrendAnalyzer:
             anomalies = []
             for idx in anomaly_indices:
                 row = df.iloc[idx]
-                anomalies.append({
-                    "timestamp": row.name.isoformat(),
-                    "volume": int(row['volume']),
-                    "sentiment": float(row['sentiment']),
-                    "anomaly_score": float(iso_forest.score_samples(X_scaled)[idx]),
-                })
+                anomalies.append(
+                    {
+                        "timestamp": row.name.isoformat(),
+                        "volume": int(row["volume"]),
+                        "sentiment": float(row["sentiment"]),
+                        "anomaly_score": float(iso_forest.score_samples(X_scaled)[idx]),
+                    }
+                )
 
             return AnomalyResult(
                 metric=f"{category}/{topic}",
@@ -312,11 +293,7 @@ class MLTrendAnalyzer:
             )
 
     async def seasonal_decomposition(
-        self,
-        topic: str,
-        category: str,
-        days: int = 30,
-        period: int = 7
+        self, topic: str, category: str, days: int = 30, period: int = 7
     ) -> dict[str, Any]:
         """
         Perform seasonal decomposition of time series.
@@ -351,15 +328,10 @@ class MLTrendAnalyzer:
                 }
 
             # Use volume for decomposition
-            series = df['volume'].asfreq('D', fill_value=0)
+            series = df["volume"].asfreq("D", fill_value=0)
 
             # Perform seasonal decomposition
-            decomposition = seasonal_decompose(
-                series,
-                model='additive',
-                period=period,
-                extrapolate_trend='freq'
-            )
+            decomposition = seasonal_decompose(series, model="additive", period=period, extrapolate_trend="freq")
 
             return {
                 "status": "success",
@@ -386,10 +358,8 @@ _ml_analyzer = MLTrendAnalyzer()
 # Public API functions
 # ============================================================================
 
-async def forecast_trend(
-    metric: str,
-    days: int = 7
-) -> dict[str, Any]:
+
+async def forecast_trend(metric: str, days: int = 7) -> dict[str, Any]:
     """
     Forecast future trend for a metric.
 

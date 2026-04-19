@@ -316,7 +316,6 @@ class TestSchedulerPersistence:
         assert data[0]["action"] == "list_containers"
 
 
-
 # ---------------------------------------------------------------------------
 # Additional tests for improved scheduler coverage
 # ---------------------------------------------------------------------------
@@ -328,6 +327,7 @@ from unittest.mock import AsyncMock
 def test_parse_utc_naive_datetime():
     """_parse_utc adds UTC timezone to naive datetimes."""
     from scheduler import _parse_utc
+
     dt_str = "2024-01-15T09:00:00"  # naive
     result = _parse_utc(dt_str)
     assert result.tzinfo == datetime.timezone.utc
@@ -337,6 +337,7 @@ def test_parse_utc_naive_datetime():
 def test_parse_utc_aware_datetime():
     """_parse_utc converts aware datetimes to UTC."""
     from scheduler import _parse_utc
+
     dt_str = "2024-01-15T14:00:00+05:00"  # +5 timezone
     result = _parse_utc(dt_str)
     assert result.tzinfo == datetime.timezone.utc
@@ -406,24 +407,26 @@ class TestSchedulerLoadEdgeCases:
     def test_load_with_non_standard_task_id(self, tmp_path):
         """Non-standard task IDs don't crash _load."""
         temp_file = tmp_path / "schedules.json"
-        task_data = [{
-            "task_id": "custom-non-standard-id",
-            "action": "list_containers",
-            "args": {},
-            "cron_hour": 3,
-            "cron_minute": 0,
-            "interval_minutes": 0,
-            "cron_expression": "",
-            "prompt": "",
-            "enabled": True,
-            "created_by": "",
-            "created_at": "",
-            "last_run": "",
-            "last_result": "",
-            "run_count": 0,
-            "notify_channel_id": 0,
-            "alert_only": True,
-        }]
+        task_data = [
+            {
+                "task_id": "custom-non-standard-id",
+                "action": "list_containers",
+                "args": {},
+                "cron_hour": 3,
+                "cron_minute": 0,
+                "interval_minutes": 0,
+                "cron_expression": "",
+                "prompt": "",
+                "enabled": True,
+                "created_by": "",
+                "created_at": "",
+                "last_run": "",
+                "last_result": "",
+                "run_count": 0,
+                "notify_channel_id": 0,
+                "alert_only": True,
+            }
+        ]
         temp_file.write_text(json.dumps(task_data))
         with patch.object(scheduler_module, "SCHEDULE_FILE", temp_file):
             s = TaskScheduler()
@@ -447,8 +450,10 @@ class TestPromptJobExecution:
         fake_response = ("LLM response text", [], "gemini")
         fake_collector = MagicMock()
 
-        with patch("llm.chat", new_callable=AsyncMock, return_value=fake_response), \
-             patch("metrics_collector.get_collector", return_value=fake_collector):
+        with (
+            patch("llm.chat", new_callable=AsyncMock, return_value=fake_response),
+            patch("metrics_collector.get_collector", return_value=fake_collector),
+        ):
             task = sched.create("prompt-job", {}, prompt="Tell me the weather")
             await sched._execute_task(task)
 
@@ -462,8 +467,10 @@ class TestPromptJobExecution:
         async def slow_chat(*args, **kwargs):
             raise asyncio.TimeoutError()
 
-        with patch("llm.chat", side_effect=slow_chat), \
-             patch("metrics_collector.get_collector", return_value=fake_collector):
+        with (
+            patch("llm.chat", side_effect=slow_chat),
+            patch("metrics_collector.get_collector", return_value=fake_collector),
+        ):
             task = sched.create("prompt-job", {}, prompt="Slow query")
             await sched._execute_task(task)
 
@@ -476,8 +483,10 @@ class TestPromptJobExecution:
         async def failing_chat(*args, **kwargs):
             raise RuntimeError("LLM crashed")
 
-        with patch("llm.chat", side_effect=failing_chat), \
-             patch("metrics_collector.get_collector", return_value=fake_collector):
+        with (
+            patch("llm.chat", side_effect=failing_chat),
+            patch("metrics_collector.get_collector", return_value=fake_collector),
+        ):
             task = sched.create("prompt-job", {}, prompt="Test prompt")
             await sched._execute_task(task)
 
@@ -494,8 +503,10 @@ class TestPromptJobExecution:
 
         sched.notify_callback = notify
 
-        with patch("llm.chat", new_callable=AsyncMock, return_value=fake_response), \
-             patch("metrics_collector.get_collector", return_value=fake_collector):
+        with (
+            patch("llm.chat", new_callable=AsyncMock, return_value=fake_response),
+            patch("metrics_collector.get_collector", return_value=fake_collector),
+        ):
             task = sched.create("alert-job", {}, prompt="Monitor service", notify_channel_id=12345)
             task.alert_only = True
             await sched._execute_task(task)
@@ -522,8 +533,10 @@ class TestSkillJobTimeout:
         sched.register_skills({"slow_skill": slow_skill})
         task = sched.create("slow_skill", {})
 
-        with patch("scheduler.asyncio.wait_for", side_effect=fake_wait_for), \
-             patch("metrics_collector.get_collector", return_value=fake_collector):
+        with (
+            patch("scheduler.asyncio.wait_for", side_effect=fake_wait_for),
+            patch("metrics_collector.get_collector", return_value=fake_collector),
+        ):
             await sched._execute_task(task)
 
         assert "timed out" in task.last_result.lower() or "Error" in task.last_result
@@ -598,6 +611,7 @@ class TestLLMSchedulingSkills:
     async def test_create_scheduled_task_no_skill_or_prompt(self):
         """create_scheduled_task returns error when neither skill nor prompt given."""
         from scheduler import create_scheduled_task
+
         result = await create_scheduled_task()
         assert "❌" in result
 
@@ -606,6 +620,7 @@ class TestLLMSchedulingSkills:
         """create_scheduled_task returns error for unknown skill name."""
         from scheduler import create_scheduled_task
         from scheduler import scheduler as global_sched
+
         global_sched._skill_registry.pop("nonexistent_skill_xyz", None)
         result = await create_scheduled_task(skill_name="nonexistent_skill_xyz")
         assert "❌" in result
@@ -615,6 +630,7 @@ class TestLLMSchedulingSkills:
         """create_scheduled_task returns error for invalid args_json."""
         from scheduler import create_scheduled_task
         from scheduler import scheduler as global_sched
+
         global_sched.register_skills({"list_containers": AsyncMock(return_value="OK")})
         result = await create_scheduled_task(skill_name="list_containers", args_json="{invalid")
         assert "❌" in result
@@ -623,6 +639,7 @@ class TestLLMSchedulingSkills:
     async def test_create_scheduled_task_with_prompt_success(self):
         """create_scheduled_task creates prompt job successfully."""
         from scheduler import create_scheduled_task
+
         result = await create_scheduled_task(prompt="Daily weather check", interval_minutes=60)
         assert "✅" in result
 
@@ -631,6 +648,7 @@ class TestLLMSchedulingSkills:
         """create_scheduled_task creates skill job successfully."""
         from scheduler import create_scheduled_task
         from scheduler import scheduler as global_sched
+
         global_sched.register_skills({"my_test_skill": AsyncMock(return_value="OK")})
         result = await create_scheduled_task(skill_name="my_test_skill", hour=9)
         assert "✅" in result
@@ -639,6 +657,7 @@ class TestLLMSchedulingSkills:
     async def test_create_scheduled_task_invalid_cron(self):
         """create_scheduled_task validates cron expressions."""
         from scheduler import create_scheduled_task
+
         result = await create_scheduled_task(prompt="test", cron_expression="not a valid cron")
         assert "❌" in result
 
@@ -646,6 +665,7 @@ class TestLLMSchedulingSkills:
     async def test_create_scheduled_task_cron_with_label(self):
         """create_scheduled_task with cron and label creates task."""
         from scheduler import create_scheduled_task
+
         result = await create_scheduled_task(
             prompt="daily check",
             cron_expression="0 9 * * *",
@@ -658,6 +678,7 @@ class TestLLMSchedulingSkills:
         """cancel_scheduled_task removes existing task."""
         from scheduler import cancel_scheduled_task
         from scheduler import scheduler as global_sched
+
         task = global_sched.create("list_containers", {})
         result = await cancel_scheduled_task(task.task_id)
         assert "✅" in result
@@ -667,6 +688,7 @@ class TestLLMSchedulingSkills:
     async def test_cancel_scheduled_task_not_found(self):
         """cancel_scheduled_task returns error for non-existent task."""
         from scheduler import cancel_scheduled_task
+
         result = await cancel_scheduled_task("sched-9999999")
         assert "❌" in result
 
@@ -675,6 +697,7 @@ class TestLLMSchedulingSkills:
         """list_scheduled_tasks returns message when no tasks."""
         from scheduler import list_scheduled_tasks
         from scheduler import scheduler as global_sched
+
         orig_tasks = dict(global_sched._tasks)
         global_sched._tasks.clear()
         try:
@@ -688,6 +711,7 @@ class TestLLMSchedulingSkills:
         """list_scheduled_tasks returns formatted list."""
         from scheduler import list_scheduled_tasks
         from scheduler import scheduler as global_sched
+
         orig_tasks = dict(global_sched._tasks)
         global_sched._tasks.clear()
         try:
@@ -703,6 +727,7 @@ class TestLLMSchedulingSkills:
         """list_scheduled_tasks shows prompt jobs with icon."""
         from scheduler import list_scheduled_tasks
         from scheduler import scheduler as global_sched
+
         orig_tasks = dict(global_sched._tasks)
         global_sched._tasks.clear()
         try:
@@ -718,6 +743,7 @@ class TestLLMSchedulingSkills:
         """list_scheduled_tasks shows cron expression correctly."""
         from scheduler import list_scheduled_tasks
         from scheduler import scheduler as global_sched
+
         orig_tasks = dict(global_sched._tasks)
         global_sched._tasks.clear()
         try:
@@ -733,6 +759,7 @@ class TestLLMSchedulingSkills:
         """schedule_research_report creates a scheduled research task."""
         from scheduler import schedule_research_report
         from scheduler import scheduler as global_sched
+
         orig_tasks = dict(global_sched._tasks)
         try:
             result = await schedule_research_report("AI trends in healthcare")
@@ -746,6 +773,7 @@ class TestLLMSchedulingSkills:
     async def test_schedule_research_report_no_topic(self):
         """schedule_research_report returns error with empty topic."""
         from scheduler import schedule_research_report
+
         result = await schedule_research_report("")
         assert "❌" in result
 
@@ -753,5 +781,6 @@ class TestLLMSchedulingSkills:
     async def test_schedule_research_report_invalid_cron(self):
         """schedule_research_report validates cron expression."""
         from scheduler import schedule_research_report
+
         result = await schedule_research_report("test topic", cron_expression="bad cron!")
         assert "❌" in result

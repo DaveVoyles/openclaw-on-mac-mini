@@ -48,8 +48,7 @@ def _register_media_commands(bot: commands.Bot, send_morning_briefing: Callable[
         mime = (image.content_type or "").split(";")[0].strip()
         if mime not in SUPPORTED_IMAGE_MIMES:
             await interaction.response.send_message(
-                f"❌ Unsupported file type `{mime or 'unknown'}`. "
-                "Supported: PNG, JPEG, WebP, GIF, HEIC",
+                f"❌ Unsupported file type `{mime or 'unknown'}`. Supported: PNG, JPEG, WebP, GIF, HEIC",
                 ephemeral=True,
             )
             return
@@ -126,6 +125,7 @@ def _register_media_commands(bot: commands.Bot, send_morning_briefing: Callable[
             file_type_label = "PDF"
             try:
                 import pypdf
+
                 reader = pypdf.PdfReader(io.BytesIO(file_bytes))
                 pages_text = []
                 for page in reader.pages[:PDF_MAX_PAGES]:
@@ -139,9 +139,7 @@ def _register_media_commands(bot: commands.Bot, send_morning_briefing: Callable[
                     )
                     return
             except ImportError:
-                await interaction.followup.send(
-                    "❌ pypdf not installed. Add `pypdf>=4.0` to requirements.txt."
-                )
+                await interaction.followup.send("❌ pypdf not installed. Add `pypdf>=4.0` to requirements.txt.")
                 return
             except (OSError, ValueError, TypeError) as e:
                 await interaction.followup.send(f"❌ Failed to parse PDF: {e}")
@@ -181,7 +179,9 @@ def _register_media_commands(bot: commands.Bot, send_morning_briefing: Callable[
     # /briefing
     # ------------------------------------------------------------------
 
-    @bot.tree.command(name="briefing", description="Generate an on-demand morning briefing (weather, health, downloads, calendar)")
+    @bot.tree.command(
+        name="briefing", description="Generate an on-demand morning briefing (weather, health, downloads, calendar)"
+    )
     @require_auth
     async def briefing_cmd(interaction: discord.Interaction):
         if not llm_is_configured():

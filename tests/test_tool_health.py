@@ -11,6 +11,7 @@ from tool_health import CircuitBreaker, ToolHealthTracker
 # CircuitBreaker tests
 # ---------------------------------------------------------------------------
 
+
 class TestCircuitBreaker:
     def test_initially_closed(self):
         cb = CircuitBreaker(max_failures=3, cooldown_seconds=60)
@@ -60,6 +61,7 @@ class TestCircuitBreaker:
 # ---------------------------------------------------------------------------
 # ToolHealthTracker tests
 # ---------------------------------------------------------------------------
+
 
 class TestToolHealthTracker:
     def test_default_success_rate(self):

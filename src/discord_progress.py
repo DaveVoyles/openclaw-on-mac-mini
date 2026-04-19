@@ -1,4 +1,5 @@
 """Shared Discord progress indicator for long-running bot operations."""
+
 import logging
 import time
 

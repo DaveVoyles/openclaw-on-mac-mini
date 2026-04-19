@@ -102,13 +102,13 @@ def _format_model_label(model: str | None) -> str:
     """Return a human-readable model attribution label, e.g. 'GPT-4o', 'Gemini 2.5 Flash'."""
     m = (model or "unknown").replace("models/", "").strip()
     if m.startswith("gemini-"):
-        return "Gemini " + m[len("gemini-"):].replace("-", " ").title()
+        return "Gemini " + m[len("gemini-") :].replace("-", " ").title()
     if m.startswith("gpt-"):
         suffix = m[4:]
         # Preserve capitalisation: "4o", "4o-mini" → "4o" / "4o-mini"
         return f"GPT-{suffix}"
     if m.startswith("claude-"):
-        parts = m[len("claude-"):].split("-")
+        parts = m[len("claude-") :].split("-")
         return "Claude " + " ".join(p.title() for p in parts)
     return m.replace("-", " ").title()
 
@@ -151,15 +151,14 @@ async def _gemini_chat(
         loop = asyncio.get_running_loop()
         _t0 = _time.monotonic()
         _rate_limiter.record()
-        response = await loop.run_in_executor(
-            None, lambda: chat_session.send_message(user_message)
-        )
+        response = await loop.run_in_executor(None, lambda: chat_session.send_message(user_message))
         await _record_usage(response)
 
         from llm_tools import _run_tool_loop
 
         response, rounds = await _run_tool_loop(
-            chat_session, response,
+            chat_session,
+            response,
             max_rounds=max_tool_rounds,
             on_tool_call=on_tool_call,
             parallel=parallel_tools,
@@ -327,6 +326,7 @@ async def _try_copilot_proxy_reply(
     trace: RequestTrace | None = None,
 ) -> tuple[str, list[dict], str] | None:
     from llm.providers import COPILOT_PROXY_ENABLED, call_provider_stream, chat_openai
+
     if not COPILOT_PROXY_ENABLED:
         return None
 
@@ -337,11 +337,7 @@ async def _try_copilot_proxy_reply(
         log.debug("Mini-model fast-path: using %s", model_override)
         if trace is not None:
             trace.mini_model_used = True
-    per_attempt_timeout = (
-        max(timeout / max(len(candidates), 1), 1.0)
-        if timeout
-        else None
-    )
+    per_attempt_timeout = max(timeout / max(len(candidates), 1), 1.0) if timeout else None
 
     for candidate in candidates:
         try:
@@ -439,6 +435,7 @@ async def _stream_copilot_chunks(
     caller can fall through to the next provider naturally.
     """
     from llm.providers import COPILOT_PROXY_ENABLED, call_provider_stream
+
     if not COPILOT_PROXY_ENABLED:
         return
 
@@ -465,18 +462,25 @@ async def _stream_copilot_chunks(
         except (OSError, ConnectionError, ValueError, RuntimeError) as exc:
             log.warning(
                 "Copilot stream candidate %s failed (%s): %s",
-                candidate, context, exc,
+                candidate,
+                context,
+                exc,
             )
             # W12-4: emit partial content with warning footer if we accumulated something
             if accumulated:
                 partial = accumulated + "\n\n⚠️ *Stream interrupted — showing partial response.*"
-                yield partial, True, {
-                    "model_used": f"copilot/{candidate}",
-                    "updated_history": history + [
-                        {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [partial]},
-                    ],
-                }
+                yield (
+                    partial,
+                    True,
+                    {
+                        "model_used": f"copilot/{candidate}",
+                        "updated_history": history
+                        + [
+                            {"role": "user", "parts": [cleaned_user_message]},
+                            {"role": "model", "parts": [partial]},
+                        ],
+                    },
+                )
                 return
             continue
 
@@ -497,12 +501,14 @@ async def _stream_copilot_chunks(
         if reply:
             log.info(
                 "Copilot stream candidate %s returned placeholder reply (%s); trying next",
-                candidate, context,
+                candidate,
+                context,
             )
         else:
             log.warning(
                 "Copilot stream candidate %s returned no reply (%s); trying next",
-                candidate, context,
+                candidate,
+                context,
             )
 
 
@@ -558,11 +564,7 @@ async def _recover_stream_provider_failure(
     try:
         declarations = _get_tool_declarations()
         routed_declarations, _ = route_tool_declarations(cleaned_user_message, declarations)
-        selected_names = {
-            str(item.get("name", "")).strip()
-            for item in routed_declarations
-            if isinstance(item, dict)
-        }
+        selected_names = {str(item.get("name", "")).strip() for item in routed_declarations if isinstance(item, dict)}
         if "generate_sports_watch_report" in selected_names:
             from skills.reporting_skills import generate_sports_watch_report
 
@@ -693,7 +695,9 @@ async def _assemble_model_message(
     # --- hard-context-boundaries and followup-anchor-mode ---
     followup = False
     followup_phrases = ("follow up", "what about", "and ", "also ", "more on ", "next ", "continue ")
-    if len(cleaned_user_message.split()) < 10 or any(cleaned_user_message.lower().startswith(p) for p in followup_phrases):
+    if len(cleaned_user_message.split()) < 10 or any(
+        cleaned_user_message.lower().startswith(p) for p in followup_phrases
+    ):
         followup = True
     followup = followup or bool(context_controls.get("use_prior_report"))
     recalled_context = await _auto_recall_context(
@@ -758,10 +762,12 @@ async def _try_web_search_route(
         return None
     try:
         from model_routing_policy import select_web_search_route
+
         web_route = select_web_search_route(model_message)
         if web_route.prefer_search:
             log.info("chat_stream web_search_route reason=%s", web_route.reason)
             from skills.reporting_skills import generate_web_search_report
+
             web_reply = await generate_web_search_report(cleaned_user_message)
             if web_reply and not web_reply.startswith("❌"):
                 if trace is not None:
@@ -792,6 +798,7 @@ async def _try_coding_route(
     try:
         from llm.providers import COPILOT_PROXY_ENABLED
         from model_routing_policy import select_coding_route
+
         if not COPILOT_PROXY_ENABLED:
             return
         coding_route = select_coding_route(cleaned_user_message)
@@ -807,7 +814,17 @@ async def _try_coding_route(
             ):
                 if _is_final:
                     routing_notes.append(f"Coding fast-path → Copilot ({coding_route.reason})")
-                    yield _txt, True, {"model_used": _smeta["model_used"], "updated_history": _smeta["updated_history"], "needs_tools": False, "routing_notes": list(routing_notes), **metadata}
+                    yield (
+                        _txt,
+                        True,
+                        {
+                            "model_used": _smeta["model_used"],
+                            "updated_history": _smeta["updated_history"],
+                            "needs_tools": False,
+                            "routing_notes": list(routing_notes),
+                            **metadata,
+                        },
+                    )
                     _got_final = True
                     break
                 yield _txt, False, {}
@@ -825,7 +842,11 @@ async def _try_coding_route(
                 reply, updated, model_label = result
                 routing_notes.append(f"Coding fast-path → Copilot ({coding_route.reason})")
                 reply = _apply_trace_footer(reply, trace)
-                yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
+                yield (
+                    reply,
+                    True,
+                    {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata},
+                )
     except (ImportError, OSError, ValueError, AttributeError) as _fp_exc:
         log.warning("Stream coding fast-path failed, falling through to standard routing: %s", _fp_exc)
 
@@ -847,6 +868,7 @@ async def _route_by_preference(
         try:
             from llm.providers import COPILOT_PROXY_ENABLED, chat_anthropic, chat_openai
             from model_router import classify_query, is_ollama_alive
+
             _ollama_up = await is_ollama_alive()
             route = classify_query(
                 cleaned_user_message,
@@ -873,7 +895,17 @@ async def _route_by_preference(
                         model_override=route.model or None,
                     ):
                         if _is_final:
-                            yield _txt, True, {"model_used": _smeta["model_used"], "updated_history": _smeta["updated_history"], "needs_tools": False, "routing_notes": list(routing_notes), **metadata}
+                            yield (
+                                _txt,
+                                True,
+                                {
+                                    "model_used": _smeta["model_used"],
+                                    "updated_history": _smeta["updated_history"],
+                                    "needs_tools": False,
+                                    "routing_notes": list(routing_notes),
+                                    **metadata,
+                                },
+                            )
                             _got_final = True
                             break
                         yield _txt, False, {}
@@ -892,7 +924,11 @@ async def _route_by_preference(
                     if result is not None:
                         reply, updated, model_label = result
                         reply = _apply_trace_footer(reply, trace)
-                        yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
+                        yield (
+                            reply,
+                            True,
+                            {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata},
+                        )
                         return
                     log.warning("Copilot auto-route exhausted candidates, falling through to Gemini")
 
@@ -903,14 +939,19 @@ async def _route_by_preference(
                         {"role": "user", "parts": [cleaned_user_message]},
                         {"role": "model", "parts": [reply]},
                     ]
-                    yield reply, True, {"model_used": OLLAMA_MODEL, "updated_history": updated, "needs_tools": False, **metadata}
+                    yield (
+                        reply,
+                        True,
+                        {"model_used": OLLAMA_MODEL, "updated_history": updated, "needs_tools": False, **metadata},
+                    )
                     return
                 log.warning("Ollama auto-route returned empty, falling through to Gemini")
 
             elif route.model_type == "openai":
                 system_prompt = _load_system_prompt()
-                reply = await chat_openai(model_message, history, system_prompt,
-                                          temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+                reply = await chat_openai(
+                    model_message, history, system_prompt, temperature=TEMPERATURE, max_tokens=MAX_TOKENS
+                )
                 finalized = _finalize_provider_reply(
                     reply,
                     provider="openai",
@@ -919,15 +960,20 @@ async def _route_by_preference(
                 )
                 if finalized is not None:
                     updated, model_label = finalized
-                    yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
+                    yield (
+                        reply,
+                        True,
+                        {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata},
+                    )
                     return
                 if reply:
                     log.info("OpenAI route returned placeholder reply, falling through to Gemini")
 
             elif route.model_type == "anthropic":
                 system_prompt = _load_system_prompt()
-                reply = await chat_anthropic(model_message, history, system_prompt,
-                                             temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+                reply = await chat_anthropic(
+                    model_message, history, system_prompt, temperature=TEMPERATURE, max_tokens=MAX_TOKENS
+                )
                 finalized = _finalize_provider_reply(
                     reply,
                     provider="anthropic",
@@ -936,7 +982,11 @@ async def _route_by_preference(
                 )
                 if finalized is not None:
                     updated, model_label = finalized
-                    yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
+                    yield (
+                        reply,
+                        True,
+                        {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata},
+                    )
                     return
                 if reply:
                     log.info("Anthropic route returned placeholder reply, falling through to Gemini")
@@ -947,15 +997,18 @@ async def _route_by_preference(
     if model_preference in ("openai", "anthropic", "copilot"):
         try:
             from llm.providers import chat_anthropic, chat_openai
+
             provider_name = model_preference
             if model_preference == "openai":
                 system_prompt = _load_system_prompt()
-                reply = await chat_openai(model_message, history, system_prompt,
-                                          temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+                reply = await chat_openai(
+                    model_message, history, system_prompt, temperature=TEMPERATURE, max_tokens=MAX_TOKENS
+                )
             elif model_preference == "anthropic":
                 system_prompt = _load_system_prompt()
-                reply = await chat_anthropic(model_message, history, system_prompt,
-                                             temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+                reply = await chat_anthropic(
+                    model_message, history, system_prompt, temperature=TEMPERATURE, max_tokens=MAX_TOKENS
+                )
             else:
                 if os.getenv("PROVIDER_STREAM", "").strip() == "1":
                     _got_final = False
@@ -966,7 +1019,16 @@ async def _route_by_preference(
                         context="forced-copilot",
                     ):
                         if _is_final:
-                            yield _txt, True, {"model_used": _smeta["model_used"], "updated_history": _smeta["updated_history"], "needs_tools": False, **metadata}
+                            yield (
+                                _txt,
+                                True,
+                                {
+                                    "model_used": _smeta["model_used"],
+                                    "updated_history": _smeta["updated_history"],
+                                    "needs_tools": False,
+                                    **metadata,
+                                },
+                            )
                             _got_final = True
                             break
                         yield _txt, False, {}
@@ -984,7 +1046,11 @@ async def _route_by_preference(
                     if result is not None:
                         reply, updated, model_label = result
                         reply = _apply_trace_footer(reply, trace)
-                        yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
+                        yield (
+                            reply,
+                            True,
+                            {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata},
+                        )
                         return
                     reply = None
             finalized = _finalize_provider_reply(
@@ -995,7 +1061,11 @@ async def _route_by_preference(
             )
             if finalized is not None:
                 updated, model_label = finalized
-                yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
+                yield (
+                    reply,
+                    True,
+                    {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata},
+                )
                 return
             log.info("%s call failed, falling back to Gemini", model_preference)
         except (ImportError, OSError, ConnectionError, ValueError, RuntimeError) as e:
@@ -1004,10 +1074,18 @@ async def _route_by_preference(
     # Forced local mode
     if model_preference == "local":
         if not LOCAL_LLM_ENABLED:
-            yield "⚠️ Local LLM is disabled (`LOCAL_LLM_ENABLED=false`).", True, {"model_used": "none", "updated_history": history, "needs_tools": False, **metadata}
+            yield (
+                "⚠️ Local LLM is disabled (`LOCAL_LLM_ENABLED=false`).",
+                True,
+                {"model_used": "none", "updated_history": history, "needs_tools": False, **metadata},
+            )
             return
         if not await _ollama_available():
-            yield "⚠️ Ollama is not reachable. Check that the service is running.", True, {"model_used": "none", "updated_history": history, "needs_tools": False, **metadata}
+            yield (
+                "⚠️ Ollama is not reachable. Check that the service is running.",
+                True,
+                {"model_used": "none", "updated_history": history, "needs_tools": False, **metadata},
+            )
             return
         gemma_reply = await _try_local_model(model_message, history, force=True)
         if gemma_reply is not None:
@@ -1015,14 +1093,22 @@ async def _route_by_preference(
                 {"role": "user", "parts": [cleaned_user_message]},
                 {"role": "model", "parts": [gemma_reply]},
             ]
-            yield gemma_reply, True, {"model_used": OLLAMA_MODEL, "updated_history": updated, "needs_tools": False, **metadata}
+            yield (
+                gemma_reply,
+                True,
+                {"model_used": OLLAMA_MODEL, "updated_history": updated, "needs_tools": False, **metadata},
+            )
             return
         log.info("Local model returned empty, auto-falling back to Gemini")
 
     # Forced Gemini mode — validate API key before proceeding
     if model_preference in ("gemini", "local"):
         if not GOOGLE_API_KEY:
-            yield "⚠️ Gemini API key not configured (`GOOGLE_API_KEY`).", True, {"model_used": "none", "updated_history": history, "needs_tools": False, **metadata}
+            yield (
+                "⚠️ Gemini API key not configured (`GOOGLE_API_KEY`).",
+                True,
+                {"model_used": "none", "updated_history": history, "needs_tools": False, **metadata},
+            )
             return
 
     # Rate-limit pre-check
@@ -1038,7 +1124,17 @@ async def _route_by_preference(
             if result is not None:
                 reply, updated, model_label = result
                 routing_notes.append("Gemini rate-limited → used Copilot proxy")
-                yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, "routing_notes": routing_notes, **metadata}
+                yield (
+                    reply,
+                    True,
+                    {
+                        "model_used": model_label,
+                        "updated_history": updated,
+                        "needs_tools": False,
+                        "routing_notes": routing_notes,
+                        **metadata,
+                    },
+                )
                 return
         except (ImportError, KeyError) as exc:
             log.debug("Copilot proxy fallback unavailable: %s", exc)
@@ -1064,15 +1160,19 @@ async def chat_stream(
     trace: RequestTrace | None = None,
 ) -> AsyncGenerator[tuple[str, bool, dict[str, Any]], None]:
     """Async generator yielding ``(chunk_text, is_final, metadata)`` tuples."""
-    log.info("LLM chat_stream start model_pref=%s trace=%s msg=%.60s",
-             model_preference, get_trace_id(), user_message)
+    log.info("LLM chat_stream start model_pref=%s trace=%s msg=%.60s", model_preference, get_trace_id(), user_message)
     history, context_quality = await _prepare_history(history, model_preference)
 
     _routing_notes: list[str] = []
 
     (
-        model_message, metadata, cleaned_user_message,
-        cross_channel, context_controls, followup, recalled_context,
+        model_message,
+        metadata,
+        cleaned_user_message,
+        cross_channel,
+        context_controls,
+        followup,
+        recalled_context,
     ) = await _assemble_model_message(user_message, context_controls, context_quality, _routing_notes)
 
     _web_result = await _try_web_search_route(model_message, cleaned_user_message, history, model_preference, trace)
@@ -1082,16 +1182,29 @@ async def chat_stream(
         return
 
     async for _chunk in _try_coding_route(
-        model_message, cleaned_user_message, history, model_preference,
-        recalled_context, _routing_notes, metadata, trace,
+        model_message,
+        cleaned_user_message,
+        history,
+        model_preference,
+        recalled_context,
+        _routing_notes,
+        metadata,
+        trace,
     ):
         yield _chunk
         if _chunk[1]:  # is_final
             return
 
     async for _chunk in _route_by_preference(
-        model_message, cleaned_user_message, history, model_preference,
-        routing_profile, recalled_context, _routing_notes, metadata, trace,
+        model_message,
+        cleaned_user_message,
+        history,
+        model_preference,
+        routing_profile,
+        recalled_context,
+        _routing_notes,
+        metadata,
+        trace,
     ):
         yield _chunk
         if _chunk[1]:  # is_final
@@ -1103,9 +1216,7 @@ async def chat_stream(
         label="LLM",
     )
     if route_info.get("strategy") in {"shortlist", "pack-filter"}:
-        _routing_notes.append(
-            "Tool shortlist: " + ", ".join(route_info.get("selected", [])[:6])
-        )
+        _routing_notes.append("Tool shortlist: " + ", ".join(route_info.get("selected", [])[:6]))
         if route_info.get("bundles"):
             _routing_notes.append("Intent bundle: " + ", ".join(route_info.get("bundles", [])[:3]))
         if route_info.get("pack"):
@@ -1122,7 +1233,9 @@ async def chat_stream(
 
     try:
         text, updated_history, model_name = await _gemini_chat(
-            model_message, history, model,
+            model_message,
+            history,
+            model,
             on_tool_call=on_tool_call,
             parallel_tools=True,
             label="LLM",
@@ -1137,7 +1250,17 @@ async def chat_stream(
             routing_notes=_routing_notes,
             reason="primary",
         )
-        yield text, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": needs_tools, "routing_notes": _routing_notes, **metadata}
+        yield (
+            text,
+            True,
+            {
+                "model_used": model_name,
+                "updated_history": updated_history,
+                "needs_tools": needs_tools,
+                "routing_notes": _routing_notes,
+                **metadata,
+            },
+        )
         return
     updated_history = _strip_recalled_prefix(updated_history, cleaned_user_message, model_message)
 
@@ -1164,7 +1287,9 @@ async def chat_stream(
             )
         try:
             text, updated_history, model_name = await _gemini_chat(
-                retry_msg, history, model,
+                retry_msg,
+                history,
+                model,
                 on_tool_call=on_tool_call,
                 parallel_tools=True,
                 label="LLM-retry",
@@ -1180,7 +1305,17 @@ async def chat_stream(
                 routing_notes=_routing_notes,
                 reason="retry",
             )
-            yield text, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": needs_tools, "routing_notes": _routing_notes, **metadata}
+            yield (
+                text,
+                True,
+                {
+                    "model_used": model_name,
+                    "updated_history": updated_history,
+                    "needs_tools": needs_tools,
+                    "routing_notes": _routing_notes,
+                    **metadata,
+                },
+            )
             return
     response_invalid = not _is_memory_store and not _gemma_response_seems_valid(text)
     if response_invalid:
@@ -1188,19 +1323,14 @@ async def chat_stream(
         _routing_notes.append("Retry response remained placeholder")
 
     # Auto-escalate vague responses to web search (but never for memory-store requests)
-    if (
-        not _is_memory_store
-        and (
-            response_invalid
-            or (
-                _VAGUE_RESPONSE_RE.search(text)
-                and _FACTUAL_QUESTION_RE.search(cleaned_user_message.strip())
-            )
-        )
+    if not _is_memory_store and (
+        response_invalid
+        or (_VAGUE_RESPONSE_RE.search(text) and _FACTUAL_QUESTION_RE.search(cleaned_user_message.strip()))
     ):
         if _FACTUAL_QUESTION_RE.search(cleaned_user_message.strip()):
             log.info("Auto-escalating to web search for: %s", cleaned_user_message)
             from skills import SKILLS
+
             search_fn = SKILLS.get("search_web")
             if search_fn is not None:
                 try:
@@ -1216,13 +1346,17 @@ async def chat_stream(
                         )
                         try:
                             text, updated_history, model_name = await _gemini_chat(
-                                enhanced_msg, history, model,
+                                enhanced_msg,
+                                history,
+                                model,
                                 on_tool_call=on_tool_call,
                                 parallel_tools=True,
                                 label="LLM-escalate",
                             )
                             updated_history = _strip_recalled_prefix(
-                                updated_history, cleaned_user_message, enhanced_msg,
+                                updated_history,
+                                cleaned_user_message,
+                                enhanced_msg,
                             )
                             response_invalid = not _gemma_response_seems_valid(text)
                         except Exception as exc:  # broad: intentional
@@ -1247,7 +1381,17 @@ async def chat_stream(
         _routing_notes.append("Returned explicit fallback after invalid retry")
 
     text = _apply_trace_footer(text, trace)
-    yield text, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": True, "routing_notes": _routing_notes, **metadata}
+    yield (
+        text,
+        True,
+        {
+            "model_used": model_name,
+            "updated_history": updated_history,
+            "needs_tools": True,
+            "routing_notes": _routing_notes,
+            **metadata,
+        },
+    )
     return
 
 
@@ -1305,10 +1449,12 @@ async def _chat_try_web_search_route(
         return None
     try:
         from model_routing_policy import select_web_search_route
+
         web_route = select_web_search_route(model_message)
         if web_route.prefer_search:
             log.info("chat web_search_route reason=%s", web_route.reason)
             from skills.reporting_skills import generate_web_search_report
+
             web_reply = await generate_web_search_report(cleaned_user_message)
             if web_reply and not web_reply.startswith("❌"):
                 if trace is not None:
@@ -1337,6 +1483,7 @@ async def _chat_try_coding_fast_path(
     try:
         from llm.providers import COPILOT_PROXY_ENABLED
         from model_routing_policy import select_coding_route
+
         if COPILOT_PROXY_ENABLED:
             coding_route = select_coding_route(cleaned_user_message)
             if coding_route.matches:
@@ -1373,6 +1520,7 @@ async def _chat_try_auto_routing(
 
         from llm.providers import COPILOT_PROXY_ENABLED, chat_anthropic, chat_openai
         from model_router import classify_query, is_ollama_alive
+
         _ollama_up = await is_ollama_alive()
         route = classify_query(
             cleaned_user_message,
@@ -1412,8 +1560,9 @@ async def _chat_try_auto_routing(
 
         elif route.model_type == "openai":
             system_prompt = _load_system_prompt()
-            reply = await chat_openai(model_message, history, system_prompt,
-                                      temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+            reply = await chat_openai(
+                model_message, history, system_prompt, temperature=TEMPERATURE, max_tokens=MAX_TOKENS
+            )
             finalized = _finalize_provider_reply(
                 reply,
                 provider="openai",
@@ -1427,8 +1576,9 @@ async def _chat_try_auto_routing(
 
         elif route.model_type == "anthropic":
             system_prompt = _load_system_prompt()
-            reply = await chat_anthropic(model_message, history, system_prompt,
-                                         temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+            reply = await chat_anthropic(
+                model_message, history, system_prompt, temperature=TEMPERATURE, max_tokens=MAX_TOKENS
+            )
             finalized = _finalize_provider_reply(
                 reply,
                 provider="anthropic",
@@ -1456,15 +1606,18 @@ async def _chat_try_forced_provider(
         return None
     try:
         from llm.providers import chat_anthropic, chat_openai
+
         provider_name = model_preference
         if model_preference == "openai":
             system_prompt = _load_system_prompt()
-            reply = await chat_openai(model_message, history, system_prompt,
-                                      temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+            reply = await chat_openai(
+                model_message, history, system_prompt, temperature=TEMPERATURE, max_tokens=MAX_TOKENS
+            )
         elif model_preference == "anthropic":
             system_prompt = _load_system_prompt()
-            reply = await chat_anthropic(model_message, history, system_prompt,
-                                         temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+            reply = await chat_anthropic(
+                model_message, history, system_prompt, temperature=TEMPERATURE, max_tokens=MAX_TOKENS
+            )
         else:
             result = await _try_copilot_proxy_reply(
                 model_message=model_message,
@@ -1513,33 +1666,52 @@ async def chat(
       - ``"local"`` — force Ollama/Gemma; error if unavailable
       - ``"gemini"`` — skip everything, go straight to Gemini
     """
-    log.info("LLM chat start model_pref=%s trace=%s msg=%.60s",
-             model_preference, get_trace_id(), user_message)
+    log.info("LLM chat start model_pref=%s trace=%s msg=%.60s", model_preference, get_trace_id(), user_message)
     history, cleaned_user_message, model_message, recalled_context = await _chat_prepare_context(
-        user_message, history, model_preference,
+        user_message,
+        history,
+        model_preference,
     )
 
     web_result = await _chat_try_web_search_route(
-        model_message, cleaned_user_message, history, model_preference, trace,
+        model_message,
+        cleaned_user_message,
+        history,
+        model_preference,
+        trace,
     )
     if web_result is not None:
         return web_result
 
     coding_result = await _chat_try_coding_fast_path(
-        model_message, cleaned_user_message, history, model_preference, recalled_context, trace,
+        model_message,
+        cleaned_user_message,
+        history,
+        model_preference,
+        recalled_context,
+        trace,
     )
     if coding_result is not None:
         return coding_result
 
     auto_result = await _chat_try_auto_routing(
-        model_message, cleaned_user_message, history, model_preference,
-        routing_profile, recalled_context, trace,
+        model_message,
+        cleaned_user_message,
+        history,
+        model_preference,
+        routing_profile,
+        recalled_context,
+        trace,
     )
     if auto_result is not None:
         return auto_result
 
     forced_result = await _chat_try_forced_provider(
-        model_message, cleaned_user_message, history, model_preference, trace,
+        model_message,
+        cleaned_user_message,
+        history,
+        model_preference,
+        trace,
     )
     if forced_result is not None:
         return forced_result
@@ -1578,8 +1750,12 @@ async def chat(
         model_message = _apply_route_hints(model_message, route_info)
         try:
             text, updated_history, model_name = await _gemini_chat(
-                model_message, history, model,
-                on_tool_call=on_tool_call, parallel_tools=True, label="LLM",
+                model_message,
+                history,
+                model,
+                on_tool_call=on_tool_call,
+                parallel_tools=True,
+                label="LLM",
             )
         except Exception as exc:  # broad: intentional
             log.warning("Gemini failed in forced mode (%s), trying local fallback: %s", type(exc).__name__, exc)
@@ -1637,6 +1813,7 @@ async def chat(
     try:
         from answer_policy import is_low_quality, record_quality_retry
         from llm.providers import COPILOT_PROXY_ENABLED
+
         if is_low_quality(text) and COPILOT_PROXY_ENABLED:
             log.info("Quality retry gate triggered — Gemini reply too short/vague, trying Copilot")
             record_quality_retry()
@@ -1666,6 +1843,7 @@ def is_configured() -> bool:
     deployments are not incorrectly blocked with "LLM not configured".
     """
     from llm.providers import COPILOT_PROXY_ENABLED  # local import avoids circular deps
+
     return bool(GOOGLE_API_KEY) or LOCAL_LLM_ENABLED or COPILOT_PROXY_ENABLED
 
 

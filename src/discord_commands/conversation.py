@@ -55,6 +55,7 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
             "cost-saver": "💰 Cost-saver",
         }
         from config import cfg
+
         system_profile = cfg.routing_profile or "copilot-first"
         profile_display = (
             f"{profile_labels.get(user_profile, user_profile)} *(your override)*"
@@ -72,12 +73,14 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
         )
         try:
             from llm.providers import COPILOT_PROXY_ENABLED
+
             proxy_status = "🟢 Enabled" if COPILOT_PROXY_ENABLED else "🔴 Disabled"
             embed.add_field(name="Copilot Proxy", value=proxy_status, inline=False)
         except (ImportError, AttributeError) as exc:
             log.debug("Copilot proxy status check failed: %s", exc)
         try:
             from llm import LOCAL_LLM_ENABLED, OLLAMA_MODEL, _ollama_available
+
             ollama_up = await _ollama_available() if LOCAL_LLM_ENABLED else False
             status = f"{'🟢' if ollama_up else '🔴'} Ollama ({OLLAMA_MODEL}): {'online' if ollama_up else 'offline'}"
             if not LOCAL_LLM_ENABLED:
@@ -89,14 +92,16 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
 
     @model_group.command(name="set", description="Set your default LLM routing preference")
     @app_commands.describe(preference="Which model to use by default")
-    @app_commands.choices(preference=[
-        app_commands.Choice(name="🔄 Auto — follow active routing profile", value="auto"),
-        app_commands.Choice(name="🏠 Local — Gemma/Ollama (free, no tools)", value="local"),
-        app_commands.Choice(name="☁️ Gemini — cloud (tools, best quality)", value="gemini"),
-        app_commands.Choice(name="🟢 OpenAI — GPT-4o via Copilot", value="openai"),
-        app_commands.Choice(name="🟣 Anthropic — Claude via Copilot", value="anthropic"),
-        app_commands.Choice(name="🟦 Copilot — enterprise proxy", value="copilot"),
-    ])
+    @app_commands.choices(
+        preference=[
+            app_commands.Choice(name="🔄 Auto — follow active routing profile", value="auto"),
+            app_commands.Choice(name="🏠 Local — Gemma/Ollama (free, no tools)", value="local"),
+            app_commands.Choice(name="☁️ Gemini — cloud (tools, best quality)", value="gemini"),
+            app_commands.Choice(name="🟢 OpenAI — GPT-4o via Copilot", value="openai"),
+            app_commands.Choice(name="🟣 Anthropic — Claude via Copilot", value="anthropic"),
+            app_commands.Choice(name="🟦 Copilot — enterprise proxy", value="copilot"),
+        ]
+    )
     @require_auth
     async def model_set_cmd(interaction: discord.Interaction, preference: app_commands.Choice[str]):
         result = set_model_preference(interaction.user.id, preference.value)
@@ -121,6 +126,7 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
     async def profile_show_cmd(interaction: discord.Interaction):
         user_profile = get_routing_profile(interaction.user.id)
         from config import cfg
+
         system_profile = cfg.routing_profile or "copilot-first"
         profile_labels = {
             "copilot-first": "🟦 Copilot-first — Copilot for non-tool asks, Gemini for tools",
@@ -147,12 +153,16 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
 
     @profile_group.command(name="set", description="Set your auto-routing profile")
     @app_commands.describe(profile="How OpenClaw should route non-tool asks in auto mode")
-    @app_commands.choices(profile=[
-        app_commands.Choice(name="🟦 Copilot-first — Copilot for non-tool asks, Gemini for tools", value="copilot-first"),
-        app_commands.Choice(name="⚖️ Balanced — best provider per query type", value="balanced"),
-        app_commands.Choice(name="☁️ Gemini-first — Gemini preferred for everything", value="gemini-first"),
-        app_commands.Choice(name="💰 Cost-saver — local Ollama first, Gemini only when needed", value="cost-saver"),
-    ])
+    @app_commands.choices(
+        profile=[
+            app_commands.Choice(
+                name="🟦 Copilot-first — Copilot for non-tool asks, Gemini for tools", value="copilot-first"
+            ),
+            app_commands.Choice(name="⚖️ Balanced — best provider per query type", value="balanced"),
+            app_commands.Choice(name="☁️ Gemini-first — Gemini preferred for everything", value="gemini-first"),
+            app_commands.Choice(name="💰 Cost-saver — local Ollama first, Gemini only when needed", value="cost-saver"),
+        ]
+    )
     @require_auth
     async def profile_set_cmd(interaction: discord.Interaction, profile: app_commands.Choice[str]):
         result = set_routing_profile(interaction.user.id, profile.value)
@@ -171,7 +181,9 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
     # /save, /resume, /threads, /threads-search, /forget
     # ------------------------------------------------------------------
 
-    @bot.tree.command(name="save", description="Save the current conversation as a named thread (persists across restarts)")
+    @bot.tree.command(
+        name="save", description="Save the current conversation as a named thread (persists across restarts)"
+    )
     @app_commands.describe(name="A short name for this thread, e.g. 'media-research' (letters, digits, - or _)")
     @require_auth
     async def save_cmd(interaction: discord.Interaction, name: str):
@@ -213,6 +225,7 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
 
         try:
             from thread_store import search_threads as sqlite_search
+
             db_results = await sqlite_search(interaction.user.id, query, limit=10)
         except (OSError, ValueError) as e:
             log.debug("SQLite thread search failed: %s", e)
@@ -221,6 +234,7 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
         semantic_lines = []
         try:
             import vector_store
+
             scoped_channel_id = interaction.channel_id
             scoped_thread_id = None
             if isinstance(interaction.channel, discord.Thread):
@@ -249,6 +263,7 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
             lines.append("**Keyword matches:**")
             for t in db_results:
                 import time as _t
+
                 name = t.get("name") or t.get("title") or f"thread-{t['id']}"
                 msgs = t.get("message_count", 0)
                 updated = _t.strftime("%Y-%m-%d", _t.localtime(t.get("updated_at", 0)))

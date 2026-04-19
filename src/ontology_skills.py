@@ -20,10 +20,7 @@ _ONTOLOGY_TIMEOUT = 20
 
 
 def _missing_skill_message() -> str:
-    return (
-        "❌ Ontology skill is not installed. Run: "
-        "npx clawhub@latest install ontology"
-    )
+    return "❌ Ontology skill is not installed. Run: npx clawhub@latest install ontology"
 
 
 def _safe_json_loads(text: str, context: str = "ontology"):
@@ -50,11 +47,7 @@ async def _run_ontology(args: list[str]) -> tuple[int, str, str]:
 def _entity_label(entity: dict) -> str:
     props = entity.get("properties", {})
     summary = (
-        props.get("name")
-        or props.get("title")
-        or props.get("description")
-        or props.get("content")
-        or "(no label)"
+        props.get("name") or props.get("title") or props.get("description") or props.get("content") or "(no label)"
     )
     return f"{entity.get('id', '?')} [{entity.get('type', '?')}] {summary}"
 
@@ -97,9 +90,12 @@ async def ontology_create_entity(entity_type: str, properties_json: str, entity_
 
     args = [
         "create",
-        "--type", entity_type,
-        "--props", props,
-        "--graph", _GRAPH_PATH,
+        "--type",
+        entity_type,
+        "--props",
+        props,
+        "--graph",
+        _GRAPH_PATH,
     ]
     if entity_id.strip():
         args.extend(["--id", entity_id.strip()])
@@ -115,6 +111,7 @@ async def ontology_create_entity(entity_type: str, properties_json: str, entity_
     # Embed entity into vector store for semantic recall
     try:
         import vector_store
+
         label = _entity_label(entity)
         entity_vid = entity.get("id", entity_type)
         await vector_store.add_memory(
@@ -130,11 +127,15 @@ async def ontology_create_entity(entity_type: str, properties_json: str, entity_
 
 async def ontology_get_entity(entity_id: str) -> str:
     """Fetch a single ontology entity by ID."""
-    rc, out, err = await _run_ontology([
-        "get",
-        "--id", entity_id,
-        "--graph", _GRAPH_PATH,
-    ])
+    rc, out, err = await _run_ontology(
+        [
+            "get",
+            "--id",
+            entity_id,
+            "--graph",
+            _GRAPH_PATH,
+        ]
+    )
     if rc != 0:
         return f"❌ Failed to get ontology entity: {err.strip() or out.strip()}"
     if out.strip().startswith("Entity not found"):
@@ -174,12 +175,17 @@ async def ontology_update_entity(entity_id: str, properties_json: str) -> str:
     except json.JSONDecodeError as exc:
         return f"❌ Invalid properties_json: {exc}"
 
-    rc, out, err = await _run_ontology([
-        "update",
-        "--id", entity_id,
-        "--props", props,
-        "--graph", _GRAPH_PATH,
-    ])
+    rc, out, err = await _run_ontology(
+        [
+            "update",
+            "--id",
+            entity_id,
+            "--props",
+            props,
+            "--graph",
+            _GRAPH_PATH,
+        ]
+    )
     if rc != 0:
         return f"❌ Failed to update ontology entity: {err.strip() or out.strip()}"
     if out.strip().startswith("Entity not found"):
@@ -197,31 +203,39 @@ async def ontology_relate(from_id: str, relation: str, to_id: str, properties_js
     except json.JSONDecodeError as exc:
         return f"❌ Invalid properties_json: {exc}"
 
-    rc, out, err = await _run_ontology([
-        "relate",
-        "--from", from_id,
-        "--rel", relation,
-        "--to", to_id,
-        "--props", props,
-        "--graph", _GRAPH_PATH,
-    ])
+    rc, out, err = await _run_ontology(
+        [
+            "relate",
+            "--from",
+            from_id,
+            "--rel",
+            relation,
+            "--to",
+            to_id,
+            "--props",
+            props,
+            "--graph",
+            _GRAPH_PATH,
+        ]
+    )
     if rc != 0:
         return f"❌ Failed to create ontology relation: {err.strip() or out.strip()}"
     data, err_msg = _safe_json_loads(out)
     if err_msg:
         return err_msg
-    return (
-        f"✅ Created relation: {data.get('from')} -[{data.get('rel')}]-> {data.get('to')}"
-    )
+    return f"✅ Created relation: {data.get('from')} -[{data.get('rel')}]-> {data.get('to')}"
 
 
 async def ontology_get_related(entity_id: str, relation: str = "", direction: str = "both") -> str:
     """Get entities related to a given ontology entity."""
     args = [
         "related",
-        "--id", entity_id,
-        "--dir", direction,
-        "--graph", _GRAPH_PATH,
+        "--id",
+        entity_id,
+        "--dir",
+        direction,
+        "--graph",
+        _GRAPH_PATH,
     ]
     if relation.strip():
         args.extend(["--rel", relation.strip()])
@@ -238,11 +252,15 @@ async def ontology_get_related(entity_id: str, relation: str = "", direction: st
 
 async def ontology_validate() -> str:
     """Validate the ontology graph against the local schema."""
-    rc, out, err = await _run_ontology([
-        "validate",
-        "--graph", _GRAPH_PATH,
-        "--schema", _SCHEMA_PATH,
-    ])
+    rc, out, err = await _run_ontology(
+        [
+            "validate",
+            "--graph",
+            _GRAPH_PATH,
+            "--schema",
+            _SCHEMA_PATH,
+        ]
+    )
     if rc != 0:
         return f"❌ Failed to validate ontology graph: {err.strip() or out.strip()}"
     return out.strip() or "Graph is valid."

@@ -172,17 +172,13 @@ class TrendTracker:
                 (timestamp, topic, category, volume, sentiment, sources_str, metadata_str),
             )
             db.commit()
-            log.debug(
-                "Tracked: %s/%s vol=%d sent=%.2f", category, topic, volume, sentiment
-            )
+            log.debug("Tracked: %s/%s vol=%d sent=%.2f", category, topic, volume, sentiment)
             return True
         except Exception as e:  # broad: intentional — DB ops can raise sqlite3.Error or RuntimeError from mocks
             log.error("Failed to track entity %s: %s", topic, e)
             return False
 
-    def get_trend(
-        self, topic: str, category: str = "", hours: int = 24
-    ) -> list[DataPoint]:
+    def get_trend(self, topic: str, category: str = "", hours: int = 24) -> list[DataPoint]:
         """
         Get historical data points for a topic.
 
@@ -234,9 +230,7 @@ class TrendTracker:
 
         return points
 
-    def detect_anomalies(
-        self, topic: str, category: str = "", window_hours: int = 168
-    ) -> list[tuple[float, str]]:
+    def detect_anomalies(self, topic: str, category: str = "", window_hours: int = 168) -> list[tuple[float, str]]:
         """
         Detect anomalies using z-score analysis.
 
@@ -269,9 +263,7 @@ class TrendTracker:
             if vol_stdev > 0:
                 vol_z = abs((point.volume - vol_mean) / vol_stdev)
                 if vol_z >= Z_SCORE_ANOMALY:
-                    anomalies.append(
-                        (point.timestamp, f"Volume spike: {point.volume} (z={vol_z:.1f})")
-                    )
+                    anomalies.append((point.timestamp, f"Volume spike: {point.volume} (z={vol_z:.1f})"))
 
             # Sentiment anomaly
             if sent_stdev > 0:
@@ -286,9 +278,7 @@ class TrendTracker:
 
         return anomalies
 
-    def is_trending(
-        self, topic: str, category: str = "", min_volume: int = 5
-    ) -> TrendAnalysis:
+    def is_trending(self, topic: str, category: str = "", min_volume: int = 5) -> TrendAnalysis:
         """
         Determine if a topic is trending with detailed analysis.
 
@@ -334,11 +324,7 @@ class TrendTracker:
         avg_volume_30d = statistics.mean([p.volume for p in points_30d]) if points_30d else avg_volume_7d
 
         # Volume change
-        volume_change_pct = (
-            ((current_volume - avg_volume_7d) / avg_volume_7d * 100)
-            if avg_volume_7d > 0
-            else 0
-        )
+        volume_change_pct = ((current_volume - avg_volume_7d) / avg_volume_7d * 100) if avg_volume_7d > 0 else 0
 
         # Sentiment change
         if len(points_24h) >= 2:
@@ -351,19 +337,9 @@ class TrendTracker:
         velocity = 0.0
         if len(points_7d) >= 2:
             # Compare recent growth rate to historical growth rate
-            recent_growth = (
-                (avg_volume_24h - avg_volume_7d) / avg_volume_7d
-                if avg_volume_7d > 0
-                else 0
-            )
-            historical_growth = (
-                (avg_volume_7d - avg_volume_30d) / avg_volume_30d
-                if avg_volume_30d > 0
-                else 0
-            )
-            velocity = (
-                recent_growth / historical_growth if historical_growth != 0 else 0
-            )
+            recent_growth = (avg_volume_24h - avg_volume_7d) / avg_volume_7d if avg_volume_7d > 0 else 0
+            historical_growth = (avg_volume_7d - avg_volume_30d) / avg_volume_30d if avg_volume_30d > 0 else 0
+            velocity = recent_growth / historical_growth if historical_growth != 0 else 0
 
         # Detection flags
         is_spike = current_volume >= avg_volume_7d * SPIKE_THRESHOLD and current_volume >= min_volume
@@ -386,9 +362,7 @@ class TrendTracker:
         if len(points_7d) > 1:
             vol_mean = statistics.mean([p.volume for p in points_7d])
             vol_stdev = statistics.stdev([p.volume for p in points_7d])
-            z_score = (
-                (current_volume - vol_mean) / vol_stdev if vol_stdev > 0 else 0
-            )
+            z_score = (current_volume - vol_mean) / vol_stdev if vol_stdev > 0 else 0
         else:
             z_score = 0
 
@@ -423,9 +397,7 @@ class TrendTracker:
             sources=list(all_sources),
         )
 
-    def get_trending_topics(
-        self, category: str = "", hours: int = 24, limit: int = 10
-    ) -> list[TrendAnalysis]:
+    def get_trending_topics(self, category: str = "", hours: int = 24, limit: int = 10) -> list[TrendAnalysis]:
         """
         Get top trending topics across all tracked entities.
 
@@ -468,9 +440,7 @@ class TrendTracker:
                 analyses.append(analysis)
 
         # Sort by trending score (combination of volume change and velocity)
-        analyses.sort(
-            key=lambda a: (a.volume_change_pct * (1 + a.velocity)), reverse=True
-        )
+        analyses.sort(key=lambda a: a.volume_change_pct * (1 + a.velocity), reverse=True)
 
         return analyses[:limit]
 
@@ -567,9 +537,7 @@ class TrendTracker:
         """
         db = self._get_db()
         if enabled_only:
-            cursor = db.execute(
-                "SELECT * FROM trend_config WHERE enabled = 1 ORDER BY created_at DESC"
-            )
+            cursor = db.execute("SELECT * FROM trend_config WHERE enabled = 1 ORDER BY created_at DESC")
         else:
             cursor = db.execute("SELECT * FROM trend_config ORDER BY created_at DESC")
 
@@ -591,9 +559,7 @@ class TrendTracker:
             True if alert is allowed
         """
         db = self._get_db()
-        cursor = db.execute(
-            "SELECT last_alert FROM trend_config WHERE topic = ?", (topic,)
-        )
+        cursor = db.execute("SELECT last_alert FROM trend_config WHERE topic = ?", (topic,))
         row = cursor.fetchone()
 
         if not row:

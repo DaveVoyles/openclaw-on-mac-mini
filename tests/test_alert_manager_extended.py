@@ -1,4 +1,5 @@
 """Extended tests for alert_manager.py — Discord trend alerting."""
+
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -19,6 +20,7 @@ from trend_tracker import TrendAnalysis
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_analysis(**overrides) -> TrendAnalysis:
     defaults = dict(
@@ -46,6 +48,7 @@ def make_analysis(**overrides) -> TrendAnalysis:
 # ---------------------------------------------------------------------------
 # should_route_bounded_alert — extra scenarios
 # ---------------------------------------------------------------------------
+
 
 def test_bounded_alert_different_fingerprint_still_rate_limited():
     reset_bounded_alert_cache()
@@ -87,6 +90,7 @@ def test_bounded_alert_updates_cache_on_route():
 # ---------------------------------------------------------------------------
 # format_trend_alert
 # ---------------------------------------------------------------------------
+
 
 def test_format_trend_alert_returns_embed():
     analysis = make_analysis()
@@ -212,6 +216,7 @@ def test_format_trend_alert_sentiment_change_shown():
 # format_text_alert
 # ---------------------------------------------------------------------------
 
+
 def test_format_text_alert_basic():
     text = format_text_alert(make_analysis(), "TRENDING")
     assert "🚨 TRENDING ALERT" in text
@@ -286,6 +291,7 @@ def test_format_text_alert_spike_type():
 # send_trend_alert
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_send_trend_alert_rate_limited():
     mock_tracker = MagicMock()
@@ -347,6 +353,7 @@ async def test_send_trend_alert_uses_custom_cooldown():
 # ---------------------------------------------------------------------------
 # check_and_alert_all
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_check_and_alert_all_empty_trending():
@@ -432,6 +439,7 @@ async def test_check_and_alert_all_with_category_filter():
 # render_text_chart
 # ---------------------------------------------------------------------------
 
+
 def test_render_text_chart_no_data():
     mock_tracker = MagicMock()
     mock_tracker.get_trend.return_value = []
@@ -443,6 +451,7 @@ def test_render_text_chart_no_data():
 
 def test_render_text_chart_with_data():
     from trend_tracker import DataPoint
+
     now = time.time()
     points = [
         DataPoint(
@@ -466,6 +475,7 @@ def test_render_text_chart_with_data():
 
 def test_render_text_chart_with_category_and_width():
     from trend_tracker import DataPoint
+
     now = time.time()
     points = [
         DataPoint(
@@ -484,9 +494,9 @@ def test_render_text_chart_with_category_and_width():
     assert "Ethereum" in result
     assert "Avg:" in result
 
+
 # --- Merged from test_alert_manager.py ---
 """Tests for bounded alert routing helpers."""
-
 
 
 def test_bounded_alert_deduplicates_within_cooldown():
@@ -527,4 +537,3 @@ def test_bounded_alert_allows_after_cooldown():
 
     assert allowed is True
     assert reason == "routed"
-

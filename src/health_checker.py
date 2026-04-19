@@ -169,6 +169,7 @@ class HealthChecker:
                     elif "memory" in name.lower():
                         actions.append("Triggered garbage collection")
                         import gc
+
                         gc.collect()
                 except Exception as e:  # broad: intentional
                     logger.error(f"Failed to heal {name}: {e}")
@@ -178,6 +179,7 @@ class HealthChecker:
 
 
 # Built-in health checks
+
 
 async def check_disk_space(threshold_percent: float = 90.0) -> HealthCheckResult:
     """Check disk space availability."""
@@ -282,9 +284,7 @@ async def check_database(db_path: Path = Path("data/conversations.db")) -> Healt
         )
 
 
-async def check_api_endpoint(
-    name: str, url: str, timeout: float = 5.0
-) -> HealthCheckResult:
+async def check_api_endpoint(name: str, url: str, timeout: float = 5.0) -> HealthCheckResult:
     """Check if an API endpoint is reachable."""
     try:
         async with aiohttp.ClientSession() as session:

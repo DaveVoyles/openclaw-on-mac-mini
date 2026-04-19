@@ -184,5 +184,6 @@ class TestPluginPermissionRegistry:
         # Even a DM interaction should be allowed for a PUBLIC plugin
         interaction = _make_interaction(guild=None)
         from permissions import check_plugin_permission
+
         assert check_plugin_permission("dm-plugin", interaction) is True
         mod._PLUGIN_PERMISSIONS.pop("dm-plugin", None)

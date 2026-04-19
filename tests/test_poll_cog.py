@@ -1,4 +1,5 @@
 """Tests for cogs/poll_cog.py."""
+
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -59,12 +60,14 @@ def _make_cog():
 
 # ── __init__ ──────────────────────────────────────────────────────────────────
 
+
 def test_poll_cog_init():
     cog = _make_cog()
     assert cog.bot is not None
 
 
 # ── poll_cmd ──────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_poll_cmd_too_few_options():
@@ -100,7 +103,8 @@ async def test_poll_cmd_success():
     mock_task = MagicMock()
     with patch("asyncio.create_task", return_value=mock_task) as mock_create_task:
         await cog.poll_cmd.callback(
-            cog, inter,
+            cog,
+            inter,
             question="Best food?",
             options="Pizza, Tacos, Sushi",
             duration=60,
@@ -124,7 +128,8 @@ async def test_poll_cmd_two_options():
 
     with patch("asyncio.create_task"):
         await cog.poll_cmd.callback(
-            cog, inter,
+            cog,
+            inter,
             question="Yes or No?",
             options="Yes, No",
         )
@@ -144,8 +149,6 @@ async def test_poll_cmd_exactly_ten_options():
 
     options = ",".join([f"Option {i}" for i in range(10)])
     with patch("asyncio.create_task"):
-        await cog.poll_cmd.callback(
-            cog, inter, question="Pick one?", options=options
-        )
+        await cog.poll_cmd.callback(cog, inter, question="Pick one?", options=options)
 
     assert fake_msg.add_reaction.await_count == 10

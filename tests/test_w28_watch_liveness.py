@@ -15,6 +15,7 @@ Covers:
 - /watch bell (no arg) via _cmd_watch shows current state
 - Unknown bell arg prints usage message
 """
+
 from __future__ import annotations
 
 import sys
@@ -135,6 +136,7 @@ class TestRenderWatchIterationCounter:
         )
         out = capsys.readouterr().out
         import json
+
         payload = json.loads(out)
         # JSON payload should have iteration as int, not formatted string
         assert payload["iteration"] == 3
@@ -357,6 +359,7 @@ class TestCmdWatchBellDispatch:
 
     def _make_ctx(self, args: str) -> MagicMock:
         from openclaw_cli_types import ChatCommandContext
+
         return ChatCommandContext(history=[], session_id="sess-w28", args=args)
 
     def _mock_cli_mod(self) -> MagicMock:
@@ -368,6 +371,7 @@ class TestCmdWatchBellDispatch:
 
     def test_watch_bell_on_via_cmd_watch(self, capsys):
         import openclaw_cli_cmd_workflow as wf
+
         prefs = {}
         ctx = self._make_ctx("bell on")
         with (
@@ -382,6 +386,7 @@ class TestCmdWatchBellDispatch:
 
     def test_watch_bell_off_via_cmd_watch(self, capsys):
         import openclaw_cli_cmd_workflow as wf
+
         prefs = {"watch_bell": True}
         ctx = self._make_ctx("bell off")
         with (
@@ -396,6 +401,7 @@ class TestCmdWatchBellDispatch:
 
     def test_watch_bell_no_arg_via_cmd_watch(self, capsys):
         import openclaw_cli_cmd_workflow as wf
+
         prefs = {"watch_bell": True}
         ctx = self._make_ctx("bell")
         with (

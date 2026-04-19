@@ -15,6 +15,7 @@ Usage in any skill module:
 
 On bot shutdown, call ``close_all()`` to tear down every managed session.
 """
+
 from __future__ import annotations
 
 import logging
@@ -58,11 +59,7 @@ class SessionManager:
     async def get(self) -> aiohttp.ClientSession:
         """Return the shared session, creating it lazily if needed."""
         if self._session is None or self._session.closed:
-            connector = (
-                aiohttp.TCPConnector(**self._connector_kwargs)
-                if self._connector_kwargs
-                else None
-            )
+            connector = aiohttp.TCPConnector(**self._connector_kwargs) if self._connector_kwargs else None
             self._session = aiohttp.ClientSession(
                 timeout=self._timeout,
                 connector=connector,

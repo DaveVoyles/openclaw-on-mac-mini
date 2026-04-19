@@ -54,9 +54,11 @@ async def test_check_readiness_not_ready(checker):
 @pytest.mark.asyncio
 async def test_check_readiness_ready(checker):
     """Test readiness check when ready."""
+
     # Register a simple check
     async def simple_check():
         from health_checker import HealthCheckResult, HealthStatus
+
         return HealthCheckResult("simple", HealthStatus.HEALTHY, "OK")
 
     checker.register_check("simple", simple_check)
@@ -82,6 +84,7 @@ async def test_check_startup(checker):
 
 def test_register_check(checker):
     """Test registering a custom check."""
+
     async def custom_check():
         return HealthCheckResult(
             name="custom",
@@ -96,8 +99,10 @@ def test_register_check(checker):
 @pytest.mark.asyncio
 async def test_readiness_with_custom_check(checker):
     """Test readiness with custom check."""
+
     async def passing_check():
         from health_checker import HealthCheckResult
+
         return HealthCheckResult(
             name="custom_pass",
             status=HealthStatus.HEALTHY,
@@ -106,6 +111,7 @@ async def test_readiness_with_custom_check(checker):
 
     async def failing_check():
         from health_checker import HealthCheckResult
+
         return HealthCheckResult(
             name="custom_fail",
             status=HealthStatus.UNHEALTHY,
@@ -137,15 +143,11 @@ def test_get_overall_status(checker):
     assert checker.get_overall_status() == HealthStatus.HEALTHY
 
     # One degraded
-    checker._last_results["check2"] = HealthCheckResult(
-        "check2", HealthStatus.DEGRADED, "Warning"
-    )
+    checker._last_results["check2"] = HealthCheckResult("check2", HealthStatus.DEGRADED, "Warning")
     assert checker.get_overall_status() == HealthStatus.DEGRADED
 
     # One unhealthy
-    checker._last_results["check2"] = HealthCheckResult(
-        "check2", HealthStatus.UNHEALTHY, "Error"
-    )
+    checker._last_results["check2"] = HealthCheckResult("check2", HealthStatus.UNHEALTHY, "Error")
     assert checker.get_overall_status() == HealthStatus.UNHEALTHY
 
 
@@ -272,8 +274,10 @@ async def test_check_api_endpoint_error():
 @pytest.mark.asyncio
 async def test_check_duration_recorded(checker):
     """Test that check duration is recorded."""
+
     async def slow_check():
         from health_checker import HealthCheckResult
+
         await asyncio.sleep(0.1)
         return HealthCheckResult("slow", HealthStatus.HEALTHY, "OK")
 
@@ -290,6 +294,7 @@ async def test_check_duration_recorded(checker):
 @pytest.mark.asyncio
 async def test_check_error_handling(checker):
     """Test that check errors are handled gracefully."""
+
     async def failing_check():
         raise ValueError("Check failed!")
 

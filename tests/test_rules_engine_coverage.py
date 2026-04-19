@@ -18,6 +18,7 @@ from rules_engine import detect_correction
 # detect_correction — pure function
 # ---------------------------------------------------------------------------
 
+
 class TestDetectCorrection:
     def test_empty_string_returns_false(self):
         assert detect_correction("") is False
@@ -75,6 +76,7 @@ class TestDetectCorrection:
 # _load_rules / _save_rules (async)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_load_rules_returns_empty_when_file_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "RULES_FILE", tmp_path / "rules.json")
@@ -103,6 +105,7 @@ async def test_load_rules_handles_corrupt_json(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # add_rule (async) — with mocked ChromaDB
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_add_rule_persists_to_file(tmp_path, monkeypatch):
@@ -143,6 +146,7 @@ async def test_add_rule_chromadb_failure_ignored(tmp_path, monkeypatch):
 # get_all_rules (async)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_rules_engine_coverage_get_all_rules_returns_list(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "RULES_FILE", tmp_path / "rules.json")
@@ -157,6 +161,7 @@ async def test_rules_engine_coverage_get_all_rules_returns_list(tmp_path, monkey
 # ---------------------------------------------------------------------------
 # delete_rule (async)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_delete_rule_removes_from_file(tmp_path, monkeypatch):
@@ -195,6 +200,7 @@ async def test_delete_rule_chromadb_failure_still_succeeds(tmp_path, monkeypatch
 # get_relevant_rules (async)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_relevant_rules_uses_vector_store(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "RULES_FILE", tmp_path / "rules.json")
@@ -221,6 +227,7 @@ async def test_get_relevant_rules_falls_back_to_json(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # extract_rule (async)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_extract_rule_calls_llm_and_returns_rule(monkeypatch):

@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_ui_core.py — terminal detection and ANSI palette."""
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -9,6 +10,7 @@ from openclaw_cli_ui_core import _c, _get_is_tty
 # ---------------------------------------------------------------------------
 # _c() — ANSI code gating
 # ---------------------------------------------------------------------------
+
 
 class TestAnsiGating:
     def test_c_returns_code_when_tty(self):
@@ -29,6 +31,7 @@ class TestAnsiGating:
 # ---------------------------------------------------------------------------
 # _get_is_tty()
 # ---------------------------------------------------------------------------
+
 
 class TestGetIsTty:
     def test_openclaw_cli_ui_core_unit_returns_bool(self):
@@ -57,6 +60,7 @@ class TestGetIsTty:
 # ANSI palette constants exist and are strings
 # ---------------------------------------------------------------------------
 
+
 class TestAnsiConstants:
     def _attr(self, name):
         return getattr(ui_core, name)
@@ -83,8 +87,23 @@ class TestAnsiConstants:
             assert isinstance(self._attr(name), str), f"{name} should be str"
 
     def test_all_constants_present(self):
-        expected = {"_R", "_B", "_DM", "_CY", "_GR", "_YE", "_RE", "_MA",
-                    "_BCY", "_BGR", "_BYE", "_BRE", "_BBL", "_IT", "_UL"}
+        expected = {
+            "_R",
+            "_B",
+            "_DM",
+            "_CY",
+            "_GR",
+            "_YE",
+            "_RE",
+            "_MA",
+            "_BCY",
+            "_BGR",
+            "_BYE",
+            "_BRE",
+            "_BBL",
+            "_IT",
+            "_UL",
+        }
         for name in expected:
             assert hasattr(ui_core, name), f"Missing constant {name}"
 

@@ -90,6 +90,7 @@ _LAZY_EXPORTS: dict[str, str] = {
 def __getattr__(name: str):
     if name in _LAZY_EXPORTS:
         import importlib
+
         module = importlib.import_module(_LAZY_EXPORTS[name])
         value = getattr(module, name)
         globals()[name] = value  # cache so subsequent lookups skip __getattr__
@@ -105,7 +106,10 @@ def is_configured() -> bool:
     are not incorrectly blocked.
     """
     from llm.providers import COPILOT_PROXY_ENABLED  # local import avoids circular deps
+
     return bool(GOOGLE_API_KEY) or LOCAL_LLM_ENABLED or COPILOT_PROXY_ENABLED
+
+
 from .context import (  # noqa: F401
     _CONTEXT_LIMITS,
     _auto_recall_context,

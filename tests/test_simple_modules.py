@@ -1,4 +1,5 @@
 """Tests for json_utils, nlp_entities, skills_facade, todo_manager."""
+
 import os
 
 os.environ.setdefault("LOG_DIR", "/tmp")
@@ -124,7 +125,7 @@ class TestRepairJson:
         assert result == {"a": 1}
 
     def test_trailing_comma_array(self):
-        result = repair_json('[1, 2, 3,]')
+        result = repair_json("[1, 2, 3,]")
         assert result == [1, 2, 3]
 
     def test_single_quotes(self):
@@ -136,7 +137,7 @@ class TestRepairJson:
         assert result == {"a": 1}
 
     def test_missing_closing_bracket(self):
-        result = repair_json('[1, 2, 3')
+        result = repair_json("[1, 2, 3")
         assert result == [1, 2, 3]
 
     def test_line_comment_removal(self):
@@ -511,6 +512,7 @@ class TestTodoManagerList:
 
     def test_list_filter_today(self, mgr):
         from datetime import datetime, timezone
+
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         item = mgr.add("Today task", user_id=1, due_date=today)
         items = mgr.list_for_user(1, filter_="today")

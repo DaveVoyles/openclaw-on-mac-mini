@@ -29,8 +29,13 @@ def _parse_due(raw: str | None) -> str | None:
     if low == "tomorrow":
         return (today + timedelta(days=1)).isoformat()
     weekdays = {
-        "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
-        "friday": 4, "saturday": 5, "sunday": 6,
+        "monday": 0,
+        "tuesday": 1,
+        "wednesday": 2,
+        "thursday": 3,
+        "friday": 4,
+        "saturday": 5,
+        "sunday": 6,
     }
     if low in weekdays:
         target = weekdays[low]

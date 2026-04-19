@@ -23,9 +23,7 @@ log = logging.getLogger(__name__)
 from config import cfg as _cfg
 from http_session import SessionManager
 
-UPTIME_KUMA_URL = os.getenv(
-    "UPTIME_KUMA_URL", f"http://{_cfg.docker_host_ip}:3001"
-)
+UPTIME_KUMA_URL = os.getenv("UPTIME_KUMA_URL", f"http://{_cfg.docker_host_ip}:3001")
 UPTIME_KUMA_USER = os.getenv("UPTIME_KUMA_USER", "dave")
 UPTIME_KUMA_PASS = os.getenv("UPTIME_KUMA_PASS", "")
 
@@ -40,6 +38,7 @@ _STATUS_SLUG = os.getenv("UPTIME_KUMA_STATUS_SLUG", "main")
 # ---------------------------------------------------------------------------
 # Helpers — use the public status-page JSON API (no auth needed)
 # ---------------------------------------------------------------------------
+
 
 async def _fetch_status_page() -> dict:
     """Fetch the public status page heartbeat data."""
@@ -72,6 +71,7 @@ def _status_text(status: int) -> str:
 # ---------------------------------------------------------------------------
 # Skills
 # ---------------------------------------------------------------------------
+
 
 async def get_all_monitor_status() -> str:
     """
@@ -109,8 +109,7 @@ async def get_all_monitor_status() -> str:
         else:
             down_count += 1
             msg = latest.get("msg", "")
-            lines.append(f"{emoji} **{name}** — {_status_text(status)}"
-                         + (f" ({msg[:80]})" if msg else ""))
+            lines.append(f"{emoji} **{name}** — {_status_text(status)}" + (f" ({msg[:80]})" if msg else ""))
 
     lines.insert(1, f"🟢 {up_count} up · 🔴 {down_count} down\n")
     return "\n".join(lines)[:1900]
@@ -147,8 +146,7 @@ async def get_monitor_detail(name: str) -> str:
         for beats in heartbeat_list.values():
             if beats:
                 available.append(beats[-1].get("name", "?"))
-        return (f"⚠️ No monitor matching '{name}'. "
-                f"Available: {', '.join(sorted(available))}")
+        return f"⚠️ No monitor matching '{name}'. Available: {', '.join(sorted(available))}"
 
     latest = match_beats[-1]
     monitor_name = latest.get("name", name)
@@ -199,8 +197,7 @@ async def get_monitors_down() -> str:
         if latest.get("status") != 1:
             name = latest.get("name", f"Monitor {monitor_id}")
             msg = latest.get("msg", "")
-            down.append(f"🔴 **{name}** — {_status_text(latest.get('status', -1))}"
-                        + (f": {msg[:100]}" if msg else ""))
+            down.append(f"🔴 **{name}** — {_status_text(latest.get('status', -1))}" + (f": {msg[:100]}" if msg else ""))
 
     if not down:
         total = sum(1 for beats in heartbeat_list.values() if beats)
@@ -232,10 +229,7 @@ async def get_uptime_summary() -> str:
         total = len(beats)
         up = sum(1 for b in beats if b.get("status") == 1)
         pct = round(up / total * 100, 1) if total > 0 else 0
-        avg_ping = round(
-            sum(b.get("ping", 0) or 0 for b in beats if b.get("status") == 1)
-            / max(up, 1)
-        )
+        avg_ping = round(sum(b.get("ping", 0) or 0 for b in beats if b.get("status") == 1) / max(up, 1))
         stats.append((name, pct, avg_ping, total))
 
     if not stats:

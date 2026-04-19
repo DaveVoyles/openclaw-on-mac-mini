@@ -146,6 +146,7 @@ async def add_document(
     await loop.run_in_executor(None, _upsert)
 
     from vector_store_compaction import _compact_scope_if_needed  # lazy — avoids circular dep
+
     await _compact_scope_if_needed(
         collection_name=collection_name,
         channel_id=resolved_channel_id,
@@ -219,13 +220,15 @@ async def search(
                     pass
             if similarity < threshold:
                 continue
-            output.append({
-                "id": doc_id,
-                "text": results["documents"][0][i] if results.get("documents") else "",
-                "metadata": meta,
-                "distance": distance,
-                "similarity": round(similarity, 3),
-            })
+            output.append(
+                {
+                    "id": doc_id,
+                    "text": results["documents"][0][i] if results.get("documents") else "",
+                    "metadata": meta,
+                    "distance": distance,
+                    "similarity": round(similarity, 3),
+                }
+            )
 
         return output[:top_k]
 
@@ -249,18 +252,13 @@ async def search(
         if track_access:
             try:
                 from vector_store_compaction import bump_access  # lazy — avoids circular dep
-                asyncio.get_running_loop().create_task(
-                    bump_access(collection_name, [r["id"] for r in output])
-                )
+
+                asyncio.get_running_loop().create_task(bump_access(collection_name, [r["id"] for r in output]))
             except (AttributeError, OSError, RuntimeError) as exc:
                 log.debug("Access tracking dispatch failed: %s", exc)
         return output
 
-    if (
-        not resolved_channel_id
-        or not enable_scope_fallback
-        or scoped_where == where
-    ):
+    if not resolved_channel_id or not enable_scope_fallback or scoped_where == where:
         return output
 
     fallback_results = await _query_once(where)
@@ -320,9 +318,8 @@ async def search(
     if track_access and output:
         try:
             from vector_store_compaction import bump_access  # lazy — avoids circular dep
-            asyncio.get_running_loop().create_task(
-                bump_access(collection_name, [r["id"] for r in output])
-            )
+
+            asyncio.get_running_loop().create_task(bump_access(collection_name, [r["id"] for r in output]))
         except (AttributeError, OSError, RuntimeError) as exc:
             log.debug("Access tracking dispatch failed: %s", exc)
 

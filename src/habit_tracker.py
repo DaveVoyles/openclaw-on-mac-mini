@@ -23,9 +23,7 @@ class Habit:
     user_id: str
     frequency: str = "daily"  # "daily" or "weekly"
     checkins: list[str] = field(default_factory=list)  # ISO timestamps
-    created_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class HabitTracker:
@@ -42,9 +40,7 @@ class HabitTracker:
         if self.path.exists():
             try:
                 raw = json.loads(self.path.read_text())
-                self._habits = {
-                    k: Habit(**v) for k, v in raw.items()
-                }
+                self._habits = {k: Habit(**v) for k, v in raw.items()}
             except (json.JSONDecodeError, OSError, TypeError, ValueError, KeyError) as e:
                 log.error("Failed to load habits: %s", e)
                 self._habits = {}
@@ -87,10 +83,7 @@ class HabitTracker:
             return 0
 
         dates = sorted(
-            {
-                datetime.fromisoformat(ts).date()
-                for ts in habit.checkins
-            },
+            {datetime.fromisoformat(ts).date() for ts in habit.checkins},
             reverse=True,
         )
         today = datetime.now(timezone.utc).date()

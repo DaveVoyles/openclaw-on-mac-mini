@@ -5,6 +5,7 @@ Handlers: _cmd_collab, _cmd_search, _cmd_outputs, _cmd_stats (×2),
           _cmd_pattern, _cmd_history, _cmd_pin, _cmd_pins,
           _cmd_quality, _cmd_timeline.
 """
+
 from __future__ import annotations
 
 import re
@@ -76,12 +77,14 @@ OUTPUT_DASHBOARD_EXCERPT_CHARS = 220
 # ---------------------------------------------------------------------------
 def _get_cli_mod():  # type: ignore[return]
     import openclaw_cli as _m
+
     return _m
 
 
 # ---------------------------------------------------------------------------
 # Local helpers (moved from openclaw_cli.py; used only by handlers here)
 # ---------------------------------------------------------------------------
+
 
 def _prefs_set(key: str, value: object) -> None:
     _PREFS[key] = value
@@ -92,6 +95,7 @@ def _relative_time(ts_str: str) -> str:
     """Convert ISO timestamp to relative time string."""
     try:
         import datetime as _dt
+
         ts = _dt.datetime.fromisoformat(ts_str)
         now = _dt.datetime.now(_dt.timezone.utc).replace(tzinfo=None)
         diff = now - ts
@@ -154,6 +158,7 @@ def _print_workflow_preview(name: str, steps: list[str], ctx: ChatCommandContext
 # Handlers
 # ---------------------------------------------------------------------------
 
+
 def _cmd_collab(ctx: ChatCommandContext) -> str:
     """/collab [status|share|note|decision|assign] — collaboration notes, decisions, assignments, and handoff summaries."""
     _cli = _get_cli_mod()
@@ -171,7 +176,9 @@ def _cmd_collab(ctx: ChatCommandContext) -> str:
     remainder = parts[1].strip() if len(parts) > 1 else ""
 
     if sub not in {"note", "decision", "assign"}:
-        _cli._print_error("Usage: /collab [status|share|note [@actor] TEXT|decision [@actor] [#tag] TEXT|assign @actor TEXT]")
+        _cli._print_error(
+            "Usage: /collab [status|share|note [@actor] TEXT|decision [@actor] [#tag] TEXT|assign @actor TEXT]"
+        )
         return _CMD_CONTINUE
 
     actor, tags, text = _parse_collab_entry(remainder)
@@ -257,6 +264,7 @@ def _cmd_search(ctx: ChatCommandContext) -> str:
                 events = load_events(sess.session_id, limit=200)
             except (OSError, ValueError, AttributeError):
                 import logging as _logging
+
                 _logging.getLogger("openclaw_cli").debug("load_events failed for %s", sess.session_id, exc_info=True)
                 continue
             for ev in events:
@@ -305,7 +313,9 @@ def _cmd_search(ctx: ChatCommandContext) -> str:
             else:
                 grid.add_row(kind, highlighted, ts)
         scope = "all sessions" if cross_session else "this session"
-        _RICH_CONSOLE.print(_RichPanel(grid, title=f"[bold]🔍 search results[/] [dim]{scope}[/]", border_style="cyan", padding=(0, 1)))
+        _RICH_CONSOLE.print(
+            _RichPanel(grid, title=f"[bold]🔍 search results[/] [dim]{scope}[/]", border_style="cyan", padding=(0, 1))
+        )
     else:
         scope = "all sessions" if cross_session else "this session"
         print(f"[search results — {scope}]")
@@ -326,7 +336,9 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
     outputs = list_saved_outputs(session.session_id, limit=OUTPUT_LIST_LIMIT)
     if not outputs:
         if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print("[dim]No saved outputs yet.[/]  [dim]Use /write, /research, or /analyze to generate output.[/]")
+            _RICH_CONSOLE.print(
+                "[dim]No saved outputs yet.[/]  [dim]Use /write, /research, or /analyze to generate output.[/]"
+            )
         else:
             print("No saved outputs yet. Use /write, /research, or /analyze to generate output.")
         return _CMD_CONTINUE
@@ -349,6 +361,7 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
     # /outputs promote <index> <name>
     if token_lower.startswith("promote "):
         from pathlib import Path
+
         promote_args = token[8:].strip().split(maxsplit=1)
         if len(promote_args) < 2:
             print(f"{_BRE}error:{_R} Usage: /outputs promote <index> <stable-name>")
@@ -365,6 +378,7 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
         dst = src.parent / new_name
         try:
             import shutil as _shutil
+
             _shutil.copy2(src, dst)
         except OSError as exc:
             print(f"{_BRE}error:{_R} Could not promote: {exc}")
@@ -419,7 +433,7 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
                 *[
                     line
                     for line in str(
-                        (output_previews.get(str(item.get('name') or '').strip()) or {}).get('preview') or ""
+                        (output_previews.get(str(item.get("name") or "").strip()) or {}).get("preview") or ""
                     ).splitlines()
                     if line.strip()
                 ],
@@ -483,8 +497,13 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
             border_style="dim",
         )
         if _RICH_AVAILABLE and _IS_TTY:
-            table = _RichTable(border_style="dim", show_edge=True, pad_edge=True, header_style="bold cyan",
-                               caption=f"[dim]{len(outputs)} output(s)[/]")
+            table = _RichTable(
+                border_style="dim",
+                show_edge=True,
+                pad_edge=True,
+                header_style="bold cyan",
+                caption=f"[dim]{len(outputs)} output(s)[/]",
+            )
             table.add_column("#", style="dim", justify="right", no_wrap=True)
             table.add_column("Filename", style="bold")
             table.add_column("Size", style="cyan", justify="right", no_wrap=True)
@@ -521,7 +540,14 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
         if modified_at:
             subtitle += f"  ·  {modified_at}"
         subtitle += f"[/]{trunc_note}"
-        _RICH_CONSOLE.print(_RichPanel(str(preview.get("preview") or ""), title=f"[bold]{name}[/]  {subtitle}", border_style="dim", padding=(0, 1)))
+        _RICH_CONSOLE.print(
+            _RichPanel(
+                str(preview.get("preview") or ""),
+                title=f"[bold]{name}[/]  {subtitle}",
+                border_style="dim",
+                padding=(0, 1),
+            )
+        )
     else:
         preview_label = f"saved output preview: {name} ({size}"
         if modified_at:
@@ -536,7 +562,9 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
             [
                 "/outputs overlay to jump to another saved artifact" if len(outputs) > 1 else "",
                 "/outputs promote <index> <name> to keep a stable copy",
-                "/context to compare this artifact with current grounding" if session.files or session.plan_id or session.task_id else "",
+                "/context to compare this artifact with current grounding"
+                if session.files or session.plan_id or session.task_id
+                else "",
             ]
         ),
         title="Artifact shortcuts",
@@ -587,7 +615,9 @@ def _cmd_stats(ctx: ChatCommandContext) -> str:
                     short = "…" + short
                 grid.append(f"    {count:>3}×  ", style="dim")
                 grid.append(f"{short}\n", style="cyan")
-        _RICH_CONSOLE.print(_RichPanel(grid, title=f"[bold]{_e('📊', '[stats]')} OpenClaw Stats[/]", border_style="dim", padding=(0, 1)))
+        _RICH_CONSOLE.print(
+            _RichPanel(grid, title=f"[bold]{_e('📊', '[stats]')} OpenClaw Stats[/]", border_style="dim", padding=(0, 1))
+        )
     else:
         print(f"\n  {_e('📊', '[stats]')} OpenClaw Stats\n")
         print(f"  sessions    : {total_sessions}  ({active} active)")
@@ -607,6 +637,7 @@ def _cmd_stats(ctx: ChatCommandContext) -> str:
 def _cmd_pattern(ctx: "ChatCommandContext") -> str:
     """/pattern — manage reusable workflow patterns backed by history or workflows."""
     import re as _re
+
     args = (ctx.args or "").strip()
     patterns = _pattern_store()
     workflows = _workflow_store()
@@ -641,7 +672,7 @@ def _cmd_pattern(ctx: "ChatCommandContext") -> str:
             _get_cli_mod()._print_error("Usage: /pattern save <name> [last N|workflow NAME]")
             return _CMD_CONTINUE
         pattern_name = save_parts[0]
-        if not _re.match(r'^[A-Za-z0-9_-]{1,40}$', pattern_name):
+        if not _re.match(r"^[A-Za-z0-9_-]{1,40}$", pattern_name):
             _get_cli_mod()._print_error("Pattern name must be 1-40 alphanumeric characters, hyphens, or underscores.")
             return _CMD_CONTINUE
         source = "history"
@@ -679,7 +710,9 @@ def _cmd_pattern(ctx: "ChatCommandContext") -> str:
             "session_id": ctx.session_id,
         }
         _save_prefs()
-        print(f"  {_GR}{_e('✅', '[OK]')} Pattern '{pattern_name}' saved ({len(commands[:20])} step{'s' if len(commands[:20]) != 1 else ''}).{_R}")
+        print(
+            f"  {_GR}{_e('✅', '[OK]')} Pattern '{pattern_name}' saved ({len(commands[:20])} step{'s' if len(commands[:20]) != 1 else ''}).{_R}"
+        )
         return _CMD_CONTINUE
 
     if token in {"show", "preview"}:
@@ -769,6 +802,7 @@ def _cmd_history(ctx: "ChatCommandContext") -> str:
     if _RICH_AVAILABLE and is_tty:
         from rich.console import Group as _RichGroup
         from rich.text import Text as _RichText
+
         content_lines: list[_RichText] = []
         if not entries:
             content_lines.append(_RichText("(no history yet)", style="dim"))
@@ -792,12 +826,14 @@ def _cmd_history(ctx: "ChatCommandContext") -> str:
         title_parts = [f"{_e('📜', '')} Command History"]
         if page_info:
             title_parts.append(f"[dim]({page_info})[/dim]")
-        _RICH_CONSOLE.print(_RichPanel(
-            _RichGroup(*content_lines),
-            title=" ".join(title_parts),
-            border_style="cyan",
-            padding=(0, 1),
-        ))
+        _RICH_CONSOLE.print(
+            _RichPanel(
+                _RichGroup(*content_lines),
+                title=" ".join(title_parts),
+                border_style="cyan",
+                padding=(0, 1),
+            )
+        )
         if total_pages > 1:
             _RICH_CONSOLE.print(f"[dim]  /history {page + 1} for next page[/dim]" if page < total_pages else "")
     else:
@@ -838,7 +874,9 @@ def _cmd_pin(ctx: "ChatCommandContext") -> str:
             if sub in ("list", "ls"):
                 if not pins:
                     if _RICH_AVAILABLE and is_tty:
-                        _RICH_CONSOLE.print(_RichPanel("[dim](no pins)[/dim]", title="📌 Pins", border_style="cyan", padding=(0, 1)))
+                        _RICH_CONSOLE.print(
+                            _RichPanel("[dim](no pins)[/dim]", title="📌 Pins", border_style="cyan", padding=(0, 1))
+                        )
                     else:
                         print(f"  {_B}📌 Pins{_R}")
                         print(f"  {_DM}(no pins){_R}")
@@ -1034,7 +1072,9 @@ def _cmd_quality(ctx: "ChatCommandContext") -> str:
         else:
             print(f"\n  {_DM}Average rating: {_B}{avg:.1f}{_R}{_DM}/5.0  ·  Total: {total}{_R}\n")
             if snapshot:
-                print(f"  Latest route: {snapshot.get('what_happened', '')} · confidence {snapshot.get('conf_label', '(unknown)')}")
+                print(
+                    f"  Latest route: {snapshot.get('what_happened', '')} · confidence {snapshot.get('conf_label', '(unknown)')}"
+                )
                 print("  Use /trace for the full decision snapshot.\n")
 
     return _CMD_CONTINUE
@@ -1100,6 +1140,7 @@ def _cmd_stats(ctx: "ChatCommandContext") -> str:  # type: ignore[no-redef]
 def _cmd_timeline(ctx: ChatCommandContext) -> str:  # noqa: ARG001
     """/timeline — show a visual activity timeline of recent openclaw usage."""
     import datetime
+
     is_tty = _get_is_tty()
 
     cmd_history = _get_cli_mod()._PREFS.get("cmd_history", [])

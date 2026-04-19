@@ -10,6 +10,7 @@ Allowed imports: openclaw_cli_sessions, openclaw_cli_session_display, openclaw_c
                  openclaw_cli_prefs, stdlib only.
 Do NOT import from openclaw_cli — circular import.
 """
+
 from __future__ import annotations
 
 import logging
@@ -141,7 +142,9 @@ def _session_preview_lines(session: SessionSummary) -> list[str]:
     actors = list(snapshot.get("actors") or [])
     decisions = list(snapshot.get("recent_decisions") or [])
     if actors:
-        actor_names = ", ".join(str(actor.get("name") or "operator").strip() for actor in actors[:2] if str(actor.get("name") or "").strip())
+        actor_names = ", ".join(
+            str(actor.get("name") or "operator").strip() for actor in actors[:2] if str(actor.get("name") or "").strip()
+        )
         if actor_names:
             lines.append(f"collab: {actor_names}")
     if decisions:
@@ -168,47 +171,67 @@ def _collect_operator_alerts() -> list[dict[str, Any]]:
         operator = _session_operator_snapshot(session, watch_state=watch_state, collaboration_snapshot=snapshot)
         watch_status = str((watch_state or {}).get("status") or "").strip().lower()
         failures = int((watch_state or {}).get("failure_count") or 0)
-        pending = len([item for item in list((watch_state or {}).get("interventions") or []) if isinstance(item, dict) and str(item.get("status") or "").strip().lower() == "pending"])
+        pending = len(
+            [
+                item
+                for item in list((watch_state or {}).get("interventions") or [])
+                if isinstance(item, dict) and str(item.get("status") or "").strip().lower() == "pending"
+            ]
+        )
         latest_handoff = str(operator.get("latest_handoff") or "").strip()
         readiness = str(operator.get("readiness_label") or "").strip().lower()
         if watch_status in {"retrying"} or failures > 0:
-            alerts.append({
-                "id": f"{session.session_id}:retry:{failures}:{watch_status}",
-                "session_id": session.session_id,
-                "title": session.title,
-                "severity": "warn",
-                "kind": "retry",
-                "message": f"automation retrying · failures {failures}",
-            })
+            alerts.append(
+                {
+                    "id": f"{session.session_id}:retry:{failures}:{watch_status}",
+                    "session_id": session.session_id,
+                    "title": session.title,
+                    "severity": "warn",
+                    "kind": "retry",
+                    "message": f"automation retrying · failures {failures}",
+                }
+            )
         if pending:
-            alerts.append({
-                "id": f"{session.session_id}:pending:{pending}",
-                "session_id": session.session_id,
-                "title": session.title,
-                "severity": "info",
-                "kind": "pending",
-                "message": f"{pending} pending operator intervention{'s' if pending != 1 else ''}",
-            })
+            alerts.append(
+                {
+                    "id": f"{session.session_id}:pending:{pending}",
+                    "session_id": session.session_id,
+                    "title": session.title,
+                    "severity": "info",
+                    "kind": "pending",
+                    "message": f"{pending} pending operator intervention{'s' if pending != 1 else ''}",
+                }
+            )
         if readiness == "handoff-ready" and not latest_handoff:
-            alerts.append({
-                "id": f"{session.session_id}:handoff-ready",
-                "session_id": session.session_id,
-                "title": session.title,
-                "severity": "info",
-                "kind": "handoff",
-                "message": "ready to hand off · create a snapshot",
-            })
+            alerts.append(
+                {
+                    "id": f"{session.session_id}:handoff-ready",
+                    "session_id": session.session_id,
+                    "title": session.title,
+                    "severity": "info",
+                    "kind": "handoff",
+                    "message": "ready to hand off · create a snapshot",
+                }
+            )
         if _session_is_stale(session) and watch_status in {"running", "active"}:
-            alerts.append({
-                "id": f"{session.session_id}:stale-watch",
-                "session_id": session.session_id,
-                "title": session.title,
-                "severity": "warn",
-                "kind": "stale",
-                "message": "watch looks stale while still active",
-            })
+            alerts.append(
+                {
+                    "id": f"{session.session_id}:stale-watch",
+                    "session_id": session.session_id,
+                    "title": session.title,
+                    "severity": "warn",
+                    "kind": "stale",
+                    "message": "watch looks stale while still active",
+                }
+            )
     severity_order = {"warn": 0, "retry": 0, "error": 0, "info": 1, "idle": 2}
-    alerts.sort(key=lambda item: (severity_order.get(str(item.get("severity") or ""), 9), str(item.get("title") or ""), str(item.get("message") or "")))
+    alerts.sort(
+        key=lambda item: (
+            severity_order.get(str(item.get("severity") or ""), 9),
+            str(item.get("title") or ""),
+            str(item.get("message") or ""),
+        )
+    )
     return alerts
 
 
@@ -256,8 +279,7 @@ def _last_trace_snapshot(session_id: str) -> dict[str, Any] | None:
     latest_rating_label = ""
     if isinstance(latest_rating, dict):
         latest_rating_label = (
-            f"{latest_rating.get('score', latest_rating.get('rating', '?'))}/5"
-            f" ({latest_rating.get('label', 'rated')})"
+            f"{latest_rating.get('score', latest_rating.get('rating', '?'))}/5 ({latest_rating.get('label', 'rated')})"
         )
 
     return {

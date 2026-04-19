@@ -38,6 +38,7 @@ def _get_client():  # type: ignore[return]
         return None
     try:
         import dropbox  # type: ignore[import]
+
         return dropbox.Dropbox(DROPBOX_ACCESS_TOKEN)
     except ImportError:
         log.warning("dropbox package not installed — run: pip install dropbox>=12.0.2")
@@ -71,6 +72,7 @@ async def list_recent_files(path: str = DROPBOX_WATCH_PATH, count: int = 20) -> 
         for entry in result.entries:
             try:
                 import dropbox.files as dbxf  # type: ignore[import]
+
                 if not isinstance(entry, dbxf.FileMetadata):
                     continue
             except ImportError:

@@ -1,4 +1,5 @@
 """Tests for cogs/network_cog.py."""
+
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -59,6 +60,7 @@ def _make_cog():
 
 # ── __init__ ──────────────────────────────────────────────────────────────────
 
+
 def test_network_cog_init():
     cog = _make_cog()
     assert cog.bot is not None
@@ -66,9 +68,11 @@ def test_network_cog_init():
 
 # ── cog_command_error ─────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_network_cog_cog_command_error_not_done():
     from discord import app_commands
+
     cog = _make_cog()
     inter = _make_interaction(done=False)
     err = app_commands.AppCommandError("Something broke")
@@ -80,6 +84,7 @@ async def test_network_cog_cog_command_error_not_done():
 @pytest.mark.asyncio
 async def test_cog_command_error_already_done():
     from discord import app_commands
+
     cog = _make_cog()
     inter = _make_interaction(done=True)
     err = app_commands.AppCommandError("Something broke")
@@ -89,13 +94,16 @@ async def test_cog_command_error_already_done():
 
 # ── network_cmd ───────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_network_cmd_success():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.network_cog.get_network_status", new=AsyncMock(return_value="All OK")), \
-         patch("cogs.network_cog.audit_log") as mock_audit:
+    with (
+        patch("cogs.network_cog.get_network_status", new=AsyncMock(return_value="All OK")),
+        patch("cogs.network_cog.audit_log") as mock_audit,
+    ):
         await cog.network_cmd.callback(cog, inter)
 
     inter.response.defer.assert_awaited_once()
@@ -108,8 +116,10 @@ async def test_network_cmd_embed_content():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.network_cog.get_network_status", new=AsyncMock(return_value="Network OK")), \
-         patch("cogs.network_cog.audit_log"):
+    with (
+        patch("cogs.network_cog.get_network_status", new=AsyncMock(return_value="Network OK")),
+        patch("cogs.network_cog.audit_log"),
+    ):
         await cog.network_cmd.callback(cog, inter)
 
     embed = inter.followup.send.call_args[1].get("embed") or inter.followup.send.call_args[0][0]
@@ -118,13 +128,16 @@ async def test_network_cmd_embed_content():
 
 # ── tailscale_cmd ─────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_tailscale_cmd_success():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.network_cog.get_tailscale_status", new=AsyncMock(return_value="VPN OK")), \
-         patch("cogs.network_cog.audit_log") as mock_audit:
+    with (
+        patch("cogs.network_cog.get_tailscale_status", new=AsyncMock(return_value="VPN OK")),
+        patch("cogs.network_cog.audit_log") as mock_audit,
+    ):
         await cog.tailscale_cmd.callback(cog, inter)
 
     inter.response.defer.assert_awaited_once()
@@ -134,13 +147,16 @@ async def test_tailscale_cmd_success():
 
 # ── speedtest_cmd ─────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_speedtest_cmd_success():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.network_cog.run_speed_test", new=AsyncMock(return_value="100 Mbps")), \
-         patch("cogs.network_cog.audit_log") as mock_audit:
+    with (
+        patch("cogs.network_cog.run_speed_test", new=AsyncMock(return_value="100 Mbps")),
+        patch("cogs.network_cog.audit_log") as mock_audit,
+    ):
         await cog.speedtest_cmd.callback(cog, inter)
 
     inter.response.defer.assert_awaited_once()

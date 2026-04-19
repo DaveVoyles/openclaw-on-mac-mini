@@ -35,8 +35,10 @@ GITHUB_API = "https://api.github.com"
 # Persistence helpers
 # ---------------------------------------------------------------------------
 
+
 async def _load_watches() -> dict:
     """Load the watches JSON; returns {} on missing/corrupt file."""
+
     def _read():
         if not WATCHES_FILE.exists():
             return {}
@@ -44,14 +46,17 @@ async def _load_watches() -> dict:
             return json.loads(WATCHES_FILE.read_text())
         except (json.JSONDecodeError, ValueError, OSError):
             return {}
+
     return await asyncio.to_thread(_read)
 
 
 async def _save_watches(data: dict) -> None:
     """Persist the watches dict to disk."""
+
     def _write():
         WATCHES_FILE.parent.mkdir(parents=True, exist_ok=True)
         WATCHES_FILE.write_text(json.dumps(data, indent=2))
+
     await asyncio.to_thread(_write)
 
 
@@ -59,8 +64,10 @@ async def _save_watches(data: dict) -> None:
 # GitHub API helpers
 # ---------------------------------------------------------------------------
 
+
 def _gh_headers() -> dict:
     from config import cfg
+
     headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
     if cfg.github_token:
         headers["Authorization"] = f"token {cfg.github_token}"
@@ -72,6 +79,7 @@ def _parse_repo(repo: str | None) -> str | None:
     if repo:
         return repo.strip()
     from config import cfg
+
     if cfg.github_default_repos:
         return cfg.github_default_repos[0]
     return None
@@ -88,6 +96,7 @@ def _fmt_date(iso: str) -> str:
 # ---------------------------------------------------------------------------
 # Cog
 # ---------------------------------------------------------------------------
+
 
 class GitHubCog(commands.Cog):
     def __init__(self, bot) -> None:
@@ -128,9 +137,7 @@ class GitHubCog(commands.Cog):
                 await interaction.followup.send(f"❌ Repo `{target}` not found or not accessible.", ephemeral=True)
                 return
             if resp.status_code == 401:
-                await interaction.followup.send(
-                    "❌ GitHub returned 401 — check your `GITHUB_TOKEN`.", ephemeral=True
-                )
+                await interaction.followup.send("❌ GitHub returned 401 — check your `GITHUB_TOKEN`.", ephemeral=True)
                 return
             resp.raise_for_status()
 
@@ -375,7 +382,9 @@ class GitHubCog(commands.Cog):
         )
 
         if prs_resp.status_code != 200 or issues_resp.status_code != 200:
-            log.warning("Monitor: non-200 for %s (prs=%s issues=%s)", repo, prs_resp.status_code, issues_resp.status_code)
+            log.warning(
+                "Monitor: non-200 for %s (prs=%s issues=%s)", repo, prs_resp.status_code, issues_resp.status_code
+            )
             return False
 
         prs = prs_resp.json()

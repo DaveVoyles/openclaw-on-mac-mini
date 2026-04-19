@@ -4,6 +4,7 @@ test_bg_tasks_unit.py — Unit tests for src/bg_tasks.py
 Tests the managed_task() helper and related utilities.
 Async tests use pytest-asyncio (asyncio_mode = "auto" via pyproject.toml).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -39,9 +40,15 @@ if "discord" not in sys.modules:
         sys.modules["discord.ext.commands"] = MagicMock()
 
 for _mod in [
-    "google", "google.genai", "google.genai.types",
-    "aiohttp", "pandas", "scipy", "scipy.stats",
-    "psutil", "prometheus_client",
+    "google",
+    "google.genai",
+    "google.genai.types",
+    "aiohttp",
+    "pandas",
+    "scipy",
+    "scipy.stats",
+    "psutil",
+    "prometheus_client",
 ]:
     _try_stub(_mod)
 
@@ -87,6 +94,7 @@ async def test_managed_task_completes_normally():
 
 async def test_managed_task_timeout_logs_warning(caplog: pytest.LogCaptureFixture):
     """managed_task cancels and logs a WARNING when the timeout is exceeded."""
+
     async def _slow() -> None:
         await asyncio.sleep(10)
 
@@ -104,6 +112,7 @@ async def test_managed_task_timeout_logs_warning(caplog: pytest.LogCaptureFixtur
 
 async def test_managed_task_exception_is_logged(caplog: pytest.LogCaptureFixture):
     """managed_task logs exceptions as ERROR without re-raising."""
+
     async def _boom() -> None:
         raise ValueError("test error")
 
@@ -161,6 +170,7 @@ async def test_active_task_count_increments_and_decrements():
 
 async def test_managed_task_cancelled_does_not_log_error(caplog: pytest.LogCaptureFixture):
     """CancelledError is expected; it must NOT be logged at ERROR level."""
+
     async def _long() -> None:
         await asyncio.sleep(10)
 
@@ -197,6 +207,7 @@ async def test_managed_task_no_timeout():
 
 async def test_managed_task_error_callback_exception_swallowed(caplog: pytest.LogCaptureFixture):
     """If error_callback itself raises, the exception is silently ignored."""
+
     def _bad_callback(exc: Exception) -> None:
         raise RuntimeError("callback boom")
 

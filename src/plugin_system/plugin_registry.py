@@ -453,16 +453,11 @@ class PluginRegistry:
 
             command_name = display_name.casefold()
             if command_name in seen_commands:
-                return (
-                    f"Plugin '{metadata.name}' registers duplicate command '/{display_name}'"
-                )
+                return f"Plugin '{metadata.name}' registers duplicate command '/{display_name}'"
 
             if command_name in existing_commands:
                 owner = existing_commands[command_name]
-                return (
-                    f"Command '/{display_name}' from plugin '{metadata.name}' "
-                    f"conflicts with plugin '{owner}'"
-                )
+                return f"Command '/{display_name}' from plugin '{metadata.name}' conflicts with plugin '{owner}'"
 
             seen_commands[command_name] = display_name
 
@@ -482,10 +477,12 @@ class PluginRegistry:
 # Version compatibility helpers (module-level, used by _check_conflicts)
 # ---------------------------------------------------------------------------
 
+
 def _get_host_version_fallback() -> str:
     """Read OpenClaw version from pyproject.toml as fallback."""
     import pathlib
     import tomllib
+
     try:
         pyproject = pathlib.Path(__file__).parent.parent.parent / "pyproject.toml"
         with open(pyproject, "rb") as f:
@@ -521,8 +518,9 @@ def _version_at_most(current: str, maximum: str) -> bool:
 def _is_valid_semver(v: str) -> bool:
     """Basic semver validity check."""
     import re
+
     v = v.lstrip("v")
-    return bool(re.match(r'^\d+\.\d+(\.\d+)?(-[\w.]+)?(\+[\w.]+)?$', v))
+    return bool(re.match(r"^\d+\.\d+(\.\d+)?(-[\w.]+)?(\+[\w.]+)?$", v))
 
 
 def _check_plugin_version_compat(plugin_name: str, plugin_meta: dict) -> list[str]:
@@ -532,6 +530,7 @@ def _check_plugin_version_compat(plugin_name: str, plugin_meta: dict) -> list[st
     # Get current host version
     try:
         from importlib.metadata import version as pkg_version
+
         host_version = pkg_version("openclaw")
     except ImportError:
         host_version = _get_host_version_fallback()
@@ -549,10 +548,7 @@ def _check_plugin_version_compat(plugin_name: str, plugin_meta: dict) -> list[st
         )
 
     # Check max version if declared
-    max_version = (
-        plugin_meta.get("max_openclaw_version")
-        or plugin_meta.get("max_host_version")
-    )
+    max_version = plugin_meta.get("max_openclaw_version") or plugin_meta.get("max_host_version")
     if max_version and not _version_at_most(host_version, max_version):
         warnings.append(
             f"Plugin '{plugin_name}' was tested up to OpenClaw {max_version} "
@@ -563,8 +559,7 @@ def _check_plugin_version_compat(plugin_name: str, plugin_meta: dict) -> list[st
     plugin_version = plugin_meta.get("version")
     if plugin_version and not _is_valid_semver(plugin_version):
         warnings.append(
-            f"Plugin '{plugin_name}' declares version '{plugin_version}' "
-            f"which is not a valid semver string."
+            f"Plugin '{plugin_name}' declares version '{plugin_version}' which is not a valid semver string."
         )
 
     return warnings

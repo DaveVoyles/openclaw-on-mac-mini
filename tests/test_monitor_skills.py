@@ -15,6 +15,7 @@ import monitor_skills as ms
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def isolate_snapshots(tmp_path, monkeypatch):
     """Redirect snapshot storage to a temp directory for every test."""
@@ -27,6 +28,7 @@ def isolate_snapshots(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # SSRF guard
 # ---------------------------------------------------------------------------
+
 
 class TestSSRFGuard:
     @pytest.mark.asyncio
@@ -71,6 +73,7 @@ class TestSSRFGuard:
 # Content hashing
 # ---------------------------------------------------------------------------
 
+
 class TestContentHash:
     def test_monitor_skills_deterministic(self):
         assert ms._content_hash("hello") == ms._content_hash("hello")
@@ -89,6 +92,7 @@ class TestContentHash:
 # ---------------------------------------------------------------------------
 # Snapshot storage (load/save)
 # ---------------------------------------------------------------------------
+
 
 class TestSnapshotStorage:
     def test_monitor_skills_load_returns_empty_when_no_file(self):
@@ -110,12 +114,15 @@ class TestSnapshotStorage:
 # snapshot_url
 # ---------------------------------------------------------------------------
 
+
 class TestSnapshotUrl:
     @pytest.mark.asyncio
     async def test_successful_snapshot(self, monkeypatch):
         """Snapshot stores URL metadata and returns confirmation."""
+
         async def mock_fetch(url):
             return "Hello World page content"
+
         monkeypatch.setattr(ms, "_fetch_text", mock_fetch)
 
         result = await ms.snapshot_url("https://example.com", "Example")
@@ -132,6 +139,7 @@ class TestSnapshotUrl:
     async def test_snapshot_fetch_failure(self, monkeypatch):
         async def mock_fetch(url):
             raise RuntimeError("Connection refused")
+
         monkeypatch.setattr(ms, "_fetch_text", mock_fetch)
 
         result = await ms.snapshot_url("https://down.example.com")
@@ -141,6 +149,7 @@ class TestSnapshotUrl:
 # ---------------------------------------------------------------------------
 # check_url_for_changes
 # ---------------------------------------------------------------------------
+
 
 class TestCheckUrlForChanges:
     @pytest.mark.asyncio
@@ -152,8 +161,10 @@ class TestCheckUrlForChanges:
     async def test_no_change_detected(self, monkeypatch):
         """When content hash matches, report no change."""
         content = "Static page content"
+
         async def mock_fetch(url):
             return content
+
         monkeypatch.setattr(ms, "_fetch_text", mock_fetch)
 
         # Create a baseline
@@ -167,12 +178,14 @@ class TestCheckUrlForChanges:
     async def test_change_detected(self, monkeypatch):
         """When content hash differs, report change."""
         call_count = 0
+
         async def mock_fetch(url):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
                 return "Original content"
             return "Updated content!"
+
         monkeypatch.setattr(ms, "_fetch_text", mock_fetch)
 
         await ms.snapshot_url("https://example.com", "Test")
@@ -184,9 +197,11 @@ class TestCheckUrlForChanges:
     async def test_change_count_increments(self, monkeypatch):
         """Change count should increment on each change detection."""
         version = [0]
+
         async def mock_fetch(url):
             version[0] += 1
             return f"Content version {version[0]}"
+
         monkeypatch.setattr(ms, "_fetch_text", mock_fetch)
 
         await ms.snapshot_url("https://example.com")
@@ -201,6 +216,7 @@ class TestCheckUrlForChanges:
 # list_monitored_urls / remove_url_monitor
 # ---------------------------------------------------------------------------
 
+
 class TestListAndRemove:
     @pytest.mark.asyncio
     async def test_monitor_skills_list_empty(self):
@@ -211,6 +227,7 @@ class TestListAndRemove:
     async def test_list_after_snapshot(self, monkeypatch):
         async def mock_fetch(url):
             return "content"
+
         monkeypatch.setattr(ms, "_fetch_text", mock_fetch)
         await ms.snapshot_url("https://example.com", "MyLabel")
 
@@ -222,6 +239,7 @@ class TestListAndRemove:
     async def test_remove_existing_url(self, monkeypatch):
         async def mock_fetch(url):
             return "content"
+
         monkeypatch.setattr(ms, "_fetch_text", mock_fetch)
         await ms.snapshot_url("https://example.com", "MyLabel")
 

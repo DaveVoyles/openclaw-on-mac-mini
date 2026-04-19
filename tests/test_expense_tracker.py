@@ -1,4 +1,5 @@
 """Tests for src/expense_tracker.py — ExpenseTracker CRUD with JSON persistence."""
+
 import json
 
 import pytest
@@ -19,13 +20,30 @@ class TestExpenseTrackerLoad:
 
     def test_expense_tracker_loads_existing_data(self, tmp_path):
         path = tmp_path / "expenses.json"
-        e = Expense(id="abc12345", amount=9.99, category="food", note="lunch",
-                    user_id="u1", timestamp="2024-01-01T12:00:00+00:00")
-        path.write_text(json.dumps([et.__import__("dataclasses").asdict(e) if False else {
-            "id": "abc12345", "amount": 9.99, "category": "food",
-            "note": "lunch", "user_id": "u1",
-            "timestamp": "2024-01-01T12:00:00+00:00"
-        }]))
+        e = Expense(
+            id="abc12345",
+            amount=9.99,
+            category="food",
+            note="lunch",
+            user_id="u1",
+            timestamp="2024-01-01T12:00:00+00:00",
+        )
+        path.write_text(
+            json.dumps(
+                [
+                    et.__import__("dataclasses").asdict(e)
+                    if False
+                    else {
+                        "id": "abc12345",
+                        "amount": 9.99,
+                        "category": "food",
+                        "note": "lunch",
+                        "user_id": "u1",
+                        "timestamp": "2024-01-01T12:00:00+00:00",
+                    }
+                ]
+            )
+        )
         t = ExpenseTracker(path=path)
         assert len(t._expenses) == 1
         assert t._expenses[0].category == "food"

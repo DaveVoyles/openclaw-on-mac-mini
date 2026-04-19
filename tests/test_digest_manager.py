@@ -229,10 +229,13 @@ class TestDigestManager:
     async def test_generate_digest_disabled(self, manager, temp_prefs_dir):
         """Test digest generation when disabled."""
         user_id = "test_user_disabled"
-        manager.save_preferences(user_id, {
-            "topics": ["AI"],
-            "enabled": False,
-        })
+        manager.save_preferences(
+            user_id,
+            {
+                "topics": ["AI"],
+                "enabled": False,
+            },
+        )
 
         digest = await manager.generate_digest(user_id, preview=False)
 
@@ -242,10 +245,13 @@ class TestDigestManager:
     async def test_generate_digest_disabled_but_preview(self, manager, temp_prefs_dir):
         """Test that preview works even when disabled."""
         user_id = "test_user_preview"
-        manager.save_preferences(user_id, {
-            "topics": ["AI"],
-            "enabled": False,
-        })
+        manager.save_preferences(
+            user_id,
+            {
+                "topics": ["AI"],
+                "enabled": False,
+            },
+        )
 
         with patch.object(manager, "_generate_news_section", new_callable=AsyncMock) as mock_news:
             mock_news.return_value = "\n🤖 NEWS\n• Test article\n"
@@ -259,10 +265,13 @@ class TestDigestManager:
     async def test_generate_digest_with_topics(self, manager, temp_prefs_dir):
         """Test digest generation with topics configured."""
         user_id = "test_user_topics"
-        manager.save_preferences(user_id, {
-            "topics": ["AI", "space"],
-            "schedule": "daily",
-        })
+        manager.save_preferences(
+            user_id,
+            {
+                "topics": ["AI", "space"],
+                "schedule": "daily",
+            },
+        )
 
         with patch.object(manager, "_generate_news_section", new_callable=AsyncMock) as mock_news:
             mock_news.return_value = "\n🤖 NEWS & TOPICS (2 articles)\n• AI article\n• Space article\n"
@@ -277,9 +286,12 @@ class TestDigestManager:
     async def test_generate_digest_with_stocks(self, manager, temp_prefs_dir):
         """Test digest generation with stocks configured."""
         user_id = "test_user_stocks"
-        manager.save_preferences(user_id, {
-            "stocks": ["TSLA", "NVDA"],
-        })
+        manager.save_preferences(
+            user_id,
+            {
+                "stocks": ["TSLA", "NVDA"],
+            },
+        )
 
         with patch.object(manager, "_generate_stocks_section", new_callable=AsyncMock) as mock_stocks:
             mock_stocks.return_value = "\n📈 YOUR STOCKS (2 symbols)\n• TSLA: $245\n• NVDA: $800\n"
@@ -293,9 +305,12 @@ class TestDigestManager:
     async def test_generate_digest_with_teams(self, manager, temp_prefs_dir):
         """Test digest generation with teams configured."""
         user_id = "test_user_teams"
-        manager.save_preferences(user_id, {
-            "teams": ["Lakers", "Patriots"],
-        })
+        manager.save_preferences(
+            user_id,
+            {
+                "teams": ["Lakers", "Patriots"],
+            },
+        )
 
         with patch.object(manager, "_generate_sports_section", new_callable=AsyncMock) as mock_sports:
             mock_sports.return_value = "\n🏀 SPORTS UPDATES (2 teams)\n• Lakers won\n• Patriots lost\n"

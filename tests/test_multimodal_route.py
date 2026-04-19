@@ -10,6 +10,7 @@ from model_routing_policy import MultimodalRouteDecision, select_multimodal_rout
 # select_multimodal_route policy
 # ---------------------------------------------------------------------------
 
+
 class TestSelectMultimodalRoute:
     def test_multimodal_route_prefers_copilot_when_available(self):
         result = select_multimodal_route(copilot_available=True, has_openai_key=False)
@@ -40,9 +41,11 @@ class TestSelectMultimodalRoute:
 # Capability registry flags
 # ---------------------------------------------------------------------------
 
+
 class TestCapabilityRegistryMultimodal:
     def test_copilot_supports_multimodal_when_available(self):
         from model_routing_policy import build_provider_capability_registry
+
         registry = build_provider_capability_registry(
             has_openai_key=False,
             has_anthropic_key=False,
@@ -53,6 +56,7 @@ class TestCapabilityRegistryMultimodal:
 
     def test_copilot_not_multimodal_when_unavailable(self):
         from model_routing_policy import build_provider_capability_registry
+
         registry = build_provider_capability_registry(
             has_openai_key=False,
             has_anthropic_key=False,
@@ -63,6 +67,7 @@ class TestCapabilityRegistryMultimodal:
 
     def test_openai_supports_multimodal_with_key(self):
         from model_routing_policy import build_provider_capability_registry
+
         registry = build_provider_capability_registry(
             has_openai_key=True,
             has_anthropic_key=False,
@@ -75,6 +80,7 @@ class TestCapabilityRegistryMultimodal:
 # ---------------------------------------------------------------------------
 # analyze_image wiring
 # ---------------------------------------------------------------------------
+
 
 class TestAnalyzeImageRouting:
     _image = b"\x89PNG\r\n\x1a\n"  # minimal PNG-like bytes
@@ -121,5 +127,6 @@ class TestAnalyzeImageRouting:
     @pytest.mark.asyncio
     async def test_rejects_unsupported_mime(self):
         from llm.response import analyze_image
+
         result = await analyze_image(self._image, "application/pdf", "describe it")
         assert "Unsupported" in result

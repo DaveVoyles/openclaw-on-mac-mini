@@ -56,4 +56,3 @@ __all__ = [
     "ApprovalView",
     "build_approval_embed",
 ]
-

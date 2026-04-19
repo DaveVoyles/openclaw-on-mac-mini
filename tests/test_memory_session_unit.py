@@ -18,6 +18,7 @@ from memory_session import (
 # _summary_path
 # ---------------------------------------------------------------------------
 
+
 class TestSummaryPath:
     def test_returns_path_under_summaries_dir(self, tmp_path, monkeypatch):
         summaries = tmp_path / "summaries"
@@ -36,6 +37,7 @@ class TestSummaryPath:
 # ---------------------------------------------------------------------------
 # _load_last_summary
 # ---------------------------------------------------------------------------
+
 
 class TestLoadLastSummary:
     def test_memory_session_unit_returns_empty_when_no_file(self, tmp_path, monkeypatch):
@@ -71,6 +73,7 @@ class TestLoadLastSummary:
 # _summarize_and_store
 # ---------------------------------------------------------------------------
 
+
 class TestSummarizeAndStore:
     @pytest.mark.asyncio
     async def test_empty_summary_from_llm_writes_nothing(self, tmp_path, monkeypatch):
@@ -78,8 +81,7 @@ class TestSummarizeAndStore:
         monkeypatch.setattr(ms_module, "SUMMARIES_DIR", summaries)
         llm_mock = MagicMock()
         llm_mock.summarize_conversation = AsyncMock(return_value="")
-        with patch("memory_session._atomic_write") as mock_aw, \
-             patch.dict("sys.modules", {"llm": llm_mock}):
+        with patch("memory_session._atomic_write") as mock_aw, patch.dict("sys.modules", {"llm": llm_mock}):
             await _summarize_and_store(1, "Alice", [{"role": "user", "parts": ["hi"]}])
         mock_aw.assert_not_called()
 
@@ -93,8 +95,10 @@ class TestSummarizeAndStore:
         qmd_mock.remember_fact = AsyncMock()
         vs_mock = MagicMock()
         vs_mock.add_conversation_summary = AsyncMock()
-        with patch("memory_session._atomic_write") as mock_aw, \
-             patch.dict("sys.modules", {"llm": llm_mock, "qmd": qmd_mock, "vector_store": vs_mock}):
+        with (
+            patch("memory_session._atomic_write") as mock_aw,
+            patch.dict("sys.modules", {"llm": llm_mock, "qmd": qmd_mock, "vector_store": vs_mock}),
+        ):
             await _summarize_and_store(1, "Alice", [{"role": "user", "parts": ["hi"]}])
         mock_aw.assert_called_once()
         written_data = json.loads(mock_aw.call_args[0][1])
@@ -111,8 +115,10 @@ class TestSummarizeAndStore:
         qmd_mock.remember_fact = AsyncMock(side_effect=RuntimeError("qmd fail"))
         vs_mock = MagicMock()
         vs_mock.add_conversation_summary = AsyncMock()
-        with patch("memory_session._atomic_write"), \
-             patch.dict("sys.modules", {"llm": llm_mock, "qmd": qmd_mock, "vector_store": vs_mock}):
+        with (
+            patch("memory_session._atomic_write"),
+            patch.dict("sys.modules", {"llm": llm_mock, "qmd": qmd_mock, "vector_store": vs_mock}),
+        ):
             await _summarize_and_store(1, "Alice", [{"role": "user", "parts": ["hi"]}])
 
     @pytest.mark.asyncio
@@ -128,6 +134,7 @@ class TestSummarizeAndStore:
 # ---------------------------------------------------------------------------
 # create_session_handover
 # ---------------------------------------------------------------------------
+
 
 class TestCreateSessionHandover:
     @pytest.mark.asyncio
@@ -156,8 +163,10 @@ class TestCreateSessionHandover:
         vs_mock.CONVERSATIONS_COLLECTION = "conversations"
         vs_mock.add_document = AsyncMock()
         history = [{"role": "user", "parts": ["hi"]}] * 5
-        with patch("memory_session._atomic_write") as mock_aw, \
-             patch.dict("sys.modules", {"llm": llm_mock, "vector_store": vs_mock}):
+        with (
+            patch("memory_session._atomic_write") as mock_aw,
+            patch.dict("sys.modules", {"llm": llm_mock, "vector_store": vs_mock}),
+        ):
             result = await create_session_handover(1, "Alice", history)
         assert result == "Decision: deploy tomorrow."
         mock_aw.assert_called_once()
@@ -176,6 +185,7 @@ class TestCreateSessionHandover:
 # ---------------------------------------------------------------------------
 # load_last_handover
 # ---------------------------------------------------------------------------
+
 
 class TestLoadLastHandover:
     def test_memory_session_unit_returns_empty_when_no_file_v2(self, tmp_path, monkeypatch):

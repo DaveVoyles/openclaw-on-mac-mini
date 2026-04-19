@@ -67,6 +67,7 @@ class TestOpenclawTypes:
 
     def test_all_typeddicts_importable(self):
         import openclaw_types as ot
+
         for name in ["MessageContext", "ConversationMessage", "SkillResult", "APIResponse", "NewsArticle"]:
             assert hasattr(ot, name)
 

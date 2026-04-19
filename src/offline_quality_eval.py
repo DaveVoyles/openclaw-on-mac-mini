@@ -38,11 +38,13 @@ DEFAULT_DRIFT_TOLERANCES: dict[str, float | int] = {
 
 SEVERE_DRIFT_SCORE_THRESHOLD = 4
 SEVERE_DRIFT_TOLERANCE_MULTIPLIER = 2.0
-SEVERE_DRIFT_PRIORITY_METRICS = frozenset({
-    "coverage_proxy",
-    "evidence_completeness",
-    "max_latency_bucket",
-})
+SEVERE_DRIFT_PRIORITY_METRICS = frozenset(
+    {
+        "coverage_proxy",
+        "evidence_completeness",
+        "max_latency_bucket",
+    }
+)
 
 DEFAULT_RECOMMENDATION_BOUNDS: dict[str, float | int] = {
     "min_coverage_proxy": 0.05,
@@ -196,7 +198,9 @@ def run_quality_eval(
         domain = str(item.get("domain") or "unknown")
         domain_counts[domain] = domain_counts.get(domain, 0) + 1
         domain_coverage_proxy[domain] = domain_coverage_proxy.get(domain, 0.0) + float(item["coverage_proxy"])
-        domain_source_diversity_proxy[domain] = domain_source_diversity_proxy.get(domain, 0.0) + float(item["source_diversity_proxy"])
+        domain_source_diversity_proxy[domain] = domain_source_diversity_proxy.get(domain, 0.0) + float(
+            item["source_diversity_proxy"]
+        )
         quality_status = str(item.get("quality_status") or "unknown")
         quality_status_counts[quality_status] = quality_status_counts.get(quality_status, 0) + 1
         assertion_payload = item.get("target_assertions")
@@ -223,7 +227,8 @@ def run_quality_eval(
         "source_diversity_proxy": source_diversity_proxy >= float(effective_thresholds["min_source_diversity_proxy"]),
         "evidence_completeness": evidence_completeness >= float(effective_thresholds["min_evidence_completeness"]),
         "warning_rate": warning_rate <= float(effective_thresholds["max_warning_rate"]),
-        "latency_bucket": _bucket_rank(max_observed_bucket) <= _bucket_rank(str(effective_thresholds["max_latency_bucket"])),
+        "latency_bucket": _bucket_rank(max_observed_bucket)
+        <= _bucket_rank(str(effective_thresholds["max_latency_bucket"])),
     }
 
     summary = {

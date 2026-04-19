@@ -50,9 +50,7 @@ def test_build_sports_watch_query_assembles_structured_inputs():
 
 
 def test_infer_sports_request_extracts_slots_from_plain_english():
-    slots = mod.infer_sports_request(
-        "What games does Maryland have in the next 5 days in men's division 1 lacrosse?"
-    )
+    slots = mod.infer_sports_request("What games does Maryland have in the next 5 days in men's division 1 lacrosse?")
     assert slots["team"] == "Maryland"
     assert slots["sport"] == "lacrosse"
     assert slots["league"] == "NCAA Division 1"
@@ -60,9 +58,7 @@ def test_infer_sports_request_extracts_slots_from_plain_english():
 
 
 def test_infer_sports_request_treats_today_as_same_day_window():
-    slots = mod.infer_sports_request(
-        "Show me the schedule for the men's division 1 college lacrosse games today"
-    )
+    slots = mod.infer_sports_request("Show me the schedule for the men's division 1 college lacrosse games today")
     assert slots["sport"] == "lacrosse"
     assert slots["league"] == "NCAA Division 1"
     assert slots["days"] == 1
@@ -233,7 +229,11 @@ async def test_generate_sports_watch_report_uses_reliable_search_flags(monkeypat
         return "**Web Search Results**\n\n**1. Game**\nExample\n🔗 <https://example.com>"
 
     async def fake_chat(**kwargs):
-        return ("# Sports Watch\n\n| Date | Matchup | Time (ET) | Watch | Notes |\n| --- | --- | --- | --- | --- |\n", [], "test-model")
+        return (
+            "# Sports Watch\n\n| Date | Matchup | Time (ET) | Watch | Notes |\n| --- | --- | --- | --- | --- |\n",
+            [],
+            "test-model",
+        )
 
     monkeypatch.setattr("skills.search_skills.search_web", fake_search_web)
     monkeypatch.setattr(llm, "chat", fake_chat)
@@ -264,7 +264,11 @@ async def test_generate_box_office_report_uses_reliable_search_flags(monkeypatch
         return "**Web Search Results**\n\n**1. Title**\nExample\n🔗 <https://example.com>"
 
     async def fake_chat(**kwargs):
-        return ("## Weekly Box Office\n\n| Film | Weekend Gross | Domestic Total | Worldwide Total |\n| --- | --- | --- | --- |\n| Test | $1 | $2 | $3 |\n\nSources: Example", [], "test-model")
+        return (
+            "## Weekly Box Office\n\n| Film | Weekend Gross | Domestic Total | Worldwide Total |\n| --- | --- | --- | --- |\n| Test | $1 | $2 | $3 |\n\nSources: Example",
+            [],
+            "test-model",
+        )
 
     monkeypatch.setattr("skills.search_skills.search_web", fake_search_web)
     monkeypatch.setattr(llm, "chat", fake_chat)
@@ -340,7 +344,9 @@ async def test_generate_sports_watch_report_weekend_warns_on_partial_coverage(mo
 
     monkeypatch.setattr("skills.search_skills.search_web", fake_search_web)
     monkeypatch.setattr("llm.chat", fake_chat)
-    monkeypatch.setattr(mod, "_record_quality_metric", lambda event, context="reporting": events.append((event, context)))
+    monkeypatch.setattr(
+        mod, "_record_quality_metric", lambda event, context="reporting": events.append((event, context))
+    )
 
     result = await mod.generate_sports_watch_report(
         query="full weekend division 1 men's lacrosse recap",
@@ -692,10 +698,7 @@ async def test_generate_sports_watch_report_today_full_slate_uses_stronger_queri
                 "**2. Virginia at Syracuse**\n🔗 <https://www.espn.com/game2>\n\n"
                 "**3. North Carolina at Notre Dame**\n🔗 <https://www.insidelacrosse.com/game3>\n\n"
             )
-        return (
-            "**Web Search Results** (1 of 1 unique):\n"
-            "**1. Penn at Princeton**\n🔗 <https://www.espn.com/game4>\n\n"
-        )
+        return "**Web Search Results** (1 of 1 unique):\n**1. Penn at Princeton**\n🔗 <https://www.espn.com/game4>\n\n"
 
     async def fake_chat(**kwargs):
         prompt = kwargs["user_message"]

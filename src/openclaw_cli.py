@@ -206,8 +206,21 @@ from openclaw_cli_router import (
 from openclaw_cli_ui_core import (
     _IS_TTY,
     _c,
-    _R, _B, _DM, _CY, _GR, _YE, _RE, _MA,
-    _BCY, _BGR, _BYE, _BRE, _BBL, _IT, _UL,
+    _R,
+    _B,
+    _DM,
+    _CY,
+    _GR,
+    _YE,
+    _RE,
+    _MA,
+    _BCY,
+    _BGR,
+    _BYE,
+    _BRE,
+    _BBL,
+    _IT,
+    _UL,
 )
 from openclaw_cli_exec import (
     _separator_fill as _exec_separator_fill,
@@ -225,6 +238,7 @@ from openclaw_cli_exec import (
 def _get_is_tty() -> bool:
     """Live TTY check — reads openclaw_cli._IS_TTY so monkeypatch works in tests."""
     return _IS_TTY or sys.stdout.isatty()
+
 
 # ---------------------------------------------------------------------------
 # Color / rich support — graceful fallback when not in a TTY or rich absent
@@ -486,11 +500,12 @@ def _prefs_set(key: str, value: object) -> None:
     _PREFS[key] = value
     _save_prefs()
 
+
 _HEADING_EMOJIS: dict[int, str] = {
     1: "✨",  # H1 — rare, important
     2: "🔹",  # H2 — section header
-    3: "▸",   # H3 — subsection
-    4: "·",   # H4 — minor sub
+    3: "▸",  # H3 — subsection
+    4: "·",  # H4 — minor sub
 }
 
 _CMD_HISTORY_MAX = 50  # max entries in command history
@@ -502,12 +517,12 @@ _MOTION_PACING_SECONDS: dict[str, float] = {
 }
 
 _HIGH_CONTRAST_THEMES: dict[str, tuple[str, str]] = {
-    "default":  ("bold bright_white",   "\033[1;97m"),
-    "green":    ("bold bright_green",   "\033[1;92m"),
-    "yellow":   ("bold bright_yellow",  "\033[1;93m"),
-    "magenta":  ("bold bright_magenta", "\033[1;95m"),
-    "cyan":     ("bold bright_cyan",    "\033[1;96m"),
-    "mono":     ("bold white",          "\033[1;37m"),
+    "default": ("bold bright_white", "\033[1;97m"),
+    "green": ("bold bright_green", "\033[1;92m"),
+    "yellow": ("bold bright_yellow", "\033[1;93m"),
+    "magenta": ("bold bright_magenta", "\033[1;95m"),
+    "cyan": ("bold bright_cyan", "\033[1;96m"),
+    "mono": ("bold white", "\033[1;37m"),
 }
 
 # ASCII fallbacks for each emoji used in the UI
@@ -526,49 +541,49 @@ _EMOJI_FALLBACKS: dict[str, str] = {
 
 _EXTENDED_SCHEMES: dict[str, dict[str, str]] = {
     "cyberpunk": {
-        "primary": "\033[95m",    # bright magenta
-        "accent":  "\033[96m",    # bright cyan
-        "dim":     "\033[35m",    # magenta dim
-        "ok":      "\033[92m",    # bright green
-        "warn":    "\033[93m",    # bright yellow
-        "error":   "\033[91m",    # bright red
-        "label":   "cyberpunk 🌆",
+        "primary": "\033[95m",  # bright magenta
+        "accent": "\033[96m",  # bright cyan
+        "dim": "\033[35m",  # magenta dim
+        "ok": "\033[92m",  # bright green
+        "warn": "\033[93m",  # bright yellow
+        "error": "\033[91m",  # bright red
+        "label": "cyberpunk 🌆",
     },
     "ocean": {
-        "primary": "\033[96m",    # bright cyan
-        "accent":  "\033[34m",    # blue
-        "dim":     "\033[36m",    # cyan
-        "ok":      "\033[32m",    # green
-        "warn":    "\033[33m",    # yellow
-        "error":   "\033[31m",    # red
-        "label":   "ocean 🌊",
+        "primary": "\033[96m",  # bright cyan
+        "accent": "\033[34m",  # blue
+        "dim": "\033[36m",  # cyan
+        "ok": "\033[32m",  # green
+        "warn": "\033[33m",  # yellow
+        "error": "\033[31m",  # red
+        "label": "ocean 🌊",
     },
     "sunset": {
-        "primary": "\033[33m",    # yellow
-        "accent":  "\033[31m",    # red
-        "dim":     "\033[35m",    # magenta
-        "ok":      "\033[32m",    # green
-        "warn":    "\033[91m",    # bright red
-        "error":   "\033[31m",    # red
-        "label":   "sunset 🌅",
+        "primary": "\033[33m",  # yellow
+        "accent": "\033[31m",  # red
+        "dim": "\033[35m",  # magenta
+        "ok": "\033[32m",  # green
+        "warn": "\033[91m",  # bright red
+        "error": "\033[31m",  # red
+        "label": "sunset 🌅",
     },
     "matrix": {
-        "primary": "\033[92m",    # bright green
-        "accent":  "\033[32m",    # green
-        "dim":     "\033[2;32m",  # dim green
-        "ok":      "\033[92m",    # bright green
-        "warn":    "\033[33m",    # yellow
-        "error":   "\033[91m",    # bright red
-        "label":   "matrix 🟩",
+        "primary": "\033[92m",  # bright green
+        "accent": "\033[32m",  # green
+        "dim": "\033[2;32m",  # dim green
+        "ok": "\033[92m",  # bright green
+        "warn": "\033[33m",  # yellow
+        "error": "\033[91m",  # bright red
+        "label": "matrix 🟩",
     },
     "default": {
-        "primary": "\033[36m",    # cyan
-        "accent":  "\033[1;36m",  # bold cyan
-        "dim":     "\033[2m",     # dim
-        "ok":      "\033[32m",    # green
-        "warn":    "\033[33m",    # yellow
-        "error":   "\033[31m",    # red
-        "label":   "default 🦞",
+        "primary": "\033[36m",  # cyan
+        "accent": "\033[1;36m",  # bold cyan
+        "dim": "\033[2m",  # dim
+        "ok": "\033[32m",  # green
+        "warn": "\033[33m",  # yellow
+        "error": "\033[31m",  # red
+        "label": "default 🦞",
     },
 }
 
@@ -807,8 +822,10 @@ def _run_interactive_overlay(
                             max(0, active_index - (visible_limit // 2)),
                             max(0, len(all_matches) - visible_limit),
                         )
-                    visible_matches = all_matches[page_start:page_start + visible_limit]
-                    visible_active = 0 if not visible_matches else min(active_index - page_start, len(visible_matches) - 1)
+                    visible_matches = all_matches[page_start : page_start + visible_limit]
+                    visible_active = (
+                        0 if not visible_matches else min(active_index - page_start, len(visible_matches) - 1)
+                    )
                     detail_lines = []
                     if visible_matches:
                         detail_lines = _overlay_detail_lines(
@@ -1005,6 +1022,7 @@ def _theme_ansi() -> str:
 # Shared display helpers
 # ---------------------------------------------------------------------------
 
+
 def _status_family(status: str) -> str:
     """Normalize related status words into a shared rendering family."""
     s = str(status or "").strip().lower().replace("-", "_").replace(" ", "_")
@@ -1198,9 +1216,7 @@ def _print_dashboard_surface(
         _append_dashboard_rich_section(body, "Summary", summary_lines)
         _append_dashboard_rich_section(body, "Details", detail_lines, title_style="bold white")
         _append_dashboard_rich_section(body, "Actions", action_lines, title_style="bold yellow")
-        _RICH_CONSOLE.print(
-            _RichPanel(body, title=f"[bold]{title}[/]", border_style=border_style, padding=(0, 1))
-        )
+        _RICH_CONSOLE.print(_RichPanel(body, title=f"[bold]{title}[/]", border_style=border_style, padding=(0, 1)))
         return
     lines = [title, *(_dashboard_section_lines("Summary", summary_lines))]
     detail_block = _dashboard_section_lines("Details", detail_lines)
@@ -1319,7 +1335,12 @@ def _top_context_bar_lines(
         _progress_cell("routing", routing_label),
     ]
     if session_id:
-        summary_parts.insert(0, _progress_cell("id", f"{session_id[:8]}…", status=str((session.status if session else "active") or "active")))
+        summary_parts.insert(
+            0,
+            _progress_cell(
+                "id", f"{session_id[:8]}…", status=str((session.status if session else "active") or "active")
+            ),
+        )
     if session and session.files:
         summary_parts.append(_progress_cell("files", str(len(session.files))))
 
@@ -1425,9 +1446,7 @@ def _print_predictive_affordances(
         for hint in clean:
             body.append("  • ", style="dim")
             body.append(f"{hint}\n")
-        _RICH_CONSOLE.print(
-            _RichPanel(body, title=f"[bold]{title}[/]", border_style=border_style, padding=(0, 1))
-        )
+        _RICH_CONSOLE.print(_RichPanel(body, title=f"[bold]{title}[/]", border_style=border_style, padding=(0, 1)))
         return
     print(f"{title}:")
     for hint in clean:
@@ -1482,6 +1501,7 @@ def _print_meta_footer(*pairs: tuple[str, str]) -> None:
 def _print_error(msg: str, *, file: object = None) -> None:
     """Print a standardized error message with color when available."""
     import sys as _sys
+
     dest = file if file is not None else _sys.stdout
     if _RICH_AVAILABLE and _IS_TTY and dest is _sys.stderr:
         _RICH_CONSOLE.print(f"[bold red]error:[/] {msg}", stderr=True)
@@ -1555,13 +1575,20 @@ def _print_shell_result(result: Any) -> None:
         exit_ok = result.returncode == 0
         exit_style = "green" if exit_ok else "bold red"
         exit_icon = "\u2713" if exit_ok else "\u2717"
-        _RICH_CONSOLE.print(f"[dim]$[/] {result.command}  [dim]\u00b7  cwd:[/] {result.cwd}  [{exit_style}]{exit_icon} exit {result.returncode}[/]")
+        _RICH_CONSOLE.print(
+            f"[dim]$[/] {result.command}  [dim]\u00b7  cwd:[/] {result.cwd}  [{exit_style}]{exit_icon} exit {result.returncode}[/]"
+        )
         if result.stdout.strip():
-            _RICH_CONSOLE.print(f"[dim]\u2500\u2500\u2500 stdout \u2500\u2500\u2500[/]\n[dim]{result.stdout.rstrip()}[/]")
+            _RICH_CONSOLE.print(
+                f"[dim]\u2500\u2500\u2500 stdout \u2500\u2500\u2500[/]\n[dim]{result.stdout.rstrip()}[/]"
+            )
         if result.stderr.strip():
-            _RICH_CONSOLE.print(f"[dim]\u2500\u2500\u2500 stderr \u2500\u2500\u2500[/]\n[dim red]{result.stderr.rstrip()}[/]")
+            _RICH_CONSOLE.print(
+                f"[dim]\u2500\u2500\u2500 stderr \u2500\u2500\u2500[/]\n[dim red]{result.stderr.rstrip()}[/]"
+            )
     else:
         from openclaw_cli_actions import format_shell_result
+
         print(format_shell_result(result))
 
 
@@ -1582,6 +1609,7 @@ def _print_file_edit_result(result: Any) -> None:
                     _RICH_CONSOLE.print(f"[dim]{line}[/]")
     else:
         from openclaw_cli_actions import preview_file_result
+
         print(preview_file_result(result))
 
 
@@ -1614,7 +1642,9 @@ def _print_file_edit_preview(result: Any) -> None:
     _print_feedback(
         "Edit preview.",
         level="info" if result.changed else "warn",
-        detail=result.summary if result.summary else ("changes pending review" if result.changed else "no file changes"),
+        detail=result.summary
+        if result.summary
+        else ("changes pending review" if result.changed else "no file changes"),
     )
     _print_file_edit_result(result)
 
@@ -1666,7 +1696,10 @@ def _summarize_exec_side_effects(command_parts: list[str]) -> str:
         return "deletes or irreversibly resets data"
     if any(token in normalized for token in ("npm install", "pip install", "brew install", "brew upgrade")):
         return "installs or updates dependencies"
-    if any(token in normalized for token in ("git checkout", "git clean", "git restore", "mv ", "cp ", "chmod", "chown", "kill")):
+    if any(
+        token in normalized
+        for token in ("git checkout", "git clean", "git restore", "mv ", "cp ", "chmod", "chown", "kill")
+    ):
         return "changes workspace or system state"
     if any(token in normalized for token in ("git status", "git diff", "ls", "cat", "rg", "grep")):
         return "reads local state without writing files"
@@ -1675,14 +1708,15 @@ def _summarize_exec_side_effects(command_parts: list[str]) -> str:
     return "may change local or system state; verify the exact target"
 
 
-def _summarize_edit_side_effects(path: str, preview_result: Any, *, append_mode: bool, replace_values: list[str] | None = None) -> str:
+def _summarize_edit_side_effects(
+    path: str, preview_result: Any, *, append_mode: bool, replace_values: list[str] | None = None
+) -> str:
     """Describe the file edit effect without repeating the full diff."""
     replace_values = list(replace_values or [])
     target_path = Path(str(getattr(preview_result, "path", "") or path)).expanduser()
     diff_text = str(getattr(preview_result, "diff", "") or "")
     existed = target_path.exists() or any(
-        line.startswith("-") and not line.startswith("---")
-        for line in diff_text.splitlines()
+        line.startswith("-") and not line.startswith("---") for line in diff_text.splitlines()
     )
     if replace_values:
         return "replaces matching text in the existing file"
@@ -1703,9 +1737,7 @@ def _build_exec_approval_review(*, command_text: str, cwd: str) -> list[str]:
         f"Review: side effects {_summarize_exec_side_effects(command_parts)}",
     ]
     if len(command_parts) > 1:
-        review_lines.append(
-            f"Review: args `{_truncate_review_text(' '.join(command_parts[1:]), limit=96)}`"
-        )
+        review_lines.append(f"Review: args `{_truncate_review_text(' '.join(command_parts[1:]), limit=96)}`")
     return review_lines
 
 
@@ -1731,7 +1763,15 @@ def _build_edit_approval_review(
 
 
 def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **kwargs: Any) -> Any:
-    return _ui_utils_mod._with_spinner(label, fn, *args, output_json=output_json, _override_is_tty=_IS_TTY, _override_heartbeat_secs=_SPINNER_HEARTBEAT_SECONDS, **kwargs)
+    return _ui_utils_mod._with_spinner(
+        label,
+        fn,
+        *args,
+        output_json=output_json,
+        _override_is_tty=_IS_TTY,
+        _override_heartbeat_secs=_SPINNER_HEARTBEAT_SECONDS,
+        **kwargs,
+    )
 
 
 _SEARCH_ONLY_MODELS = frozenset({"perplexity", "perplexity-direct"})
@@ -1768,12 +1808,7 @@ def normalize_base_url(raw_url: str | None) -> str:
 
 def default_client_name() -> str:
     """Return a human-readable client name for telemetry and headers."""
-    return (
-        os.getenv("OPENCLAW_CLIENT_NAME")
-        or socket.gethostname()
-        or platform.node()
-        or "openclaw-cli"
-    ).strip()
+    return (os.getenv("OPENCLAW_CLIENT_NAME") or socket.gethostname() or platform.node() or "openclaw-cli").strip()
 
 
 def default_user_name() -> str:
@@ -1981,8 +2016,6 @@ def _format_collaboration_entry(entry: dict[str, Any]) -> str:
     return f"{actor}: {summary}{suffix}".strip()
 
 
-
-
 def _session_mood_snapshot(
     session: SessionSummary,
     *,
@@ -2061,7 +2094,13 @@ def _print_automation_dashboard() -> None:
             active_sessions += 1
         if str((watch_state or {}).get("status") or "").strip().lower() in {"running", "active", "retrying"}:
             live_watches += 1
-        pending_interventions += len([item for item in list((watch_state or {}).get("interventions") or []) if isinstance(item, dict) and str(item.get("status") or "").strip().lower() == "pending"])
+        pending_interventions += len(
+            [
+                item
+                for item in list((watch_state or {}).get("interventions") or [])
+                if isinstance(item, dict) and str(item.get("status") or "").strip().lower() == "pending"
+            ]
+        )
         if str(operator.get("readiness_label") or "").strip() == "handoff-ready":
             ready_handoffs += 1
         open_incidents += len([item for item in list(snapshot.get("open_incidents") or []) if isinstance(item, dict)])
@@ -2077,7 +2116,9 @@ def _print_automation_dashboard() -> None:
     if alerts:
         print("  Top alerts:")
         for alert in alerts[:5]:
-            print(f"    - [{str(alert.get('severity') or 'info').upper()}] {str(alert.get('title') or '')} · {str(alert.get('message') or '')}")
+            print(
+                f"    - [{str(alert.get('severity') or 'info').upper()}] {str(alert.get('title') or '')} · {str(alert.get('message') or '')}"
+            )
 
 
 def _build_session_share_text(session_id: str) -> str:
@@ -2198,12 +2239,6 @@ def _session_age_label(session: SessionSummary) -> str:
     if age_seconds is None:
         return "unknown"
     return _format_elapsed_compact(age_seconds)
-
-
-
-
-
-
 
 
 def _truncate_preview(text: str, *, max_chars: int) -> str:
@@ -2353,7 +2388,9 @@ def _validate_task_id_local(task_id: str, *, cwd: str | None = None) -> LocalLin
     tasks = payload.get("tasks") if isinstance(payload, dict) else []
     if not isinstance(tasks, list):
         return LocalLinkValidation(kind="task", item_id=normalized, available=False, source=str(tasks_file))
-    task = next((item for item in tasks if isinstance(item, dict) and str(item.get("id") or "").strip() == normalized), None)
+    task = next(
+        (item for item in tasks if isinstance(item, dict) and str(item.get("id") or "").strip() == normalized), None
+    )
     if task is None:
         return LocalLinkValidation(
             kind="task",
@@ -2390,11 +2427,7 @@ def _load_task_record(task_id: str, *, cwd: str | None = None) -> dict[str, Any]
     if not isinstance(tasks, list):
         return None
     return next(
-        (
-            item
-            for item in tasks
-            if isinstance(item, dict) and str(item.get("id") or "").strip() == normalized
-        ),
+        (item for item in tasks if isinstance(item, dict) and str(item.get("id") or "").strip() == normalized),
         None,
     )
 
@@ -2435,28 +2468,6 @@ def _render_effective_grounding_preview(
     return _truncate_preview("\n\n".join(section for section in sections if section), max_chars=max_chars)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def _plan_task_context_snippet(plan_id: str, task_id: str, *, cwd: str | None = None) -> str:
     """Return a concise plan/task framing block for LLM prompts, or '' if neither is set."""
     plan_id = str(plan_id or "").strip()
@@ -2491,8 +2502,7 @@ def build_analysis_prompt(
         f"Goal: {goal}",
         _plan_task_context_snippet(session.plan_id, session.task_id, cwd=session.cwd),
         f"Working directory: {session.cwd}",
-        "Use the workspace context below to ground your answer. "
-        "Focus on findings, risks, and concrete next steps.",
+        "Use the workspace context below to ground your answer. Focus on findings, risks, and concrete next steps.",
         "Workspace context:",
         context_text,
     ]
@@ -2516,8 +2526,7 @@ def build_write_prompt(
         f"Document title: {title}",
         f"Writing task: {task}",
         _plan_task_context_snippet(session.plan_id, session.task_id, cwd=session.cwd),
-        "Return clean markdown suitable for saving to a file. "
-        "Prefer clear headings and direct prose.",
+        "Return clean markdown suitable for saving to a file. Prefer clear headings and direct prose.",
         "Workspace context:",
         context_text,
     ]
@@ -2751,10 +2760,7 @@ def format_http_error(base_url: str, status_code: int, detail: str) -> str:
         if isinstance(payload, dict) and payload.get("error"):
             message = str(payload["error"]).strip()
     if status_code == 401:
-        return (
-            f"OpenClaw rejected the request with 401 Unauthorized. "
-            f"{auth_setup_hint()} for {base_url}."
-        )
+        return f"OpenClaw rejected the request with 401 Unauthorized. {auth_setup_hint()} for {base_url}."
     if not message:
         message = f"HTTP {status_code}"
     return f"OpenClaw request failed ({status_code}): {message}"
@@ -2818,10 +2824,10 @@ def _terminal_width(*, fallback: int = 80) -> int:
 
 _SEPARATOR_STYLES: dict[str, list[str]] = {
     "gradient": ["▓▒░  ▓▒░  ▓▒░", "░▓▒  ░▓▒  ░▓▒", "▒░▓  ▒░▓  ▒░▓"],
-    "pulse":    ["─────────────", "━━━━━━━━━━━━━", "═══════════════"],
-    "dots":     ["· · · · · · ·", "• • • • • • •", "○ ○ ○ ○ ○ ○ ○"],
-    "wave":     ["~-~-~-~-~-~-~", "-~-~-~-~-~-~-", "~-~-~-~-~-~-~"],
-    "none":     [],
+    "pulse": ["─────────────", "━━━━━━━━━━━━━", "═══════════════"],
+    "dots": ["· · · · · · ·", "• • • • • • •", "○ ○ ○ ○ ○ ○ ○"],
+    "wave": ["~-~-~-~-~-~-~", "-~-~-~-~-~-~-", "~-~-~-~-~-~-~"],
+    "none": [],
 }
 
 
@@ -2892,6 +2898,7 @@ def _print_animated_separator() -> None:
 def _render_table_ansi(rows: list[list[str]]) -> list[str]:
     """Shim — delegates to openclaw_cli_render; honours monkeypatched _terminal_width."""
     from dataclasses import replace as _dc_replace
+
     return _render_mod._render_table_ansi(rows, _dc_replace(_make_render_ctx(), cols=_terminal_width()))
 
 
@@ -2906,7 +2913,7 @@ def _inject_heading_emojis(text: str) -> str:
         if line.strip().startswith("```"):
             in_code = not in_code
         if not in_code and line.startswith("#"):
-            m = re.match(r'^(#{1,4}) (.+)$', line)
+            m = re.match(r"^(#{1,4}) (.+)$", line)
             if m:
                 level = len(m.group(1))
                 emoji = _HEADING_EMOJIS.get(level, "")
@@ -2916,7 +2923,7 @@ def _inject_heading_emojis(text: str) -> str:
     return "\n".join(result)
 
 
-_URL_PATTERN = re.compile(r'(https?://[^\s\)\]\>\"\']+)', re.IGNORECASE)
+_URL_PATTERN = re.compile(r"(https?://[^\s\)\]\>\"\']+)", re.IGNORECASE)
 
 
 def _make_clickable_link(url: str, text: str = "") -> str:
@@ -3234,7 +3241,9 @@ def _execute_routed_plan(
         slash_command = _plan_step_slash_command(step)
         if not slash_command:
             summary = f"step {step.index} has no executable slash command"
-            _update_persisted_plan_step(plan_id, step.index, status="failed", output=summary, session_id=session.session_id)
+            _update_persisted_plan_step(
+                plan_id, step.index, status="failed", output=summary, session_id=session.session_id
+            )
             if _RICH_AVAILABLE and _IS_TTY:
                 _RICH_CONSOLE.print(f"  [dim][{step.index}/{total}][/] [red]✗ failed:[/] {summary}")
             else:
@@ -3252,10 +3261,14 @@ def _execute_routed_plan(
             fallback=f"step {step.index} complete",
         )
         if routed == _CMD_QUIT:
-            _update_persisted_plan_step(plan_id, step.index, status="failed", output="execution aborted", session_id=session.session_id)
+            _update_persisted_plan_step(
+                plan_id, step.index, status="failed", output="execution aborted", session_id=session.session_id
+            )
             return _CMD_QUIT
         if routed is None or not ctx.command_ok:
-            _update_persisted_plan_step(plan_id, step.index, status="failed", output=summary, session_id=session.session_id)
+            _update_persisted_plan_step(
+                plan_id, step.index, status="failed", output=summary, session_id=session.session_id
+            )
             if _RICH_AVAILABLE and _IS_TTY:
                 _RICH_CONSOLE.print(f"  [dim][{step.index}/{total}][/] [red]✗ failed:[/] {summary}")
             else:
@@ -3271,7 +3284,7 @@ def _execute_routed_plan(
 # ---------------------------------------------------------------------------
 
 _CMD_CONTINUE: str = "continue"  # sentinel: command handled, keep the REPL loop
-_CMD_QUIT: str = "quit"           # sentinel: command handled, exit the REPL
+_CMD_QUIT: str = "quit"  # sentinel: command handled, exit the REPL
 _SYSTEM_PROMPT_MAX = 2000
 
 
@@ -3341,11 +3354,14 @@ def _set_command_result(ctx: ChatCommandContext, *, ok: bool, summary: str = "")
 # Session / context inspection and mutation commands
 # ---------------------------------------------------------------------------
 
+
 def _require_session_or_warn(ctx: ChatCommandContext) -> "SessionSummary | None":
     """Load the active session, printing a warning when none is set."""
     if not ctx.session_id:
         if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print("[yellow]⚠[/]  no active session  [dim]·  openclaw --session <id>  or  openclaw session create[/]")
+            _RICH_CONSOLE.print(
+                "[yellow]⚠[/]  no active session  [dim]·  openclaw --session <id>  or  openclaw session create[/]"
+            )
         else:
             print("No active session. Start with: openclaw --session <id> or openclaw session create")
         _set_command_result(ctx, ok=False, summary="no active session")
@@ -3361,9 +3377,6 @@ def _require_session_or_warn(ctx: ChatCommandContext) -> "SessionSummary | None"
 # ---------------------------------------------------------------------------
 # Wave 12: Watch status helpers + /watch REPL command
 # ---------------------------------------------------------------------------
-
-
-
 
 
 def _last_trace_snapshot(session_id: str) -> dict[str, Any] | None:
@@ -3410,8 +3423,7 @@ def _last_trace_snapshot(session_id: str) -> dict[str, Any] | None:
     latest_rating_label = ""
     if isinstance(latest_rating, dict):
         latest_rating_label = (
-            f"{latest_rating.get('score', latest_rating.get('rating', '?'))}/5"
-            f" ({latest_rating.get('label', 'rated')})"
+            f"{latest_rating.get('score', latest_rating.get('rating', '?'))}/5 ({latest_rating.get('label', 'rated')})"
         )
 
     return {
@@ -3463,7 +3475,10 @@ def _route_quality_summary() -> list[dict[str, Any]]:
                 "high_rate": int(sum(1 for score in scores if score >= 4) / max(1, len(scores)) * 100),
             }
         )
-    rows.sort(key=lambda item: (float(item.get("avg") or 0.0), int(item.get("count") or 0), str(item.get("route") or "")), reverse=True)
+    rows.sort(
+        key=lambda item: (float(item.get("avg") or 0.0), int(item.get("count") or 0), str(item.get("route") or "")),
+        reverse=True,
+    )
     return rows
 
 
@@ -3500,11 +3515,27 @@ def _handoff_check_snapshot(session_id: str) -> dict[str, Any]:
     checks: list[tuple[str, bool, str]] = []
     checks.append(("plan", bool(session.plan_id), str(session.plan_id or "link a plan with /plan <id>")))
     checks.append(("task", bool(session.task_id), str(session.task_id or "link a task with /task <id>")))
-    checks.append(("owner", bool(assignments), str(assignments[0].get("assignee") or assignments[0].get("actor") if assignments else "record ownership with /collab assign @actor TEXT")))
+    checks.append(
+        (
+            "owner",
+            bool(assignments),
+            str(
+                assignments[0].get("assignee") or assignments[0].get("actor")
+                if assignments
+                else "record ownership with /collab assign @actor TEXT"
+            ),
+        )
+    )
     checks.append(("handoff", bool(latest_handoff), str(latest_handoff.get("id") or "create one with /handoff create")))
     watch_status = str(watch_state.get("status") or "").strip().lower()
     checks.append(("watch", watch_status not in {"running", "active"}, watch_status or "idle"))
-    checks.append(("incidents", not open_incidents, "resolve incidents with /incident resolve <index>" if open_incidents else "none"))
+    checks.append(
+        (
+            "incidents",
+            not open_incidents,
+            "resolve incidents with /incident resolve <index>" if open_incidents else "none",
+        )
+    )
     readiness = "ready"
     if open_risks or open_incidents:
         readiness = "blocked"
@@ -3527,6 +3558,7 @@ def _incident_entries(session_id: str) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # Action delegation slash commands
 # ---------------------------------------------------------------------------
+
 
 def _require_config_or_warn(ctx: ChatCommandContext) -> "CliConfig | None":
     """Return ctx.config, printing a warning when it is absent."""
@@ -3615,15 +3647,23 @@ def _session_badges(s: "SessionSummary") -> str:
     parts: list[str] = []
     parts.append(_status_cell(s.status or "active", rich=_RICH_AVAILABLE and _IS_TTY))
     if s.automation_mode:
-        parts.append(_progress_cell("auto", s.automation_mode, status=s.automation_status or "active", rich=_RICH_AVAILABLE and _IS_TTY))
+        parts.append(
+            _progress_cell(
+                "auto", s.automation_mode, status=s.automation_status or "active", rich=_RICH_AVAILABLE and _IS_TTY
+            )
+        )
     if _session_is_stale(s):
         parts.append(_status_cell("stale", rich=_RICH_AVAILABLE and _IS_TTY))
     elif s.updated_at:
         parts.append(_status_cell("info", detail="fresh", rich=_RICH_AVAILABLE and _IS_TTY))
     if (s.output_count or 0) > 0:
-        parts.append(_progress_cell("outputs", str(s.output_count), status="complete", rich=_RICH_AVAILABLE and _IS_TTY))
+        parts.append(
+            _progress_cell("outputs", str(s.output_count), status="complete", rich=_RICH_AVAILABLE and _IS_TTY)
+        )
     if (s.checkpoint_count or 0) > 0:
-        parts.append(_progress_cell("ckpt", str(s.checkpoint_count), status="complete", rich=_RICH_AVAILABLE and _IS_TTY))
+        parts.append(
+            _progress_cell("ckpt", str(s.checkpoint_count), status="complete", rich=_RICH_AVAILABLE and _IS_TTY)
+        )
     mood_cell = _session_mood_cell(_session_mood_snapshot(s), rich=_RICH_AVAILABLE and _IS_TTY)
     if mood_cell:
         parts.append(mood_cell)
@@ -3643,6 +3683,8 @@ def _session_is_stale(s: "SessionSummary", days: int = 7) -> bool:
 
 def _print_workspace_capsule(capsule: dict[str, Any], *, title: str = "Workspace Capsule") -> None:
     _ui_utils_mod._print_workspace_capsule(capsule, title=title)
+
+
 def _print_macro_progress(steps: list, current_idx: int, done_indices: set) -> None:
     """Print a live macro step progress tracker."""
     _macros_mod._print_macro_progress(steps, current_idx, done_indices, a11y_plain=_a11y_plain_mode())
@@ -3775,17 +3817,20 @@ def build_chat_command_registry() -> ChatCommandRegistry:
     """Build and return the default interactive-chat command registry."""
     registry = ChatCommandRegistry()
     for name, description, handler, aliases in _COMMAND_SPECS:
-        registry.register(SlashCommand(
-            name=name,
-            description=description,
-            handler=handler,
-            aliases=aliases,
-        ))
+        registry.register(
+            SlashCommand(
+                name=name,
+                description=description,
+                handler=handler,
+                aliases=aliases,
+            )
+        )
     return registry
 
 
 def handle_auth_command(args: argparse.Namespace) -> int:
     """Handle CLI token login/status/logout flows."""
+
     def _auth_print(msg: str, style: str = "") -> None:
         if _RICH_AVAILABLE and _IS_TTY and style:
             _RICH_CONSOLE.print(f"[{style}]{msg}[/]")
@@ -3876,7 +3921,9 @@ def _print_connection_error_panel(msg: str, base_url: str = "") -> None:
         body.append("  • Is the OpenClaw server running?\n", style="dim")
         body.append("  • Check OPENCLAW_URL or pass --url\n", style="dim")
         body.append("  • Try: openclaw health\n", style="dim")
-    _RICH_CONSOLE.print(_RichPanel(body, title="[bold red]❌ Connection failed[/]", border_style="red", padding=(0, 1)), file=sys.stderr)
+    _RICH_CONSOLE.print(
+        _RichPanel(body, title="[bold red]❌ Connection failed[/]", border_style="red", padding=(0, 1)), file=sys.stderr
+    )
     _print_predictive_affordances(
         _build_error_recovery_hints(msg),
         title="Recovery menu",
@@ -3905,18 +3952,25 @@ def handle_status_command(args: argparse.Namespace, *, config: "CliConfig") -> i
     resolution = resolve_token_details(config.token)
 
     from openclaw_cli_sessions import list_sessions as _list_sessions
+
     recent = _list_sessions(limit=1)
     recent_session = recent[0] if recent else None
 
     if output_json:
         import json as _json
-        print(_json.dumps({
-            "version": version,
-            "latest": latest,
-            "health": health_status,
-            "token_source": resolution.source if resolution.token else None,
-            "recent_session": recent_session.session_id if recent_session else None,
-        }, indent=2))
+
+        print(
+            _json.dumps(
+                {
+                    "version": version,
+                    "latest": latest,
+                    "health": health_status,
+                    "token_source": resolution.source if resolution.token else None,
+                    "recent_session": recent_session.session_id if recent_session else None,
+                },
+                indent=2,
+            )
+        )
         return 0
 
     if _RICH_AVAILABLE and _IS_TTY:
@@ -3945,7 +3999,9 @@ def handle_status_command(args: argparse.Namespace, *, config: "CliConfig") -> i
             if recent_session.title:
                 grid.append(f"  [dim]{recent_session.title[:50]}[/]")
             grid.append("\n")
-        _RICH_CONSOLE.print(_RichPanel(grid, title="[bold cyan]🦞 OpenClaw Status[/]", border_style="cyan", padding=(0, 1)))
+        _RICH_CONSOLE.print(
+            _RichPanel(grid, title="[bold cyan]🦞 OpenClaw Status[/]", border_style="cyan", padding=(0, 1))
+        )
     else:
         print(f"version : {version}" + (f" (update: {latest})" if latest and latest != version else ""))
         print(f"server  : {config.base_url}  [{health_status}]")
@@ -4076,7 +4132,15 @@ def _print_status_bar(
     history_len: int = 0,
     context_pct: int = 0,
 ) -> None:
-    _ui_utils_mod._print_status_bar(session_id=session_id, autoroute_on=autoroute_on, history_len=history_len, context_pct=context_pct, _override_is_tty=_IS_TTY, _override_rich_available=_RICH_AVAILABLE, _override_cols=_terminal_width())
+    _ui_utils_mod._print_status_bar(
+        session_id=session_id,
+        autoroute_on=autoroute_on,
+        history_len=history_len,
+        context_pct=context_pct,
+        _override_is_tty=_IS_TTY,
+        _override_rich_available=_RICH_AVAILABLE,
+        _override_cols=_terminal_width(),
+    )
 
 
 def _emit_context_overflow_warning(
@@ -4165,7 +4229,9 @@ def _maybe_warn_context_pressure(history: list[dict[str, str]]) -> None:
     _last_context_warn_band = band
 
 
-def _make_prompt(session_id: str = "", autoroute_on: bool = True, multiline: bool = False, draft_active: bool = False) -> str:
+def _make_prompt(
+    session_id: str = "", autoroute_on: bool = True, multiline: bool = False, draft_active: bool = False
+) -> str:
     """Build the REPL prompt string, optionally with session hint or autoroute badge."""
     if _a11y_plain_mode():
         return "openclaw> "
@@ -4193,6 +4259,7 @@ def _make_prompt(session_id: str = "", autoroute_on: bool = True, multiline: boo
 def _render_prompt_format(fmt: str) -> str:
     """Render a prompt format string with current state substitutions."""
     import datetime
+
     now = datetime.datetime.now().strftime("%H:%M")
 
     route_mode = _PREFS.get("route_mode", "")
@@ -4216,11 +4283,11 @@ def _print_first_run_tips() -> None:
     """Print a compact new-session tip panel (shown once, only in TTY mode)."""
     is_tty = _get_is_tty()
     tips = [
-        (f"{_e('📁', '[cwd]')} /cwd <path>",       "Set working directory for file context"),
+        (f"{_e('📁', '[cwd]')} /cwd <path>", "Set working directory for file context"),
         (f"{_e('📄', '[files]')} /files add <path>", "Track specific files the AI can reference"),
-        (f"{_e('📋', '[plan]')} /plan <id>",         "Link a plan so routes read it automatically"),
-        (f"{_e('🔍', '[ctx]')} /context",             "See what context the AI currently has"),
-        (f"{_e('💡', '[help]')} /help search <kw>",  "Search commands by keyword"),
+        (f"{_e('📋', '[plan]')} /plan <id>", "Link a plan so routes read it automatically"),
+        (f"{_e('🔍', '[ctx]')} /context", "See what context the AI currently has"),
+        (f"{_e('💡', '[help]')} /help search <kw>", "Search commands by keyword"),
     ]
     if _RICH_AVAILABLE and is_tty:
         t = _RichTable.grid(padding=(0, 2))
@@ -4228,12 +4295,14 @@ def _print_first_run_tips() -> None:
         t.add_column(style="dim")
         for cmd, desc in tips:
             t.add_row(cmd, desc)
-        _RICH_CONSOLE.print(_RichPanel(
-            t,
-            title=f"[dim]{_e('🚀', '[new]')} New session — quick tips[/]",
-            border_style="dim",
-            padding=(0, 1),
-        ))
+        _RICH_CONSOLE.print(
+            _RichPanel(
+                t,
+                title=f"[dim]{_e('🚀', '[new]')} New session — quick tips[/]",
+                border_style="dim",
+                padding=(0, 1),
+            )
+        )
     else:
         print(f"\n  {_e('🚀', '[new]')} New session — quick tips:")
         for cmd, desc in tips:
@@ -4296,38 +4365,126 @@ def _print_shell_bottom_bar(
         _override_rich_available=_RICH_AVAILABLE,
         _override_cols=_terminal_width(),
     )
-_BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
-    # Core
-    "help", "clear", "quit", "exit", "update", "version", "v",
-    # Session & context
-    "session", "context", "cwd", "files", "plan", "watch", "task", "risk", "incident",
-    "sessions", "tag", "resume", "replay", "handoff", "workspace", "collab",
-    # Outputs & edits
-    "outputs", "rollback", "events", "why", "trace", "runbook", "exporttemplates", "edit", "exec", "write",
-    "changes", "diff", "snapshot",
-    # Routing & analysis
-    "autoroute", "analyze", "research",
-    # Display & UI
-    "theme", "emoji", "layout", "colorscheme", "separator", "links",
-    "autobold", "jsonformat", "emojiheaders", "pathhints", "ratehint",
-    "promptdebug", "quality", "routing", "tip", "shortcuts",
-    "palette", "overlay", "bindlist", "keybind", "keys",
-    # Dashboard & benchmarks
-    "dashboard", "alerts", "fleet", "benchmark", "timeline",
-    # History & search
-    "history", "recall", "histsearch", "freq", "heatmap", "top", "streak",
-    # Persistence
-    "export", "stats",
-    # Pinning & notes
-    "pin", "pins", "search",
-    # Aliases, macros, templates
-    "alias", "macro", "macrostatus", "workflow", "pattern", "patterns", "template", "draft",
-    # Accessibility
-    "accessibility", "a11y",
-    # Misc / fun
-    "rate", "ratehint", "copy", "clip", "save", "retry", "notify", "celebrate", "inject", "system", "prompt",
-    "pasteguard", "followup", "tokeninfo", "paste",
-})
+
+
+_BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset(
+    {
+        # Core
+        "help",
+        "clear",
+        "quit",
+        "exit",
+        "update",
+        "version",
+        "v",
+        # Session & context
+        "session",
+        "context",
+        "cwd",
+        "files",
+        "plan",
+        "watch",
+        "task",
+        "risk",
+        "incident",
+        "sessions",
+        "tag",
+        "resume",
+        "replay",
+        "handoff",
+        "workspace",
+        "collab",
+        # Outputs & edits
+        "outputs",
+        "rollback",
+        "events",
+        "why",
+        "trace",
+        "runbook",
+        "exporttemplates",
+        "edit",
+        "exec",
+        "write",
+        "changes",
+        "diff",
+        "snapshot",
+        # Routing & analysis
+        "autoroute",
+        "analyze",
+        "research",
+        # Display & UI
+        "theme",
+        "emoji",
+        "layout",
+        "colorscheme",
+        "separator",
+        "links",
+        "autobold",
+        "jsonformat",
+        "emojiheaders",
+        "pathhints",
+        "ratehint",
+        "promptdebug",
+        "quality",
+        "routing",
+        "tip",
+        "shortcuts",
+        "palette",
+        "overlay",
+        "bindlist",
+        "keybind",
+        "keys",
+        # Dashboard & benchmarks
+        "dashboard",
+        "alerts",
+        "fleet",
+        "benchmark",
+        "timeline",
+        # History & search
+        "history",
+        "recall",
+        "histsearch",
+        "freq",
+        "heatmap",
+        "top",
+        "streak",
+        # Persistence
+        "export",
+        "stats",
+        # Pinning & notes
+        "pin",
+        "pins",
+        "search",
+        # Aliases, macros, templates
+        "alias",
+        "macro",
+        "macrostatus",
+        "workflow",
+        "pattern",
+        "patterns",
+        "template",
+        "draft",
+        # Accessibility
+        "accessibility",
+        "a11y",
+        # Misc / fun
+        "rate",
+        "ratehint",
+        "copy",
+        "clip",
+        "save",
+        "retry",
+        "notify",
+        "celebrate",
+        "inject",
+        "system",
+        "prompt",
+        "pasteguard",
+        "followup",
+        "tokeninfo",
+        "paste",
+    }
+)
 
 _MAX_ALIASES = 50
 
@@ -4336,6 +4493,7 @@ def _relative_time(ts_str: str) -> str:
     """Convert ISO timestamp to relative time string."""
     try:
         import datetime
+
         ts = datetime.datetime.fromisoformat(ts_str)
         now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
         diff = now - ts
@@ -4354,6 +4512,8 @@ def _relative_time(ts_str: str) -> str:
 
 def _celebration_burst(message: str = "") -> None:
     _ui_utils_mod._celebration_burst(message)
+
+
 def _print_ascii_trophy(streak: int) -> None:
     """Print an ASCII trophy for streak achievements."""
     is_tty = _get_is_tty()
@@ -4442,14 +4602,14 @@ def _strip_gh_refs(text: str) -> str:
 
 # Prompt keywords that indicate the user wants to edit/modify a file (for write-back).
 _EDIT_INTENT_RE = _re.compile(
-    r'\b(edit|update|modify|rewrite|fix|improve|change|refactor|revise|correct|'
-    r'clean\s+up|reformat|replace|overwrite|save|write\s+back)\b',
+    r"\b(edit|update|modify|rewrite|fix|improve|change|refactor|revise|correct|"
+    r"clean\s+up|reformat|replace|overwrite|save|write\s+back)\b",
     _re.IGNORECASE,
 )
 
 # Detects when the AI responded with a short clarifying question rather than a real answer.
-_CLARIFYING_Q_RE = _re.compile(r'\?\s*$')
-_CLARIFYING_NOISE = _re.compile(r'(\[1\]|https?://|```|---|\*\*\*)')
+_CLARIFYING_Q_RE = _re.compile(r"\?\s*$")
+_CLARIFYING_NOISE = _re.compile(r"(\[1\]|https?://|```|---|\*\*\*)")
 _CLARIFYING_MAX_CHARS = 350
 
 
@@ -4462,7 +4622,9 @@ def _suggest_followups(last_prompt: str, *, response_text: str = "", session_id:
 
 
 def _print_followup_suggestions(suggestions: list[str], *, mode: str = "chat") -> None:
-    return _path_utils._print_followup_suggestions(suggestions, mode=mode, prefs=_PREFS, is_tty=_get_is_tty(), rich_available=_RICH_AVAILABLE)
+    return _path_utils._print_followup_suggestions(
+        suggestions, mode=mode, prefs=_PREFS, is_tty=_get_is_tty(), rich_available=_RICH_AVAILABLE
+    )
 
 
 def _paste_guard(
@@ -4477,12 +4639,7 @@ def _paste_guard(
     Fails open — any unexpected error returns prompt unchanged.
     """
     try:
-        if not (
-            len(prompt) > 400
-            and prompt.count("\n") >= 3
-            and autoroute_on
-            and _PREFS.get("paste_guard", True)
-        ):
+        if not (len(prompt) > 400 and prompt.count("\n") >= 3 and autoroute_on and _PREFS.get("paste_guard", True)):
             return prompt
 
         # Peek at the route without executing — routing is deterministic for the same prompt.
@@ -4515,21 +4672,22 @@ def _print_key_bindings() -> None:
     """Print currently active readline key bindings summary."""
     is_tty = _get_is_tty()
     bindings = [
-        ("Ctrl+R",   "Reverse history search (type to filter)"),
-        ("Ctrl+L",   "Clear screen"),
-        ("Ctrl+W",   "Delete previous word"),
-        ("Ctrl+U",   "Clear current line"),
-        ("Ctrl+A",   "Jump to start of line"),
-        ("Ctrl+E",   "Jump to end of line"),
-        ("Ctrl+C",   "Interrupt / cancel"),
-        ("Ctrl+D",   "Exit openclaw"),
-        ("Tab",      "Auto-complete slash commands"),
-        ("↑ / ↓",    "Browse command history"),
+        ("Ctrl+R", "Reverse history search (type to filter)"),
+        ("Ctrl+L", "Clear screen"),
+        ("Ctrl+W", "Delete previous word"),
+        ("Ctrl+U", "Clear current line"),
+        ("Ctrl+A", "Jump to start of line"),
+        ("Ctrl+E", "Jump to end of line"),
+        ("Ctrl+C", "Interrupt / cancel"),
+        ("Ctrl+D", "Exit openclaw"),
+        ("Tab", "Auto-complete slash commands"),
+        ("↑ / ↓", "Browse command history"),
     ]
 
     if _RICH_AVAILABLE and is_tty:
         from rich.table import Table
         from rich.box import SIMPLE
+
         _RICH_CONSOLE.print("\n[bold cyan]⌨️  Active Key Bindings[/]\n")
         tbl = Table(box=SIMPLE, show_header=True, header_style="bold cyan")
         tbl.add_column("Key", style="bold yellow", no_wrap=True, width=16)
@@ -4661,6 +4819,7 @@ def _apply_custom_keybind(key_name: str, action: str) -> None:
     """Apply a custom keybind via readline (best-effort)."""
     try:
         import readline as _rl
+
         if key_name.startswith("Ctrl+"):
             char = key_name[5:].upper()
             if len(char) == 1:
@@ -4687,6 +4846,7 @@ def _setup_readline() -> None:
     readline.parse_and_bind("tab: complete")
     try:
         import readline as _rl
+
         # Ensure emacs mode is active so Ctrl-R reverse search works natively.
         _rl.parse_and_bind("set editing-mode emacs")
         # Ctrl-L: clear screen
@@ -4741,6 +4901,7 @@ def _build_prompt_toolkit_session() -> Any | None:
     # Custom bindings: Enter always submits; paste accumulates newlines in buffer.
     kb = _PTKKeyBindings() if _PTKKeyBindings is not None else None
     if kb is not None:
+
         @kb.add("enter", eager=True)
         def _submit_on_enter(event: Any) -> None:  # type: ignore[misc]
             event.current_buffer.validate_and_handle()
@@ -4758,6 +4919,7 @@ def _build_prompt_toolkit_session() -> Any | None:
 def _maybe_show_startup_tip(config: "CliConfig", session_id: str, history: list) -> None:
     """Optionally display a random startup tip and first-run checklist."""
     import random as _random
+
     _is_tty_startup = _get_is_tty()
     if _random.random() < 0.3 and not _a11y_plain_mode() and _is_tty_startup and not config.output_json:
         _startup_tip = _random.choice(_OPENCLAW_TIPS)
@@ -4818,7 +4980,7 @@ def _read_input_with_paste(input_func: Any, prompt_str: str) -> str:
     if not line.startswith(_BP_START):
         return line
     # Bracketed paste: strip start marker, accumulate lines until end marker.
-    first = line[len(_BP_START):]
+    first = line[len(_BP_START) :]
     if _BP_END in first:
         return first[: first.index(_BP_END)].strip()
     buf = [first]
@@ -4848,11 +5010,31 @@ def _run_chat_build_effective_input(
     stripped.
     """
     global _next_inject
-    _BINARY_EXTS = frozenset({
-        ".pdf", ".docx", ".xlsx", ".pptx", ".zip", ".tar", ".gz",
-        ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg",
-        ".mp3", ".mp4", ".mov", ".avi", ".exe", ".bin", ".dmg",
-    })
+    _BINARY_EXTS = frozenset(
+        {
+            ".pdf",
+            ".docx",
+            ".xlsx",
+            ".pptx",
+            ".zip",
+            ".tar",
+            ".gz",
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".bmp",
+            ".webp",
+            ".svg",
+            ".mp3",
+            ".mp4",
+            ".mov",
+            ".avi",
+            ".exe",
+            ".bin",
+            ".dmg",
+        }
+    )
     _auto_file_chunks: list[str] = []
     _auto_injected_paths: list[str] = []
 
@@ -4861,6 +5043,7 @@ def _run_chat_build_effective_input(
     if _explicit_refs:
         prompt = _strip_explicit_refs(prompt)
     import urllib.request as _urllib_req
+
     for _ref_kind, _ref_target in _explicit_refs:
         if _ref_kind == "file":
             _fp = Path(_ref_target).expanduser()
@@ -4897,10 +5080,9 @@ def _run_chat_build_effective_input(
                 print(f" ✗ ({_ref_err})")
         elif _ref_kind == "clip":
             import subprocess as _subp
+
             try:
-                _clip_text = _subp.run(
-                    ["pbpaste"], capture_output=True, text=True, check=True
-                ).stdout.strip()
+                _clip_text = _subp.run(["pbpaste"], capture_output=True, text=True, check=True).stdout.strip()
                 if _clip_text:
                     _auto_file_chunks.append(f"[Clipboard]\n{_clip_text[:100_000]}")
                     print(f"  {_DM}↳ reading @clip: {len(_clip_text):,} chars from clipboard{_R}")
@@ -4914,10 +5096,9 @@ def _run_chat_build_effective_input(
                 print(f"  {_DM}↳ @dir: {_ref_target} not found or not a directory{_R}")
             else:
                 _dir_files = sorted(
-                    p for p in _dp.iterdir()
-                    if p.is_file()
-                    and p.suffix.lower() not in _BINARY_EXTS
-                    and p.stat().st_size < 200_000
+                    p
+                    for p in _dp.iterdir()
+                    if p.is_file() and p.suffix.lower() not in _BINARY_EXTS and p.stat().st_size < 200_000
                 )[:20]
                 if not _dir_files:
                     print(f"  {_DM}↳ @dir: {_ref_target} — no readable text files found{_R}")
@@ -4930,9 +5111,7 @@ def _run_chat_build_effective_input(
                         except OSError:
                             pass
 
-    _explicit_paths_set = {
-        str(Path(p).expanduser().resolve()) for p in _auto_injected_paths
-    }
+    _explicit_paths_set = {str(Path(p).expanduser().resolve()) for p in _auto_injected_paths}
     for _fpath in _detect_file_paths(prompt):
         _fp = Path(_fpath).expanduser()
         _resolved = str(_fp.resolve())
@@ -4975,6 +5154,7 @@ def _run_chat_build_effective_input(
 
     # @git: injection
     import subprocess as _w53_subp
+
     _git_refs = _detect_git_refs(prompt)
     if _git_refs:
         prompt = _strip_git_refs(prompt)
@@ -5014,9 +5194,7 @@ def _run_chat_build_effective_input(
         if _is_cmd_allowlisted(_cmd_str):
             print(f"  {_DM}↳ running @cmd:{_cmd_str}…{_R}", flush=True)
             try:
-                _cmd_result = _w53_subp.run(
-                    _cmd_str, shell=True, capture_output=True, text=True, timeout=10
-                )
+                _cmd_result = _w53_subp.run(_cmd_str, shell=True, capture_output=True, text=True, timeout=10)
                 _cmd_out = (_cmd_result.stdout + _cmd_result.stderr)[:50_000]
                 if _cmd_out.strip():
                     _auto_file_chunks.append(f"[Command: {_cmd_str}]\n{_cmd_out}")
@@ -5110,8 +5288,7 @@ def _run_chat_display_response(
             _mh = _PREFS.get("last_model", "")
             _rh = _PREFS.get("route_mode", "")
             _pressure = _session_display_mod._context_pressure_snapshot(
-                history, system_prompt=_sys_p, pending_inject=_inj_p,
-                model_hint=_mh, route_hint=_rh
+                history, system_prompt=_sys_p, pending_inject=_inj_p, model_hint=_mh, route_hint=_rh
             )
             _ctx_pct = int(_pressure.get("pct_history_raw", 0))
         except Exception:
@@ -5124,11 +5301,13 @@ def _run_chat_display_response(
         )
     if _PREFS.get("desktop_notify") and elapsed >= 10.0 and _IS_TTY:
         import subprocess as _notif_subp
+
         _notif_summary = (_last_response_text[:80].replace('"', "'") + "…") if _last_response_text else "Done"
         try:
             _notif_subp.run(
                 [
-                    "osascript", "-e",
+                    "osascript",
+                    "-e",
                     f'display notification "{_notif_summary}" with title "OpenClaw" subtitle "Response ready ({elapsed:.0f}s)"',
                 ],
                 check=False,
@@ -5147,6 +5326,7 @@ def _run_chat_write_back(
 ) -> None:
     """Show diff preview and offer to save AI response back to auto-injected source files."""
     import difflib as _difflib
+
     _response_text = response.response or ""
     for _wb_path in auto_injected_paths:
         _code_match = _re.search(r"```(?:\w+)?\n(.*?)```", _response_text, _re.DOTALL)
@@ -5154,13 +5334,15 @@ def _run_chat_write_back(
         _wb_fp = Path(_wb_path).expanduser()
         _wb_before = _wb_fp.read_text(encoding="utf-8", errors="replace") if _wb_fp.is_file() else ""
         if _wb_before:
-            _diff_lines = list(_difflib.unified_diff(
-                _wb_before.splitlines(keepends=True),
-                _content_to_save.splitlines(keepends=True),
-                fromfile=f"current: {_wb_path}",
-                tofile=f"proposed: {_wb_path}",
-                n=2,
-            ))
+            _diff_lines = list(
+                _difflib.unified_diff(
+                    _wb_before.splitlines(keepends=True),
+                    _content_to_save.splitlines(keepends=True),
+                    fromfile=f"current: {_wb_path}",
+                    tofile=f"proposed: {_wb_path}",
+                    n=2,
+                )
+            )
             if _diff_lines:
                 _shown = _diff_lines[:30]
                 for _dl in _shown:
@@ -5225,7 +5407,12 @@ def _run_chat_read_prompt(
     global _last_interrupted_prompt
     try:
         autoroute_on = _session_auto_route_enabled(session_id)
-        prompt_str = _make_prompt(session_id=session_id, autoroute_on=autoroute_on, multiline=_multiline_mode, draft_active=bool(_draft_buffer))
+        prompt_str = _make_prompt(
+            session_id=session_id,
+            autoroute_on=autoroute_on,
+            multiline=_multiline_mode,
+            draft_active=bool(_draft_buffer),
+        )
         if _multiline_mode:
             prompt = _read_multiline_input(input_func, prompt_str)
         elif prompt_session is not None:
@@ -5241,9 +5428,7 @@ def _run_chat_read_prompt(
             _disable_bracketed_paste()
         # Auto-summarize: promote the last user prompt to session title if still generic
         if session_id and history:
-            _last_prompt = next(
-                (t["content"] for t in reversed(history) if t.get("role") == "user"), ""
-            )
+            _last_prompt = next((t["content"] for t in reversed(history) if t.get("role") == "user"), "")
             if _last_prompt:
                 _sess = load_session(session_id)
                 if _sess and (not _sess.title or _sess.title.startswith("Session ")):
@@ -5449,10 +5634,12 @@ def _run_chat_handle_clarification(
     if not _clarify:
         return False, prompt, response
     # Add the clarification to history and send immediately.
-    history.extend([
-        {"role": "user", "content": prompt},
-        {"role": "assistant", "content": response.response},
-    ])
+    history.extend(
+        [
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": response.response},
+        ]
+    )
     try:
         if ask_func is invoke_openclaw and should_use_streaming(config):
             _spin_stop2, _spin_thread2, _spin_cancel2 = _ui_utils_mod._start_stream_spinner(
@@ -5551,9 +5738,7 @@ def run_chat(
             continue
 
         if autoroute_on:
-            route_action = _run_chat_handle_autoroute(
-                prompt, registry=registry, ctx=ctx, session_id=session_id
-            )
+            route_action = _run_chat_handle_autoroute(prompt, registry=registry, ctx=ctx, session_id=session_id)
             if route_action == "quit":
                 return 0
             if route_action == "continue":
@@ -5605,6 +5790,7 @@ def run_chat(
                     _sess.title = prompt[:60].strip()
                     save_session(_sess)
 
+
 def run_async(coro: Any) -> Any:
     """Run an async coroutine from the synchronous CLI entrypoint."""
     return asyncio.run(coro)
@@ -5638,7 +5824,8 @@ def handle_session_command(args: argparse.Namespace) -> int:
         filter_query = str(getattr(args, "filter", "") or "").strip().lower()
         if filter_query:
             sessions = [
-                s for s in sessions
+                s
+                for s in sessions
                 if filter_query in s.session_id.lower()
                 or filter_query in (s.title or "").lower()
                 or filter_query in (s.last_summary or "").lower()
@@ -5649,8 +5836,7 @@ def handle_session_command(args: argparse.Namespace) -> int:
                 title="Session list overlay",
                 items=sessions,
                 label_fn=lambda s: (
-                    f"{s.session_id[:8]}…  {s.title or '—'}  "
-                    f"{(s.updated_at or '—')[:19]}  {_session_badges(s)}".strip()
+                    f"{s.session_id[:8]}…  {s.title or '—'}  {(s.updated_at or '—')[:19]}  {_session_badges(s)}".strip()
                 ),
                 detail_fn=lambda s: _session_preview_lines(s),
                 on_select=lambda s: (
@@ -5720,8 +5906,12 @@ def handle_plan_command(args: argparse.Namespace, *, session_id: str = "") -> in
             return 0
         if _RICH_AVAILABLE and _IS_TTY:
             _STATUS_COLORS = {
-                "running": "cyan", "done": "green", "completed": "green",
-                "failed": "red", "cancelled": "dim", "pending": "yellow",
+                "running": "cyan",
+                "done": "green",
+                "completed": "green",
+                "failed": "red",
+                "cancelled": "dim",
+                "pending": "yellow",
                 "in-progress": "cyan",
             }
             table = _RichTable(border_style="dim", show_edge=True, pad_edge=True, header_style="bold cyan")
@@ -5751,14 +5941,18 @@ def handle_plan_command(args: argparse.Namespace, *, session_id: str = "") -> in
     if subcommand == "resume":
         result = run_async(resume_plan(args.plan_id))
         if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print(f"[green]▶[/] [bold]plan resumed:[/] [yellow]{args.plan_id}[/]  [dim]{str(result)[:120]}[/]")
+            _RICH_CONSOLE.print(
+                f"[green]▶[/] [bold]plan resumed:[/] [yellow]{args.plan_id}[/]  [dim]{str(result)[:120]}[/]"
+            )
         else:
             print(result)
         return 0
     if subcommand == "cancel":
         result = run_async(cancel_plan(args.plan_id))
         if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print(f"[red]✗[/] [bold]plan cancelled:[/] [dim]{args.plan_id}[/]  [dim]{str(result)[:120]}[/]")
+            _RICH_CONSOLE.print(
+                f"[red]✗[/] [bold]plan cancelled:[/] [dim]{args.plan_id}[/]  [dim]{str(result)[:120]}[/]"
+            )
         else:
             print(result)
         return 0
@@ -5767,13 +5961,17 @@ def handle_plan_command(args: argparse.Namespace, *, session_id: str = "") -> in
 
 def handle_analyze_command(args: argparse.Namespace, *, config: CliConfig) -> int:
     """Analyze a working directory or file set through the ask API."""
-    prompt_parts, prompt_targets = extract_prompt_targets(list(getattr(args, "prompt", []) or []), cwd=getattr(args, "cwd", None))
+    prompt_parts, prompt_targets = extract_prompt_targets(
+        list(getattr(args, "prompt", []) or []), cwd=getattr(args, "cwd", None)
+    )
     goal = parse_prompt(prompt_parts)
     if not goal:
         raise OpenClawCliError("Analysis goal is required.")
 
     explicit_targets = [*list(getattr(args, "files", []) or []), *prompt_targets]
-    normalized_targets, context_text = collect_workspace_context(cwd=getattr(args, "cwd", None), targets=explicit_targets)
+    normalized_targets, context_text = collect_workspace_context(
+        cwd=getattr(args, "cwd", None), targets=explicit_targets
+    )
     session = ensure_cli_session(
         getattr(args, "session", ""),
         title=f"Analyze: {goal[:60]}",
@@ -5832,9 +6030,29 @@ def handle_scan_command(args: argparse.Namespace, *, config: CliConfig) -> int:
     MAX_FILE_CHARS = 20_000
     SKIP_DIRS = {".git", "__pycache__", "node_modules", ".venv", "venv", ".DS_Store"}
     TEXT_EXTS = {
-        ".txt", ".md", ".rst", ".csv", ".json", ".yaml", ".yml", ".toml",
-        ".ini", ".cfg", ".log", ".py", ".js", ".ts", ".html", ".xml",
-        ".css", ".sql", ".sh", ".bash", ".r", ".docx", ".pdf",
+        ".txt",
+        ".md",
+        ".rst",
+        ".csv",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".ini",
+        ".cfg",
+        ".log",
+        ".py",
+        ".js",
+        ".ts",
+        ".html",
+        ".xml",
+        ".css",
+        ".sql",
+        ".sh",
+        ".bash",
+        ".r",
+        ".docx",
+        ".pdf",
     }
 
     tree_lines: list[str] = [f"📁 {target_path.name}/"]
@@ -5867,6 +6085,7 @@ def handle_scan_command(args: argparse.Namespace, *, config: CliConfig) -> int:
                     if ext == ".pdf":
                         try:
                             from pypdf import PdfReader
+
                             reader = PdfReader(str(entry))
                             text = "\n".join(page.extract_text() or "" for page in reader.pages)
                         except Exception:
@@ -5874,6 +6093,7 @@ def handle_scan_command(args: argparse.Namespace, *, config: CliConfig) -> int:
                     elif ext == ".docx":
                         try:
                             import docx
+
                             doc = docx.Document(str(entry))
                             text = "\n".join(p.text for p in doc.paragraphs)
                         except Exception:
@@ -5897,11 +6117,7 @@ def handle_scan_command(args: argparse.Namespace, *, config: CliConfig) -> int:
     if truncated:
         files_text += "\n\n[Note: Some files were omitted due to size limits]"
 
-    context_text = (
-        f"Folder: {target_path}\n\n"
-        f"## Folder Structure\n{tree_text}\n\n"
-        f"## File Contents\n{files_text}"
-    )
+    context_text = f"Folder: {target_path}\n\n## Folder Structure\n{tree_text}\n\n## File Contents\n{files_text}"
 
     session = ensure_cli_session(
         getattr(args, "session", ""),
@@ -5936,18 +6152,23 @@ def handle_scan_command(args: argparse.Namespace, *, config: CliConfig) -> int:
 def handle_research_command(args: argparse.Namespace) -> int:
     """Run the built-in research agent from the CLI."""
     from openclaw_cli_actions import write_text_file
+
     try:
         from research_agent import ResearchAgent
     except ImportError as exc:
         raise OpenClawCliError(missing_feature_hint("openclaw research")) from exc
 
-    prompt_parts, prompt_targets = extract_prompt_targets(list(getattr(args, "query", []) or []), cwd=getattr(args, "cwd", None))
+    prompt_parts, prompt_targets = extract_prompt_targets(
+        list(getattr(args, "query", []) or []), cwd=getattr(args, "cwd", None)
+    )
     query = parse_prompt(prompt_parts)
     if not query:
         raise OpenClawCliError("Research query is required.")
 
     explicit_targets = [*list(getattr(args, "files", []) or []), *prompt_targets]
-    normalized_targets, context_text = collect_workspace_context(cwd=getattr(args, "cwd", None), targets=explicit_targets)
+    normalized_targets, context_text = collect_workspace_context(
+        cwd=getattr(args, "cwd", None), targets=explicit_targets
+    )
     session = ensure_cli_session(
         getattr(args, "session", ""),
         title=f"Research: {query[:60]}",
@@ -5970,8 +6191,12 @@ def handle_research_command(args: argparse.Namespace) -> int:
         else:
             print(message)
 
-    append_event(session.session_id, kind="research", content=query, metadata={"summary": query, "files": normalized_targets})
-    report = run_async(ResearchAgent().run(effective_query, on_progress=_progress, deep=bool(getattr(args, "deep", False))))
+    append_event(
+        session.session_id, kind="research", content=query, metadata={"summary": query, "files": normalized_targets}
+    )
+    report = run_async(
+        ResearchAgent().run(effective_query, on_progress=_progress, deep=bool(getattr(args, "deep", False)))
+    )
     if _IS_TTY:
         sys.stdout.write("\r" + " " * 62 + "\r")
         sys.stdout.flush()
@@ -5987,7 +6212,12 @@ def handle_research_command(args: argparse.Namespace) -> int:
             report,
         )
         output_display = str(output_target)
-    append_event(session.session_id, kind="assistant", content=report, metadata={"summary": f"saved research to {output_display}"})
+    append_event(
+        session.session_id,
+        kind="assistant",
+        content=report,
+        metadata={"summary": f"saved research to {output_display}"},
+    )
     print(report)
     _print_meta_footer(("saved", output_display), ("session", session.session_id))
     return 0
@@ -5995,13 +6225,17 @@ def handle_research_command(args: argparse.Namespace) -> int:
 
 def handle_write_command(args: argparse.Namespace, *, config: CliConfig) -> int:
     """Generate a markdown document from a writing task."""
-    task_parts, prompt_targets = extract_prompt_targets(list(getattr(args, "task", []) or []), cwd=getattr(args, "cwd", None))
+    task_parts, prompt_targets = extract_prompt_targets(
+        list(getattr(args, "task", []) or []), cwd=getattr(args, "cwd", None)
+    )
     task_text = parse_prompt(task_parts)
     if not task_text:
         raise OpenClawCliError("Writing task is required.")
 
     explicit_targets = [*list(getattr(args, "files", []) or []), *prompt_targets]
-    normalized_targets, context_text = collect_workspace_context(cwd=getattr(args, "cwd", None), targets=explicit_targets)
+    normalized_targets, context_text = collect_workspace_context(
+        cwd=getattr(args, "cwd", None), targets=explicit_targets
+    )
     title = str(getattr(args, "title", "") or "").strip() or task_text[:80]
     session = ensure_cli_session(
         getattr(args, "session", ""),
@@ -6013,7 +6247,12 @@ def handle_write_command(args: argparse.Namespace, *, config: CliConfig) -> int:
     )
     scoped_config = bind_config_to_session(config, session.session_id)
     prompt = build_write_prompt(task=task_text, context_text=context_text, session=session, title=title)
-    append_event(session.session_id, kind="write", content=task_text, metadata={"summary": task_text, "files": normalized_targets})
+    append_event(
+        session.session_id,
+        kind="write",
+        content=task_text,
+        metadata={"summary": task_text, "files": normalized_targets},
+    )
     response = _with_spinner(
         "✍️  Writing…",
         invoke_openclaw,
@@ -6038,10 +6277,6 @@ def handle_write_command(args: argparse.Namespace, *, config: CliConfig) -> int:
     print(response.response)
     _print_meta_footer(("saved", output_display), ("session", session.session_id))
     return 0
-
-
-
-
 
 
 def handle_exec_command(args: argparse.Namespace) -> int:
@@ -6235,9 +6470,11 @@ def main(argv: list[str] | None = None) -> int:
                 # Standalone: compare file hashes against the server
                 try:
                     import hashlib
+
                     base_url = os.getenv("OPENCLAW_URL", "http://192.168.1.93:8765").rstrip("/")
                     url = f"{base_url}/cli-update/meta"
                     import urllib.request as _ur
+
                     with _ur.urlopen(_ur.Request(url), timeout=3.0) as resp:
                         server_hashes: dict[str, str] = json.loads(resp.read())
                     for fname, server_hash in server_hashes.items():
@@ -6256,9 +6493,7 @@ def main(argv: list[str] | None = None) -> int:
                 if latest:
                     _update_mod._latest_version = latest
 
-        _update_thread: threading.Thread | None = threading.Thread(
-            target=_update_check_worker, daemon=True
-        )
+        _update_thread: threading.Thread | None = threading.Thread(target=_update_check_worker, daemon=True)
         _update_thread.start()
     else:
         _update_thread = None
@@ -6338,11 +6573,31 @@ def main(argv: list[str] | None = None) -> int:
         history = load_conversation_history(config.session_id) if config.session_id else None
 
         # Auto-inject local files mentioned in the prompt (same logic as the REPL path).
-        _BINARY_EXTS_OS = frozenset({
-            ".pdf", ".docx", ".xlsx", ".pptx", ".zip", ".tar", ".gz",
-            ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg",
-            ".mp3", ".mp4", ".mov", ".avi", ".exe", ".bin", ".dmg",
-        })
+        _BINARY_EXTS_OS = frozenset(
+            {
+                ".pdf",
+                ".docx",
+                ".xlsx",
+                ".pptx",
+                ".zip",
+                ".tar",
+                ".gz",
+                ".png",
+                ".jpg",
+                ".jpeg",
+                ".gif",
+                ".bmp",
+                ".webp",
+                ".svg",
+                ".mp3",
+                ".mp4",
+                ".mov",
+                ".avi",
+                ".exe",
+                ".bin",
+                ".dmg",
+            }
+        )
         _os_file_chunks: list[str] = []
         for _fpath in _detect_file_paths(prompt):
             _fp = Path(_fpath).expanduser()
@@ -6366,7 +6621,9 @@ def main(argv: list[str] | None = None) -> int:
                 is_tty=_IS_TTY,
                 output_json=config.output_json,
             )
-            response = invoke_openclaw_stream(prompt, config=config, history=history, _stop_spinner=_spin_stop, _cancel_event=_spin_cancel)
+            response = invoke_openclaw_stream(
+                prompt, config=config, history=history, _stop_spinner=_spin_stop, _cancel_event=_spin_cancel
+            )
             if _spin_stop is not None and not _spin_stop.is_set():
                 _spin_stop.set()
             if _spin_thread is not None:
@@ -6374,9 +6631,13 @@ def main(argv: list[str] | None = None) -> int:
             if _spin_cancel is not None and _spin_cancel.is_set():
                 raise KeyboardInterrupt
         elif history is None:
-            response = _with_spinner("💬 Thinking…", invoke_openclaw, prompt, config=config, output_json=config.output_json)
+            response = _with_spinner(
+                "💬 Thinking…", invoke_openclaw, prompt, config=config, output_json=config.output_json
+            )
         else:
-            response = _with_spinner("💬 Thinking…", invoke_openclaw, prompt, config=config, history=history, output_json=config.output_json)
+            response = _with_spinner(
+                "💬 Thinking…", invoke_openclaw, prompt, config=config, history=history, output_json=config.output_json
+            )
         print_response(response, output_json=config.output_json)
         save_path = getattr(args, "save_to", None)
         if save_path:

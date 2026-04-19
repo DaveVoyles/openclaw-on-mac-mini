@@ -232,9 +232,7 @@ def select_latency_budget_policy(
 
     degrade_mode, degrade_reasons = classify_degrade_mode(load_tier, load_stats)
     degrade_cfg = _DEGRADE_MODE_MODIFIERS[degrade_mode]
-    allow_retry = bool(tier_cfg["allow_repair_retry"]) and bool(
-        degrade_cfg["allow_repair_retry"]
-    )
+    allow_retry = bool(tier_cfg["allow_repair_retry"]) and bool(degrade_cfg["allow_repair_retry"])
 
     if degrade_mode == "constrained":
         _record_degrade_mode_metric(
@@ -258,8 +256,7 @@ def select_latency_budget_policy(
                 * float(degrade_cfg["retrieval_scale"])
             ),
             "floor": int(profile_cfg["retrieval_floor"]),
-            "query_variant_delta": int(tier_cfg["query_variant_delta"])
-            + int(degrade_cfg["query_variant_delta"]),
+            "query_variant_delta": int(tier_cfg["query_variant_delta"]) + int(degrade_cfg["query_variant_delta"]),
             "provider_attempt_delta": int(tier_cfg["provider_attempt_delta"])
             + int(degrade_cfg["provider_attempt_delta"]),
             "degrade_mode": degrade_mode,
@@ -477,9 +474,7 @@ async def run_ask_stream(
                         result.model_used = model_name
                     routing_notes = meta.get("routing_notes")
                     if isinstance(routing_notes, list):
-                        result.routing_notes.extend(
-                            str(note) for note in routing_notes if isinstance(note, str)
-                        )
+                        result.routing_notes.extend(str(note) for note in routing_notes if isinstance(note, str))
                     explainability_note = meta.get("explainability_note")
                     if isinstance(explainability_note, str):
                         result.context_explainability_note = explainability_note.strip()

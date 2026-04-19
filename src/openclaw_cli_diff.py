@@ -4,6 +4,7 @@ openclaw_cli_diff — Diff colorization for unified diff output.
 Imports from: openclaw_cli_ui_core (ANSI constants)
 Does NOT import from: openclaw_cli.py (no circular deps)
 """
+
 from __future__ import annotations
 
 try:

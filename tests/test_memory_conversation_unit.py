@@ -9,6 +9,7 @@ from memory_helpers import CONTEXT_TTL, MAX_HISTORY_LENGTH
 # Conversation — basic properties
 # ---------------------------------------------------------------------------
 
+
 class TestConversationInit:
     def test_default_user_name(self):
         conv = Conversation()
@@ -39,6 +40,7 @@ class TestConversationInit:
 # Conversation — add_user_message
 # ---------------------------------------------------------------------------
 
+
 class TestConversationAddMessage:
     def test_appends_user_message(self):
         conv = Conversation()
@@ -63,6 +65,7 @@ class TestConversationAddMessage:
 # Conversation — update_from_llm
 # ---------------------------------------------------------------------------
 
+
 class TestConversationUpdateFromLLM:
     def test_replaces_history(self):
         conv = Conversation()
@@ -83,6 +86,7 @@ class TestConversationUpdateFromLLM:
 # Conversation — _trim
 # ---------------------------------------------------------------------------
 
+
 class TestConversationTrim:
     def test_trim_keeps_max_history(self):
         conv = Conversation()
@@ -102,6 +106,7 @@ class TestConversationTrim:
 # ---------------------------------------------------------------------------
 # Conversation — clear
 # ---------------------------------------------------------------------------
+
 
 class TestConversationClear:
     def test_clears_history(self):
@@ -128,6 +133,7 @@ class TestConversationClear:
 # Conversation — age_minutes / is_expired
 # ---------------------------------------------------------------------------
 
+
 class TestConversationExpiry:
     def test_age_minutes_is_nonnegative(self):
         conv = Conversation()
@@ -143,6 +149,7 @@ class TestConversationExpiry:
 # ---------------------------------------------------------------------------
 # ConversationStore — in-memory delegation
 # ---------------------------------------------------------------------------
+
 
 class TestConversationStoreInMemory:
     def test_memory_conversation_unit_get_creates_new_conversation(self):
@@ -196,6 +203,7 @@ class TestConversationStoreInMemory:
 # ---------------------------------------------------------------------------
 # ConversationStore — thread delegation
 # ---------------------------------------------------------------------------
+
 
 class TestConversationStoreThreads:
     def test_save_thread_no_history_returns_error(self):

@@ -27,6 +27,7 @@ log = logging.getLogger(__name__)
 # Public response envelope
 # ---------------------------------------------------------------------------
 
+
 @dataclasses.dataclass
 class ProviderResponse:
     """Typed envelope returned by :func:`call_provider`.
@@ -62,9 +63,7 @@ _proxy_healthy: bool = False  # set by check_proxy_health() at startup
 
 _DEFAULT_CHAIN: list[str] = ["copilot", "openai", "anthropic"]
 PROVIDER_FALLBACK_CHAIN: list[str] = [
-    p.strip()
-    for p in os.getenv("PROVIDER_FALLBACK_CHAIN", "copilot,openai,anthropic").split(",")
-    if p.strip()
+    p.strip() for p in os.getenv("PROVIDER_FALLBACK_CHAIN", "copilot,openai,anthropic").split(",") if p.strip()
 ]
 
 _OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -89,6 +88,7 @@ def register_provider_plugin(name: str, plugin: "ProviderPlugin") -> None:
     and ``name`` is not one of the built-in providers.
     """
     from llm.provider_plugin import ProviderPlugin as _PP  # noqa: PLC0415
+
     if not isinstance(plugin, _PP):
         raise TypeError(f"Plugin {plugin!r} does not implement ProviderPlugin protocol")
     _plugin_registry[name] = plugin
@@ -126,6 +126,7 @@ def reset_token_usage(provider: str | None = None) -> None:
         _cumulative_tokens.update({"input": 0, "output": 0})
         _tokens_by_provider.clear()
         _tokens_by_skill.clear()
+
 
 # ---------------------------------------------------------------------------
 # Proxy health check
@@ -252,7 +253,11 @@ async def _call_with_retry(
             delay = base_delay * (2**attempt)
             log.warning(
                 "Provider %s attempt %d/%d failed (HTTP %d), retrying in %.1fs",
-                provider, attempt + 1, attempts, exc.status, delay,
+                provider,
+                attempt + 1,
+                attempts,
+                exc.status,
+                delay,
             )
             await asyncio.sleep(delay)
         except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as exc:
@@ -260,7 +265,11 @@ async def _call_with_retry(
             delay = base_delay * (2**attempt)
             log.warning(
                 "Provider %s attempt %d/%d failed (%s), retrying in %.1fs",
-                provider, attempt + 1, attempts, exc, delay,
+                provider,
+                attempt + 1,
+                attempts,
+                exc,
+                delay,
             )
             await asyncio.sleep(delay)
     raise last_exc  # type: ignore[misc]
@@ -289,9 +298,7 @@ async def _retry_with_backoff(
             last_exc = exc
         if attempt < max_retries:
             delay = base_delay * (2**attempt) * random.uniform(0.8, 1.2)
-            log.debug(
-                "Retryable error on attempt %d; retrying in %.2fs", attempt, delay
-            )
+            log.debug("Retryable error on attempt %d; retrying in %.2fs", attempt, delay)
             await asyncio.sleep(delay)
     raise last_exc  # type: ignore[misc]
 
@@ -300,7 +307,7 @@ async def _retry_with_backoff(
 # Simple half-open circuit breaker for non-Gemini providers
 # ---------------------------------------------------------------------------
 _CB_THRESHOLD = int(os.getenv("CB_FAILURE_THRESHOLD", "3"))
-_CB_TIMEOUT   = float(os.getenv("CB_TIMEOUT_SECONDS", "30.0"))
+_CB_TIMEOUT = float(os.getenv("CB_TIMEOUT_SECONDS", "30.0"))
 
 _circuit: dict[str, dict] = {}  # provider -> {failures: int, open_until: float}
 
@@ -413,11 +420,13 @@ async def chat_openai(
         if inp or out:
             try:
                 from spending import tracker as _spending
+
                 await _spending.record_copilot(model=model)
             except (ImportError, AttributeError):
                 pass
         elif COPILOT_PROXY_ENABLED:
             from spending import tracker as spending_tracker
+
             await spending_tracker.record_copilot(model=model)
         return content
     except aiohttp.ClientResponseError as e:
@@ -521,7 +530,9 @@ async def chat_anthropic(
     # (the proxy serves Claude models in OpenAI-compatible format)
     if COPILOT_PROXY_ENABLED:
         return await chat_openai(
-            message, history, system_prompt,
+            message,
+            history,
+            system_prompt,
             model=model or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4.5"),
             temperature=temperature,
             max_tokens=max_tokens,
@@ -569,9 +580,7 @@ async def chat_anthropic(
         data, _retry = await _call_with_retry(_do_anthropic_post, "anthropic")
         _last_usage["retry_count"] = _retry
         content_blocks = data.get("content", [])
-        content = " ".join(
-            b["text"] for b in content_blocks if b.get("type") == "text"
-        )
+        content = " ".join(b["text"] for b in content_blocks if b.get("type") == "text")
         _record_success("anthropic")
         # Record token usage
         usage = data.get("usage", {})
@@ -582,6 +591,7 @@ async def chat_anthropic(
         if inp or out:
             try:
                 from spending import tracker as _spending
+
                 await _spending.record_copilot(model=model)
             except (ImportError, AttributeError):
                 pass
@@ -641,6 +651,7 @@ async def chat_ollama(
     }
 
     try:
+
         async def _do_ollama_post() -> dict:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
@@ -694,9 +705,7 @@ async def chat_ollama_stream(
         "stream": True,
     }
     async with aiohttp.ClientSession() as session:
-        async with session.post(
-            url, json=payload, timeout=aiohttp.ClientTimeout(total=120)
-        ) as r:
+        async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=120)) as r:
             r.raise_for_status()
             async for line in r.content:
                 line = line.strip()
@@ -742,20 +751,40 @@ async def _call_one(
         model_name = model or os.getenv("OPENAI_MODEL", "gpt-4o")
         t0 = _time.monotonic()
         _last_usage.update(input_tokens=0, output_tokens=0, retry_count=0)
-        raw = await chat_openai(message, history, system_prompt, model=model_name, temperature=temperature, max_tokens=max_tokens)
+        raw = await chat_openai(
+            message, history, system_prompt, model=model_name, temperature=temperature, max_tokens=max_tokens
+        )
         latency_ms = (_time.monotonic() - t0) * 1000
         if raw is None:
             return None
-        return ProviderResponse(text=raw, provider=provider, model=model_name, latency_ms=latency_ms, input_tokens=_last_usage["input_tokens"], output_tokens=_last_usage["output_tokens"], retry_count=_last_usage["retry_count"])
+        return ProviderResponse(
+            text=raw,
+            provider=provider,
+            model=model_name,
+            latency_ms=latency_ms,
+            input_tokens=_last_usage["input_tokens"],
+            output_tokens=_last_usage["output_tokens"],
+            retry_count=_last_usage["retry_count"],
+        )
     if provider == "anthropic":
         model_name = model or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4.5")
         t0 = _time.monotonic()
         _last_usage.update(input_tokens=0, output_tokens=0, retry_count=0)
-        raw = await chat_anthropic(message, history, system_prompt, model=model_name, temperature=temperature, max_tokens=max_tokens)
+        raw = await chat_anthropic(
+            message, history, system_prompt, model=model_name, temperature=temperature, max_tokens=max_tokens
+        )
         latency_ms = (_time.monotonic() - t0) * 1000
         if raw is None:
             return None
-        return ProviderResponse(text=raw, provider=provider, model=model_name, latency_ms=latency_ms, input_tokens=_last_usage["input_tokens"], output_tokens=_last_usage["output_tokens"], retry_count=_last_usage["retry_count"])
+        return ProviderResponse(
+            text=raw,
+            provider=provider,
+            model=model_name,
+            latency_ms=latency_ms,
+            input_tokens=_last_usage["input_tokens"],
+            output_tokens=_last_usage["output_tokens"],
+            retry_count=_last_usage["retry_count"],
+        )
     if provider == "ollama":
         model_name = model or _OLLAMA_DEFAULT_MODEL
         t0 = _time.monotonic()
@@ -764,7 +793,15 @@ async def _call_one(
         latency_ms = (_time.monotonic() - t0) * 1000
         if raw is None:
             return None
-        return ProviderResponse(text=raw, provider=provider, model=model_name, latency_ms=latency_ms, input_tokens=_last_usage["input_tokens"], output_tokens=_last_usage["output_tokens"], retry_count=_last_usage["retry_count"])
+        return ProviderResponse(
+            text=raw,
+            provider=provider,
+            model=model_name,
+            latency_ms=latency_ms,
+            input_tokens=_last_usage["input_tokens"],
+            output_tokens=_last_usage["output_tokens"],
+            retry_count=_last_usage["retry_count"],
+        )
     log.warning("_call_one: unknown provider %r", provider)
     return None
 
@@ -776,6 +813,7 @@ async def _check_response_quality(text: str) -> bool:
     try:
         # Import lazily to avoid circular imports
         from llm_client import quick_generate  # noqa: PLC0415
+
         verdict = await quick_generate(_QUALITY_CHECK_PROMPT + text[:500])
         return verdict is None or "NO" not in verdict.upper()
     except Exception:  # noqa: BLE001  # broad: intentional
@@ -818,22 +856,29 @@ async def call_provider(
         # W10-1: per-attempt rate check — skip provider if it would exhaust quota
         try:
             from llm_ratelimit import rate_limiter as _rl
+
             if not _rl.check():
                 log.warning("call_provider: rate limit would be exhausted for provider=%s — skipping", p)
                 continue
         except (ImportError, AttributeError):
             pass  # if rate limiter is unavailable, proceed optimistically
-        resp = await _call_one(p, message, history, system_prompt, model=model, temperature=temperature, max_tokens=max_tokens)
+        resp = await _call_one(
+            p, message, history, system_prompt, model=model, temperature=temperature, max_tokens=max_tokens
+        )
         # Optional quality self-check
         if _QUALITY_CHECK and resp is not None and resp.text:
             if not await _check_response_quality(resp.text):
                 log.warning(
                     "Quality check failed for provider=%s model=%s — response will trigger fallback",
-                    resp.provider, resp.model,
+                    resp.provider,
+                    resp.model,
                 )
                 resp = ProviderResponse(
-                    text=None, provider=resp.provider, model=resp.model,
-                    latency_ms=resp.latency_ms, input_tokens=resp.input_tokens,
+                    text=None,
+                    provider=resp.provider,
+                    model=resp.model,
+                    latency_ms=resp.latency_ms,
+                    input_tokens=resp.input_tokens,
                     output_tokens=resp.output_tokens,
                 )
         if resp is not None and resp.text is not None:
@@ -852,8 +897,12 @@ async def call_provider(
     if provider in _plugin_registry:
         try:
             _plugin_text = await _plugin_registry[provider].call(
-                message, history, system_prompt,
-                model=model, temperature=temperature, max_tokens=max_tokens,
+                message,
+                history,
+                system_prompt,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
             return ProviderResponse(
                 text=_plugin_text,
@@ -893,13 +942,19 @@ async def call_provider_with_fallback(
             log.debug("Failover: skipping %s (circuit open)", provider)
             continue
         result = await call_provider(
-            provider, prompt, history or [], system_prompt,
-            model=model or "", temperature=temperature, max_tokens=max_tokens,
+            provider,
+            prompt,
+            history or [],
+            system_prompt,
+            model=model or "",
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
         if result and result.text:
             log.debug("Failover: %s succeeded", provider)
             if _tel_enabled:
                 import llm.telemetry as _telemetry  # noqa: PLC0415
+
                 _telemetry.record(
                     provider=result.provider,
                     model=result.model,
@@ -912,6 +967,7 @@ async def call_provider_with_fallback(
         log.debug("Failover: %s returned empty/None, trying next", provider)
         if _tel_enabled:
             import llm.telemetry as _telemetry  # noqa: PLC0415
+
             _telemetry.record(
                 provider=result.provider if result else provider,
                 model=result.model if result else (model or ""),
@@ -968,6 +1024,7 @@ async def _stream_gemini(
 
     try:
         import asyncio as _asyncio  # noqa: PLC0415
+
         loop = _asyncio.get_running_loop()
         # google-generativeai streaming: generate_content with stream=True
         response_iter = await loop.run_in_executor(
@@ -1076,9 +1133,13 @@ async def _stream_anthropic(
     """
     if COPILOT_PROXY_ENABLED:
         async for chunk in _stream_openai(
-            "copilot", prompt, history, system_prompt,
+            "copilot",
+            prompt,
+            history,
+            system_prompt,
             model or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4.5"),
-            temperature, max_tokens,
+            temperature,
+            max_tokens,
         ):
             yield chunk
         return
@@ -1155,22 +1216,16 @@ async def call_provider_stream(
         return
     try:
         if provider in ("openai", "copilot"):
-            async for chunk in _stream_openai(
-                provider, prompt, history, system_prompt, model, temperature, max_tokens
-            ):
+            async for chunk in _stream_openai(provider, prompt, history, system_prompt, model, temperature, max_tokens):
                 yield chunk
             _record_success(provider)
         elif provider == "anthropic":
-            async for chunk in _stream_anthropic(
-                prompt, history, system_prompt, model, temperature, max_tokens
-            ):
+            async for chunk in _stream_anthropic(prompt, history, system_prompt, model, temperature, max_tokens):
                 yield chunk
             _record_success(provider)
         elif provider == "ollama":
             _last_usage.update(input_tokens=0, output_tokens=0)
-            async for chunk in chat_ollama_stream(
-                prompt, history or [], system_prompt, model
-            ):
+            async for chunk in chat_ollama_stream(prompt, history or [], system_prompt, model):
                 yield chunk
             _record_success(provider)
             inp = _last_usage["input_tokens"]
@@ -1184,9 +1239,7 @@ async def call_provider_stream(
         elif provider == "gemini":
             # W12-1: Gemini streaming — gated by GEMINI_STREAMING_ENABLED
             if GEMINI_STREAMING_ENABLED:
-                async for chunk in _stream_gemini(
-                    prompt, history, system_prompt, model, temperature, max_tokens
-                ):
+                async for chunk in _stream_gemini(prompt, history, system_prompt, model, temperature, max_tokens):
                     yield chunk
                 _record_success(provider)
             else:
@@ -1252,7 +1305,4 @@ async def scan_providers() -> dict[str, dict]:
         return r  # type: ignore[return-value]
 
     names = ("copilot", "ollama", "openai", "anthropic")
-    return {
-        name: {"available": ok, "latency_ms": lat}
-        for name, (ok, lat) in zip(names, (_unpack(r) for r in results))
-    }
+    return {name: {"available": ok, "latency_ms": lat} for name, (ok, lat) in zip(names, (_unpack(r) for r in results))}

@@ -1,4 +1,5 @@
 """Tests for model_routing_policy mini-model fast-path additions."""
+
 from model_routing_policy import (
     MINI_MODEL_MAX_TOKENS,
     ModelRoute,

@@ -36,17 +36,11 @@ class PollCog(commands.Cog):
     ) -> None:
         choices = [o.strip() for o in options.split(",") if o.strip()]
         if len(choices) < 2 or len(choices) > 10:
-            await interaction.response.send_message(
-                "❌ Provide 2-10 options", ephemeral=True
-            )
+            await interaction.response.send_message("❌ Provide 2-10 options", ephemeral=True)
             return
 
-        embed = discord.Embed(
-            title=f"📊 {question}", color=discord.Color.purple()
-        )
-        desc = "\n".join(
-            f"{NUMBER_EMOJIS[i]} {choice}" for i, choice in enumerate(choices)
-        )
+        embed = discord.Embed(title=f"📊 {question}", color=discord.Color.purple())
+        desc = "\n".join(f"{NUMBER_EMOJIS[i]} {choice}" for i, choice in enumerate(choices))
         embed.description = desc
         embed.set_footer(text=f"Poll closes in {duration} minutes • React to vote!")
 
@@ -62,9 +56,7 @@ class PollCog(commands.Cog):
                 msg_updated = await interaction.channel.fetch_message(msg.id)
                 results = []
                 for i, choice in enumerate(choices):
-                    reaction = discord.utils.get(
-                        msg_updated.reactions, emoji=NUMBER_EMOJIS[i]
-                    )
+                    reaction = discord.utils.get(msg_updated.reactions, emoji=NUMBER_EMOJIS[i])
                     count = (reaction.count - 1) if reaction else 0
                     results.append((choice, count))
 
@@ -81,9 +73,7 @@ class PollCog(commands.Cog):
                     bar = "█" * count + "░" * (max_votes - count)
                     result_lines.append(f"{choice}: {bar} ({count} votes)")
                 result_embed.description = "\n".join(result_lines)
-                result_embed.set_footer(
-                    text=f"🏆 Winner: {winner[0]} ({winner[1]} votes)"
-                )
+                result_embed.set_footer(text=f"🏆 Winner: {winner[0]} ({winner[1]} votes)")
 
                 await interaction.channel.send(embed=result_embed)
             except Exception as e:  # broad: intentional

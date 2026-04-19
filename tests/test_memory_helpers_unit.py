@@ -21,6 +21,7 @@ from memory_helpers import (
 # _normalize_text
 # ---------------------------------------------------------------------------
 
+
 class TestNormalizeText:
     def test_strips_leading_trailing_whitespace(self):
         assert _normalize_text("  hello world  ") == "hello world"
@@ -41,6 +42,7 @@ class TestNormalizeText:
 # ---------------------------------------------------------------------------
 # _message_text
 # ---------------------------------------------------------------------------
+
 
 class TestMessageText:
     def test_memory_helpers_unit_joins_string_parts(self):
@@ -67,6 +69,7 @@ class TestMessageText:
 # ---------------------------------------------------------------------------
 # _message_salience_score
 # ---------------------------------------------------------------------------
+
 
 class TestMessageSalienceScore:
     def _msg(self, text, role="user"):
@@ -121,6 +124,7 @@ class TestMessageSalienceScore:
 # _extract_key_topics
 # ---------------------------------------------------------------------------
 
+
 class TestExtractKeyTopics:
     def test_empty_messages_returns_empty(self):
         assert _extract_key_topics([]) == []
@@ -154,6 +158,7 @@ class TestExtractKeyTopics:
 # _build_salience_summary
 # ---------------------------------------------------------------------------
 
+
 class TestBuildSalienceSummary:
     def test_empty_messages_returns_empty_tuple(self):
         summary, meta = _build_salience_summary([])
@@ -168,8 +173,13 @@ class TestBuildSalienceSummary:
     def test_meta_has_required_keys(self):
         msgs = [{"role": "user", "parts": ["Let us decide on the deadline fix error"]}]
         _, meta = _build_salience_summary(msgs)
-        for key in ("compression_applied", "retained_key_facts_count", "drift_risk",
-                    "topic_retention_ratio", "missing_topics"):
+        for key in (
+            "compression_applied",
+            "retained_key_facts_count",
+            "drift_risk",
+            "topic_retention_ratio",
+            "missing_topics",
+        ):
             assert key in meta
 
     def test_drift_risk_values(self):
@@ -202,6 +212,7 @@ class TestBuildSalienceSummary:
 # _relative_age
 # ---------------------------------------------------------------------------
 
+
 class TestRelativeAge:
     def test_under_60_seconds_is_just_now(self):
         assert _relative_age(30) == "just now"
@@ -229,6 +240,7 @@ class TestRelativeAge:
 # _thread_name_re
 # ---------------------------------------------------------------------------
 
+
 class TestThreadNameRe:
     def test_valid_alphanumeric(self):
         assert _THREAD_NAME_RE.match("thread1")
@@ -253,6 +265,7 @@ class TestThreadNameRe:
 # _atomic_write
 # ---------------------------------------------------------------------------
 
+
 class TestAtomicWrite:
     def test_delegates_to_atomic_write_util(self, tmp_path):
         target = tmp_path / "out.txt"
@@ -264,6 +277,7 @@ class TestAtomicWrite:
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
+
 
 class TestConstants:
     def test_context_ttl_is_positive(self):

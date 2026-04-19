@@ -25,9 +25,9 @@ SPENDING_FILE = Path(os.getenv("SPENDING_FILE", "/memory/spending.json"))
 
 # Gemini 2.0 Flash pricing (paid tier 1, ≤128K context window)
 # https://ai.google.dev/pricing
-PRICE_INPUT_PER_M = float(os.getenv("GEMINI_PRICE_INPUT_PER_M", "0.10"))   # $/1M input tokens
+PRICE_INPUT_PER_M = float(os.getenv("GEMINI_PRICE_INPUT_PER_M", "0.10"))  # $/1M input tokens
 PRICE_OUTPUT_PER_M = float(os.getenv("GEMINI_PRICE_OUTPUT_PER_M", "0.40"))  # $/1M output tokens
-BUDGET_LIMIT = float(os.getenv("GEMINI_BUDGET_LIMIT", "30.00"))             # $ budget cap
+BUDGET_LIMIT = float(os.getenv("GEMINI_BUDGET_LIMIT", "30.00"))  # $ budget cap
 
 
 # ---------------------------------------------------------------------------
@@ -69,15 +69,15 @@ class SpendingTracker:
             "total_output_tokens": 0,
             "total_cost_usd": 0.0,
             "calls": 0,
-            "daily": {},      # "2026-03-23": {input, output, cost, calls}
+            "daily": {},  # "2026-03-23": {input, output, cost, calls}
             "first_call": None,
             "last_call": None,
-            "perplexity": {   # Perplexity API tracking
+            "perplexity": {  # Perplexity API tracking
                 "calls": 0,
                 "total_cost_usd": 0.0,
                 "daily": {},  # "2026-03-30": {calls, cost_usd}
             },
-            "firecrawl": {    # Firecrawl API tracking
+            "firecrawl": {  # Firecrawl API tracking
                 "calls": 0,
                 "pages_scraped": 0,
                 "total_cost_usd": 0.0,
@@ -118,8 +118,12 @@ class SpendingTracker:
             day["calls"] += 1
             day["cost_usd"] += cost_per_query
             self._maybe_flush_sync()
-            log.info("Perplexity: +1 call ($%.4f) — total $%.4f (%d calls)",
-                     cost_per_query, pplx["total_cost_usd"], pplx["calls"])
+            log.info(
+                "Perplexity: +1 call ($%.4f) — total $%.4f (%d calls)",
+                cost_per_query,
+                pplx["total_cost_usd"],
+                pplx["calls"],
+            )
 
     async def record_copilot(self, model: str = "gpt-4o"):
         """Record a Copilot proxy call. Proxy usage is free ($0), but count is tracked."""
@@ -138,7 +142,9 @@ class SpendingTracker:
         cost = cost_per_page * pages
         async with self._lock:
             today = datetime.date.today().isoformat()
-            fc = self._data.setdefault("firecrawl", {"calls": 0, "pages_scraped": 0, "total_cost_usd": 0.0, "daily": {}})
+            fc = self._data.setdefault(
+                "firecrawl", {"calls": 0, "pages_scraped": 0, "total_cost_usd": 0.0, "daily": {}}
+            )
             fc["calls"] += 1
             fc["pages_scraped"] += pages
             fc["total_cost_usd"] += cost
@@ -147,8 +153,14 @@ class SpendingTracker:
             day["pages"] += pages
             day["cost_usd"] += cost
             self._maybe_flush_sync()
-            log.info("Firecrawl: +%d page(s) [%s] — total %d/%d free pages ($%.4f)",
-                     pages, action, fc["pages_scraped"], 500, fc["total_cost_usd"])
+            log.info(
+                "Firecrawl: +%d page(s) [%s] — total %d/%d free pages ($%.4f)",
+                pages,
+                action,
+                fc["pages_scraped"],
+                500,
+                fc["total_cost_usd"],
+            )
 
     def _maybe_flush_sync(self) -> None:
         """Flush to disk if batch size or time threshold exceeded. Must hold _lock."""
@@ -189,9 +201,15 @@ class SpendingTracker:
             self._data["first_call"] = now
 
         # Daily bucket
-        day = self._data["daily"].setdefault(today, {
-            "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "calls": 0,
-        })
+        day = self._data["daily"].setdefault(
+            today,
+            {
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cost_usd": 0.0,
+                "calls": 0,
+            },
+        )
         day["input_tokens"] += input_tokens
         day["output_tokens"] += output_tokens
         day["cost_usd"] += cost
@@ -201,8 +219,11 @@ class SpendingTracker:
 
         log.info(
             "Spending: +%d in / +%d out ($%.6f) — total $%.4f / $%.2f budget",
-            input_tokens, output_tokens, cost,
-            self._data["total_cost_usd"], BUDGET_LIMIT,
+            input_tokens,
+            output_tokens,
+            cost,
+            self._data["total_cost_usd"],
+            BUDGET_LIMIT,
         )
 
     # -----------------------------------------------------------------------
@@ -315,10 +336,7 @@ class SpendingTracker:
         for day_key in sorted_days:
             d = daily[day_key]
             tokens = d["input_tokens"] + d["output_tokens"]
-            lines.append(
-                f"**{day_key}**: ${d['cost_usd']:.4f} "
-                f"({tokens:,} tokens, {d['calls']} calls)"
-            )
+            lines.append(f"**{day_key}**: ${d['cost_usd']:.4f} ({tokens:,} tokens, {d['calls']} calls)")
         return "\n".join(lines)
 
     def reset(self) -> str:
@@ -402,9 +420,9 @@ def get_response_stats() -> dict:
 # Known quotas (approximate free-tier / practical limits)
 PROVIDER_QUOTAS: dict[str, dict[str, int]] = {
     "perplexity": {"daily": 200, "monthly": 0},
-    "firecrawl":  {"daily": 0,   "monthly": 500},
-    "tavily":     {"daily": 0,   "monthly": 1000},
-    "gemini":     {"daily": 1500, "monthly": 0},
+    "firecrawl": {"daily": 0, "monthly": 500},
+    "tavily": {"daily": 0, "monthly": 1000},
+    "gemini": {"daily": 1500, "monthly": 0},
 }
 
 
@@ -429,29 +447,24 @@ def get_quota_status() -> dict[str, dict]:
         if provider == "gemini":
             daily_used = data.get("daily", {}).get(today, {}).get("calls", 0)
             monthly_used = sum(
-                d.get("calls", 0)
-                for key, d in data.get("daily", {}).items()
-                if key.startswith(month_prefix)
+                d.get("calls", 0) for key, d in data.get("daily", {}).items() if key.startswith(month_prefix)
             )
         elif provider in ("perplexity", "firecrawl"):
             sub = data.get(provider, {})
             daily_used = sub.get("daily", {}).get(today, {}).get("calls", 0)
             monthly_used = sum(
-                d.get("calls", 0)
-                for key, d in sub.get("daily", {}).items()
-                if key.startswith(month_prefix)
+                d.get("calls", 0) for key, d in sub.get("daily", {}).items() if key.startswith(month_prefix)
             )
             # Firecrawl tracks pages, which is the real quota unit
             if provider == "firecrawl":
                 daily_used = sub.get("daily", {}).get(today, {}).get("pages", 0)
                 monthly_used = sum(
-                    d.get("pages", 0)
-                    for key, d in sub.get("daily", {}).items()
-                    if key.startswith(month_prefix)
+                    d.get("pages", 0) for key, d in sub.get("daily", {}).items() if key.startswith(month_prefix)
                 )
         else:
             # Tavily and others — pull from search_provider stats for today's count
             from search_provider import get_stats as _get_stats
+
             stats = _get_stats(provider)
             daily_used = stats.total_calls  # in-memory only, approximate
             monthly_used = stats.total_calls

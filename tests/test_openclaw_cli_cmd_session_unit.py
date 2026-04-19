@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_cmd_session.py — session lifecycle command handlers."""
+
 from __future__ import annotations
 
 import sys
@@ -81,6 +82,7 @@ def _mock_cli(**kwargs) -> MagicMock:
 # _cmd_session — show current session info
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_session_calls_print_session_summary():
     session = _mock_session()
     cli = _mock_cli(_session=session)
@@ -103,10 +105,13 @@ def test_cmd_session_no_session_returns_continue():
 # _cmd_events — show session events
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_events_no_events(capsys):
     cli = _mock_cli()
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("openclaw_cli_cmd_session.load_events", return_value=[]):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch("openclaw_cli_cmd_session.load_events", return_value=[]),
+    ):
         result = mod._cmd_events(_ctx(""))
     assert result == _CMD_CONTINUE
     out = capsys.readouterr().out
@@ -119,9 +124,11 @@ def test_cmd_events_shows_events(capsys):
         {"kind": "chat", "content": "hello", "timestamp": "2024-01-01T10:00:00"},
         {"kind": "analyze", "content": "result", "timestamp": "2024-01-01T11:00:00"},
     ]
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("openclaw_cli_cmd_session.load_events", return_value=events), \
-         patch("openclaw_cli_cmd_session._build_event_label", return_value="label"):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch("openclaw_cli_cmd_session.load_events", return_value=events),
+        patch("openclaw_cli_cmd_session._build_event_label", return_value="label"),
+    ):
         result = mod._cmd_events(_ctx(""))
     assert result == _CMD_CONTINUE
     out = capsys.readouterr().out
@@ -143,9 +150,11 @@ def test_cmd_events_decisions_filter(capsys):
         {"kind": "chat", "content": "chat message", "timestamp": "2024-01-01T10:00:00"},
         {"kind": "route", "content": "routing decision", "timestamp": "2024-01-01T11:00:00"},
     ]
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("openclaw_cli_cmd_session.load_events", return_value=events), \
-         patch("openclaw_cli_cmd_session._build_event_label", return_value="label"):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch("openclaw_cli_cmd_session.load_events", return_value=events),
+        patch("openclaw_cli_cmd_session._build_event_label", return_value="label"),
+    ):
         result = mod._cmd_events(_ctx("decisions"))
     assert result == _CMD_CONTINUE
     out = capsys.readouterr().out
@@ -159,9 +168,11 @@ def test_cmd_events_decisions_filter(capsys):
 def test_cmd_events_numeric_limit(capsys):
     cli = _mock_cli()
     events = [{"kind": "chat", "content": f"msg {i}", "timestamp": "2024-01-01T10:00:00"} for i in range(10)]
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("openclaw_cli_cmd_session.load_events", return_value=events[:2]) as mock_load, \
-         patch("openclaw_cli_cmd_session._build_event_label", return_value="label"):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch("openclaw_cli_cmd_session.load_events", return_value=events[:2]) as mock_load,
+        patch("openclaw_cli_cmd_session._build_event_label", return_value="label"),
+    ):
         result = mod._cmd_events(_ctx("2"))
     assert result == _CMD_CONTINUE
     mock_load.assert_called_once_with("sess-1", limit=2)
@@ -187,8 +198,10 @@ def test_cmd_events_preview_strip_adds_recovery_actions(capsys):
             "timestamp": "2024-01-01T10:58:00",
         },
     ]
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("openclaw_cli_cmd_session.load_events", return_value=events):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch("openclaw_cli_cmd_session.load_events", return_value=events),
+    ):
         result = mod._cmd_events(_ctx(""))
     assert result == _CMD_CONTINUE
     args, kwargs = cli._print_dashboard_surface.call_args
@@ -204,10 +217,13 @@ def test_cmd_events_preview_strip_adds_recovery_actions(capsys):
 # _cmd_sessions — list sessions
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_sessions_no_sessions(capsys):
     cli = _mock_cli()
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("openclaw_cli_cmd_session.list_sessions", return_value=[]):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch("openclaw_cli_cmd_session.list_sessions", return_value=[]),
+    ):
         result = mod._cmd_sessions(_ctx(""))
     assert result == _CMD_CONTINUE
     out = capsys.readouterr().out
@@ -217,8 +233,10 @@ def test_cmd_sessions_no_sessions(capsys):
 def test_cmd_sessions_lists_sessions(capsys):
     cli = _mock_cli()
     sessions = [_mock_session_summary(session_id="abc12345", title="My Project")]
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("openclaw_cli_cmd_session.list_sessions", return_value=sessions):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch("openclaw_cli_cmd_session.list_sessions", return_value=sessions),
+    ):
         result = mod._cmd_sessions(_ctx(""))
     assert result == _CMD_CONTINUE
     out = capsys.readouterr().out
@@ -231,8 +249,10 @@ def test_cmd_sessions_search_filter(capsys):
         _mock_session_summary(session_id="aaa00001", title="Alpha Project", last_summary=""),
         _mock_session_summary(session_id="bbb00002", title="Beta Project", last_summary=""),
     ]
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("openclaw_cli_cmd_session.list_sessions", return_value=sessions):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch("openclaw_cli_cmd_session.list_sessions", return_value=sessions),
+    ):
         result = mod._cmd_sessions(_ctx("search alpha"))
     assert result == _CMD_CONTINUE
     out = capsys.readouterr().out
@@ -252,6 +272,7 @@ def test_cmd_sessions_open_shows_instructions(capsys):
 # ---------------------------------------------------------------------------
 # _cmd_tag — tag a session
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_tag_list_no_tags(capsys):
     session = _mock_session(tags=[])
@@ -276,8 +297,10 @@ def test_cmd_tag_list_with_tags(capsys):
 def test_cmd_tag_add_new_tag(capsys):
     session = _mock_session(tags=[])
     cli = _mock_cli(_session=session)
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("openclaw_cli_cmd_session.save_session", MagicMock()):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch("openclaw_cli_cmd_session.save_session", MagicMock()),
+    ):
         result = mod._cmd_tag(_ctx("add newtag"))
     assert result == _CMD_CONTINUE
     out = capsys.readouterr().out
@@ -297,8 +320,10 @@ def test_cmd_tag_add_duplicate_tag(capsys):
 def test_cmd_tag_remove_tag(capsys):
     session = _mock_session(tags=["mytag"])
     cli = _mock_cli(_session=session)
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("openclaw_cli_cmd_session.save_session", MagicMock()):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch("openclaw_cli_cmd_session.save_session", MagicMock()),
+    ):
         result = mod._cmd_tag(_ctx("rm mytag"))
     assert result == _CMD_CONTINUE
     out = capsys.readouterr().out
@@ -319,12 +344,15 @@ def test_cmd_tag_remove_nonexistent_tag(capsys):
 # _cmd_bookmark / _cmd_bookmarks — bookmark management
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_bookmark_creates_bookmark(capsys):
     session = _mock_session()
     cli = _mock_cli(_session=session)
     bookmark = {"id": "bm-1", "label": "my checkpoint", "turn_index": 3}
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("openclaw_cli_cmd_session.create_session_bookmark", return_value=bookmark):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch("openclaw_cli_cmd_session.create_session_bookmark", return_value=bookmark),
+    ):
         result = mod._cmd_bookmark(_ctx("my checkpoint"))
     assert result == _CMD_CONTINUE
     cli._print_feedback.assert_called_once()
@@ -342,8 +370,10 @@ def test_cmd_bookmark_no_session(capsys):
 def test_cmd_bookmarks_no_bookmarks(capsys):
     session = _mock_session()
     cli = _mock_cli(_session=session)
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("openclaw_cli_cmd_session.list_session_bookmarks", return_value=[]):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch("openclaw_cli_cmd_session.list_session_bookmarks", return_value=[]),
+    ):
         result = mod._cmd_bookmarks(_ctx(""))
     assert result == _CMD_CONTINUE
     out = capsys.readouterr().out
@@ -357,8 +387,10 @@ def test_cmd_bookmarks_lists_bookmarks(capsys):
         {"id": "bm-1", "label": "first", "turn_index": 1, "summary": ""},
         {"id": "bm-2", "label": "second", "turn_index": 5, "summary": "A summary"},
     ]
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("openclaw_cli_cmd_session.list_session_bookmarks", return_value=bookmarks):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch("openclaw_cli_cmd_session.list_session_bookmarks", return_value=bookmarks),
+    ):
         result = mod._cmd_bookmarks(_ctx(""))
     assert result == _CMD_CONTINUE
     out = capsys.readouterr().out
@@ -370,11 +402,14 @@ def test_cmd_bookmarks_lists_bookmarks(capsys):
 # _cmd_export — export session history
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_export_no_history(capsys):
     cli = _mock_cli()
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_PREFS", {"cmd_history": []}), \
-         patch.object(mod, "_get_is_tty", return_value=False):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_PREFS", {"cmd_history": []}),
+        patch.object(mod, "_get_is_tty", return_value=False),
+    ):
         result = mod._cmd_export(_ctx(""))
     assert result == _CMD_CONTINUE
     out = capsys.readouterr().out
@@ -390,9 +425,11 @@ def test_cmd_export_writes_file(capsys, tmp_path, monkeypatch):
     output_file = tmp_path / "export_test.md"
     monkeypatch.chdir(tmp_path)
 
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_PREFS", {"cmd_history": hist}), \
-         patch.object(mod, "_get_is_tty", return_value=False):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_PREFS", {"cmd_history": hist}),
+        patch.object(mod, "_get_is_tty", return_value=False),
+    ):
         result = mod._cmd_export(_ctx("md"))
     assert result == _CMD_CONTINUE
     out = capsys.readouterr().out
@@ -406,9 +443,11 @@ def test_cmd_export_default_format_is_md(capsys, tmp_path, monkeypatch):
 
     monkeypatch.chdir(tmp_path)
 
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_PREFS", {"cmd_history": hist}), \
-         patch.object(mod, "_get_is_tty", return_value=False):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch.object(mod, "_PREFS", {"cmd_history": hist}),
+        patch.object(mod, "_get_is_tty", return_value=False),
+    ):
         result = mod._cmd_export(_ctx(""))
     assert result == _CMD_CONTINUE
     cli._content_cmds_mod._build_export_body.assert_called_once()

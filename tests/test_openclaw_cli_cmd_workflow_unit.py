@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_cmd_workflow.py — workflow and automation handlers."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -61,6 +62,7 @@ def _mock_cli(**kwargs) -> MagicMock:
 # _cmd_risk
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_risk_list_no_risks(capsys):
     cli = _mock_cli(_risk_entries=[])
     with patch.object(mod, "_get_cli_mod", return_value=cli):
@@ -83,8 +85,10 @@ def test_cmd_risk_list_with_risks(capsys):
 
 def test_cmd_risk_add_valid(capsys):
     cli = _mock_cli()
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("openclaw_cli_cmd_workflow.append_event") as mock_append:
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch("openclaw_cli_cmd_workflow.append_event") as mock_append,
+    ):
         result = mod._cmd_risk(_ctx("add high Database is down"))
     assert result == _CMD_CONTINUE
     mock_append.assert_called_once()
@@ -111,8 +115,10 @@ def test_cmd_risk_add_missing_text(capsys):
 def test_cmd_risk_clear_valid(capsys):
     risks = [{"risk_level": "medium", "actor": "operator", "content": "Old risk"}]
     cli = _mock_cli(_risk_entries=risks)
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("openclaw_cli_cmd_workflow.append_event") as mock_append:
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch("openclaw_cli_cmd_workflow.append_event") as mock_append,
+    ):
         result = mod._cmd_risk(_ctx("clear 1"))
     assert result == _CMD_CONTINUE
     mock_append.assert_called_once()
@@ -141,6 +147,7 @@ def test_cmd_risk_unknown_sub_shows_error(capsys):
 # _cmd_alerts
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_alerts_list_empty(capsys):
     cli = _mock_cli(_alerts=[])
     with patch.object(mod, "_get_cli_mod", return_value=cli):
@@ -151,9 +158,7 @@ def test_cmd_alerts_list_empty(capsys):
 
 
 def test_cmd_alerts_list_with_items(capsys):
-    alerts = [
-        {"id": "a1", "severity": "warning", "title": "High memory", "message": "Usage > 90%"}
-    ]
+    alerts = [{"id": "a1", "severity": "warning", "title": "High memory", "message": "Usage > 90%"}]
     cli = _mock_cli(_alerts=alerts)
     with patch.object(mod, "_get_cli_mod", return_value=cli):
         result = mod._cmd_alerts(_ctx("list"))
@@ -205,6 +210,7 @@ def test_cmd_alerts_unknown_sub(capsys):
 # ---------------------------------------------------------------------------
 # _cmd_workflow
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_workflow_list_empty(capsys):
     cli = _mock_cli(_workflows={})
@@ -259,6 +265,7 @@ def test_cmd_workflow_unknown_sub(capsys):
 # _cmd_macrostatus
 # ---------------------------------------------------------------------------
 
+
 def test_openclaw_cli_cmd_workflow_unit_cmd_macrostatus_no_macros(capsys):
     cli = _mock_cli(_PREFS={"macros": {}})
     with patch.object(mod, "_get_cli_mod", return_value=cli):
@@ -270,8 +277,7 @@ def test_openclaw_cli_cmd_workflow_unit_cmd_macrostatus_no_macros(capsys):
 
 def test_cmd_macrostatus_lists_macros(capsys):
     cli = _mock_cli(_PREFS={"macros": {"build": ["npm run build", "npm test"]}})
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch.object(mod, "_get_is_tty", return_value=False):
+    with patch.object(mod, "_get_cli_mod", return_value=cli), patch.object(mod, "_get_is_tty", return_value=False):
         result = mod._cmd_macrostatus(_ctx(""))
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
@@ -281,6 +287,7 @@ def test_cmd_macrostatus_lists_macros(capsys):
 # ---------------------------------------------------------------------------
 # _cmd_fleet
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_fleet_status_calls_dashboard():
     cli = _mock_cli()
@@ -318,6 +325,7 @@ def test_cmd_fleet_unknown_sub_shows_error():
 # _cmd_watch — sub-command routing
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_watch_no_session_returns_continue():
     cli = _mock_cli()
     cli._require_session_or_warn = MagicMock(return_value=None)
@@ -328,8 +336,10 @@ def test_cmd_watch_no_session_returns_continue():
 
 def test_cmd_watch_retry_limit_invalid(capsys):
     cli = _mock_cli()
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("openclaw_cli_cmd_workflow.load_watch_state", return_value={"retry_limit": 5}):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch("openclaw_cli_cmd_workflow.load_watch_state", return_value={"retry_limit": 5}),
+    ):
         result = mod._cmd_watch(_ctx("retry-limit notanumber"))
     assert result == _CMD_CONTINUE
     cli._print_error.assert_called()
@@ -337,8 +347,10 @@ def test_cmd_watch_retry_limit_invalid(capsys):
 
 def test_cmd_watch_retry_limit_no_state():
     cli = _mock_cli()
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("openclaw_cli_cmd_workflow.load_watch_state", return_value=None):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch("openclaw_cli_cmd_workflow.load_watch_state", return_value=None),
+    ):
         result = mod._cmd_watch(_ctx("retry-limit 3"))
     assert result == _CMD_CONTINUE
     cli._print_error.assert_called()
@@ -346,8 +358,10 @@ def test_cmd_watch_retry_limit_no_state():
 
 def test_cmd_watch_unknown_sub_shows_error():
     cli = _mock_cli()
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("openclaw_cli_cmd_workflow.load_watch_state", return_value=None):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch("openclaw_cli_cmd_workflow.load_watch_state", return_value=None),
+    ):
         result = mod._cmd_watch(_ctx("bogus"))
     assert result == _CMD_CONTINUE
     cli._print_error.assert_called()
@@ -355,8 +369,10 @@ def test_cmd_watch_unknown_sub_shows_error():
 
 def test_cmd_watch_status_without_state_shows_trust_recovery_hint(capsys):
     cli = _mock_cli()
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("openclaw_cli_cmd_workflow.load_watch_state", return_value=None):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch("openclaw_cli_cmd_workflow.load_watch_state", return_value=None),
+    ):
         result = mod._cmd_watch(_ctx("status"))
     assert result == _CMD_CONTINUE
     out = capsys.readouterr().out
@@ -366,8 +382,10 @@ def test_cmd_watch_status_without_state_shows_trust_recovery_hint(capsys):
 
 def test_cmd_watch_history_without_state_shows_recovery_hint(capsys):
     cli = _mock_cli()
-    with patch.object(mod, "_get_cli_mod", return_value=cli), \
-         patch("openclaw_cli_cmd_workflow.load_watch_state", return_value=None):
+    with (
+        patch.object(mod, "_get_cli_mod", return_value=cli),
+        patch("openclaw_cli_cmd_workflow.load_watch_state", return_value=None),
+    ):
         result = mod._cmd_watch(_ctx("history"))
     assert result == _CMD_CONTINUE
     out = capsys.readouterr().out

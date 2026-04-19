@@ -72,11 +72,7 @@ class ReminderManager:
 
     def cancel(self, reminder_id: str, user_id: int) -> bool:
         before = len(self._reminders)
-        self._reminders = [
-            r
-            for r in self._reminders
-            if not (r.id == reminder_id and r.user_id == user_id)
-        ]
+        self._reminders = [r for r in self._reminders if not (r.id == reminder_id and r.user_id == user_id)]
         if len(self._reminders) < before:
             self._save()
             return True
@@ -106,6 +102,7 @@ class ReminderManager:
 # Time expression parser
 # ---------------------------------------------------------------------------
 
+
 def parse_time_expression(expr: str) -> float | None:
     """Parse 'in 30m', 'at 3pm', 'at 15:00', 'in 2h' into Unix timestamp."""
     expr = expr.strip().lower()
@@ -130,9 +127,7 @@ def parse_time_expression(expr: str) -> float | None:
         elif ampm == "am" and hour == 12:
             hour = 0
 
-        target = datetime.now().replace(
-            hour=hour, minute=minute, second=0, microsecond=0
-        )
+        target = datetime.now().replace(hour=hour, minute=minute, second=0, microsecond=0)
         if target.timestamp() <= now:
             target += timedelta(days=1)  # tomorrow
         return target.timestamp()

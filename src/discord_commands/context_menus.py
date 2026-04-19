@@ -174,15 +174,11 @@ def _register_context_menus(bot: commands.Bot) -> None:
                 )
 
     bot.tree.add_command(app_commands.ContextMenu(name="Send to SMS", callback=_send_to_sms))
-    bot.tree.add_command(
-        app_commands.ContextMenu(name="Copy Workflow Context", callback=_copy_workflow_context)
-    )
+    bot.tree.add_command(app_commands.ContextMenu(name="Copy Workflow Context", callback=_copy_workflow_context))
     bot.tree.add_command(
         app_commands.ContextMenu(name="Package Report: Copy-safe", callback=_package_copy_safe_context)
     )
-    bot.tree.add_command(
-        app_commands.ContextMenu(name="Package Report: Artifact", callback=_package_artifact_context)
-    )
+    bot.tree.add_command(app_commands.ContextMenu(name="Package Report: Artifact", callback=_package_artifact_context))
     bot.tree.add_command(
         app_commands.ContextMenu(name="Package Report: Brief+Detail", callback=_package_brief_detail_context)
     )

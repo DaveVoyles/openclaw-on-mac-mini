@@ -157,9 +157,9 @@ def _routed_action_checkpoints_path(session_id: str) -> Path:
 
 
 def _normalize_watch_interventions(state: dict[str, Any]) -> dict[str, Any]:
-    state["interventions"] = [
-        item for item in list(state.get("interventions") or []) if isinstance(item, dict)
-    ][-WATCH_INTERVENTION_LIMIT:]
+    state["interventions"] = [item for item in list(state.get("interventions") or []) if isinstance(item, dict)][
+        -WATCH_INTERVENTION_LIMIT:
+    ]
     state["force_run_once"] = bool(state.get("force_run_once"))
     state["stop_requested"] = bool(state.get("stop_requested"))
     state["stop_requested_at"] = str(state.get("stop_requested_at", "") or "")
@@ -409,9 +409,7 @@ def append_event(
         handle.write(json.dumps(payload, ensure_ascii=True) + "\n")
 
     summary.last_command = payload["kind"]
-    summary.last_summary = _short_summary(
-        str((metadata or {}).get("summary") or content or payload["kind"])
-    )
+    summary.last_summary = _short_summary(str((metadata or {}).get("summary") or content or payload["kind"]))
     if payload["kind"] in {"prompt", "chat", "analyze", "research", "write", "exec", "edit", "plan"}:
         summary.command_count += 1
     if payload["kind"] == "edit" and (metadata or {}).get("changed"):
@@ -500,7 +498,8 @@ def build_collaboration_snapshot(session_id: str, *, limit: int = 5) -> dict[str
     events = load_events(session_id)
     watch_state = load_watch_state(session_id) or {}
     recent_handoffs = [
-        item for item in list_handoffs(limit=max(limit * 4, 20))
+        item
+        for item in list_handoffs(limit=max(limit * 4, 20))
         if str(item.get("source_session_id") or "") == session_id
     ]
 
@@ -685,7 +684,7 @@ def build_session_storyline(session_id: str, *, limit: int = 5) -> dict[str, Any
         return mapping.get(kind, "Session update")
 
     timeline: list[dict[str, str]] = []
-    for event in events[-max(limit * 3, 6):]:
+    for event in events[-max(limit * 3, 6) :]:
         kind = str(event.get("kind") or "").strip().lower()
         meta = event.get("metadata") if isinstance(event.get("metadata"), dict) else {}
         summary_text = _short_summary(str(meta.get("summary") or event.get("content") or kind), limit=96)
@@ -717,9 +716,7 @@ def build_session_storyline(session_id: str, *, limit: int = 5) -> dict[str, Any
     if summary.task_id:
         milestones.append(f"Task linked: {summary.task_id}")
     if outputs:
-        milestones.append(
-            f"{len(outputs)} saved output{'s' if len(outputs) != 1 else ''} ready for review"
-        )
+        milestones.append(f"{len(outputs)} saved output{'s' if len(outputs) != 1 else ''} ready for review")
     if summary.bookmarks:
         milestones.append(
             f"{len(summary.bookmarks)} bookmark{'s' if len(summary.bookmarks) != 1 else ''} saved for replay"
@@ -765,19 +762,13 @@ def build_session_storyline(session_id: str, *, limit: int = 5) -> dict[str, Any
     elif timeline:
         headline_bits.append(str(timeline[0].get("summary") or "").strip())
     if outputs:
-        headline_bits.append(
-            f"{len(outputs)} output{'s' if len(outputs) != 1 else ''} ready"
-        )
+        headline_bits.append(f"{len(outputs)} output{'s' if len(outputs) != 1 else ''} ready")
     if decisions:
-        headline_bits.append(
-            f"{len(decisions)} decision{'s' if len(decisions) != 1 else ''} recorded"
-        )
+        headline_bits.append(f"{len(decisions)} decision{'s' if len(decisions) != 1 else ''} recorded")
     elif len(actors) >= 2:
         headline_bits.append(f"{len(actors)} collaborators in the loop")
     elif checkpoints:
-        headline_bits.append(
-            f"{len(checkpoints)} checkpoint{'s' if len(checkpoints) != 1 else ''} captured"
-        )
+        headline_bits.append(f"{len(checkpoints)} checkpoint{'s' if len(checkpoints) != 1 else ''} captured")
     headline = " · ".join(bit for bit in headline_bits if bit) or "Fresh session story is still forming"
 
     handoff_summary = headline
@@ -1002,8 +993,7 @@ def queue_watch_intervention(
         (
             item
             for item in reversed(interventions)
-            if str(item.get("action") or "") == normalized_action
-            and str(item.get("status") or "") == "pending"
+            if str(item.get("action") or "") == normalized_action and str(item.get("status") or "") == "pending"
         ),
         None,
     )
@@ -1079,9 +1069,7 @@ def _capture_checkpoint_file_snapshot(path_text: str) -> dict[str, Any]:
         snapshot["reason"] = f"unable to stat file: {exc}"
         return snapshot
     if stat.st_size > ROUTED_ACTION_CHECKPOINT_MAX_FILE_BYTES:
-        snapshot["reason"] = (
-            f"file exceeds {ROUTED_ACTION_CHECKPOINT_MAX_FILE_BYTES} bytes"
-        )
+        snapshot["reason"] = f"file exceeds {ROUTED_ACTION_CHECKPOINT_MAX_FILE_BYTES} bytes"
         return snapshot
     try:
         snapshot["content"] = target.read_text(encoding="utf-8", errors="replace")
@@ -1162,11 +1150,7 @@ def create_routed_action_checkpoint(
     entries.append(checkpoint)
     _save_routed_action_checkpoint_store(session_id, entries)
 
-    step_label = (
-        f"step {step_index}/{step_total}"
-        if step_index > 0 and step_total > 0
-        else "routed step"
-    )
+    step_label = f"step {step_index}/{step_total}" if step_index > 0 and step_total > 0 else "routed step"
     summary = f"{checkpoint['action_kind']} checkpoint {checkpoint_id} captured for {step_label}"
     if rollback_supported:
         summary += " (rollback ready)"
@@ -1308,12 +1292,7 @@ def create_handoff(session_id: str, *, note: str = "", pin_outputs: list[str] | 
         raise ValueError(f"Session not found: {session_id!r}")
     watch_state = load_watch_state(session_id)
 
-    handoff_id = (
-        "handoff_"
-        + datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        + "_"
-        + session_id[:8]
-    )
+    handoff_id = "handoff_" + datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S") + "_" + session_id[:8]
 
     manifest: dict[str, Any] = {
         "id": handoff_id,

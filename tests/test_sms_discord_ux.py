@@ -113,9 +113,7 @@ async def test_context_menu_copy_workflow_context_returns_ephemeral_copy_block(m
 
     cmd = next(command for command in captured if command.name == "Copy Workflow Context")
     interaction = _mock_interaction()
-    message = SimpleNamespace(
-        content="Workflow status\n- Ship v1 today\n- Validate permissions and tests"
-    )
+    message = SimpleNamespace(content="Workflow status\n- Ship v1 today\n- Validate permissions and tests")
 
     await cmd.callback(interaction, message)
 

@@ -120,7 +120,9 @@ class TestIsLowQuality:
 
     def test_substantive_response_with_dont_know_phrase_buried_is_still_low_quality(self):
         # Phrase match triggers even in a longer text
-        assert ap.is_low_quality("I cannot answer this question because I lack the knowledge needed to give you a correct response today.")
+        assert ap.is_low_quality(
+            "I cannot answer this question because I lack the knowledge needed to give you a correct response today."
+        )
 
     def test_none_is_low_quality(self):
         assert ap.is_low_quality(None)  # type: ignore[arg-type]

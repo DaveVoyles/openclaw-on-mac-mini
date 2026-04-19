@@ -223,15 +223,15 @@ def test_invoke_openclaw_stream_prints_chunks_and_returns_final(capsys):
         captured["payload"] = json.loads(req.data.decode("utf-8"))
         return _FakeStreamingResponse(
             [
-                'event: chunk\n',
+                "event: chunk\n",
                 'data: {"delta":"Hello"}\n',
-                '\n',
-                'event: chunk\n',
+                "\n",
+                "event: chunk\n",
                 'data: {"delta":" world"}\n',
-                '\n',
-                'event: final\n',
+                "\n",
+                "event: final\n",
                 'data: {"response":"Hello world","model":"gemini","tokens":7}\n',
-                '\n',
+                "\n",
             ]
         )
 
@@ -257,12 +257,13 @@ def test_invoke_openclaw_stream_no_chunks_sets_streamed_cli_false(capsys):
     This ensures print_response will render the body itself rather than
     leaving the screen blank because it assumed the stream already printed it.
     """
+
     def _fake_urlopen(req, timeout):
         return _FakeStreamingResponse(
             [
-                'event: final\n',
+                "event: final\n",
                 'data: {"response":"Only final, no chunks","model":"perplexity-direct","tokens":0}\n',
-                '\n',
+                "\n",
             ]
         )
 
@@ -275,8 +276,6 @@ def test_invoke_openclaw_stream_no_chunks_sets_streamed_cli_false(capsys):
     assert response.response == "Only final, no chunks"
     assert response.raw["_streamed_cli"] is False
     assert capsys.readouterr().out == ""  # nothing printed mid-stream
-
-
 
     captured = {}
 
@@ -749,9 +748,7 @@ def test_route_repl_prompt_uses_classifier_fallback_for_actionish_prompt():
 
 
 def test_route_repl_prompt_decomposes_sequenced_prompt_into_plan_candidate():
-    decision = mod.route_repl_prompt(
-        "research Python packaging, then draft release notes, after that edit README.md"
-    )
+    decision = mod.route_repl_prompt("research Python packaging, then draft release notes, after that edit README.md")
 
     assert decision.kind == mod.ReplRouteKind.PLAN
     assert decision.confidence >= mod.REPL_ROUTE_AUTO_THRESHOLD
@@ -847,9 +844,7 @@ def test_route_repl_prompt_keeps_single_action_request_as_single_route():
 
 
 def test_route_repl_prompt_extracts_fenced_exec_command_with_quoted_args():
-    decision = mod.route_repl_prompt(
-        'run ```bash\ngit commit -m "ship parser fixes"\n```'
-    )
+    decision = mod.route_repl_prompt('run ```bash\ngit commit -m "ship parser fixes"\n```')
 
     assert decision.kind == mod.ReplRouteKind.EXEC
     assert decision.args_text == 'git commit -m "ship parser fixes"'
@@ -1674,8 +1669,24 @@ class TestChatCommandRegistry:
 
     def test_new_commands_registered(self):
         names = {cmd.name for cmd in self._registry().list_commands()}
-        assert names >= {"session", "context", "cwd", "files", "plan", "task", "outputs", "overlay", "rollback", "events", "collab",
-                         "analyze", "research", "write", "exec", "edit"}
+        assert names >= {
+            "session",
+            "context",
+            "cwd",
+            "files",
+            "plan",
+            "task",
+            "outputs",
+            "overlay",
+            "rollback",
+            "events",
+            "collab",
+            "analyze",
+            "research",
+            "write",
+            "exec",
+            "edit",
+        }
 
 
 class TestSessionSlashCommands:
@@ -2202,7 +2213,11 @@ class TestSessionSlashCommands:
         monkeypatch.setattr(mod.sys.stdin, "isatty", lambda: True)
         monkeypatch.setitem(mod._PREFS, mod._A11Y_PLAIN_MODE, True)
         monkeypatch.setattr("builtins.input", lambda _label: "")
-        monkeypatch.setattr(mod, "_read_overlay_keypress", lambda: (_ for _ in ()).throw(AssertionError("keypress mode should be skipped")))
+        monkeypatch.setattr(
+            mod,
+            "_read_overlay_keypress",
+            lambda: (_ for _ in ()).throw(AssertionError("keypress mode should be skipped")),
+        )
 
         result = mod._run_interactive_overlay(
             title="Plain overlay",
@@ -2292,7 +2307,9 @@ class TestSessionSlashCommands:
 
     def test_collab_assign_is_visible_in_status_snapshot(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
-        sess = sessions_mod.create_session(title="collab-assign", cwd=str(tmp_path), plan_id="plan-38", task_id="task-38")
+        sess = sessions_mod.create_session(
+            title="collab-assign", cwd=str(tmp_path), plan_id="plan-38", task_id="task-38"
+        )
 
         result = self._registry().dispatch(
             "/collab assign @alice Own the release handoff checklist",
@@ -2370,10 +2387,14 @@ class TestSessionSlashCommands:
 
     def test_handoff_check_reports_blockers_and_ownership(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
-        sess = sessions_mod.create_session(title="handoff-check", cwd=str(tmp_path), plan_id="plan-38", task_id="task-38")
+        sess = sessions_mod.create_session(
+            title="handoff-check", cwd=str(tmp_path), plan_id="plan-38", task_id="task-38"
+        )
         self._registry().dispatch("/collab assign @alice Drive final validation", self._ctx(session_id=sess.session_id))
         capsys.readouterr()
-        self._registry().dispatch("/risk add critical Waiting on release approval", self._ctx(session_id=sess.session_id))
+        self._registry().dispatch(
+            "/risk add critical Waiting on release approval", self._ctx(session_id=sess.session_id)
+        )
         capsys.readouterr()
 
         result = self._registry().dispatch("/handoff check", self._ctx(session_id=sess.session_id))
@@ -2387,10 +2408,14 @@ class TestSessionSlashCommands:
 
     def test_handoff_check_reports_open_incidents(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
-        sess = sessions_mod.create_session(title="handoff-incident", cwd=str(tmp_path), plan_id="plan-41", task_id="task-41")
+        sess = sessions_mod.create_session(
+            title="handoff-incident", cwd=str(tmp_path), plan_id="plan-41", task_id="task-41"
+        )
         self._registry().dispatch("/collab assign @alice Drive final validation", self._ctx(session_id=sess.session_id))
         capsys.readouterr()
-        self._registry().dispatch("/incident log Waiting on operator confirmation", self._ctx(session_id=sess.session_id))
+        self._registry().dispatch(
+            "/incident log Waiting on operator confirmation", self._ctx(session_id=sess.session_id)
+        )
         capsys.readouterr()
 
         result = self._registry().dispatch("/handoff check", self._ctx(session_id=sess.session_id))
@@ -2466,8 +2491,23 @@ class TestSessionSlashCommands:
     def test_help_output_includes_new_commands(self, capsys):
         self._registry().dispatch("/help", self._ctx())
         out = capsys.readouterr().out
-        for cmd in ("/session", "/context", "/cwd", "/files", "/plan", "/task", "/outputs", "/rollback", "/events",
-                     "/autoroute", "/analyze", "/research", "/write", "/exec", "/edit"):
+        for cmd in (
+            "/session",
+            "/context",
+            "/cwd",
+            "/files",
+            "/plan",
+            "/task",
+            "/outputs",
+            "/rollback",
+            "/events",
+            "/autoroute",
+            "/analyze",
+            "/research",
+            "/write",
+            "/exec",
+            "/edit",
+        ):
             assert cmd in out, f"Expected {cmd} in /help output"
         assert "Multi-step prompts can decompose into linked plans" in out
         assert "Ambiguous prompts stay in normal chat." in out
@@ -2571,7 +2611,9 @@ class TestActionSlashCommands:
     def test_analyze_no_goal_shows_usage(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
         sess = sessions_mod.create_session(title="analyze-usage", cwd=str(tmp_path))
-        result = self._registry().dispatch("/analyze", self._ctx(session_id=sess.session_id, config=self._make_config()))
+        result = self._registry().dispatch(
+            "/analyze", self._ctx(session_id=sess.session_id, config=self._make_config())
+        )
         assert result == mod._CMD_CONTINUE
         assert "Usage" in capsys.readouterr().out
 
@@ -2779,6 +2821,7 @@ class TestActionSlashCommands:
         sess = sessions_mod.create_session(title="exec-happy", cwd=str(tmp_path))
 
         from openclaw_cli_actions import ShellCommandResult
+
         fake_result = ShellCommandResult(command="echo hi", stdout="hi\n", stderr="", returncode=0, cwd=str(tmp_path))
 
         def _fake_run_async(coro):
@@ -2875,7 +2918,10 @@ class TestActionSlashCommands:
         sess = sessions_mod.create_session(title="exec-dash", cwd=str(tmp_path))
 
         from openclaw_cli_actions import ShellCommandResult
-        fake_result = ShellCommandResult(command="git status", stdout="ok\n", stderr="", returncode=0, cwd=str(tmp_path))
+
+        fake_result = ShellCommandResult(
+            command="git status", stdout="ok\n", stderr="", returncode=0, cwd=str(tmp_path)
+        )
         captured_args = []
 
         def _fake_run_async(coro):
@@ -2901,7 +2947,10 @@ class TestActionSlashCommands:
         sess = sessions_mod.create_session(title="exec-dash-handler", cwd=str(tmp_path))
 
         from openclaw_cli_actions import ShellCommandResult
-        fake_result = ShellCommandResult(command="git status", stdout="ok\n", stderr="", returncode=0, cwd=str(tmp_path))
+
+        fake_result = ShellCommandResult(
+            command="git status", stdout="ok\n", stderr="", returncode=0, cwd=str(tmp_path)
+        )
 
         def _fake_run_async(coro):
             coro.close()
@@ -3105,8 +3154,7 @@ class TestActionSlashCommands:
         assert "workspace signature before action:" in out
         events = sessions_mod.load_events(sess.session_id)
         assert any(
-            event.get("kind") == "rollback"
-            and (event.get("metadata") or {}).get("status") == "unsupported"
+            event.get("kind") == "rollback" and (event.get("metadata") or {}).get("status") == "unsupported"
             for event in events
         )
 
@@ -3287,7 +3335,6 @@ class TestActionSlashCommands:
         assert "approval 0.4s" in out
 
 
-
 def test_setup_script_supports_bash_rc_detection():
     repo_root = Path(__file__).resolve().parent.parent
     script_path = repo_root / "scripts" / "setup_openclaw_cli_mac.sh"
@@ -3380,7 +3427,9 @@ def test_main_watch_creates_checkpointed_session(monkeypatch, tmp_path, capsys):
         patch.object(mod, "invoke_openclaw", return_value=response) as invoke_openclaw,
         patch.object(mod.time, "sleep", return_value=None),
     ):
-        exit_code = mod.main(["watch", "--cwd", str(tmp_path), "--iterations", "1", "@README.md", "watch", "for", "regressions"])
+        exit_code = mod.main(
+            ["watch", "--cwd", str(tmp_path), "--iterations", "1", "@README.md", "watch", "for", "regressions"]
+        )
 
     assert exit_code == 0
     session_id = invoke_openclaw.call_args.kwargs["config"].session_id
@@ -3530,7 +3579,11 @@ def test_summarize_session_includes_age(monkeypatch, tmp_path):
         created_at="2026-04-14T15:00:00Z",
         updated_at="2026-04-14T15:30:00Z",
     )
-    monkeypatch.setattr(mod, "_elapsed_seconds", lambda started_at, finished_at=None: 3600.0 if started_at == "2026-04-14T15:00:00Z" else 0.0)
+    monkeypatch.setattr(
+        mod,
+        "_elapsed_seconds",
+        lambda started_at, finished_at=None: 3600.0 if started_at == "2026-04-14T15:00:00Z" else 0.0,
+    )
 
     summary = mod.summarize_session(session)
 
@@ -3892,7 +3945,9 @@ def test_main_watch_research_streams_progress(monkeypatch, tmp_path, capsys):
         patch.object(mod.time, "sleep", return_value=None),
         patch.dict(sys.modules, {"research_agent": fake_module}),
     ):
-        exit_code = mod.main(["watch", "--mode", "research", "--cwd", str(tmp_path), "--iterations", "1", "investigate", "scheduler"])
+        exit_code = mod.main(
+            ["watch", "--mode", "research", "--cwd", str(tmp_path), "--iterations", "1", "investigate", "scheduler"]
+        )
 
     assert exit_code == 0
     session = sessions_mod.list_sessions(limit=1)[0]
@@ -4095,7 +4150,9 @@ def test_workspace_capsule_restore_recovers_cwd_plan_and_task(monkeypatch, tmp_p
 
 def test_main_exec_tracks_shell_command(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
-    fake_result = SimpleNamespace(command="git status", cwd=str(tmp_path), returncode=0, stdout="On branch main\n", stderr="")
+    fake_result = SimpleNamespace(
+        command="git status", cwd=str(tmp_path), returncode=0, stdout="On branch main\n", stderr=""
+    )
 
     with (
         patch.object(mod, "run_shell_command", new=AsyncMock(return_value=fake_result)) as run_shell_command,
@@ -4726,10 +4783,20 @@ def test_exec_plan_task_tagging_creates_linked_session(monkeypatch, tmp_path):
         patch.object(mod, "run_shell_command", return_value=fake_result),
         patch.object(mod, "request_cli_approval", return_value=True),
     ):
-        exit_code = mod.main([
-            "exec", "--cwd", str(tmp_path), "--plan-id", "plan-99", "--task-id", "task-3",
-            "--", "echo", "hi",
-        ])
+        exit_code = mod.main(
+            [
+                "exec",
+                "--cwd",
+                str(tmp_path),
+                "--plan-id",
+                "plan-99",
+                "--task-id",
+                "task-3",
+                "--",
+                "echo",
+                "hi",
+            ]
+        )
 
     assert exit_code == 0
     sessions = mod.list_sessions(limit=1)
@@ -4767,11 +4834,19 @@ def test_edit_plan_task_tagging_creates_linked_session(monkeypatch, tmp_path):
     target.write_text("original content\n", encoding="utf-8")
 
     with patch.object(mod, "request_cli_approval", return_value=True):
-        exit_code = mod.main([
-            "edit", str(target),
-            "--replace", "original", "updated",
-            "--plan-id", "plan-55", "--task-id", "task-9",
-        ])
+        exit_code = mod.main(
+            [
+                "edit",
+                str(target),
+                "--replace",
+                "original",
+                "updated",
+                "--plan-id",
+                "plan-55",
+                "--task-id",
+                "task-9",
+            ]
+        )
 
     assert exit_code == 0
     sessions = mod.list_sessions(limit=1)
@@ -4948,11 +5023,18 @@ def test_analyze_injects_plan_task_context_into_prompt(monkeypatch, tmp_path):
         patch.object(mod, "build_config", return_value=config),
         patch.object(mod, "invoke_openclaw", return_value=response) as mock_invoke,
     ):
-        exit_code = mod.main([
-            "analyze", "--cwd", str(tmp_path),
-            "--plan-id", "plan-ANALYZE", "--task-id", "task-ANALYZE",
-            "review the code",
-        ])
+        exit_code = mod.main(
+            [
+                "analyze",
+                "--cwd",
+                str(tmp_path),
+                "--plan-id",
+                "plan-ANALYZE",
+                "--task-id",
+                "task-ANALYZE",
+                "review the code",
+            ]
+        )
 
     assert exit_code == 0
     prompt = mock_invoke.call_args.args[0]
@@ -4991,7 +5073,10 @@ def test_watch_execute_iteration_analysis_injects_plan_task(monkeypatch, tmp_pat
     """execute_watch_iteration in analyze mode injects plan/task context into the LLM prompt."""
     monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
     session = mod.create_session(
-        title="Watch plan test", cwd=str(tmp_path), plan_id="plan-WATCH", task_id="task-WATCH",
+        title="Watch plan test",
+        cwd=str(tmp_path),
+        plan_id="plan-WATCH",
+        task_id="task-WATCH",
     )
     state = {
         "session_id": session.session_id,
@@ -5063,10 +5148,16 @@ def test_research_injects_plan_task_into_query(monkeypatch, tmp_path):
             return "Research report"
 
     with patch.dict(sys.modules, {"research_agent": types.SimpleNamespace(ResearchAgent=_FakeAgent)}):
-        exit_code = mod.main([
-            "research", "--plan-id", "plan-R1", "--task-id", "task-R2",
-            "investigate latency issues",
-        ])
+        exit_code = mod.main(
+            [
+                "research",
+                "--plan-id",
+                "plan-R1",
+                "--task-id",
+                "task-R2",
+                "investigate latency issues",
+            ]
+        )
 
     assert exit_code == 0
     assert captured_queries, "ResearchAgent.run was never called"
@@ -5102,7 +5193,10 @@ def test_watch_research_iteration_injects_plan_task(monkeypatch, tmp_path):
     """execute_watch_iteration in research mode injects plan/task context into the effective query."""
     monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
     session = mod.create_session(
-        title="Watch research plan", cwd=str(tmp_path), plan_id="plan-WR", task_id="task-WR",
+        title="Watch research plan",
+        cwd=str(tmp_path),
+        plan_id="plan-WR",
+        task_id="task-WR",
     )
     state = {
         "session_id": session.session_id,
@@ -5218,6 +5312,7 @@ class TestCmdAlias:
 
 # ── /history command ──────────────────────────────────────────────────────────
 
+
 class TestCmdHistory:
     """Tests for the /history slash command handler."""
 
@@ -5316,6 +5411,7 @@ class TestCmdHistsearch:
 
 
 # ── /pin and /pins commands ───────────────────────────────────────────────────
+
 
 class TestPinCommand:
     """Tests for /pin and /pins slash commands."""
@@ -5497,7 +5593,15 @@ class TestAccessibilityPrefs:
         prefs_file = tmp_path / ".openclaw" / "prefs.json"
         prefs_file.parent.mkdir(parents=True, exist_ok=True)
         prefs_file.write_text(
-            json.dumps({"theme": "unknown", "emoji_pack": "bogus", "layout": "loud", "layout_focus": "sideways", "emoji": False}),
+            json.dumps(
+                {
+                    "theme": "unknown",
+                    "emoji_pack": "bogus",
+                    "layout": "loud",
+                    "layout_focus": "sideways",
+                    "emoji": False,
+                }
+            ),
             encoding="utf-8",
         )
 
@@ -5780,6 +5884,7 @@ def test_status_cell_plain_mode_prefers_text_labels(monkeypatch):
 
 # ── /macro command ─────────────────────────────────────────────────────────────
 
+
 class TestCmdMacro:
     """Tests for the /macro slash command handler."""
 
@@ -5940,7 +6045,9 @@ class TestCmdMacroRun:
         fake_registry.register(mod.SlashCommand(name="session", description="", handler=fake_session))
 
         with patch.object(mod, "build_chat_command_registry", return_value=fake_registry):
-            result = mod._macro_run(mod.ChatCommandContext(history=[], session_id=session.session_id, args=""), "templated")
+            result = mod._macro_run(
+                mod.ChatCommandContext(history=[], session_id=session.session_id, args=""), "templated"
+            )
 
         assert result == mod._CMD_CONTINUE
         assert called[0][1] == session.cwd
@@ -6006,7 +6113,9 @@ class TestCmdPattern:
         self._reset_patterns()
 
         with patch.object(mod, "_history_command_texts", return_value=["/context", "/files", "/plan"]):
-            result = self._registry().dispatch("/pattern save triage last 2", self._ctx("save triage last 2", "session-37"))
+            result = self._registry().dispatch(
+                "/pattern save triage last 2", self._ctx("save triage last 2", "session-37")
+            )
 
         assert result == mod._CMD_CONTINUE
         pattern = mod._PREFS["patterns"]["triage"]
@@ -6022,7 +6131,9 @@ class TestCmdPattern:
         self._reset_patterns()
         mod._PREFS["macros"] = {"shipit": ["/context {cwd}", "/bookmark {session}"]}
 
-        result = self._registry().dispatch("/pattern save launch workflow shipit", self._ctx("save launch workflow shipit"))
+        result = self._registry().dispatch(
+            "/pattern save launch workflow shipit", self._ctx("save launch workflow shipit")
+        )
 
         assert result == mod._CMD_CONTINUE
         pattern = mod._PREFS["patterns"]["launch"]
@@ -6166,8 +6277,7 @@ class TestCmdRate:
         mod._load_prefs()
         monkeypatch.setattr(mod, "_last_response_text", "some AI response")
         mod._PREFS.pop("ratings", None)
-        with patch.object(mod, "_save_prefs"), \
-             patch("openclaw_cli.append_event"):
+        with patch.object(mod, "_save_prefs"), patch("openclaw_cli.append_event"):
             result = mod._cmd_rate(self._ctx(args="good"))
         assert result == mod._CMD_CONTINUE
         ratings = mod._PREFS.get("ratings", [])
@@ -6181,8 +6291,7 @@ class TestCmdRate:
         mod._load_prefs()
         monkeypatch.setattr(mod, "_last_response_text", "some AI response")
         mod._PREFS.pop("ratings", None)
-        with patch.object(mod, "_save_prefs"), \
-             patch("openclaw_cli.append_event"):
+        with patch.object(mod, "_save_prefs"), patch("openclaw_cli.append_event"):
             result = mod._cmd_rate(self._ctx(args="bad"))
         assert result == mod._CMD_CONTINUE
         ratings = mod._PREFS.get("ratings", [])
@@ -6353,6 +6462,7 @@ class TestCmdHeatmap:
     def test_openclaw_cli_cli_build_is_wave50(self):
         """_CLI_BUILD must equal 'wave50'."""
         assert mod._CLI_BUILD == "wave50"
+
     """Tests for _cmd_ratehint."""
 
     def _ctx(self, args: str = "") -> mod.ChatCommandContext:
@@ -6910,6 +7020,7 @@ class TestProgressBar:
         result = mod._progress_bar(5, 10)
         assert "50%" in result
 
+
 class TestCelebrationBurst:
     """Tests for _celebration_burst and /celebrate command."""
 
@@ -7004,10 +7115,14 @@ class TestCmdStats:
         """/stats commands returns _CMD_CONTINUE."""
         monkeypatch.setattr(mod, "_IS_TTY", False)
         monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
-        monkeypatch.setattr(mod, "_PREFS", {
-            "cmd_history": [{"cmd": "/help"}, {"cmd": "/clear"}, {"cmd": "/help"}],
-            "ratings": [],
-        })
+        monkeypatch.setattr(
+            mod,
+            "_PREFS",
+            {
+                "cmd_history": [{"cmd": "/help"}, {"cmd": "/clear"}, {"cmd": "/help"}],
+                "ratings": [],
+            },
+        )
         ctx = self._ctx("commands")
         result = mod._cmd_stats(ctx)
         assert result == mod._CMD_CONTINUE
@@ -7016,10 +7131,14 @@ class TestCmdStats:
         """/stats ratings returns _CMD_CONTINUE."""
         monkeypatch.setattr(mod, "_IS_TTY", False)
         monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
-        monkeypatch.setattr(mod, "_PREFS", {
-            "cmd_history": [],
-            "ratings": [{"score": "5"}, {"score": "3"}, {"score": "5"}],
-        })
+        monkeypatch.setattr(
+            mod,
+            "_PREFS",
+            {
+                "cmd_history": [],
+                "ratings": [{"score": "5"}, {"score": "3"}, {"score": "5"}],
+            },
+        )
         ctx = self._ctx("ratings")
         result = mod._cmd_stats(ctx)
         assert result == mod._CMD_CONTINUE
@@ -7028,10 +7147,14 @@ class TestCmdStats:
         """/stats with rating data outputs star characters in the bar chart."""
         monkeypatch.setattr(mod, "_IS_TTY", False)
         monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
-        monkeypatch.setattr(mod, "_PREFS", {
-            "cmd_history": [],
-            "ratings": [{"score": "4"}, {"score": "4"}, {"score": "2"}],
-        })
+        monkeypatch.setattr(
+            mod,
+            "_PREFS",
+            {
+                "cmd_history": [],
+                "ratings": [{"score": "4"}, {"score": "4"}, {"score": "2"}],
+            },
+        )
         ctx = self._ctx("ratings")
         mod._cmd_stats(ctx)
         captured = capsys.readouterr().out
@@ -7091,6 +7214,7 @@ class TestPathHints:
 
     def _ctx(self, args: str = ""):
         import types
+
         ctx = types.SimpleNamespace(args=args)
         return ctx
 
@@ -7197,6 +7321,7 @@ class TestCmdTop:
 
     def _ctx(self, args: str = ""):
         import types
+
         return types.SimpleNamespace(args=args)
 
     def test_top_empty_history_shows_no_history(self, monkeypatch):
@@ -7243,6 +7368,7 @@ class TestCmdFreq:
 
     def _ctx(self, args: str = ""):
         import types
+
         return types.SimpleNamespace(args=args)
 
     def test_freq_empty_history_shows_no_data_message(self, monkeypatch):
@@ -7272,6 +7398,7 @@ class TestCmdFreq:
 
 # ── /recall command ───────────────────────────────────────────────────────────
 
+
 class TestCmdRecall:
     """Tests for the /recall slash command."""
 
@@ -7295,11 +7422,15 @@ class TestCmdRecall:
         """/recall with no argument and history shows numbered prompt list."""
         monkeypatch.setattr(mod, "_IS_TTY", False)
         monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
-        monkeypatch.setitem(mod._PREFS, "cmd_history", [
-            "explain recursion",
-            "/help",
-            "what is async await",
-        ])
+        monkeypatch.setitem(
+            mod._PREFS,
+            "cmd_history",
+            [
+                "explain recursion",
+                "/help",
+                "what is async await",
+            ],
+        )
         result = mod._cmd_recall(self._ctx())
         assert result == mod._CMD_CONTINUE
         out = capsys.readouterr().out
@@ -7311,11 +7442,15 @@ class TestCmdRecall:
         """/recall 1 with history sets _next_inject to most recent prompt."""
         monkeypatch.setattr(mod, "_IS_TTY", False)
         monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
-        monkeypatch.setitem(mod._PREFS, "cmd_history", [
-            "first prompt",
-            "/help",
-            "second prompt",
-        ])
+        monkeypatch.setitem(
+            mod._PREFS,
+            "cmd_history",
+            [
+                "first prompt",
+                "/help",
+                "second prompt",
+            ],
+        )
         mod._next_inject = ""
         result = mod._cmd_recall(self._ctx(args="1"))
         assert result == mod._CMD_CONTINUE
@@ -7438,10 +7573,12 @@ class TestCmdTokeninfo:
 
     def test_tokeninfo_shows_progress_bar_and_estimate(self, capsys):
         result = mod._cmd_tokeninfo(
-            self._ctx([
-                {"role": "user", "content": "x" * 400},
-                {"role": "assistant", "content": "y" * 200},
-            ])
+            self._ctx(
+                [
+                    {"role": "user", "content": "x" * 400},
+                    {"role": "assistant", "content": "y" * 200},
+                ]
+            )
         )
 
         assert result == mod._CMD_CONTINUE
@@ -7454,10 +7591,12 @@ class TestCmdTokeninfo:
 
     def test_tokeninfo_warns_near_capacity_with_bookmark_hint(self, capsys):
         result = mod._cmd_tokeninfo(
-            self._ctx([
-                {"role": "user", "content": "x" * 400_000},
-                {"role": "assistant", "content": "y" * 120_000},
-            ])
+            self._ctx(
+                [
+                    {"role": "user", "content": "x" * 400_000},
+                    {"role": "assistant", "content": "y" * 120_000},
+                ]
+            )
         )
 
         assert result == mod._CMD_CONTINUE
@@ -7468,9 +7607,11 @@ class TestCmdTokeninfo:
     def test_tokeninfo_uses_model_aware_limit_for_gemma_route(self, capsys, monkeypatch):
         monkeypatch.setitem(mod._PREFS, "last_model", "gemma3:4b")
         result = mod._cmd_tokeninfo(
-            self._ctx([
-                {"role": "user", "content": "x" * 390_000},
-            ])
+            self._ctx(
+                [
+                    {"role": "user", "content": "x" * 390_000},
+                ]
+            )
         )
 
         assert result == mod._CMD_CONTINUE
@@ -7615,6 +7756,7 @@ class TestCmdSnapshot:
         monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
         monkeypatch.setattr(mod, "_PREFS", {})
         import subprocess
+
         fake = type("R", (), {"stdout": "abc123def456\n", "stderr": "", "returncode": 0})()
         monkeypatch.setattr(subprocess, "run", lambda *a, **kw: fake)
         with patch.object(mod, "_save_prefs"):
@@ -7654,6 +7796,7 @@ class TestCmdChanges:
         monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
         monkeypatch.setattr(mod, "_PREFS", {})
         import subprocess
+
         monkeypatch.setattr(subprocess, "run", lambda *a, **kw: type("R", (), {"stdout": "", "stderr": ""})())
         result = mod._cmd_changes(self._ctx())
         assert result == mod._CMD_CONTINUE
@@ -7663,6 +7806,7 @@ class TestCmdChanges:
         monkeypatch.setattr(mod, "_IS_TTY", False)
         monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
         import subprocess
+
         monkeypatch.setattr(subprocess, "run", lambda *a, **kw: type("R", (), {"stdout": "", "stderr": ""})())
         result = mod._cmd_diff(self._ctx())
         assert result == mod._CMD_CONTINUE
@@ -7686,18 +7830,22 @@ class TestCmdDashboard:
         """/dashboard returns _CMD_CONTINUE with pins, macros, and ratings populated."""
         monkeypatch.setattr(mod, "_IS_TTY", False)
         monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
-        monkeypatch.setattr(mod, "_PREFS", {
-            "cmd_history": [
-                {"text": "hello world", "timestamp": "2024-01-01"},
-                {"text": "/pin foo bar", "timestamp": "2024-01-02"},
-            ],
-            "ratings": [{"score": 4}, {"score": 5}],
-            "pins": {"foo": "bar", "env": "prod"},
-            "macros": {"greet": "say hello"},
-            "aliases": {"h": "/help"},
-            "snapshots": {"snap1": "abc123"},
-            "custom_keybinds": {"Ctrl+D": "/dashboard"},
-        })
+        monkeypatch.setattr(
+            mod,
+            "_PREFS",
+            {
+                "cmd_history": [
+                    {"text": "hello world", "timestamp": "2024-01-01"},
+                    {"text": "/pin foo bar", "timestamp": "2024-01-02"},
+                ],
+                "ratings": [{"score": 4}, {"score": 5}],
+                "pins": {"foo": "bar", "env": "prod"},
+                "macros": {"greet": "say hello"},
+                "aliases": {"h": "/help"},
+                "snapshots": {"snap1": "abc123"},
+                "custom_keybinds": {"Ctrl+D": "/dashboard"},
+            },
+        )
         result = mod._cmd_dashboard(self._ctx())
         assert result == mod._CMD_CONTINUE
         out = capsys.readouterr().out
@@ -7777,7 +7925,10 @@ class TestCmdBenchmark:
         monkeypatch.setattr(mod, "_IS_TTY", False)
         monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
         import socket
-        monkeypatch.setattr(socket, "create_connection", lambda *a, **kw: (_ for _ in ()).throw(ConnectionRefusedError("no server")))
+
+        monkeypatch.setattr(
+            socket, "create_connection", lambda *a, **kw: (_ for _ in ()).throw(ConnectionRefusedError("no server"))
+        )
         result = mod._cmd_benchmark(self._ctx())
         assert result == mod._CMD_CONTINUE
 
@@ -7786,7 +7937,10 @@ class TestCmdBenchmark:
         monkeypatch.setattr(mod, "_IS_TTY", False)
         monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
         import socket
-        monkeypatch.setattr(socket, "create_connection", lambda *a, **kw: (_ for _ in ()).throw(ConnectionRefusedError("no server")))
+
+        monkeypatch.setattr(
+            socket, "create_connection", lambda *a, **kw: (_ for _ in ()).throw(ConnectionRefusedError("no server"))
+        )
         result = mod._cmd_benchmark(self._ctx("5"))
         assert result == mod._CMD_CONTINUE
 
@@ -7795,6 +7949,7 @@ class TestCmdBenchmark:
         monkeypatch.setattr(mod, "_IS_TTY", False)
         monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
         import socket
+
         call_count = []
 
         def fake_connect(*a, **kw):
@@ -7827,13 +7982,17 @@ class TestCmdTimeline:
         """/timeline with mock timestamped history returns _CMD_CONTINUE."""
         monkeypatch.setattr(mod, "_IS_TTY", False)
         monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
-        monkeypatch.setattr(mod, "_PREFS", {
-            "cmd_history": [
-                {"text": "/help", "timestamp": "2024-06-01T10:00:00"},
-                {"text": "explain async", "timestamp": "2024-06-01T11:30:00"},
-                {"text": "/stats", "timestamp": "2024-06-02T09:15:00"},
-            ]
-        })
+        monkeypatch.setattr(
+            mod,
+            "_PREFS",
+            {
+                "cmd_history": [
+                    {"text": "/help", "timestamp": "2024-06-01T10:00:00"},
+                    {"text": "explain async", "timestamp": "2024-06-01T11:30:00"},
+                    {"text": "/stats", "timestamp": "2024-06-02T09:15:00"},
+                ]
+            },
+        )
         result = mod._cmd_timeline(self._ctx())
         assert result == mod._CMD_CONTINUE
         out = capsys.readouterr().out
@@ -8112,9 +8271,7 @@ class TestCmdFollowup:
         assert len(suggestions) > 0
 
     def test_suggest_followups_max_3(self):
-        suggestions = mod._suggest_followups(
-            "find the file with error history recap search compare pin rate"
-        )
+        suggestions = mod._suggest_followups("find the file with error history recap search compare pin rate")
         assert len(suggestions) <= 3
 
     def test_suggest_followups_uses_response_context_and_session(self):
@@ -8199,9 +8356,7 @@ class TestSourcesBugFixes:
         assert "foo.com" not in body
 
     def test_duplicate_sources_both_stripped(self):
-        text = (
-            "Response.\n\nSources\n- https://a.com\n\nMore text.\n\nSources\n1. https://b.com\n2. https://c.com\n"
-        )
+        text = "Response.\n\nSources\n- https://a.com\n\nMore text.\n\nSources\n1. https://b.com\n2. https://c.com\n"
         body, sources = mod._preprocess_response_text(text)
         assert "Sources" not in body
 
@@ -8282,74 +8437,88 @@ class TestSourcesBugFixes:
 
     def test_detect_url_mentions_fires_with_action_verb(self):
         import openclaw_cli_path_utils as pu
+
         urls = pu._detect_url_mentions("summarize https://example.com/readme.md for me")
         assert "https://example.com/readme.md" in urls
 
     def test_detect_url_mentions_no_action_verb_returns_empty(self):
         import openclaw_cli_path_utils as pu
+
         urls = pu._detect_url_mentions("I found https://example.com mentioned in the docs")
         assert urls == []
 
     def test_detect_url_mentions_strips_trailing_punctuation(self):
         import openclaw_cli_path_utils as pu
+
         urls = pu._detect_url_mentions("read https://example.com/path.md.")
         assert all(not u.endswith(".") for u in urls)
 
     def test_detect_url_mentions_caps_at_three(self):
         import openclaw_cli_path_utils as pu
-        text = ("summarize https://a.com https://b.com https://c.com "
-                "https://d.com")
+
+        text = "summarize https://a.com https://b.com https://c.com https://d.com"
         urls = pu._detect_url_mentions(text)
         assert len(urls) <= 3
 
     def test_detect_explicit_refs_file(self):
         import openclaw_cli_path_utils as pu
+
         refs = pu._detect_explicit_refs("please read @file:/tmp/test.txt and summarize")
         assert ("file", "/tmp/test.txt") in refs
 
     def test_detect_explicit_refs_url(self):
         import openclaw_cli_path_utils as pu
+
         refs = pu._detect_explicit_refs("explain @url:https://example.com/doc")
         assert ("url", "https://example.com/doc") in refs
 
     def test_detect_explicit_refs_multiple(self):
         import openclaw_cli_path_utils as pu
+
         refs = pu._detect_explicit_refs("compare @file:/a.md and @file:/b.md")
         assert len(refs) == 2
 
     def test_strip_explicit_refs(self):
         import openclaw_cli_path_utils as pu
+
         cleaned = pu._strip_explicit_refs("read @file:/tmp/a.txt and answer")
         assert "@file:" not in cleaned
         assert "read" in cleaned and "answer" in cleaned
 
     def test_detect_explicit_refs_empty_when_none(self):
         import openclaw_cli_path_utils as pu
+
         refs = pu._detect_explicit_refs("no explicit refs here")
         assert refs == []
 
     def test_detect_explicit_refs_clip(self):
         import openclaw_cli_path_utils as pu
+
         refs = pu._detect_explicit_refs("summarize @clip for me")
         assert ("clip", "") in refs
 
     def test_detect_explicit_refs_dir(self):
         import openclaw_cli_path_utils as pu
+
         refs = pu._detect_explicit_refs("what files are in @dir:/tmp/myproject?")
         assert ("dir", "/tmp/myproject") in refs
 
     def test_strip_explicit_refs_clip(self):
         import openclaw_cli_path_utils as pu
+
         cleaned = pu._strip_explicit_refs("summarize @clip please")
         assert "@clip" not in cleaned
         assert "summarize" in cleaned
 
     def test_detect_explicit_refs_all_types(self):
         import openclaw_cli_path_utils as pu
+
         text = "use @file:/a.md @url:https://x.com @dir:/src @clip"
         refs = pu._detect_explicit_refs(text)
         kinds = {r[0] for r in refs}
         assert kinds == {"file", "url", "dir", "clip"}
+
+
 class TestCmdTrace:
     def _ctx(self, args: str = "", session_id: str = "session-34") -> mod.ChatCommandContext:
         return mod.ChatCommandContext(history=[], session_id=session_id, args=args)
@@ -8386,11 +8555,17 @@ class TestCmdTrace:
         assert "Latest rating" in out
 
     def test_routing_suggest_shows_best_rated_route(self, capsys, monkeypatch):
-        monkeypatch.setattr(mod, "_PREFS", {"ratings": [
-            {"score": 5, "route": "research"},
-            {"score": 4, "route": "research"},
-            {"score": 3, "route": "plan"},
-        ]})
+        monkeypatch.setattr(
+            mod,
+            "_PREFS",
+            {
+                "ratings": [
+                    {"score": 5, "route": "research"},
+                    {"score": 4, "route": "research"},
+                    {"score": 3, "route": "plan"},
+                ]
+            },
+        )
         result = mod._cmd_routing(self._ctx("suggest"))
         assert result == mod._CMD_CONTINUE
         out = capsys.readouterr().out
@@ -8441,9 +8616,7 @@ def _make_loader(tmp_path: Path) -> PluginLoader:
 
 def _make_valid_manifest(plugin_dir: Path, name: str = "myplugin") -> None:
     plugin_dir.mkdir(parents=True, exist_ok=True)
-    (plugin_dir / "plugin.yaml").write_text(
-        f"name: {name}\nversion: 1.0.0\nauthor: tester@example.com\n"
-    )
+    (plugin_dir / "plugin.yaml").write_text(f"name: {name}\nversion: 1.0.0\nauthor: tester@example.com\n")
 
 
 class TestPluginLoaderManifest:
@@ -8566,7 +8739,9 @@ class TestPluginLoaderValidation:
     def test_validate_dependencies_fails_for_missing_package(self, tmp_path):
         loader = _make_loader(tmp_path)
         meta = PluginMetadata(
-            name="x", version="1.0.0", author="a",
+            name="x",
+            version="1.0.0",
+            author="a",
             dependencies=["_no_such_package_xyz_"],
         )
         ok, msg = loader.validate_dependencies(meta)
@@ -8576,7 +8751,9 @@ class TestPluginLoaderValidation:
     def test_validate_dependencies_passes_for_available_package(self, tmp_path):
         loader = _make_loader(tmp_path)
         meta = PluginMetadata(
-            name="x", version="1.0.0", author="a",
+            name="x",
+            version="1.0.0",
+            author="a",
             dependencies=["json"],  # json is always available
         )
         ok, msg = loader.validate_dependencies(meta)
@@ -8586,7 +8763,9 @@ class TestPluginLoaderValidation:
         loader = _make_loader(tmp_path)
         loader.config = {"version": "1.0.0"}
         meta = PluginMetadata(
-            name="x", version="1.0.0", author="a",
+            name="x",
+            version="1.0.0",
+            author="a",
             min_openclaw_version="0.1.0",
         )
         ok, _msg = loader.validate_version(meta)
@@ -8596,7 +8775,9 @@ class TestPluginLoaderValidation:
         loader = _make_loader(tmp_path)
         loader.config = {"version": "0.1.0"}
         meta = PluginMetadata(
-            name="x", version="1.0.0", author="a",
+            name="x",
+            version="1.0.0",
+            author="a",
             min_openclaw_version="9.9.9",
         )
         ok, msg = loader.validate_version(meta)
@@ -8645,9 +8826,19 @@ class TestPluginMetadata:
     def test_to_dict_includes_all_required_keys(self):
         meta = PluginMetadata(name="p", version="1.0.0", author="a")
         d = meta.to_dict()
-        for key in ("name", "version", "author", "description", "dependencies",
-                    "permissions", "permission_level", "min_openclaw_version",
-                    "max_openclaw_version", "homepage", "repository"):
+        for key in (
+            "name",
+            "version",
+            "author",
+            "description",
+            "dependencies",
+            "permissions",
+            "permission_level",
+            "min_openclaw_version",
+            "max_openclaw_version",
+            "homepage",
+            "repository",
+        ):
             assert key in d
 
 
@@ -9051,7 +9242,8 @@ class TestReadKeychainToken:
     def test_returns_empty_on_subprocess_os_error(self, monkeypatch):
         monkeypatch.setattr(auth_mod.sys, "platform", "darwin")
         monkeypatch.setattr(
-            auth_mod.subprocess, "run",
+            auth_mod.subprocess,
+            "run",
             lambda *a, **kw: (_ for _ in ()).throw(OSError("security not found")),
         )
         result = auth_mod.read_keychain_token(account="testuser")
@@ -9095,7 +9287,8 @@ class TestWriteKeychainToken:
 
     def test_raises_on_subprocess_os_error(self, monkeypatch):
         monkeypatch.setattr(
-            auth_mod.subprocess, "run",
+            auth_mod.subprocess,
+            "run",
             lambda *a, **kw: (_ for _ in ()).throw(OSError("security binary missing")),
         )
         with pytest.raises(auth_mod.OpenClawCliError, match="Keychain"):

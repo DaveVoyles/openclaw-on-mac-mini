@@ -5,10 +5,11 @@ import discord
 
 class EmbedColors:
     """Standard colors for Discord embeds."""
+
     SUCCESS = 0x00FF00  # Green
-    ERROR = 0xFF0000    # Red
+    ERROR = 0xFF0000  # Red
     WARNING = 0xFFA500  # Orange
-    INFO = 0x0099FF     # Blue
+    INFO = 0x0099FF  # Blue
     NEUTRAL = 0x808080  # Gray
 
 

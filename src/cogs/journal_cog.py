@@ -37,12 +37,14 @@ def _parse_date(date_str: str) -> date:
     for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%d-%m-%Y"):
         try:
             from datetime import datetime
+
             return datetime.strptime(date_str.strip(), fmt).date()
         except ValueError:
             continue
     # Fallback: dateutil if available
     try:
         from dateutil import parser as dateutil_parser
+
         return dateutil_parser.parse(date_str).date()
     except (ImportError, ValueError) as e:
         raise ValueError(f"Cannot parse date: {date_str!r}") from e
@@ -84,6 +86,7 @@ async def _save_journal_entry(entry: str, d: date) -> str:
 
 # ── Modal ──────────────────────────────────────────────────────────────────────
 
+
 class JournalEntryModal(discord.ui.Modal, title="📓 Journal Entry"):
     entry = discord.ui.TextInput(
         label="What's on your mind?",
@@ -110,6 +113,7 @@ class JournalEntryModal(discord.ui.Modal, title="📓 Journal Entry"):
 
 
 # ── Cog ───────────────────────────────────────────────────────────────────────
+
 
 class JournalCog(commands.Cog):
     def __init__(self, bot) -> None:
@@ -157,8 +161,7 @@ class JournalCog(commands.Cog):
             found = _find_journal_file(target)
             if not found:
                 await interaction.followup.send(
-                    f"No journal entry for **{target.isoformat()}**. "
-                    "Use `/journal write` to create one.",
+                    f"No journal entry for **{target.isoformat()}**. Use `/journal write` to create one.",
                     ephemeral=True,
                 )
                 return
@@ -209,7 +212,9 @@ class JournalCog(commands.Cog):
                     title="📓 Journal Streak",
                     color=discord.Color.gold(),
                 )
-                embed.add_field(name="🔥 Current Streak", value=f"**{streak} day{'s' if streak != 1 else ''}**", inline=True)
+                embed.add_field(
+                    name="🔥 Current Streak", value=f"**{streak} day{'s' if streak != 1 else ''}**", inline=True
+                )
                 embed.add_field(name="📅 Last Entry", value=last_entry.isoformat() if last_entry else "—", inline=True)
             await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception as e:  # broad: intentional — Discord command handler must not crash

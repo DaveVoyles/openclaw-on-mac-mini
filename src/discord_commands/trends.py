@@ -25,9 +25,7 @@ def _register_trend_management_commands(bot: commands.Bot) -> None:
         """Start tracking a topic."""
         await interaction.response.defer()
 
-        result = await trend_skills.track_topic(
-            topic, category, user_id=str(interaction.user.id)
-        )
+        result = await trend_skills.track_topic(topic, category, user_id=str(interaction.user.id))
 
         if result["status"] == "ok":
             embed = discord.Embed(
@@ -56,9 +54,7 @@ def _register_trend_management_commands(bot: commands.Bot) -> None:
             await interaction.response.send_message(f"⏹️ {result['message']}")
             audit_log(interaction.user, "untrack_topic", detail=topic)
         else:
-            await interaction.response.send_message(
-                f"❌ {result.get('message', 'Unknown error')}", ephemeral=True
-            )
+            await interaction.response.send_message(f"❌ {result.get('message', 'Unknown error')}", ephemeral=True)
 
 
 def _register_trend_view_commands(bot: commands.Bot) -> None:
@@ -81,9 +77,7 @@ def _register_trend_view_commands(bot: commands.Bot) -> None:
 
         # Validate timeframe
         if timeframe not in ["24h", "7d", "30d"]:
-            await interaction.followup.send(
-                "❌ Invalid timeframe. Use: 24h, 7d, or 30d", ephemeral=True
-            )
+            await interaction.followup.send("❌ Invalid timeframe. Use: 24h, 7d, or 30d", ephemeral=True)
             return
 
         # Validate limit
@@ -96,8 +90,7 @@ def _register_trend_view_commands(bot: commands.Bot) -> None:
 
             if not trending:
                 await interaction.followup.send(
-                    f"📊 No trending topics found in {category or 'all categories'} "
-                    f"for the last {timeframe}."
+                    f"📊 No trending topics found in {category or 'all categories'} for the last {timeframe}."
                 )
                 return
 
@@ -140,9 +133,7 @@ def _register_trend_view_commands(bot: commands.Bot) -> None:
             await interaction.followup.send(embed=embed)
 
         else:
-            await interaction.followup.send(
-                f"❌ {result.get('message', 'Unknown error')}", ephemeral=True
-            )
+            await interaction.followup.send(f"❌ {result.get('message', 'Unknown error')}", ephemeral=True)
 
     @bot.tree.command(name="trends", description="Show trend trajectory for a topic")
     @discord.app_commands.describe(
@@ -161,9 +152,7 @@ def _register_trend_view_commands(bot: commands.Bot) -> None:
 
         # Validate timeframe
         if timeframe not in ["24h", "7d", "30d"]:
-            await interaction.followup.send(
-                "❌ Invalid timeframe. Use: 24h, 7d, or 30d", ephemeral=True
-            )
+            await interaction.followup.send("❌ Invalid timeframe. Use: 24h, 7d, or 30d", ephemeral=True)
             return
 
         result = await trend_skills.get_topic_trajectory(topic, category, timeframe)
@@ -225,9 +214,7 @@ def _register_trend_view_commands(bot: commands.Bot) -> None:
             await interaction.followup.send(embed=embed)
 
         else:
-            await interaction.followup.send(
-                f"❌ {result.get('message', 'Unknown error')}", ephemeral=True
-            )
+            await interaction.followup.send(f"❌ {result.get('message', 'Unknown error')}", ephemeral=True)
 
     @bot.tree.command(name="breaking", description="Detect breaking news and spikes")
     @discord.app_commands.describe(
@@ -249,8 +236,7 @@ def _register_trend_view_commands(bot: commands.Bot) -> None:
 
             if not breaking:
                 await interaction.followup.send(
-                    f"📰 No breaking news detected in {category} "
-                    f"(threshold: {threshold}x normal volume)"
+                    f"📰 No breaking news detected in {category} (threshold: {threshold}x normal volume)"
                 )
                 return
 
@@ -279,9 +265,7 @@ def _register_trend_view_commands(bot: commands.Bot) -> None:
             await interaction.followup.send(embed=embed)
 
         else:
-            await interaction.followup.send(
-                f"❌ {result.get('message', 'Unknown error')}", ephemeral=True
-            )
+            await interaction.followup.send(f"❌ {result.get('message', 'Unknown error')}", ephemeral=True)
 
     @bot.tree.command(name="tracked", description="List all tracked topics")
     async def tracked_cmd(interaction: discord.Interaction):
@@ -293,8 +277,7 @@ def _register_trend_view_commands(bot: commands.Bot) -> None:
 
             if not topics:
                 await interaction.response.send_message(
-                    "📋 No topics are currently being tracked.\n"
-                    "Use `/track` to start tracking a topic."
+                    "📋 No topics are currently being tracked.\nUse `/track` to start tracking a topic."
                 )
                 return
 
@@ -331,9 +314,7 @@ def _register_trend_view_commands(bot: commands.Bot) -> None:
             await interaction.response.send_message(embed=embed)
 
         else:
-            await interaction.response.send_message(
-                f"❌ {result.get('message', 'Unknown error')}", ephemeral=True
-            )
+            await interaction.response.send_message(f"❌ {result.get('message', 'Unknown error')}", ephemeral=True)
 
 
 def _register_trend_commands(bot: commands.Bot) -> None:

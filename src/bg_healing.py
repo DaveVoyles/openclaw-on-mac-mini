@@ -46,16 +46,25 @@ ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
 
 _QUALITY_DRIFT_ALERT_ROUTE = "quality_calibration_drift"
 
-_SAFE_RESTART_TARGETS = frozenset({
-    "sonarr", "radarr", "lidarr", "prowlarr",
-    "sabnzbd", "qbittorrent", "tautulli", "overseerr",
-})
+_SAFE_RESTART_TARGETS = frozenset(
+    {
+        "sonarr",
+        "radarr",
+        "lidarr",
+        "prowlarr",
+        "sabnzbd",
+        "qbittorrent",
+        "tautulli",
+        "overseerr",
+    }
+)
 _error_re = re.compile(r"error|warn|exception|critical|failed", re.IGNORECASE)
 
 
 # ---------------------------------------------------------------------------
 # Audit writer
 # ---------------------------------------------------------------------------
+
 
 async def audit_writer_loop():
     """Flush buffered audit entries to disk every 30 seconds."""
@@ -85,6 +94,7 @@ async def audit_writer_loop():
 # ---------------------------------------------------------------------------
 # Background cleanup
 # ---------------------------------------------------------------------------
+
 
 async def background_cleanup_loop():
     """Periodically clean up expired conversations and approval requests."""
@@ -116,6 +126,7 @@ async def background_cleanup_loop():
 # ---------------------------------------------------------------------------
 # Proactive insight scanner
 # ---------------------------------------------------------------------------
+
 
 async def proactive_insight_loop(bot):
     """Scan for anomalies every 2 hours and post a Discord alert if noteworthy."""
@@ -183,10 +194,7 @@ async def _check_quality_drift_alert(bot) -> bool:
     drift_category = str(drift.get("category") or drift.get("drift_category") or "").lower().strip()
     embed = discord.Embed(
         title="🚨 Severe Quality Calibration Drift",
-        description=(
-            f"Offline calibration detected **severe** drift.\n"
-            f"Regressed metrics: {metrics_line}"
-        ),
+        description=(f"Offline calibration detected **severe** drift.\nRegressed metrics: {metrics_line}"),
         color=discord.Color.red(),
     )
     embed.add_field(name="Severity", value=f"{severity.get('level', 'unknown')} (score: {score_value})", inline=True)
@@ -196,6 +204,7 @@ async def _check_quality_drift_alert(bot) -> bool:
     # W13-5: remediation hint
     try:
         from alert_manager import get_remediation_hint
+
         hint = get_remediation_hint(drift_category)
         if hint:
             embed.add_field(name="Remediation", value=hint, inline=False)
@@ -222,6 +231,7 @@ async def _gather_system_signals():
     nas_disk = ""
     try:
         from maintenance_skills import check_nas_health
+
         nas_disk = await asyncio.wait_for(check_nas_health(), timeout=20)
     except (ImportError, OSError, asyncio.TimeoutError) as exc:
         log.debug("NAS health check failed: %s", exc)
@@ -230,6 +240,7 @@ async def _gather_system_signals():
     vpn_status = ""
     try:
         from maintenance_skills import check_gluetun_vpn
+
         vpn_status = await asyncio.wait_for(check_gluetun_vpn(), timeout=15)
     except (ImportError, OSError, asyncio.TimeoutError) as exc:
         log.debug("gluetun VPN check failed: %s", exc)
@@ -237,6 +248,7 @@ async def _gather_system_signals():
     # Record service-level health for trend tracking
     try:
         from health_history import record as _hh_record
+
         for svc_name, result in [("arr", health), ("download-clients", dl_clients), ("plex", plex)]:
             if isinstance(result, Exception):
                 _hh_record(svc_name, "down", str(result))
@@ -250,6 +262,7 @@ async def _gather_system_signals():
         import shutil
 
         from health_history import record_disk as _hh_record_disk
+
         usage = shutil.disk_usage("/")
         _hh_record_disk("/", usage.total / 1e9, usage.used / 1e9, usage.free / 1e9, usage.used / usage.total * 100)
     except (ImportError, OSError, AttributeError, ValueError) as e:
@@ -280,9 +293,7 @@ async def _gather_system_signals():
         disk_alert = True
 
     all_clean = all(
-        isinstance(r, str) and not _error_re.search(r)
-        for r in [health, dl_clients, plex]
-        if isinstance(r, str)
+        isinstance(r, str) and not _error_re.search(r) for r in [health, dl_clients, plex] if isinstance(r, str)
     )
     if all_clean and not log_snippets and not disk_alert:
         return None
@@ -346,18 +357,21 @@ async def _execute_self_healing(analysis: str) -> tuple[str, list[str]]:
                 log.info("Self-heal: restarted %s → %s", target, result[:80])
             elif action_type == "fix_qbit_download_path":
                 from maintenance_skills import fix_qbit_download_path
+
                 result = await asyncio.wait_for(fix_qbit_download_path(), timeout=60)
                 heal_results.append(f"🔧 qBittorrent path fix: {result}")
                 audit_log(None, "self_heal", detail=f"fix_qbit_download_path: {result[:200]}")
                 log.info("Self-heal: fix_qbit_download_path → %s", result[:80])
             elif action_type == "fix_arr_remote_path":
                 from maintenance_skills import fix_arr_remote_path
+
                 result = await asyncio.wait_for(fix_arr_remote_path(), timeout=120)
                 heal_results.append(f"🔧 *arr path fix: {result}")
                 audit_log(None, "self_heal", detail=f"fix_arr_remote_path: {result[:200]}")
                 log.info("Self-heal: fix_arr_remote_path → %s", result[:80])
             elif action_type == "auto_cleanup_disk":
                 from maintenance_skills import auto_cleanup_disk
+
                 result = await asyncio.wait_for(auto_cleanup_disk(), timeout=120)
                 heal_results.append(f"🧹 Disk cleanup: {result}")
                 audit_log(None, "self_heal", detail=f"auto_cleanup_disk: {result[:200]}")
@@ -447,6 +461,7 @@ class _CopilotFixView(discord.ui.View):
         results: list[str] = []
         try:
             from maintenance_skills import copilot_fix
+
             for cp in self.prompts:
                 try:
                     result = await asyncio.wait_for(copilot_fix(cp), timeout=180)
@@ -462,10 +477,7 @@ class _CopilotFixView(discord.ui.View):
 
         # Edit the status message in-place with the final result
         summary = "\n\n".join(results) if results else "No output."
-        final = (
-            f"🤖 **Copilot CLI result** (approved by **{interaction.user.display_name}**):\n"
-            f"{summary[:1900]}"
-        )
+        final = f"🤖 **Copilot CLI result** (approved by **{interaction.user.display_name}**):\n{summary[:1900]}"
         try:
             await status_msg.edit(content=final)
         except discord.HTTPException as e:
@@ -561,8 +573,8 @@ async def _run_proactive_scan(bot):
 
         # If a copilot_fix is pending approval, use Discord buttons (not reactions)
         copilot_prompts = [
-            target for action_type, target in
-            [(a, t) for a, t in _parse_heal_actions(analysis)]
+            target
+            for action_type, target in [(a, t) for a, t in _parse_heal_actions(analysis)]
             if action_type == "copilot_fix_pending"
         ]
         if copilot_prompts:

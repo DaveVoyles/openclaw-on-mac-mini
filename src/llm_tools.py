@@ -18,21 +18,23 @@ log = logging.getLogger(__name__)
 # Tool result TTL cache — avoid redundant calls for read-only snapshot tools
 # ---------------------------------------------------------------------------
 
-_CACHEABLE_TOOLS: frozenset[str] = frozenset({
-    "get_system_stats",
-    "get_docker_stats",
-    "get_nas_storage_health",
-    "get_nas_alerts",
-    "get_disk_smart_status",
-    "get_backup_status",
-    "get_uptime",
-    "check_arr_health",
-    "check_download_clients",
-    "check_plex_status",
-    "get_plex_activity",
-    "get_network_status",
-    "get_tailscale_status",
-})
+_CACHEABLE_TOOLS: frozenset[str] = frozenset(
+    {
+        "get_system_stats",
+        "get_docker_stats",
+        "get_nas_storage_health",
+        "get_nas_alerts",
+        "get_disk_smart_status",
+        "get_backup_status",
+        "get_uptime",
+        "check_arr_health",
+        "check_download_clients",
+        "check_plex_status",
+        "get_plex_activity",
+        "get_network_status",
+        "get_tailscale_status",
+    }
+)
 _TOOL_CACHE_TTL = 30  # seconds
 _TOOL_CACHE_MAX_SIZE = 256
 
@@ -115,6 +117,7 @@ def _should_return_tool_result_directly(name: str, result: str) -> bool:
     Delegates to the centralized answer policy.
     """
     from answer_policy import should_return_directly
+
     return should_return_directly(name, result)
 
 

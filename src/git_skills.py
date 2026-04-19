@@ -5,6 +5,7 @@ Provides async functions for common Git operations (status, log, diff, commit)
 and a webfetch-md integration that converts URLs to Markdown. Exported via
 the GIT_SKILLS registry for use by the bot's tool-calling layer.
 """
+
 import asyncio
 import json
 import logging
@@ -15,6 +16,7 @@ log = logging.getLogger(__name__)
 _SKILLS_DIR = Path(__file__).parent.parent
 _WEBFETCH_CLI = _SKILLS_DIR / "skills" / "webfetch-md" / "cli.js"
 
+
 async def _run_git(args):
     cmd = ["git"] + args
     try:
@@ -24,13 +26,16 @@ async def _run_git(args):
     except (OSError, asyncio.TimeoutError) as e:
         return f"❌ git {' '.join(args)} failed: {e}"
 
+
 async def git_status():
     """Check the project's Git status, showing which files are staged, unstaged, or untracked."""
     return await _run_git(["status"])
 
+
 async def git_log(limit: int = 5):
     """View recent commit history for the project codebase."""
     return await _run_git(["log", "--oneline", f"-n {limit}"])
+
 
 async def git_diff(staged: bool = False):
     """Compare code changes between current state and previous commits."""
@@ -39,9 +44,11 @@ async def git_diff(staged: bool = False):
         args.append("--staged")
     return await _run_git(args)
 
+
 async def git_commit(message: str):
     """Commit all current changes with a brief descriptive message."""
     return await _run_git(["commit", "-am", message])
+
 
 async def _run_webfetch(url: str) -> str:
     """Smartly scrape and fetch any URL, converting it into clean Markdown."""
@@ -60,6 +67,7 @@ async def _run_webfetch(url: str) -> str:
         return f"**Title**: {data.get('title')}\n\n{markdown}"
     except (OSError, json.JSONDecodeError, asyncio.TimeoutError) as e:
         return f"❌ webfetch-md failed: {e}"
+
 
 GIT_SKILLS = {
     "webfetch_md": _run_webfetch,

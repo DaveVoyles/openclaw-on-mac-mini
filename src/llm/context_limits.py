@@ -4,6 +4,7 @@ Maps known model names/prefixes to their published context window sizes.
 Prefix matching is used so that model variants (e.g. ``gemini-2.0-flash-exp``)
 resolve to their base entry (``gemini-2.0-flash``).
 """
+
 from __future__ import annotations
 
 # Published context window sizes (in tokens).
@@ -46,9 +47,7 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
 }
 
 # Sorted longest-first so the most specific prefix always wins.
-_SORTED_PREFIXES: list[tuple[str, int]] = sorted(
-    MODEL_CONTEXT_WINDOWS.items(), key=lambda kv: -len(kv[0])
-)
+_SORTED_PREFIXES: list[tuple[str, int]] = sorted(MODEL_CONTEXT_WINDOWS.items(), key=lambda kv: -len(kv[0]))
 
 
 def get_model_context_window(model_name: str | None) -> int | None:

@@ -3,6 +3,7 @@ test_scripts_unit.py — Unit tests for scripts/validate_env.py and scripts/vali
 
 Uses tmp_path to create isolated temp files; never touches real .env or schema.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -16,17 +17,25 @@ SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
 # Helpers
 # ---------------------------------------------------------------------------
 
-def run_validate_env(*extra_args: str, env_content: str = "", example_content: str = "", tmp_path: Path) -> subprocess.CompletedProcess:
+
+def run_validate_env(
+    *extra_args: str, env_content: str = "", example_content: str = "", tmp_path: Path
+) -> subprocess.CompletedProcess:
     """Create temp env/example files, run validate_env.py, return the result."""
     env_file = tmp_path / ".env"
     example_file = tmp_path / ".env.example"
     env_file.write_text(env_content)
     example_file.write_text(example_content)
     return subprocess.run(
-        [sys.executable, str(SCRIPTS_DIR / "validate_env.py"),
-         "--env", str(env_file),
-         "--example", str(example_file),
-         *extra_args],
+        [
+            sys.executable,
+            str(SCRIPTS_DIR / "validate_env.py"),
+            "--env",
+            str(env_file),
+            "--example",
+            str(example_file),
+            *extra_args,
+        ],
         capture_output=True,
         text=True,
         cwd=Path(__file__).parent.parent,
@@ -36,6 +45,7 @@ def run_validate_env(*extra_args: str, env_content: str = "", example_content: s
 # ---------------------------------------------------------------------------
 # TestValidateEnv
 # ---------------------------------------------------------------------------
+
 
 class TestValidateEnv:
     def test_all_present_exits_0(self, tmp_path: Path) -> None:
@@ -87,10 +97,16 @@ class TestValidateEnv:
         example_file.write_text("OPTIONAL_THING=\n")
         # env_file intentionally not created
         result = subprocess.run(
-            [sys.executable, str(SCRIPTS_DIR / "validate_env.py"),
-             "--env", str(env_file),
-             "--example", str(example_file)],
-            capture_output=True, text=True,
+            [
+                sys.executable,
+                str(SCRIPTS_DIR / "validate_env.py"),
+                "--env",
+                str(env_file),
+                "--example",
+                str(example_file),
+            ],
+            capture_output=True,
+            text=True,
             cwd=Path(__file__).parent.parent,
         )
         assert result.returncode == 0
@@ -101,11 +117,17 @@ class TestValidateEnv:
         example_file = tmp_path / ".env.example"
         example_file.write_text("# REQUIRED\nFOO=\n")
         result = subprocess.run(
-            [sys.executable, str(SCRIPTS_DIR / "validate_env.py"),
-             "--env", str(env_file),
-             "--example", str(example_file),
-             "--strict"],
-            capture_output=True, text=True,
+            [
+                sys.executable,
+                str(SCRIPTS_DIR / "validate_env.py"),
+                "--env",
+                str(env_file),
+                "--example",
+                str(example_file),
+                "--strict",
+            ],
+            capture_output=True,
+            text=True,
             cwd=Path(__file__).parent.parent,
         )
         assert result.returncode == 1
@@ -116,10 +138,16 @@ class TestValidateEnv:
         env_file.write_text("FOO=1\n")
         example_file = tmp_path / ".env.example"  # intentionally not created
         result = subprocess.run(
-            [sys.executable, str(SCRIPTS_DIR / "validate_env.py"),
-             "--env", str(env_file),
-             "--example", str(example_file)],
-            capture_output=True, text=True,
+            [
+                sys.executable,
+                str(SCRIPTS_DIR / "validate_env.py"),
+                "--env",
+                str(env_file),
+                "--example",
+                str(example_file),
+            ],
+            capture_output=True,
+            text=True,
             cwd=Path(__file__).parent.parent,
         )
         assert result.returncode == 1
@@ -191,9 +219,8 @@ class TestValidateSchema:
     def _import(self):
         """Import validate_schema module (deferred to avoid import-time side-effects)."""
         import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            "validate_schema", SCRIPTS_DIR / "validate_schema.py"
-        )
+
+        spec = importlib.util.spec_from_file_location("validate_schema", SCRIPTS_DIR / "validate_schema.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         return mod
@@ -255,8 +282,7 @@ class TestValidateSchema:
     def test_validate_schema_fix_hints_output(self) -> None:
         """--fix-hints produces YAML stub output when undocumented vars exist."""
         result = subprocess.run(
-            [sys.executable, str(SCRIPTS_DIR / "validate_schema.py"),
-             "--warn-only", "--fix-hints"],
+            [sys.executable, str(SCRIPTS_DIR / "validate_schema.py"), "--warn-only", "--fix-hints"],
             capture_output=True,
             text=True,
             cwd=Path(__file__).parent.parent,
@@ -291,9 +317,7 @@ class TestValidateSchema:
         mod = self._import()
         schema = tmp_path / "env_schema.yaml"
         example = tmp_path / ".env.example"
-        schema.write_text(
-            "schema_version: '1.0'\nvariables:\n  FOO:\n    required: true\n"
-        )
+        schema.write_text("schema_version: '1.0'\nvariables:\n  FOO:\n    required: true\n")
         example.write_text("FOO=\nBAR=\n")  # BAR is undocumented
         schema_vars = mod.load_schema_vars(schema)
         example_vars = mod.load_example_vars(example)
@@ -306,9 +330,7 @@ class TestValidateSchema:
         mod = self._import()
         schema = tmp_path / "env_schema.yaml"
         example = tmp_path / ".env.example"
-        schema.write_text(
-            "schema_version: '1.0'\nvariables:\n  FOO:\n    required: true\n  BAR:\n    required: true\n"
-        )
+        schema.write_text("schema_version: '1.0'\nvariables:\n  FOO:\n    required: true\n  BAR:\n    required: true\n")
         example.write_text("FOO=\n")  # BAR missing from example
         schema_vars = mod.load_schema_vars(schema)
         example_vars = mod.load_example_vars(example)

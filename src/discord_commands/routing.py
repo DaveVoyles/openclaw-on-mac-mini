@@ -34,12 +34,8 @@ def _register_routing_commands(bot: commands.Bot) -> None:
             import model_routing_policy as _mrp
 
             mini_model: str = getattr(_mrp, "_MINI_MODEL", os.getenv("OPENAI_MINI_MODEL", "gpt-4o-mini"))
-            mini_threshold: int = getattr(
-                _mrp, "_MINI_TOKEN_THRESHOLD", int(os.getenv("MINI_TOKEN_THRESHOLD", "25"))
-            )
-            mini_max: int = getattr(
-                _mrp, "MINI_MODEL_MAX_TOKENS", int(os.getenv("MINI_MODEL_MAX_TOKENS", "50"))
-            )
+            mini_threshold: int = getattr(_mrp, "_MINI_TOKEN_THRESHOLD", int(os.getenv("MINI_TOKEN_THRESHOLD", "25")))
+            mini_max: int = getattr(_mrp, "MINI_MODEL_MAX_TOKENS", int(os.getenv("MINI_MODEL_MAX_TOKENS", "50")))
         except (ImportError, AttributeError):
             mini_model = os.getenv("OPENAI_MINI_MODEL", "gpt-4o-mini")
             mini_threshold = int(os.getenv("MINI_TOKEN_THRESHOLD", "25"))

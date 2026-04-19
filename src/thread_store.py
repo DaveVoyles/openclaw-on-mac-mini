@@ -94,13 +94,12 @@ def _create_tables(db: sqlite3.Connection) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def create_thread(
-    user_id: int, channel_id: int, name: Optional[str] = None
-) -> int:
+async def create_thread(user_id: int, channel_id: int, name: Optional[str] = None) -> int:
     """Create a new thread. Returns the thread ID."""
     now = time.time()
 
     async with _lock:
+
         def _insert() -> Optional[int]:
             db = _get_db()
             cur = db.execute(
@@ -118,24 +117,21 @@ async def create_thread(
     return thread_id
 
 
-async def add_message(
-    thread_id: int, role: str, content: str
-) -> None:
+async def add_message(thread_id: int, role: str, content: str) -> None:
     """Add a message to a thread."""
     now = time.time()
     token_est = len(content) // 4  # rough estimate
 
     async with _lock:
+
         def _insert() -> None:
             db = _get_db()
             db.execute(
-                "INSERT INTO messages (thread_id, role, content, timestamp, token_estimate) "
-                "VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO messages (thread_id, role, content, timestamp, token_estimate) VALUES (?, ?, ?, ?, ?)",
                 (thread_id, role, content, now, token_est),
             )
             db.execute(
-                "UPDATE threads SET updated_at = ?, message_count = message_count + 1 "
-                "WHERE id = ?",
+                "UPDATE threads SET updated_at = ?, message_count = message_count + 1 WHERE id = ?",
                 (now, thread_id),
             )
             db.commit()
@@ -144,18 +140,16 @@ async def add_message(
         await loop.run_in_executor(None, _insert)
 
 
-async def get_thread_messages(
-    thread_id: int, limit: Optional[int] = None
-) -> list[dict]:
+async def get_thread_messages(thread_id: int, limit: Optional[int] = None) -> list[dict]:
     """Get messages from a thread, most recent last."""
     limit = limit or CONTEXT_WINDOW_SIZE
 
     async with _lock:
+
         def _query() -> list[dict]:
             db = _get_db()
             rows = db.execute(
-                "SELECT role, content, timestamp FROM messages "
-                "WHERE thread_id = ? ORDER BY timestamp DESC LIMIT ?",
+                "SELECT role, content, timestamp FROM messages WHERE thread_id = ? ORDER BY timestamp DESC LIMIT ?",
                 (thread_id, limit),
             ).fetchall()
             # Reverse to chronological order
@@ -171,15 +165,13 @@ async def get_thread_history_for_llm(thread_id: int) -> list[dict]:
     Uses a sliding window: loads CONTEXT_WINDOW_SIZE recent messages.
     """
     messages = await get_thread_messages(thread_id, limit=CONTEXT_WINDOW_SIZE)
-    return [
-        {"role": msg["role"], "parts": [msg["content"]]}
-        for msg in messages
-    ]
+    return [{"role": msg["role"], "parts": [msg["content"]]} for msg in messages]
 
 
 async def set_thread_title(thread_id: int, title: str) -> None:
     """Set a human-readable title for a thread."""
     async with _lock:
+
         def _update() -> None:
             db = _get_db()
             db.execute("UPDATE threads SET title = ? WHERE id = ?", (title, thread_id))
@@ -192,6 +184,7 @@ async def set_thread_title(thread_id: int, title: str) -> None:
 async def set_thread_name(thread_id: int, name: str) -> None:
     """Set the slug/name for a thread."""
     async with _lock:
+
         def _update() -> None:
             db = _get_db()
             db.execute("UPDATE threads SET name = ? WHERE id = ?", (name, thread_id))
@@ -207,6 +200,7 @@ async def set_thread_status(thread_id: int, status: str) -> None:
         raise ValueError(f"Invalid status: {status}")
 
     async with _lock:
+
         def _update() -> None:
             db = _get_db()
             db.execute("UPDATE threads SET status = ? WHERE id = ?", (status, thread_id))
@@ -219,6 +213,7 @@ async def set_thread_status(thread_id: int, status: str) -> None:
 async def delete_thread(thread_id: int) -> None:
     """Delete a thread and all its messages."""
     async with _lock:
+
         def _delete() -> None:
             db = _get_db()
             db.execute("DELETE FROM threads WHERE id = ?", (thread_id,))
@@ -241,6 +236,7 @@ async def list_user_threads(
     """List threads for a user, sorted by most recently active."""
 
     async with _lock:
+
         def _query() -> list[dict]:
             db = _get_db()
             sql = "SELECT * FROM threads WHERE user_id = ?"
@@ -259,6 +255,7 @@ async def list_user_threads(
 async def find_thread_by_name(user_id: int, name: str) -> Optional[dict]:
     """Find a thread by user and name."""
     async with _lock:
+
         def _query() -> Optional[dict]:
             db = _get_db()
             row = db.execute(
@@ -271,13 +268,12 @@ async def find_thread_by_name(user_id: int, name: str) -> Optional[dict]:
         return await loop.run_in_executor(None, _query)
 
 
-async def search_threads(
-    user_id: int, query: str, limit: int = 10
-) -> list[dict]:
+async def search_threads(user_id: int, query: str, limit: int = 10) -> list[dict]:
     """Search threads by title, name, or message content (keyword search)."""
     query_like = f"%{query}%"
 
     async with _lock:
+
         def _search() -> list[dict]:
             db = _get_db()
             # Search in thread title/name
@@ -316,11 +312,11 @@ async def auto_archive_stale(days: int = 7) -> int:
     cutoff = time.time() - (days * 86400)
 
     async with _lock:
+
         def _archive() -> int:
             db = _get_db()
             cur = db.execute(
-                "UPDATE threads SET status = 'archived' "
-                "WHERE status = 'active' AND updated_at < ?",
+                "UPDATE threads SET status = 'archived' WHERE status = 'active' AND updated_at < ?",
                 (cutoff,),
             )
             db.commit()
@@ -387,6 +383,7 @@ async def migrate_json_threads(threads_dir: Path) -> int:
 async def get_stats() -> dict:
     """Return thread store statistics."""
     async with _lock:
+
         def _stats() -> dict:
             db = _get_db()
             total = db.execute("SELECT COUNT(*) FROM threads").fetchone()[0]
@@ -419,19 +416,18 @@ async def auto_title_thread(thread_id: int) -> Optional[str]:
         return None
 
     # Build a compact summary of the conversation for title generation
-    snippet = "\n".join(
-        f"{m['role']}: {m['content'][:150]}" for m in messages[:6]
-    )
+    snippet = "\n".join(f"{m['role']}: {m['content'][:150]}" for m in messages[:6])
 
     try:
         from llm import chat_deep
+
         prompt = (
             "Summarize this conversation in 6 words or fewer as a short title. "
             "Reply with ONLY the title text, no quotes or punctuation.\n\n"
             f"{snippet}"
         )
         title, _ = await chat_deep(prompt)
-        title = title.strip().strip('"\'')[:60]
+        title = title.strip().strip("\"'")[:60]
         if title and not title.startswith(("⚠️", "❌")):
             await set_thread_title(thread_id, title)
             log.info("Auto-titled thread %d: %s", thread_id, title)

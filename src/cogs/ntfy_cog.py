@@ -138,9 +138,7 @@ class NtfyCog(commands.Cog):
                 embed.add_field(name="Priority", value=priority, inline=True)
                 await interaction.followup.send(embed=embed, ephemeral=True)
             else:
-                await interaction.followup.send(
-                    "❌ Failed to send notification. Check ntfy logs.", ephemeral=True
-                )
+                await interaction.followup.send("❌ Failed to send notification. Check ntfy logs.", ephemeral=True)
         except Exception as e:  # broad: intentional
             log.exception("ntfy send failed")
             await interaction.followup.send(embed=build_error_embed(e, context="/ntfy send"), ephemeral=True)
@@ -168,13 +166,9 @@ class NtfyCog(commands.Cog):
                 tags="white_check_mark",
             )
             if ok:
-                await interaction.followup.send(
-                    "✅ Test notification sent! Check your phone.", ephemeral=True
-                )
+                await interaction.followup.send("✅ Test notification sent! Check your phone.", ephemeral=True)
             else:
-                await interaction.followup.send(
-                    "❌ Test failed. Check ntfy server and logs.", ephemeral=True
-                )
+                await interaction.followup.send("❌ Test failed. Check ntfy server and logs.", ephemeral=True)
         except Exception:  # broad: intentional
             log.exception("ntfy test failed")
             await interaction.followup.send("❌ Failed to send test notification.", ephemeral=True)

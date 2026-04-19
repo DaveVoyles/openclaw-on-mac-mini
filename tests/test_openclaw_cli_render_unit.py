@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_render.py — pure rendering helpers."""
+
 from __future__ import annotations
 
 import openclaw_cli_render as mod  # type: ignore
@@ -6,6 +7,7 @@ import openclaw_cli_render as mod  # type: ignore
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_ctx(**kwargs) -> mod.RenderContext:
     """Build a minimal RenderContext for testing."""
@@ -24,6 +26,7 @@ def _make_ctx(**kwargs) -> mod.RenderContext:
 # ---------------------------------------------------------------------------
 # _apply_inline_ansi
 # ---------------------------------------------------------------------------
+
 
 def test_apply_inline_ansi_bold():
     result = mod._apply_inline_ansi("**hello**")
@@ -54,6 +57,7 @@ def test_apply_inline_ansi_double_underscore_bold():
 # _strip_inline_md
 # ---------------------------------------------------------------------------
 
+
 def test_strip_inline_md_bold():
     assert mod._strip_inline_md("**hello**") == "hello"
 
@@ -79,6 +83,7 @@ def test_strip_inline_md_mixed():
 # ---------------------------------------------------------------------------
 # _separator_fill
 # ---------------------------------------------------------------------------
+
 
 def test_separator_fill_default():
     s = mod._separator_fill(10)
@@ -109,6 +114,7 @@ def test_separator_fill_large():
 # ---------------------------------------------------------------------------
 # _response_footer_lines
 # ---------------------------------------------------------------------------
+
 
 def test_response_footer_with_elapsed():
     headline, detail = mod._response_footer_lines(elapsed=1.5)
@@ -142,6 +148,7 @@ def test_response_footer_all_fields():
 # _is_kv_bullet_group
 # ---------------------------------------------------------------------------
 
+
 def test_is_kv_bullet_group_valid():
     lines = [
         "- Name: Alice | Age: 30",
@@ -174,6 +181,7 @@ def test_is_kv_bullet_group_no_pipe():
 # ---------------------------------------------------------------------------
 # _parse_md_table
 # ---------------------------------------------------------------------------
+
 
 def test_parse_md_table_valid():
     block = "| A | B |\n|---|---|\n| 1 | 2 |"
@@ -218,6 +226,7 @@ def test_parse_md_table_multiple_rows():
 # _preprocess_response_text
 # ---------------------------------------------------------------------------
 
+
 def test_preprocess_strips_via_trailer():
     text = "Hello world\n_via gpt-4_"
     body, sources = mod._preprocess_response_text(text)
@@ -255,6 +264,7 @@ def test_preprocess_strips_recovery_note():
 # _clean_sources_for_display
 # ---------------------------------------------------------------------------
 
+
 def test_clean_sources_markdown_link():
     sources = "Sources:\n- [Example](https://example.com)"
     result = mod._clean_sources_for_display(sources)
@@ -288,6 +298,7 @@ def test_clean_sources_numbered_prefix():
 # ---------------------------------------------------------------------------
 # _bullet_group_to_table
 # ---------------------------------------------------------------------------
+
 
 def test_bullet_group_to_table_basic():
     lines = [

@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_help.py — print_chat_help."""
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -9,12 +10,13 @@ import openclaw_cli_help as mod
 # print_chat_help — plain text (non-TTY, non-rich fallback)
 # ---------------------------------------------------------------------------
 
+
 def _run_plain(search: str = "") -> str:
     """Run print_chat_help in plain text mode and capture stdout."""
-    with patch.object(mod, "_IS_TTY", False), \
-         patch.object(mod, "_RICH_AVAILABLE", False):
+    with patch.object(mod, "_IS_TTY", False), patch.object(mod, "_RICH_AVAILABLE", False):
         import io
         import sys
+
         buf = io.StringIO()
         orig = sys.stdout
         sys.stdout = buf
@@ -86,12 +88,15 @@ def test_print_chat_help_search_session_returns_session_command():
 # print_chat_help — rich mode (mocked)
 # ---------------------------------------------------------------------------
 
+
 def test_print_chat_help_rich_mode_runs_without_error():
     """Verify rich mode doesn't crash (console output is captured via mock)."""
     fake_console = type("Console", (), {"print": lambda self, *a, **kw: None})()
-    with patch.object(mod, "_IS_TTY", True), \
-         patch.object(mod, "_RICH_AVAILABLE", True), \
-         patch.object(mod, "_RICH_CONSOLE", fake_console):
+    with (
+        patch.object(mod, "_IS_TTY", True),
+        patch.object(mod, "_RICH_AVAILABLE", True),
+        patch.object(mod, "_RICH_CONSOLE", fake_console),
+    ):
         # Should run without raising — rich rendering path
         mod.print_chat_help()
 
@@ -99,10 +104,12 @@ def test_print_chat_help_rich_mode_runs_without_error():
 def test_print_chat_help_rich_with_search_no_match():
     printed = []
     fake_console = type("Console", (), {"print": lambda self, *a, **kw: printed.append(a)})()
-    with patch.object(mod, "_IS_TTY", True), \
-         patch.object(mod, "_RICH_AVAILABLE", True), \
-         patch.object(mod, "_RICH_CONSOLE", fake_console), \
-         patch("builtins.print") as mock_print:
+    with (
+        patch.object(mod, "_IS_TTY", True),
+        patch.object(mod, "_RICH_AVAILABLE", True),
+        patch.object(mod, "_RICH_CONSOLE", fake_console),
+        patch("builtins.print") as mock_print,
+    ):
         mod.print_chat_help(search="zzz_no_such_thing")
         output = " ".join(str(c) for c in mock_print.call_args_list)
     # The plain-text fallback for empty results is always used regardless of rich
@@ -112,6 +119,7 @@ def test_print_chat_help_rich_with_search_no_match():
 # ---------------------------------------------------------------------------
 # Command list integrity checks (no I/O needed)
 # ---------------------------------------------------------------------------
+
 
 def _get_commands_list() -> list[tuple[str, str]]:
     """Extract the commands list by monkey-patching print_chat_help internals."""
@@ -124,6 +132,7 @@ def _get_commands_list() -> list[tuple[str, str]]:
     # Run in plain mode and capture the lines
     import io
     import sys
+
     buf = io.StringIO()
     orig = sys.stdout
     sys.stdout = buf

@@ -233,11 +233,7 @@ class PluginLoader:
 
         version = str(value).strip()
         parts = version.split(".")
-        if (
-            not version
-            or len(parts) > _VERSION_COMPONENTS
-            or any(not part or not part.isdigit() for part in parts)
-        ):
+        if not version or len(parts) > _VERSION_COMPONENTS or any(not part or not part.isdigit() for part in parts):
             raise ValueError(f"Invalid {label}: {value!r}. Expected a version like '1', '1.2', or '1.2.3'")
 
         normalized = [int(part) for part in parts]

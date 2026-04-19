@@ -95,6 +95,7 @@ class MemoryCog(commands.Cog, name="Memory"):
         # QMD stats
         try:
             from qmd import qmd_store
+
             qmd_count = len(qmd_store._memory)
             lines.append(f"**QMD Facts:** {qmd_count:,} entries")
         except (ImportError, AttributeError):
@@ -103,6 +104,7 @@ class MemoryCog(commands.Cog, name="Memory"):
         # Vector store stats
         try:
             import vector_store
+
             stats = await vector_store.get_stats()
             for name, info in stats.items():
                 label = name.replace("_", " ").title()
@@ -113,8 +115,11 @@ class MemoryCog(commands.Cog, name="Memory"):
         # Thread store stats
         try:
             from thread_store import get_stats as thread_stats
+
             ts = await thread_stats()
-            lines.append(f"\n**Threads:** {ts['total_threads']} total ({ts['active_threads']} active, {ts['archived_threads']} archived)")
+            lines.append(
+                f"\n**Threads:** {ts['total_threads']} total ({ts['active_threads']} active, {ts['archived_threads']} archived)"
+            )
             lines.append(f"**Messages stored:** {ts['total_messages']:,}")
         except Exception:  # broad: intentional
             lines.append("**Thread store:** unavailable")
@@ -122,13 +127,16 @@ class MemoryCog(commands.Cog, name="Memory"):
         await interaction.followup.send("\n".join(lines), ephemeral=True)
 
     # ── /memory-refresh ───────────────────────────────────────────────
-    @app_commands.command(name="memory-refresh", description="Reinforce a memory so it doesn't decay (bump its access score)")
+    @app_commands.command(
+        name="memory-refresh", description="Reinforce a memory so it doesn't decay (bump its access score)"
+    )
     @app_commands.describe(query="Search query to find the memory to reinforce")
     @require_auth()
     async def memory_refresh_cmd(self, interaction: discord.Interaction, query: str) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             import vector_store
+
             results = await vector_store.search_all(query, top_k=3)
             if not results:
                 await interaction.followup.send("No matching memories found.", ephemeral=True)
@@ -149,11 +157,13 @@ class MemoryCog(commands.Cog, name="Memory"):
     # ── /rules ────────────────────────────────────────────────────────
     @app_commands.command(name="rules", description="View or manage learned behavioral rules")
     @app_commands.describe(action="list (default), search, or delete", query="Search query or rule ID to delete")
-    @app_commands.choices(action=[
-        app_commands.Choice(name="List all", value="list"),
-        app_commands.Choice(name="Search", value="search"),
-        app_commands.Choice(name="Delete", value="delete"),
-    ])
+    @app_commands.choices(
+        action=[
+            app_commands.Choice(name="List all", value="list"),
+            app_commands.Choice(name="Search", value="search"),
+            app_commands.Choice(name="Delete", value="delete"),
+        ]
+    )
     @require_auth()
     async def rules_cmd(self, interaction: discord.Interaction, action: str = "list", query: str = "") -> None:
         await interaction.response.defer(ephemeral=True)
@@ -182,10 +192,13 @@ class MemoryCog(commands.Cog, name="Memory"):
             # Default: list all with pagination
             all_rules = await get_all_rules()
             if not all_rules:
-                await interaction.followup.send("📝 No learned rules yet. I'll learn them when you correct me!", ephemeral=True)
+                await interaction.followup.send(
+                    "📝 No learned rules yet. I'll learn them when you correct me!", ephemeral=True
+                )
                 return
 
             from ui_components import PaginationView, paginate_items
+
             items = [f"• {r['rule']}  `{r['id']}`" for r in all_rules]
             pages = paginate_items(
                 items,
@@ -206,6 +219,7 @@ class MemoryCog(commands.Cog, name="Memory"):
         await interaction.response.defer(ephemeral=True)
         try:
             from user_profile import load_profile
+
             profile = load_profile()
 
             lines = ["👤 **Your Profile**\n"]
@@ -226,7 +240,9 @@ class MemoryCog(commands.Cog, name="Memory"):
                     lines.append(f"  • {note}")
 
             if len(lines) == 1:
-                lines.append("_Empty — I'll learn about you as we chat! You can also tell me things like 'I prefer concise answers' or 'my timezone is US/Eastern'._")
+                lines.append(
+                    "_Empty — I'll learn about you as we chat! You can also tell me things like 'I prefer concise answers' or 'my timezone is US/Eastern'._"
+                )
 
             await interaction.followup.send("\n".join(lines), ephemeral=True)
         except Exception as e:  # broad: intentional

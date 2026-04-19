@@ -10,7 +10,10 @@ from collections import defaultdict
 log = logging.getLogger(__name__)
 
 _LOG_PATH = pathlib.Path(
-    os.getenv("ROUTING_TELEMETRY_PATH", str(pathlib.Path(__file__).resolve().parent.parent.parent / "data" / "routing_audit.jsonl"))
+    os.getenv(
+        "ROUTING_TELEMETRY_PATH",
+        str(pathlib.Path(__file__).resolve().parent.parent.parent / "data" / "routing_audit.jsonl"),
+    )
 )
 _ENABLED = os.getenv("ROUTING_TELEMETRY", "false").lower() in ("1", "true", "yes")
 _AUDIT_MAX_LINES = int(os.getenv("AUDIT_MAX_LINES", "10000"))
@@ -84,9 +87,7 @@ def summarise(records: list[dict]) -> str:
     provider_counts: dict[str, int] = defaultdict(int)
     for r in records:
         provider_counts[r.get("provider", "unknown")] += 1
-    provider_summary = ", ".join(
-        f"{p}: {c}" for p, c in sorted(provider_counts.items(), key=lambda x: -x[1])
-    )
+    provider_summary = ", ".join(f"{p}: {c}" for p, c in sorted(provider_counts.items(), key=lambda x: -x[1]))
 
     return (
         f"**Last {total} routing calls**\n"

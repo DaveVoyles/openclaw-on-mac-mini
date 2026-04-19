@@ -95,12 +95,13 @@ class TestSplitResponse:
         assert mod._split_response("short") == ["short"]
 
     def test_long_text_split(self):
-        text = ("line\n" * 2000)  # well over 3800 chars
+        text = "line\n" * 2000  # well over 3800 chars
         chunks = mod._split_response(text)
         assert len(chunks) >= 2
         # Use the actual limit from the current bot_formatting module rather
         # than mod._EMBED_LIMIT, which may differ if constants was re-imported.
         import bot_formatting as _bf_current
+
         for chunk in chunks:
             assert len(chunk) <= _bf_current._EMBED_LIMIT + 1  # +1 for trailing ellipsis
 
@@ -269,9 +270,7 @@ class TestResponsePackaging:
                 "answer_quality_retry": {"degrade_mode": "constrained"},
             }
         )
-        assert summary == (
-            "Coverage medium · 4/8 items · Runtime constrained · retry narrower scope/timeframe"
-        )
+        assert summary == ("Coverage medium · 4/8 items · Runtime constrained · retry narrower scope/timeframe")
 
     def test_build_ask_recovery_block_for_coverage_shortfall(self):
         block = mod._build_ask_recovery_block(
@@ -311,7 +310,9 @@ class TestQualityAutoRepair:
     @pytest.mark.asyncio
     async def test_skipped_when_high_quality(self, monkeypatch):
         events: list[str] = []
-        monkeypatch.setattr(mod, "_record_quality_metric", lambda event, context="ask": events.append(f"{context}:{event}"))
+        monkeypatch.setattr(
+            mod, "_record_quality_metric", lambda event, context="ask": events.append(f"{context}:{event}")
+        )
 
         async def _retry_stream(_prompt: str):
             raise AssertionError("retry should not run for high quality")
@@ -336,7 +337,9 @@ class TestQualityAutoRepair:
     @pytest.mark.asyncio
     async def test_skipped_when_ineligible_model_error(self, monkeypatch):
         events: list[str] = []
-        monkeypatch.setattr(mod, "_record_quality_metric", lambda event, context="ask": events.append(f"{context}:{event}"))
+        monkeypatch.setattr(
+            mod, "_record_quality_metric", lambda event, context="ask": events.append(f"{context}:{event}")
+        )
 
         async def _retry_stream(_prompt: str):
             raise AssertionError("retry should not run for ineligible result")
@@ -361,6 +364,7 @@ class TestQualityAutoRepair:
         monkeypatch.setattr(mod, "_record_budget_policy_metric", lambda **kwargs: None)
         monkeypatch.setattr(mod, "get_effective_channel_profile", lambda: {"retrieval_profile": "general"})
         monkeypatch.setattr(mod, "get_latency_load_snapshot", lambda command_hint="ask": None)
+
         def _fake_safe_score(*args, **kwargs):
             final_meta = kwargs.get("final_meta") if isinstance(kwargs, dict) else None
             requested = None
@@ -394,7 +398,9 @@ class TestQualityAutoRepair:
     @pytest.mark.asyncio
     async def test_improved_outcome_uses_retry_response(self, monkeypatch):
         events: list[str] = []
-        monkeypatch.setattr(mod, "_record_quality_metric", lambda event, context="ask": events.append(f"{context}:{event}"))
+        monkeypatch.setattr(
+            mod, "_record_quality_metric", lambda event, context="ask": events.append(f"{context}:{event}")
+        )
         monkeypatch.setattr(mod, "_quality_retry_improved", lambda **kwargs: True)
         monkeypatch.setattr(mod, "get_latency_load_snapshot", lambda **kwargs: None)
         monkeypatch.setattr(
@@ -430,7 +436,9 @@ class TestQualityAutoRepair:
     @pytest.mark.asyncio
     async def test_no_improvement_keeps_original_response(self, monkeypatch):
         events: list[str] = []
-        monkeypatch.setattr(mod, "_record_quality_metric", lambda event, context="ask": events.append(f"{context}:{event}"))
+        monkeypatch.setattr(
+            mod, "_record_quality_metric", lambda event, context="ask": events.append(f"{context}:{event}")
+        )
         monkeypatch.setattr(mod, "_quality_retry_improved", lambda **kwargs: False)
         monkeypatch.setattr(mod, "get_latency_load_snapshot", lambda **kwargs: None)
         monkeypatch.setattr(
@@ -466,7 +474,9 @@ class TestQualityAutoRepair:
     @pytest.mark.asyncio
     async def test_failed_timeout_keeps_original_response(self, monkeypatch):
         events: list[str] = []
-        monkeypatch.setattr(mod, "_record_quality_metric", lambda event, context="ask": events.append(f"{context}:{event}"))
+        monkeypatch.setattr(
+            mod, "_record_quality_metric", lambda event, context="ask": events.append(f"{context}:{event}")
+        )
         monkeypatch.setattr(
             mod,
             "apply_repair_budget",
@@ -501,7 +511,9 @@ class TestQualityAutoRepair:
     @pytest.mark.asyncio
     async def test_failed_error_keeps_original_response(self, monkeypatch):
         events: list[str] = []
-        monkeypatch.setattr(mod, "_record_quality_metric", lambda event, context="ask": events.append(f"{context}:{event}"))
+        monkeypatch.setattr(
+            mod, "_record_quality_metric", lambda event, context="ask": events.append(f"{context}:{event}")
+        )
         monkeypatch.setattr(mod, "get_latency_load_snapshot", lambda **kwargs: None)
 
         async def _retry_stream(_prompt: str):
@@ -539,7 +551,9 @@ class TestLatencyAwareBudgeting:
     @pytest.mark.asyncio
     async def test_repair_budget_applied_from_profile_and_load(self, monkeypatch):
         events: list[str] = []
-        monkeypatch.setattr(mod, "_record_quality_metric", lambda event, context="ask": events.append(f"{context}:{event}"))
+        monkeypatch.setattr(
+            mod, "_record_quality_metric", lambda event, context="ask": events.append(f"{context}:{event}")
+        )
         monkeypatch.setattr(mod, "get_effective_channel_profile", lambda: {"retrieval_profile": "sports"})
         monkeypatch.setattr(
             mod,

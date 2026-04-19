@@ -192,9 +192,7 @@ class PatreonHealthChecker:
         """Check MonsterVision API and return (available, data)."""
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    self.api_url, timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST)
-                ) as resp:
+                async with session.get(self.api_url, timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST)) as resp:
                     if resp.status == 200:
                         data = await resp.json()
                         return True, data

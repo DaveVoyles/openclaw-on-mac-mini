@@ -6,6 +6,7 @@ Handlers: _cmd_system, _cmd_promptdebug, _cmd_autobold, _cmd_jsonformat,
           _cmd_separator, _cmd_palette, _cmd_prompt, _cmd_alias,
           _cmd_pathhints, _cmd_ratehint, _cmd_benchmark
 """
+
 from __future__ import annotations
 
 import os
@@ -32,6 +33,7 @@ try:
     from rich.console import Console as _RichConsole
     from rich.panel import Panel as _RichPanel
     from rich.table import Table as _RichTable
+
     _RICH_CONSOLE = _RichConsole()
     _RICH_AVAILABLE = True
 except ImportError:
@@ -45,12 +47,14 @@ except ImportError:
 def _m() -> Any:
     """Lazy import of openclaw_cli — avoids circular import, respects test monkeypatching."""
     import openclaw_cli as _cli  # noqa: PLC0415
+
     return _cli
 
 
 # ---------------------------------------------------------------------------
 # Handlers
 # ---------------------------------------------------------------------------
+
 
 def _cmd_system(ctx: "ChatCommandContext") -> str:
     """View or set a persistent system prompt prefix for all AI messages."""
@@ -69,7 +73,9 @@ def _cmd_system(ctx: "ChatCommandContext") -> str:
             if current:
                 _RICH_CONSOLE.print(_RichPanel(current, title="🔧 System Prompt", border_style="cyan", padding=(0, 1)))
             else:
-                _RICH_CONSOLE.print(_RichPanel("[dim](not set)[/]", title="🔧 System Prompt", border_style="dim", padding=(0, 1)))
+                _RICH_CONSOLE.print(
+                    _RichPanel("[dim](not set)[/]", title="🔧 System Prompt", border_style="dim", padding=(0, 1))
+                )
         else:
             if current:
                 print(f"System prompt:\n  {current}")
@@ -136,7 +142,9 @@ def _cmd_promptdebug(ctx: "ChatCommandContext") -> str:
     preview = "\n\n".join(parts)
 
     if _RICH_AVAILABLE and is_tty:
-        _RICH_CONSOLE.print(_RichPanel(preview, title="[bold]📤 Next message preview[/]", border_style="dim", padding=(0, 1)))
+        _RICH_CONSOLE.print(
+            _RichPanel(preview, title="[bold]📤 Next message preview[/]", border_style="dim", padding=(0, 1))
+        )
     else:
         print("\n📤 Next message preview:\n")
         print(preview)
@@ -176,7 +184,9 @@ def _cmd_separator(ctx: "ChatCommandContext") -> str:
     else:
         current = cli._PREFS.get("separator_style", "gradient")
         if _RICH_AVAILABLE and is_tty:
-            _RICH_CONSOLE.print(f"[dim]separator style: [bold]{current}[/] — /separator gradient|pulse|dots|wave|none[/]")
+            _RICH_CONSOLE.print(
+                f"[dim]separator style: [bold]{current}[/] — /separator gradient|pulse|dots|wave|none[/]"
+            )
         else:
             print(f"separator style: {current} — /separator gradient|pulse|dots|wave|none")
     return _CMD_CONTINUE
@@ -192,9 +202,9 @@ def _cmd_palette(ctx: "ChatCommandContext") -> str:
 
     if query:
         matches = [
-            cmd for cmd in commands
-            if query in cmd.name.lower() or
-               (cmd.description and query in cmd.description.lower())
+            cmd
+            for cmd in commands
+            if query in cmd.name.lower() or (cmd.description and query in cmd.description.lower())
         ]
     else:
         matches = commands
@@ -212,14 +222,14 @@ def _cmd_palette(ctx: "ChatCommandContext") -> str:
     if _RICH_AVAILABLE and is_tty:
         from rich.box import SIMPLE
         from rich.table import Table
+
         tbl = Table(box=SIMPLE, show_header=True, header_style="bold cyan")
         tbl.add_column("Command", style="bold green", no_wrap=True)
         tbl.add_column("Description", style="default")
         for cmd in matches:
             tbl.add_row(f"/{cmd.name}", cmd.description or "")
         _RICH_CONSOLE.print(
-            f"\n[bold cyan]🎯 Command Palette[/] "
-            f"[dim]({len(matches)} match{'es' if len(matches) != 1 else ''})[/]\n"
+            f"\n[bold cyan]🎯 Command Palette[/] [dim]({len(matches)} match{'es' if len(matches) != 1 else ''})[/]\n"
         )
         _RICH_CONSOLE.print(tbl)
     else:

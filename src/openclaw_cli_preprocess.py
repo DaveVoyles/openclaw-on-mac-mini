@@ -1,4 +1,5 @@
 """Response text preprocessing and formatting helpers."""
+
 from __future__ import annotations
 
 import json
@@ -50,45 +51,45 @@ _RE_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 # W4-2: URL sanitizer for mangled source URLs
 # ---------------------------------------------------------------------------
 
+
 def _sanitize_source_url(url: str) -> str:
     """Strip filename prefix garbage from URLs like '36mabout.htmlhttps://example.com'."""
-    match = re.search(r'https?://', url)
-    return url[match.start():] if match else url
+    match = re.search(r"https?://", url)
+    return url[match.start() :] if match else url
 
 
 def _sanitize_sources_block(sources: str) -> str:
     """Fix all mangled URLs in a sources block."""
-    return re.sub(r'\S*https?://\S+', lambda m: _sanitize_source_url(m.group(0)), sources)
+    return re.sub(r"\S*https?://\S+", lambda m: _sanitize_source_url(m.group(0)), sources)
 
 
 # ---------------------------------------------------------------------------
 # W4-3: Domain blocklist for generic/irrelevant source domains
 # ---------------------------------------------------------------------------
 
-_GENERIC_SOURCE_BLOCKLIST: frozenset[str] = frozenset({
-    "adobe.com",
-    "medium.com",
-    "quora.com",
-    "pinterest.com",
-    "slideshare.net",
-    "scribd.com",
-    "academia.edu",
-})
+_GENERIC_SOURCE_BLOCKLIST: frozenset[str] = frozenset(
+    {
+        "adobe.com",
+        "medium.com",
+        "quora.com",
+        "pinterest.com",
+        "slideshare.net",
+        "scribd.com",
+        "academia.edu",
+    }
+)
 
 
 def _filter_sources_block(sources: str) -> str:
     """Remove source lines whose domain is in the generic blocklist."""
-    lines = sources.split('\n')
+    lines = sources.split("\n")
     filtered = []
     for line in lines:
-        hosts = re.findall(r'https?://([^/\s]+)', line)
-        blocked = any(
-            any(blocked_domain in host for blocked_domain in _GENERIC_SOURCE_BLOCKLIST)
-            for host in hosts
-        )
+        hosts = re.findall(r"https?://([^/\s]+)", line)
+        blocked = any(any(blocked_domain in host for blocked_domain in _GENERIC_SOURCE_BLOCKLIST) for host in hosts)
         if not blocked:
             filtered.append(line)
-    return '\n'.join(filtered)
+    return "\n".join(filtered)
 
 
 # ---------------------------------------------------------------------------
@@ -148,7 +149,7 @@ def _bullet_group_to_table(lines: list[str]) -> list[str]:
                 if colon_idx > 0:
                     row_headers.append(part[:colon_idx].strip())
                     # Strip leading asterisks from values (closing italic marker from last segment)
-                    val = re.sub(r"^\*+\s*", "", part[colon_idx + 1:].strip())
+                    val = re.sub(r"^\*+\s*", "", part[colon_idx + 1 :].strip())
                     row_values.append(val)
                 else:
                     row_headers.append(f"Col{len(row_headers) + 1}")
@@ -173,13 +174,11 @@ def _unwrap_code_block_tables(text: str) -> str:
     renders it as a monospace code block instead of a table.  This step detects
     those blocks and removes the fences so _convert_bullet_tables can convert them.
     """
+
     def _replace(m: re.Match) -> str:
         content = m.group(1).strip()
         non_empty = [line for line in content.split("\n") if line.strip()]
-        if len(non_empty) >= 2 and all(
-            re.match(r"^[•\-\*]\s+.+$", line) and " | " in line
-            for line in non_empty
-        ):
+        if len(non_empty) >= 2 and all(re.match(r"^[•\-\*]\s+.+$", line) and " | " in line for line in non_empty):
             return content  # strip the fences
         return m.group(0)  # leave unchanged
 
@@ -223,14 +222,15 @@ def _colorize_json(text: str) -> str:
     if _a11y_plain_mode():
         return text
     import re as _re_json
+
     # Keys (quoted strings before colon) → cyan
     text = _re_json.sub(r'"([^"]+)"(\s*:)', f'{_CY}"\\1"{_R}\\2', text)
     # String values → green
     text = _re_json.sub(r':\s*"([^"]*)"', f': {_GR}"\\1"{_R}', text)
     # Numbers → yellow
-    text = _re_json.sub(r':\s*(-?\d+(?:\.\d+)?)', f': {_YE}\\1{_R}', text)
+    text = _re_json.sub(r":\s*(-?\d+(?:\.\d+)?)", f": {_YE}\\1{_R}", text)
     # Booleans and null → magenta
-    text = _re_json.sub(r'\b(true|false|null)\b', f'{_MA}\\1{_R}', text)
+    text = _re_json.sub(r"\b(true|false|null)\b", f"{_MA}\\1{_R}", text)
     return text
 
 
@@ -356,7 +356,7 @@ def _preprocess_response_text(text: str) -> tuple[str, str | None]:
         sources = best.group(0).strip()
         # Strip ALL sources blocks from body (reverse order to preserve indices)
         for m in reversed(all_matches):
-            text = text[: m.start()] + text[m.end():]
+            text = text[: m.start()] + text[m.end() :]
         text = text.rstrip()
 
     # Fallback: catch Sources blocks with no preceding blank line
@@ -366,7 +366,7 @@ def _preprocess_response_text(text: str) -> tuple[str, str | None]:
             best = max(all_loose, key=lambda m: len(m.group(1)))
             sources = best.group(0).strip()
             for m in reversed(all_loose):
-                text = text[: m.start()] + text[m.end():]
+                text = text[: m.start()] + text[m.end() :]
             text = text.rstrip()
 
     # W4-2 + W4-3: Sanitize URLs and filter generic domains in sources block
@@ -418,20 +418,20 @@ def _auto_bold_response(text: str) -> str:
 
         # 1. Dollar amounts — skip if already bolded
         line = re.sub(
-            r'(?<!\*)\$(\d[\d,\.]*(?:\s*(?:million|billion|trillion|thousand|[KMBkmb]))?)\b(?!\*)',
-            r'**$\1**',
+            r"(?<!\*)\$(\d[\d,\.]*(?:\s*(?:million|billion|trillion|thousand|[KMBkmb]))?)\b(?!\*)",
+            r"**$\1**",
             line,
         )
         # 2. Percentages — skip if already bolded
         line = re.sub(
-            r'(?<!\*)(\d+(?:\.\d+)?%)(?!\*)',
-            r'**\1**',
+            r"(?<!\*)(\d+(?:\.\d+)?%)(?!\*)",
+            r"**\1**",
             line,
         )
         # 3. File extensions — wrap in backticks if not already
         line = re.sub(
-            r'(?<![`\w])(\w[\w\-]*\.(?:py|md|json|yaml|yml|sh|txt|js|ts|go|rs|html|css))(?![`\w])',
-            r'`\1`',
+            r"(?<![`\w])(\w[\w\-]*\.(?:py|md|json|yaml|yml|sh|txt|js|ts|go|rs|html|css))(?![`\w])",
+            r"`\1`",
             line,
         )
 

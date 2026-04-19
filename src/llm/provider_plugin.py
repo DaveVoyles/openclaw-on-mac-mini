@@ -3,6 +3,7 @@
 Third-party providers should implement this protocol and register via
 ``providers.register_provider_plugin()``.
 """
+
 from __future__ import annotations
 
 from typing import AsyncIterator, Protocol, runtime_checkable

@@ -45,6 +45,7 @@ _lc_types = getattr(_lc_genai, "types", None) if _lc_genai else None
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _reset_prompt_cache():
     llm_client._system_prompt_cache = None
     llm_client._system_prompt_mtime = 0.0
@@ -53,6 +54,7 @@ def _reset_prompt_cache():
 # ---------------------------------------------------------------------------
 # _load_system_prompt
 # ---------------------------------------------------------------------------
+
 
 class TestLoadSystemPrompt:
     def test_default_when_file_missing(self, tmp_path, monkeypatch):
@@ -111,6 +113,7 @@ class TestLoadSystemPrompt:
 # ---------------------------------------------------------------------------
 # _convert_schema
 # ---------------------------------------------------------------------------
+
 
 class TestConvertSchema:
     def test_object_type_maps_correctly(self):
@@ -174,6 +177,7 @@ class TestConvertSchema:
 # _build_tools
 # ---------------------------------------------------------------------------
 
+
 class TestBuildTools:
     def test_llm_client_returns_list(self):
         result = llm_client._build_tools([])
@@ -206,6 +210,7 @@ class TestBuildTools:
 # _reset_models
 # ---------------------------------------------------------------------------
 
+
 class TestResetModels:
     def test_resets_all_to_none(self, monkeypatch):
         # Prime with fake values
@@ -226,6 +231,7 @@ class TestResetModels:
 # _get_tool_declarations
 # ---------------------------------------------------------------------------
 
+
 class TestGetToolDeclarations:
     def test_llm_client_returns_list_v2(self):
         result = llm_client._get_tool_declarations()
@@ -241,6 +247,7 @@ class TestGetToolDeclarations:
 # ---------------------------------------------------------------------------
 # _init_gemini_model
 # ---------------------------------------------------------------------------
+
 
 class TestInitGeminiModel:
     def test_raises_without_api_key(self, monkeypatch, tmp_path):
@@ -270,6 +277,7 @@ class TestInitGeminiModel:
 # ---------------------------------------------------------------------------
 # _record_usage (async)
 # ---------------------------------------------------------------------------
+
 
 class TestRecordUsage:
     @pytest.mark.asyncio

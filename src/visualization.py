@@ -62,11 +62,7 @@ def _save_chart(fig: go.Figure, cache_key: str, format: str = "png") -> Path:
     return chart_path
 
 
-def create_stock_chart(
-    data: dict[str, Any],
-    chart_type: str = "candlestick",
-    format: str = "png"
-) -> dict[str, Any]:
+def create_stock_chart(data: dict[str, Any], chart_type: str = "candlestick", format: str = "png") -> dict[str, Any]:
     """
     Create a stock price chart (candlestick or line).
 
@@ -123,51 +119,29 @@ def create_stock_chart(
 
         # Create figure with secondary y-axis for volume
         fig = make_subplots(
-            rows=2, cols=1,
+            rows=2,
+            cols=1,
             shared_xaxes=True,
             vertical_spacing=0.05,
             row_heights=[0.7, 0.3],
-            subplot_titles=(f"{ticker} Price", "Volume")
+            subplot_titles=(f"{ticker} Price", "Volume"),
         )
 
         # Add price chart
         if chart_type == "candlestick":
             fig.add_trace(
-                go.Candlestick(
-                    x=dates,
-                    open=opens,
-                    high=highs,
-                    low=lows,
-                    close=closes,
-                    name="Price"
-                ),
-                row=1, col=1
+                go.Candlestick(x=dates, open=opens, high=highs, low=lows, close=closes, name="Price"), row=1, col=1
             )
         else:  # line chart
             fig.add_trace(
-                go.Scatter(
-                    x=dates,
-                    y=closes,
-                    mode="lines",
-                    name="Close Price",
-                    line=dict(color="#00D9FF", width=2)
-                ),
-                row=1, col=1
+                go.Scatter(x=dates, y=closes, mode="lines", name="Close Price", line=dict(color="#00D9FF", width=2)),
+                row=1,
+                col=1,
             )
 
         # Add volume bars
-        colors = ['red' if closes[i] < opens[i] else 'green'
-                  for i in range(len(closes))]
-        fig.add_trace(
-            go.Bar(
-                x=dates,
-                y=volumes,
-                name="Volume",
-                marker_color=colors,
-                opacity=0.5
-            ),
-            row=2, col=1
-        )
+        colors = ["red" if closes[i] < opens[i] else "green" for i in range(len(closes))]
+        fig.add_trace(go.Bar(x=dates, y=volumes, name="Volume", marker_color=colors, opacity=0.5), row=2, col=1)
 
         # Update layout
         fig.update_layout(
@@ -176,7 +150,7 @@ def create_stock_chart(
             template="plotly_dark",
             showlegend=False,
             height=600,
-            margin=dict(l=50, r=50, t=80, b=50)
+            margin=dict(l=50, r=50, t=80, b=50),
         )
 
         fig.update_xaxes(title_text="Date", row=2, col=1)
@@ -202,10 +176,7 @@ def create_stock_chart(
         }
 
 
-def create_trend_chart(
-    data: dict[str, Any],
-    format: str = "png"
-) -> dict[str, Any]:
+def create_trend_chart(data: dict[str, Any], format: str = "png") -> dict[str, Any]:
     """
     Create a trend visualization chart.
 
@@ -281,18 +252,14 @@ def create_trend_chart(
                 mode="lines+markers",
                 name="Actual",
                 line=dict(color="#00D9FF", width=2),
-                marker=dict(size=6)
+                marker=dict(size=6),
             )
         )
 
         # Add trend line
         fig.add_trace(
             go.Scatter(
-                x=dates,
-                y=trend_line,
-                mode="lines",
-                name="Trend",
-                line=dict(color="#FF6B6B", width=2, dash="dash")
+                x=dates, y=trend_line, mode="lines", name="Trend", line=dict(color="#FF6B6B", width=2, dash="dash")
             )
         )
 
@@ -304,7 +271,7 @@ def create_trend_chart(
             template="plotly_dark",
             height=600,
             margin=dict(l=50, r=50, t=80, b=50),
-            hovermode="x unified"
+            hovermode="x unified",
         )
 
         # Save chart
@@ -325,10 +292,7 @@ def create_trend_chart(
         }
 
 
-def create_comparison_chart(
-    data: dict[str, Any],
-    format: str = "png"
-) -> dict[str, Any]:
+def create_comparison_chart(data: dict[str, Any], format: str = "png") -> dict[str, Any]:
     """
     Create a multi-asset comparison chart.
 
@@ -409,7 +373,7 @@ def create_comparison_chart(
                     y=normalized_values,
                     mode="lines",
                     name=ticker,
-                    line=dict(color=colors[i % len(colors)], width=2)
+                    line=dict(color=colors[i % len(colors)], width=2),
                 )
             )
 
@@ -422,12 +386,7 @@ def create_comparison_chart(
             height=600,
             margin=dict(l=50, r=50, t=80, b=50),
             hovermode="x unified",
-            legend=dict(
-                yanchor="top",
-                y=0.99,
-                xanchor="left",
-                x=0.01
-            )
+            legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
         )
 
         # Add horizontal line at 0%

@@ -104,9 +104,7 @@ class NoteCog(commands.Cog):
                     found = f
                     break
             if not found:
-                await interaction.followup.send(
-                    f"❌ Note `{filename}` not found in vault", ephemeral=True
-                )
+                await interaction.followup.send(f"❌ Note `{filename}` not found in vault", ephemeral=True)
                 return
 
             content = found.read_text()

@@ -324,9 +324,7 @@ class AuditLogger:
                                 continue
 
                         # Filter by days
-                        timestamp = datetime.fromisoformat(
-                            log_entry["timestamp"].rstrip("Z")
-                        )
+                        timestamp = datetime.fromisoformat(log_entry["timestamp"].rstrip("Z"))
                         age_days = (datetime.utcnow() - timestamp).days
                         if age_days > days:
                             continue

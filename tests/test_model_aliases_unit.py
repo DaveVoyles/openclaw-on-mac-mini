@@ -1,4 +1,5 @@
 """Unit tests for model_aliases.py — additional edge cases beyond test_model_aliases_constants.py."""
+
 from __future__ import annotations
 
 from model_aliases import (
@@ -11,6 +12,7 @@ from model_aliases import (
 # ---------------------------------------------------------------------------
 # normalize_model_input — additional edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestNormalizeModelInputEdgeCases:
     def test_mixed_case_alias(self):
@@ -42,6 +44,7 @@ class TestNormalizeModelInputEdgeCases:
 # ---------------------------------------------------------------------------
 # model_input_suggestion — additional edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestModelInputSuggestionEdgeCases:
     def test_exact_valid_pref_returns_empty(self):
@@ -75,6 +78,7 @@ class TestModelInputSuggestionEdgeCases:
 # ---------------------------------------------------------------------------
 # DATA — constants structure
 # ---------------------------------------------------------------------------
+
 
 class TestModelAliasesDataIntegrity:
     def test_aliases_dict_is_nonempty(self):

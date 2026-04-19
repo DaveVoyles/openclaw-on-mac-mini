@@ -15,9 +15,7 @@ def require_auth():
 
     async def predicate(interaction) -> bool:
         if not is_allowed(interaction):
-            raise app_commands.CheckFailure(
-                "🔒 You are not authorized to use this command."
-            )
+            raise app_commands.CheckFailure("🔒 You are not authorized to use this command.")
         return True
 
     return app_commands.check(predicate)

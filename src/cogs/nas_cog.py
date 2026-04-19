@@ -46,9 +46,7 @@ class NasCog(commands.Cog, name="NAS"):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    async def cog_command_error(
-        self, interaction: discord.Interaction, error: app_commands.AppCommandError
-    ) -> None:
+    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
         msg = f"❌ Command failed: {error}"
         if interaction.response.is_done():
             await interaction.followup.send(msg, ephemeral=True)

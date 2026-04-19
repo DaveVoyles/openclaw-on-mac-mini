@@ -35,6 +35,7 @@ async def analyze_logs(service: str, lines: int = 50) -> str:
     try:
         from llm import chat as llm_chat
         from llm import is_configured as llm_is_configured
+
         if not llm_is_configured():
             return _basic_analysis(service, log_text)
 

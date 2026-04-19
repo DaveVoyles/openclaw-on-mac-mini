@@ -1,4 +1,5 @@
 """Tests for audit.py, constants.py, and alert_manager.py pure functions."""
+
 from __future__ import annotations
 
 import time
@@ -14,6 +15,7 @@ from audit import _audit_buffer, audit_log
 # ===========================================================================
 # audit.py
 # ===========================================================================
+
 
 class TestAuditLog:
     def setup_method(self):
@@ -91,31 +93,37 @@ class TestAuditLog:
 # constants.py
 # ===========================================================================
 
+
 class TestConstants:
     def test_discord_limits_are_positive(self):
         from constants import DISCORD_MESSAGE_LIMIT, EMBED_DESC_LIMIT, EMBED_SPLIT_LIMIT
+
         assert DISCORD_MESSAGE_LIMIT > 0
         assert EMBED_DESC_LIMIT > 0
         assert EMBED_SPLIT_LIMIT > 0
 
     def test_embed_split_less_than_desc(self):
         from constants import EMBED_DESC_LIMIT, EMBED_SPLIT_LIMIT
+
         assert EMBED_SPLIT_LIMIT < EMBED_DESC_LIMIT
 
     def test_intervals_positive(self):
         from constants import AUDIT_FLUSH_INTERVAL, BRIEFING_CHECK_INTERVAL, CLEANUP_INTERVAL
+
         assert AUDIT_FLUSH_INTERVAL > 0
         assert CLEANUP_INTERVAL > 0
         assert BRIEFING_CHECK_INTERVAL > 0
 
     def test_max_file_size_is_mb_range(self):
         from constants import MAX_FILE_SIZE
+
         assert MAX_FILE_SIZE >= 1024 * 1024  # at least 1 MB
 
 
 # ===========================================================================
 # alert_manager.py — should_route_bounded_alert
 # ===========================================================================
+
 
 class TestShouldRouteBoundedAlert:
     def setup_method(self):
@@ -143,9 +151,7 @@ class TestShouldRouteBoundedAlert:
     def test_after_cooldown_routes_again(self):
         now = time.time()
         should_route_bounded_alert("key1", fingerprint="fp1", now_ts=now)
-        ok, reason = should_route_bounded_alert(
-            "key1", fingerprint="fp1", now_ts=now + DEFAULT_COOLDOWN + 1
-        )
+        ok, reason = should_route_bounded_alert("key1", fingerprint="fp1", now_ts=now + DEFAULT_COOLDOWN + 1)
         assert ok is True
 
     def test_different_keys_independent(self):
@@ -176,8 +182,10 @@ class TestShouldRouteBoundedAlert:
 # alert_manager.py — format_text_alert (smoke test)
 # ===========================================================================
 
+
 def _make_trend_analysis(topic="bitcoin", category="crypto"):
     from trend_tracker import TrendAnalysis
+
     return TrendAnalysis(
         topic=topic,
         category=category,
@@ -201,6 +209,7 @@ def _make_trend_analysis(topic="bitcoin", category="crypto"):
 class TestFormatTextAlert:
     def test_returns_non_empty_string(self):
         from alert_manager import format_text_alert
+
         analysis = _make_trend_analysis()
         text = format_text_alert(analysis)
         assert isinstance(text, str)
@@ -208,6 +217,7 @@ class TestFormatTextAlert:
 
     def test_alert_type_in_output(self):
         from alert_manager import format_text_alert
+
         analysis = _make_trend_analysis("eth")
         text = format_text_alert(analysis, alert_type="SPIKE")
         assert "SPIKE" in text or "eth" in text.lower()

@@ -59,6 +59,7 @@ class ImagineCog(commands.Cog):
         negative: str = "",
     ) -> None:
         from cooldowns import check_cooldown
+
         remaining = check_cooldown("imagine", interaction.user.id, cooldown_seconds=10.0)
         if remaining > 0:
             await interaction.response.send_message(
@@ -111,9 +112,7 @@ class ImagineCog(commands.Cog):
                 content=f"❌ Stable Diffusion is offline. Make sure it's running at `{cfg.sd_url}`"
             )
         except Exception:  # broad: intentional
-            await interaction.edit_original_response(
-                content="❌ Image generation failed. Check the logs for details."
-            )
+            await interaction.edit_original_response(content="❌ Image generation failed. Check the logs for details.")
 
     # ── /imagine status ───────────────────────────────────────────────────
 

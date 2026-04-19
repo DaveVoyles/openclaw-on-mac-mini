@@ -52,9 +52,9 @@ class TestCircuitStaysClosedOnSuccess:
         cb = CircuitBreaker(max_failures=3, cooldown_seconds=60)
         cb.record_failure("gemini")
         cb.record_failure("gemini")
-        cb.record_success("gemini")   # resets counter
-        cb.record_failure("gemini")   # only 1 failure now
-        cb.record_failure("gemini")   # 2 failures — still under threshold
+        cb.record_success("gemini")  # resets counter
+        cb.record_failure("gemini")  # only 1 failure now
+        cb.record_failure("gemini")  # 2 failures — still under threshold
         assert not cb.is_open("gemini")
 
 
@@ -66,7 +66,7 @@ class TestCircuitOpensAfterNFailures:
         cb = CircuitBreaker(max_failures=5, cooldown_seconds=60)
         for i in range(4):
             cb.record_failure("gemini")
-            assert not cb.is_open("gemini"), f"Should be closed after {i+1} failures"
+            assert not cb.is_open("gemini"), f"Should be closed after {i + 1} failures"
         cb.record_failure("gemini")
         assert cb.is_open("gemini")
 
@@ -98,8 +98,10 @@ class TestGeminiChatCircuitOpen:
         mock_rate_limiter = AsyncMock()
         mock_rate_limiter.wait_for_capacity = AsyncMock(return_value=True)
 
-        with patch.object(chat_mod, "_gemini_circuit", mock_cb), \
-             patch.object(chat_mod, "_rate_limiter", mock_rate_limiter):
+        with (
+            patch.object(chat_mod, "_gemini_circuit", mock_cb),
+            patch.object(chat_mod, "_rate_limiter", mock_rate_limiter),
+        ):
             with pytest.raises(RuntimeError, match="circuit breaker is open"):
                 await chat_mod._gemini_chat("hello", [], mock_model)
 
@@ -120,8 +122,7 @@ class TestGeminiChatCircuitOpen:
 
         mock_client = MagicMock()
 
-        with patch.object(chat_mod, "_gemini_circuit", mock_cb), \
-             patch.object(chat_mod, "_client", mock_client):
+        with patch.object(chat_mod, "_gemini_circuit", mock_cb), patch.object(chat_mod, "_client", mock_client):
             with pytest.raises(RuntimeError):
                 await chat_mod._gemini_chat("hello", [], mock_model)
 

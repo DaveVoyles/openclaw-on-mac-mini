@@ -135,9 +135,7 @@ class DnsCog(commands.Cog):
                 "/control/rewrite/add",
                 json={"domain": domain, "answer": "0.0.0.0"},
             )
-            await interaction.followup.send(
-                f"🚫 `{domain}` is now blocked (rewrites to 0.0.0.0)", ephemeral=True
-            )
+            await interaction.followup.send(f"🚫 `{domain}` is now blocked (rewrites to 0.0.0.0)", ephemeral=True)
         except Exception:  # broad: intentional
             log.exception("dns block failed for %s", domain)
             await interaction.followup.send(f"❌ Failed to block `{domain}`.", ephemeral=True)
@@ -169,9 +167,7 @@ class DnsCog(commands.Cog):
             rewrites: list = await _ag_request("GET", "/control/rewrite/list")
 
             if not rewrites:
-                await interaction.followup.send(
-                    "📋 No custom rewrite rules found.", ephemeral=True
-                )
+                await interaction.followup.send("📋 No custom rewrite rules found.", ephemeral=True)
                 return
 
             PAGE_SIZE = 15
@@ -179,9 +175,7 @@ class DnsCog(commands.Cog):
             embeds: list[discord.Embed] = []
 
             for idx, page in enumerate(pages):
-                lines = [
-                    f"`{r.get('domain', '?')}` → `{r.get('answer', '?')}`" for r in page
-                ]
+                lines = [f"`{r.get('domain', '?')}` → `{r.get('answer', '?')}`" for r in page]
                 embed = discord.Embed(
                     title=f"📋 Blocked Domains ({len(rewrites)} total)",
                     description=truncate_for_embed("\n".join(lines)),
@@ -198,9 +192,7 @@ class DnsCog(commands.Cog):
 
         except Exception:  # broad: intentional
             log.exception("dns blocked failed")
-            await interaction.followup.send(
-                "❌ Failed to fetch rewrite rules.", ephemeral=True
-            )
+            await interaction.followup.send("❌ Failed to fetch rewrite rules.", ephemeral=True)
 
 
 async def setup(bot) -> None:

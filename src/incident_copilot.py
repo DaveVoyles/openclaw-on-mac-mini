@@ -269,16 +269,16 @@ async def generate_incident_report(
         "You are Incident Copilot. Summarize the incident and produce next actions.\n"
         "Return ONLY JSON with this schema:\n"
         "{"
-        "\"summary\": string,"
-        "\"suspected_causes\": [string],"
-        "\"actions\": ["
+        '"summary": string,'
+        '"suspected_causes": [string],'
+        '"actions": ['
         "{"
-        "\"title\": string,"
-        "\"description\": string,"
-        "\"command\": \"restart_container\"|\"\","
-        "\"target\": string,"
-        "\"risk_level\": \"low\"|\"medium\"|\"high\"|\"critical\","
-        "\"rationale\": string"
+        '"title": string,'
+        '"description": string,'
+        '"command": "restart_container"|"",'
+        '"target": string,'
+        '"risk_level": "low"|"medium"|"high"|"critical",'
+        '"rationale": string'
         "}"
         "]"
         "}\n"

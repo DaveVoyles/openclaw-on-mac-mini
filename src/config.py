@@ -54,17 +54,18 @@ _threads: dict[str, Any] = _yaml.get("threads", {})
 #   from config import TIMEOUT_FAST, TIMEOUT_DEFAULT, TIMEOUT_SLOW, TIMEOUT_LONG
 # ---------------------------------------------------------------------------
 
-TIMEOUT_FAST: int = 5         # Health checks, quick status
-TIMEOUT_DEFAULT: int = 15     # Standard API calls
-TIMEOUT_SLOW: int = 30        # Web scraping, search APIs
-TIMEOUT_LONG: int = 60        # Container operations, LLM calls
-TIMEOUT_EXTENDED: int = 120   # Image generation, research
+TIMEOUT_FAST: int = 5  # Health checks, quick status
+TIMEOUT_DEFAULT: int = 15  # Standard API calls
+TIMEOUT_SLOW: int = 30  # Web scraping, search APIs
+TIMEOUT_LONG: int = 60  # Container operations, LLM calls
+TIMEOUT_EXTENDED: int = 120  # Image generation, research
 
 DB_TIMEOUT_DEFAULT: int = 10  # seconds; prevent indefinite SQLite lock waits
 
 # ---------------------------------------------------------------------------
 # Config namespace — env vars take precedence over YAML
 # ---------------------------------------------------------------------------
+
 
 class _Config:
     """Read-only config namespace. Env vars override YAML defaults."""
@@ -73,9 +74,7 @@ class _Config:
     discord_token: str = os.getenv("DISCORD_BOT_TOKEN", "")
     discord_guild_id: str = os.getenv("DISCORD_GUILD_ID", "")
     allowed_user_ids: list[int] = [
-        int(uid.strip())
-        for uid in os.getenv("ALLOWED_USER_IDS", "").split(",")
-        if uid.strip()
+        int(uid.strip()) for uid in os.getenv("ALLOWED_USER_IDS", "").split(",") if uid.strip()
     ]
     alert_channel_id: int = int(os.getenv("ALERT_CHANNEL_ID", "0"))
 
@@ -100,7 +99,9 @@ class _Config:
     llm_rph_limit: int = int(os.getenv("LLM_RPH_LIMIT", str(_rate_limits.get("per_hour", 500))))
     llm_max_tool_rounds: int = int(os.getenv("LLM_MAX_TOOL_ROUNDS", str(_llm.get("max_tool_rounds", 12))))
     llm_max_history_turns: int = int(os.getenv("LLM_MAX_HISTORY_TURNS", str(_conversation.get("max_history", 50))))
-    conversation_ttl_minutes: int = int(os.getenv("CONVERSATION_TTL_MINUTES", str(_conversation.get("ttl_minutes", 30))))
+    conversation_ttl_minutes: int = int(
+        os.getenv("CONVERSATION_TTL_MINUTES", str(_conversation.get("ttl_minutes", 30)))
+    )
 
     # -- Deep / Thinking -------------------------------------------------------
     thinking_model: str = os.getenv("THINKING_MODEL", "gemini-2.5-flash")
@@ -111,7 +112,9 @@ class _Config:
     ollama_model: str = os.getenv("OLLAMA_MODEL", _local_llm.get("model", "gemma4:e4b"))
     local_llm_enabled: bool = os.getenv("LOCAL_LLM_ENABLED", str(_local_llm.get("enabled", True))).lower() == "true"
     default_model_preference: str = os.getenv("DEFAULT_MODEL_PREFERENCE", _local_llm.get("default_preference", "auto"))
-    ollama_tools_enabled: bool = os.getenv("OLLAMA_TOOLS_ENABLED", str(_local_llm.get("tools_enabled", True))).lower() == "true"
+    ollama_tools_enabled: bool = (
+        os.getenv("OLLAMA_TOOLS_ENABLED", str(_local_llm.get("tools_enabled", True))).lower() == "true"
+    )
 
     # -- Copilot Proxy (Phase 8 enhancement) -----------------------------------
     copilot_proxy_url: str = os.getenv("COPILOT_PROXY_URL", "")
@@ -255,11 +258,7 @@ class _Config:
 
     # -- GitHub ----------------------------------------------------------------
     github_token: str = os.getenv("GITHUB_TOKEN", "")
-    github_default_repos: list[str] = [
-        r.strip()
-        for r in os.getenv("GITHUB_DEFAULT_REPOS", "").split(",")
-        if r.strip()
-    ]
+    github_default_repos: list[str] = [r.strip() for r in os.getenv("GITHUB_DEFAULT_REPOS", "").split(",") if r.strip()]
 
     # -- Sentry (error monitoring) ---------------------------------------------
     sentry_auth_token: str = os.getenv("SENTRY_AUTH_TOKEN", "")
@@ -278,8 +277,13 @@ class _Config:
     reflection_enabled: bool = os.getenv("REFLECTION_ENABLED", "true").lower() == "true"
 
     # -- Auto-recall (Phase 1: Auto-RAG) --------------------------------------
-    auto_recall_enabled: bool = os.getenv("AUTO_RECALL_ENABLED", str(_yaml.get("vector_store", {}).get("contextual_recall", True))).lower() == "true"
-    auto_recall_top_k: int = int(os.getenv("AUTO_RECALL_TOP_K", str(_yaml.get("vector_store", {}).get("contextual_top_k", 3))))
+    auto_recall_enabled: bool = (
+        os.getenv("AUTO_RECALL_ENABLED", str(_yaml.get("vector_store", {}).get("contextual_recall", True))).lower()
+        == "true"
+    )
+    auto_recall_top_k: int = int(
+        os.getenv("AUTO_RECALL_TOP_K", str(_yaml.get("vector_store", {}).get("contextual_top_k", 3)))
+    )
 
     # -- Thread-based conversations --------------------------------------------
     thread_auto_create: bool = os.getenv("THREAD_AUTO_CREATE", str(_threads.get("auto_create", True))).lower() == "true"
@@ -349,11 +353,13 @@ class _Config:
 
         def _add(name: str, configured: bool, detail: str = "") -> None:
             """Add a configuration status entry."""
-            entries.append({
-                "name": name,
-                "status": "configured" if configured else "missing",
-                "detail": detail,
-            })
+            entries.append(
+                {
+                    "name": name,
+                    "status": "configured" if configured else "missing",
+                    "detail": detail,
+                }
+            )
 
         _add("Discord Bot Token", bool(self.discord_token))
         _add("Google API Key (Gemini)", bool(self.google_api_key))

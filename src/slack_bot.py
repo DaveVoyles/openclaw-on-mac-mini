@@ -183,9 +183,7 @@ def _load_user_email_creds() -> None:
 def _save_user_email_creds() -> None:
     try:
         _USER_EMAIL_CREDS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _USER_EMAIL_CREDS_PATH.write_text(
-            json.dumps(_user_email_creds, indent=2), encoding="utf-8"
-        )
+        _USER_EMAIL_CREDS_PATH.write_text(json.dumps(_user_email_creds, indent=2), encoding="utf-8")
     except Exception as exc:
         log.warning("Failed to save user email creds: %s", exc)
 
@@ -215,9 +213,7 @@ def _load_user_dropbox_tokens() -> None:
 def _save_user_dropbox_tokens() -> None:
     try:
         _USER_DROPBOX_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _USER_DROPBOX_PATH.write_text(
-            json.dumps(_user_dropbox_tokens, indent=2), encoding="utf-8"
-        )
+        _USER_DROPBOX_PATH.write_text(json.dumps(_user_dropbox_tokens, indent=2), encoding="utf-8")
     except Exception as exc:
         log.warning("Failed to save user Dropbox tokens: %s", exc)
 
@@ -440,12 +436,12 @@ _MODEL_ALIASES: dict[str, str] = {
 _WELCOME_MESSAGE = (
     "👋 *Hi! I'm OpenClaw — your personal AI assistant, right here in Slack.*\n\n"
     "Here are some things you can ask me right now:\n"
-    "• \"What should I make for dinner tonight with chicken and vegetables?\" 🍳\n"
-    "• \"Help me write a message to my doctor about rescheduling my appointment\" ✍️\n"
-    "• \"What does this letter say?\" *(then drop in a photo or PDF)* 📄\n"
-    "• \"Look at this spreadsheet and tell me what it shows\" *(drop in an Excel file)* 📊\n"
-    "• \"What's a good birthday gift for someone who likes gardening?\" 🎁\n"
-    "• \"Explain this in plain English\" *(paste in any confusing text)* 🤔\n\n"
+    '• "What should I make for dinner tonight with chicken and vegetables?" 🍳\n'
+    '• "Help me write a message to my doctor about rescheduling my appointment" ✍️\n'
+    '• "What does this letter say?" *(then drop in a photo or PDF)* 📄\n'
+    '• "Look at this spreadsheet and tell me what it shows" *(drop in an Excel file)* 📊\n'
+    '• "What\'s a good birthday gift for someone who likes gardening?" 🎁\n'
+    '• "Explain this in plain English" *(paste in any confusing text)* 🤔\n\n'
     "*You don't need any special commands — just talk to me like you'd talk to a friend!*\n"
     "Type `/help` anytime to see more examples."
 )
@@ -453,17 +449,17 @@ _WELCOME_MESSAGE = (
 _HELP_TEXT = (
     "*📚 OpenClaw Quick Help*\n\n"
     "*Working with files:*\n"
-    "• Drag in a Word doc (.docx) → \"proofread this\" / \"make this more formal\" / \"summarize in 5 bullet points\"\n"
-    "• Drag in an Excel file (.xlsx) → \"what is this tracking?\" / \"explain column C\" / \"find any errors\"\n"
-    "• Drag in a PDF → \"summarize this\"\n"
-    "• Drop in a photo → \"what's in this image?\"\n\n"
+    '• Drag in a Word doc (.docx) → "proofread this" / "make this more formal" / "summarize in 5 bullet points"\n'
+    '• Drag in an Excel file (.xlsx) → "what is this tracking?" / "explain column C" / "find any errors"\n'
+    '• Drag in a PDF → "summarize this"\n'
+    '• Drop in a photo → "what\'s in this image?"\n\n'
     "*Just chatting:*\n"
-    "• Ask anything — \"what's the weather in Boston?\" / \"explain this email to me\" / \"help me write a thank-you note\"\n\n"
+    '• Ask anything — "what\'s the weather in Boston?" / "explain this email to me" / "help me write a thank-you note"\n\n'
     "*Tips:*\n"
     "• `/simple on` — always get plain, easy-to-read answers (no need to type `--simple` every time)\n"
     "• Add `--simple` to any one message for a one-off plain answer\n"
     "• Reply in a thread to keep context from earlier messages\n\n"
-    "_Example: Upload Budget2025.xlsx and type: \"summarize the totals for me\"_"
+    '_Example: Upload Budget2025.xlsx and type: "summarize the totals for me"_'
 )
 
 _SIMPLE_FLAG_RE = re.compile(r"\s*--simple\b", re.IGNORECASE)
@@ -548,7 +544,7 @@ _DIGEST_LOOKBACK_HOURS: int = int(os.getenv("DIGEST_LOOKBACK_HOURS", "24"))  # s
 _CASUAL_TIPS = [
     "\n\n💡 _Tip: You can just talk to me naturally — no commands needed!_",
     "\n\n💡 _Tip: Drop a photo or file into Slack anytime and ask me about it._",
-    "\n\n💡 _Tip: Not happy with my answer? Just say \"try again\" or \"make it shorter\"._",
+    '\n\n💡 _Tip: Not happy with my answer? Just say "try again" or "make it shorter"._',
     "\n\n💡 _Tip: You can ask me anything — cooking, writing, explaining something — just like texting a friend._",
     "\n\n💡 _Tip: Type `/help` to see example questions you can ask me._",
 ]
@@ -780,6 +776,7 @@ async def _run_upload_server() -> None:
 # Wave 4: Proactive file-alert helpers
 # ---------------------------------------------------------------------------
 
+
 def _load_known_files() -> set[str]:
     """Load the set of known filenames from disk."""
     try:
@@ -794,9 +791,7 @@ def _load_known_files() -> set[str]:
 def _save_known_files(known: set[str]) -> None:
     try:
         _KNOWN_FILES_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _KNOWN_FILES_PATH.write_text(
-            json.dumps({"files": sorted(known)}, indent=2), encoding="utf-8"
-        )
+        _KNOWN_FILES_PATH.write_text(json.dumps({"files": sorted(known)}, indent=2), encoding="utf-8")
     except Exception as exc:
         log.warning("Could not save known_files.json: %s", exc)
 
@@ -911,7 +906,6 @@ async def _file_alert_loop(client: Any) -> None:
             log.warning("file_alert_loop: error during poll: %s", exc)
 
 
-
 async def _notify_upload_received(filename: str, size: int) -> None:
     """DM the notify user when a file is uploaded via the HTTP endpoint."""
     if size > 1024:
@@ -923,7 +917,7 @@ async def _notify_upload_received(filename: str, size: int) -> None:
             channel=SLACK_NOTIFY_USER_ID,
             text=(
                 f"📥 *Got it!* I received `{filename}` ({size_human}). "
-                "Just ask me what to do with it — for example: \"summarize this\" or \"what's in this file?\""
+                'Just ask me what to do with it — for example: "summarize this" or "what\'s in this file?"'
             ),
         )
     except Exception as exc:
@@ -983,13 +977,9 @@ async def _process_slack_files(files: list[dict], token: str, question: str) -> 
         try:
             session = await _slack_dl_sessions.get()
             headers = {"Authorization": f"Bearer {token}"}
-            async with session.get(
-                url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)
-            ) as resp:
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                 if resp.status != 200:
-                    log.warning(
-                        "Failed to download Slack file %s: HTTP %d", filename, resp.status
-                    )
+                    log.warning("Failed to download Slack file %s: HTTP %d", filename, resp.status)
                     question += f"\n\n[Attachment: failed to download {filename}]"
                     continue
 
@@ -998,6 +988,7 @@ async def _process_slack_files(files: list[dict], token: str, question: str) -> 
             if mimetype.startswith("image/"):
                 # OCR intent: extract text verbatim instead of describing the image
                 from ocr_skill import is_ocr_request, ocr_file  # lazy import
+
                 if is_ocr_request(question):
                     ocr_text = await ocr_file(data, mimetype, hint="")
                     question = f"{question}\n\n[OCR result for {filename}]:\n{ocr_text}"
@@ -1007,6 +998,7 @@ async def _process_slack_files(files: list[dict], token: str, question: str) -> 
             elif mimetype == "application/pdf":
                 # OCR intent on PDF: extract text layer (or ask user to send as image)
                 from ocr_skill import is_ocr_request, ocr_file  # lazy import
+
                 if is_ocr_request(question):
                     ocr_text = await ocr_file(data, mimetype, hint="")
                     question = f"{question}\n\n[OCR result for {filename}]:\n{ocr_text}"
@@ -1080,9 +1072,7 @@ def _register_bot_message(channel: str, ts: str, user_id: str) -> None:
         del _bot_message_registry[oldest]
 
 
-async def _build_thread_history(
-    client: Any, channel: str, thread_ts: str
-) -> list[dict[str, str]]:
+async def _build_thread_history(client: Any, channel: str, thread_ts: str) -> list[dict[str, str]]:
     """Fetch previous messages in *thread_ts* and return them as conversation history.
 
     The last message (the current prompt) is excluded — the caller supplies that
@@ -1090,18 +1080,14 @@ async def _build_thread_history(
     """
     global _BOT_USER_ID
     try:
-        result = await client.conversations_replies(
-            channel=channel, ts=thread_ts, limit=20
-        )
+        result = await client.conversations_replies(channel=channel, ts=thread_ts, limit=20)
         messages: list[dict] = result.get("messages", [])
         history: list[dict[str, str]] = []
         for msg in messages[:-1]:  # exclude the triggering message
             content = (msg.get("text") or "").strip()
             if not content or content == "⏳ Thinking…":
                 continue
-            is_bot = bool(msg.get("bot_id")) or (
-                _BOT_USER_ID and msg.get("user") == _BOT_USER_ID
-            )
+            is_bot = bool(msg.get("bot_id")) or (_BOT_USER_ID and msg.get("user") == _BOT_USER_ID)
             role = "assistant" if is_bot else "user"
             history.append({"role": role, "content": content})
         return history
@@ -1146,8 +1132,7 @@ _FILE_ACTION_PROMPTS: dict[str, str] = {
     ),
     "file_summarize": "Please summarize the key points in a few bullet points.",
     "file_explain": (
-        "Please explain what this document is about in plain, simple language. "
-        "Assume the reader is non-technical."
+        "Please explain what this document is about in plain, simple language. Assume the reader is non-technical."
     ),
     "file_errors": (
         "Please identify any errors, inconsistencies, unusual values, or potential problems "
@@ -1193,9 +1178,7 @@ def _register_file(file_id: str, file_obj: dict, file_bytes: bytes | None = None
         del _file_registry[oldest]
 
 
-def _build_file_blocks(
-    filename: str, description: str | None, mimetype: str, file_id: str
-) -> list[dict]:
+def _build_file_blocks(filename: str, description: str | None, mimetype: str, file_id: str) -> list[dict]:
     """Build Slack Block Kit blocks for a file upload suggestion message."""
     is_image = (mimetype or "").lower().startswith("image/")
 
@@ -1398,9 +1381,7 @@ async def _generate_chart(
 
     # Get LLM chart spec
     try:
-        sample = "\t".join(headers) + "\n" + "\n".join(
-            "\t".join(str(v or "") for v in r) for r in data_rows[:5]
-        )
+        sample = "\t".join(headers) + "\n" + "\n".join("\t".join(str(v or "") for v in r) for r in data_rows[:5])
         spec_prompt = (
             f"Spreadsheet columns: {headers}\nSample data:\n{sample}\n\n"
             'Return JSON: {"chart_type": "bar|line|pie", "x_column": "col", '
@@ -1552,9 +1533,7 @@ async def _run_research_pipeline(
     Phase 3: Post combined answer.  If no file: post Perplexity results with a tip.
     """
     # Phase 1: Perplexity research
-    perplexity_prompt = (
-        f"Research the following topic and provide a concise, cited summary with key facts:\n\n{text}"
-    )
+    perplexity_prompt = f"Research the following topic and provide a concise, cited summary with key facts:\n\n{text}"
     try:
         research_results = await _ask(perplexity_prompt, user, model_pref="perplexity-direct")
     except Exception as exc:
@@ -1563,10 +1542,7 @@ async def _run_research_pipeline(
 
     # No active file — return Perplexity results with tip
     if file_obj is None:
-        answer = (
-            f"🔍 *Research Results*\n\n{research_results}\n\n"
-            "_Tip: share a Word doc to incorporate these findings_"
-        )
+        answer = f"🔍 *Research Results*\n\n{research_results}\n\n_Tip: share a Word doc to incorporate these findings_"
         try:
             await client.chat_postMessage(channel=channel, text=answer)
         except Exception as exc:
@@ -1601,10 +1577,7 @@ async def _run_research_pipeline(
         gemini_answer = "(Could not incorporate findings into document)"
 
     # Phase 3: Post final combined answer
-    final_text = (
-        f"🔍 *Research Summary*\n{research_results}\n\n"
-        f"📄 *Suggested document update*\n{gemini_answer}"
-    )
+    final_text = f"🔍 *Research Summary*\n{research_results}\n\n📄 *Suggested document update*\n{gemini_answer}"
     try:
         await client.chat_postMessage(channel=channel, text=_clean_for_slack(final_text))
     except Exception as exc:
@@ -1686,9 +1659,7 @@ async def _process_batch(
 
     done_count = sum(1 for r in results if r["status"] == "done")
     summary = (
-        f"✅ All {done_count} files processed!"
-        if done_count == total
-        else f"✅ {done_count}/{total} files processed."
+        f"✅ All {done_count} files processed!" if done_count == total else f"✅ {done_count}/{total} files processed."
     )
     try:
         await client.chat_postMessage(channel=channel, thread_ts=thread_ts, text=summary)
@@ -1759,8 +1730,6 @@ async def _auto_brief_file(file_obj: dict, token: str) -> str | None:
         return None
 
 
-
-
 async def _compare_documents(
     file_obj_a: dict,
     file_obj_b: dict,
@@ -1794,9 +1763,7 @@ async def _two_phase_research(file_obj: dict, token: str, base_prompt: str) -> s
     )
     research_prompt = f"Research current information about these topics from a document: {doc_content[:500]}"
     try:
-        research_result = await _ask(
-            research_prompt, user_id="system", simple=False, model_pref="perplexity-direct"
-        )
+        research_result = await _ask(research_prompt, user_id="system", simple=False, model_pref="perplexity-direct")
     except Exception as exc:
         log.warning("_two_phase_research: Perplexity phase failed, falling back: %s", exc)
         research_result = ""
@@ -1813,8 +1780,6 @@ async def _two_phase_research(file_obj: dict, token: str, base_prompt: str) -> s
         combined_prompt = await _process_slack_files([file_obj], token, base_prompt)
 
     return combined_prompt
-
-
 
 
 async def _ask(
@@ -1885,6 +1850,7 @@ async def _edit_thinking_with_progress(
 # Shared send-and-track helper
 # ---------------------------------------------------------------------------
 
+
 async def _send_answer(
     *,
     client: Any,
@@ -1902,21 +1868,29 @@ async def _send_answer(
     t0 = time.monotonic()
     progress_task: asyncio.Task | None = None
     if thinking_ts:
-        progress_task = asyncio.create_task(
-            _edit_thinking_with_progress(client, channel, thinking_ts, _PROGRESS_STEPS)
-        )
+        progress_task = asyncio.create_task(_edit_thinking_with_progress(client, channel, thinking_ts, _PROGRESS_STEPS))
     try:
         try:
             answer = await _ask(prompt, user_id, model_pref=model_pref, history=history, simple=simple)
             text = _clean_for_slack(answer) if answer else "(no response)"
             text += _maybe_append_tip()
-            _log_query_metrics(user_id, action="message", model_used=model_pref or "auto",
-                               duration_ms=int((time.monotonic() - t0) * 1000), status="ok")
+            _log_query_metrics(
+                user_id,
+                action="message",
+                model_used=model_pref or "auto",
+                duration_ms=int((time.monotonic() - t0) * 1000),
+                status="ok",
+            )
         except Exception as exc:
             log.warning("_send_answer: _ask failed: %s", exc)
             text = "Hmm, something didn't work right — sorry about that! Try sending your message again. If it keeps happening, you can let Dave know."
-            _log_query_metrics(user_id, action="message", model_used=model_pref or "auto",
-                               duration_ms=int((time.monotonic() - t0) * 1000), status="error")
+            _log_query_metrics(
+                user_id,
+                action="message",
+                model_used=model_pref or "auto",
+                duration_ms=int((time.monotonic() - t0) * 1000),
+                status="error",
+            )
             # Post a Block Kit "Try again" button so the user has a recovery path
             prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()[:16]
             _retry_cache[prompt_hash] = prompt
@@ -1975,6 +1949,7 @@ async def _send_answer(
 # ---------------------------------------------------------------------------
 # Admin DM alerting
 # ---------------------------------------------------------------------------
+
 
 async def _alert_admin(client: Any, message: str) -> None:
     """DM the admin when error rate spikes."""
@@ -2061,6 +2036,7 @@ async def _handle_screenshot_intent(
 
     try:
         from screenshot_skill import take_website_screenshot  # lazy import — lives in /app/skills
+
         png_bytes = await take_website_screenshot(url)
     except Exception as exc:
         log.warning("_handle_screenshot_intent: failed for %s: %s", url, exc)
@@ -2088,6 +2064,7 @@ async def _handle_screenshot_intent(
 # ---------------------------------------------------------------------------
 # Slack app factory
 # ---------------------------------------------------------------------------
+
 
 async def _handle_batch_file(event: dict, client: Any, say: Any) -> None:
     """Group simultaneous file_shared events and process as a batch when multiple arrive.
@@ -2169,9 +2146,7 @@ async def _handle_batch_file(event: dict, client: Any, say: Any) -> None:
         description = await _auto_brief_file(file_obj, SLACK_BOT_TOKEN)
         blocks = _build_file_blocks(filename, description, mimetype, fid)
         fallback_text = (
-            f"📎 *{filename}*"
-            + (f"\n_{description}_" if description else "")
-            + "\n\nWhat would you like to do?"
+            f"📎 *{filename}*" + (f"\n_{description}_" if description else "") + "\n\nWhat would you like to do?"
         )
         try:
             await client.chat_postMessage(
@@ -2215,7 +2190,7 @@ async def _process_single_file_shared(event: dict, client: Any, say: Any) -> Non
 
     _register_file(file_id, file_obj)
     filename = file_obj.get("name", "file")
-    mimetype = (file_obj.get("mimetype") or "")
+    mimetype = file_obj.get("mimetype") or ""
 
     # Compare flow: if user has already selected Document A, treat this as Document B
     if user_id and user_id in _compare_pending:
@@ -2256,9 +2231,7 @@ async def _process_single_file_shared(event: dict, client: Any, say: Any) -> Non
 
     # Show a placeholder while we run the auto-brief
     try:
-        placeholder = await client.chat_postMessage(
-            channel=channel, text=f"📎 *{filename}* — reading…"
-        )
+        placeholder = await client.chat_postMessage(channel=channel, text=f"📎 *{filename}* — reading…")
         placeholder_ts = (placeholder or {}).get("ts")
     except Exception:
         placeholder_ts = None
@@ -2268,16 +2241,12 @@ async def _process_single_file_shared(event: dict, client: Any, say: Any) -> Non
 
     blocks = _build_file_blocks(filename, description, mimetype, file_id)
     fallback_text = (
-        f"📎 *{filename}*"
-        + (f"\n_{description}_" if description else "")
-        + "\n\nWhat would you like to do?"
+        f"📎 *{filename}*" + (f"\n_{description}_" if description else "") + "\n\nWhat would you like to do?"
     )
 
     try:
         if placeholder_ts:
-            await client.chat_update(
-                channel=channel, ts=placeholder_ts, text=fallback_text, blocks=blocks
-            )
+            await client.chat_update(channel=channel, ts=placeholder_ts, text=fallback_text, blocks=blocks)
         else:
             await client.chat_postMessage(channel=channel, text=fallback_text, blocks=blocks)
     except Exception as exc:
@@ -2401,11 +2370,28 @@ def _parse_schedule_time(text: str) -> int | None:
     return -1  # parse error
 
 
-_VAGUE_PATTERNS: frozenset[str] = frozenset([
-    "help", "hi", "hello", "hey", "thanks", "ok", "okay",
-    "this", "it", "stuff", "things", "something", "anything",
-    "can you", "please", "yes", "no", "sure",
-])
+_VAGUE_PATTERNS: frozenset[str] = frozenset(
+    [
+        "help",
+        "hi",
+        "hello",
+        "hey",
+        "thanks",
+        "ok",
+        "okay",
+        "this",
+        "it",
+        "stuff",
+        "things",
+        "something",
+        "anything",
+        "can you",
+        "please",
+        "yes",
+        "no",
+        "sure",
+    ]
+)
 
 
 def _is_vague_question(text: str, has_files: bool = False) -> bool:
@@ -2470,16 +2456,20 @@ def _build_home_view(user_id: str, name: str) -> dict:
             fname = f.get("name", "unknown")
             uploaded = f.get("uploaded_at", "")[:10] if f.get("uploaded_at") else ""
             file_lines.append(f"• *{fname}*" + (f" ({uploaded})" if uploaded else ""))
-        blocks.append({
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": "*📁 Your recent files:*\n" + "\n".join(file_lines)},
-        })
+        blocks.append(
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": "*📁 Your recent files:*\n" + "\n".join(file_lines)},
+            }
+        )
         blocks.append({"type": "divider"})
 
-    blocks.append({
-        "type": "context",
-        "elements": [{"type": "mrkdwn", "text": "📖 Full guide: `/help` · Questions? Just send me a DM!"}],
-    })
+    blocks.append(
+        {
+            "type": "context",
+            "elements": [{"type": "mrkdwn", "text": "📖 Full guide: `/help` · Questions? Just send me a DM!"}],
+        }
+    )
 
     return {"type": "home", "blocks": blocks}
 
@@ -2530,6 +2520,7 @@ async def _post_clarification_prompt(client: Any, channel: str, user_id: str) ->
 # Wave 10: Dropbox helpers
 # ---------------------------------------------------------------------------
 
+
 def _get_dropbox_client(token: str | None = None) -> Any | None:
     """Return a Dropbox client using *token* or the server-level DROPBOX_APP_TOKEN."""
     active_token = token or _DROPBOX_TOKEN
@@ -2537,6 +2528,7 @@ def _get_dropbox_client(token: str | None = None) -> Any | None:
         return None
     try:
         import dropbox  # noqa: PLC0415
+
         return dropbox.Dropbox(active_token)
     except ImportError:
         return None
@@ -2552,13 +2544,15 @@ def _dropbox_list_folder(path: str, token: str | None = None) -> list[dict]:
         files = []
         for entry in result.entries:
             if hasattr(entry, "server_modified"):
-                files.append({
-                    "name": entry.name,
-                    "size": getattr(entry, "size", 0),
-                    "modified": entry.server_modified.strftime("%Y-%m-%d %H:%M"),
-                    "id": entry.id,
-                    "path": entry.path_lower,
-                })
+                files.append(
+                    {
+                        "name": entry.name,
+                        "size": getattr(entry, "size", 0),
+                        "modified": entry.server_modified.strftime("%Y-%m-%d %H:%M"),
+                        "id": entry.id,
+                        "path": entry.path_lower,
+                    }
+                )
         return sorted(files, key=lambda f: f["modified"], reverse=True)
     except Exception:  # noqa: BLE001
         return []
@@ -2567,6 +2561,7 @@ def _dropbox_list_folder(path: str, token: str | None = None) -> list[dict]:
 async def _dropbox_sync_new_files(slack_client: Any) -> int:
     """Poll Dropbox for new files and sync them. Returns count of new files."""
     from datetime import datetime
+
     dbx = _get_dropbox_client()
     if dbx is None:
         return 0
@@ -2601,12 +2596,14 @@ async def _dropbox_sync_new_files(slack_client: Any) -> int:
             dbx.files_download_to_file(str(local_path), entry.path_lower)
             if _DROPBOX_VIRTUAL_USER not in _file_history:
                 _file_history[_DROPBOX_VIRTUAL_USER] = []
-            _file_history[_DROPBOX_VIRTUAL_USER].append({
-                "name": entry.name,
-                "uploaded_at": datetime.now().isoformat(),
-                "auto_brief": None,
-                "source": "dropbox",
-            })
+            _file_history[_DROPBOX_VIRTUAL_USER].append(
+                {
+                    "name": entry.name,
+                    "uploaded_at": datetime.now().isoformat(),
+                    "auto_brief": None,
+                    "source": "dropbox",
+                }
+            )
             _save_file_history()
             new_count += 1
             if slack_client and _DROPBOX_NOTIFY_CHANNEL:
@@ -2629,6 +2626,7 @@ async def _dropbox_sync_new_files(slack_client: Any) -> int:
 # Wave 10 Yoda: Google Calendar helpers
 # ---------------------------------------------------------------------------
 
+
 async def _get_google_access_token() -> str | None:
     """Exchange refresh token for a short-lived access token. Cached for 55 min."""
     import time
@@ -2641,12 +2639,14 @@ async def _get_google_access_token() -> str | None:
     if _google_token_cache.get("expires_at", 0) > now + 60:
         return _google_token_cache["access_token"]
     try:
-        data = urllib.parse.urlencode({
-            "client_id": _GOOGLE_CLIENT_ID,
-            "client_secret": _GOOGLE_CLIENT_SECRET,
-            "refresh_token": _GOOGLE_REFRESH_TOKEN,
-            "grant_type": "refresh_token",
-        }).encode()
+        data = urllib.parse.urlencode(
+            {
+                "client_id": _GOOGLE_CLIENT_ID,
+                "client_secret": _GOOGLE_CLIENT_SECRET,
+                "refresh_token": _GOOGLE_REFRESH_TOKEN,
+                "grant_type": "refresh_token",
+            }
+        ).encode()
         req = urllib.request.Request(
             "https://oauth2.googleapis.com/token",
             data=data,
@@ -2675,14 +2675,16 @@ async def _get_calendar_events(days_ahead: int = 0) -> list[dict]:
         now = datetime.now(timezone.utc)
         time_min = now.replace(hour=0, minute=0, second=0, microsecond=0)
         time_max = now.replace(hour=23, minute=59, second=59) + timedelta(days=days_ahead)
-        params = urllib.parse.urlencode({
-            "calendarId": "primary",
-            "timeMin": time_min.isoformat(),
-            "timeMax": time_max.isoformat(),
-            "singleEvents": "true",
-            "orderBy": "startTime",
-            "maxResults": 20,
-        })
+        params = urllib.parse.urlencode(
+            {
+                "calendarId": "primary",
+                "timeMin": time_min.isoformat(),
+                "timeMax": time_max.isoformat(),
+                "singleEvents": "true",
+                "orderBy": "startTime",
+                "maxResults": 20,
+            }
+        )
         req = urllib.request.Request(
             f"https://www.googleapis.com/calendar/v3/calendars/primary/events?{params}",
             headers={"Authorization": f"Bearer {token}"},
@@ -2693,12 +2695,14 @@ async def _get_calendar_events(days_ahead: int = 0) -> list[dict]:
         for item in data.get("items", []):
             start = item.get("start", {})
             end = item.get("end", {})
-            events.append({
-                "summary": item.get("summary", "(no title)"),
-                "start": start.get("dateTime", start.get("date", "")),
-                "end": end.get("dateTime", end.get("date", "")),
-                "location": item.get("location", ""),
-            })
+            events.append(
+                {
+                    "summary": item.get("summary", "(no title)"),
+                    "start": start.get("dateTime", start.get("date", "")),
+                    "end": end.get("dateTime", end.get("date", "")),
+                    "location": item.get("location", ""),
+                }
+            )
         return events
     except Exception:  # noqa: BLE001
         return []
@@ -2707,6 +2711,7 @@ async def _get_calendar_events(days_ahead: int = 0) -> list[dict]:
 def _format_calendar_events(events: list[dict], label: str = "today") -> str:
     """Format calendar events as plain text."""
     from datetime import datetime
+
     if not events:
         return f"📅 Nothing on the calendar {label}."
     lines = [f"📅 *Your schedule for {label}:*"]
@@ -2738,10 +2743,12 @@ async def _get_gmail_unread(max_results: int = 5) -> list[dict]:
         import urllib.parse  # noqa: PLC0415
         import urllib.request  # noqa: PLC0415
 
-        params = urllib.parse.urlencode({
-            "labelIds": "INBOX,UNREAD",
-            "maxResults": max_results,
-        })
+        params = urllib.parse.urlencode(
+            {
+                "labelIds": "INBOX,UNREAD",
+                "maxResults": max_results,
+            }
+        )
         req = urllib.request.Request(
             f"https://gmail.googleapis.com/gmail/v1/users/me/messages?{params}",
             headers={"Authorization": f"Bearer {token}"},
@@ -2752,10 +2759,12 @@ async def _get_gmail_unread(max_results: int = 5) -> list[dict]:
         results = []
         for msg in messages:
             msg_id = msg["id"]
-            meta_params = urllib.parse.urlencode({
-                "format": "metadata",
-                "metadataHeaders": ["Subject", "From", "Date"],
-            })
+            meta_params = urllib.parse.urlencode(
+                {
+                    "format": "metadata",
+                    "metadataHeaders": ["Subject", "From", "Date"],
+                }
+            )
             meta_req = urllib.request.Request(
                 f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_id}?{meta_params}",
                 headers={"Authorization": f"Bearer {token}"},
@@ -2763,12 +2772,14 @@ async def _get_gmail_unread(max_results: int = 5) -> list[dict]:
             with urllib.request.urlopen(meta_req, timeout=10) as resp:
                 meta = json.loads(resp.read())
             headers = {h["name"]: h["value"] for h in meta.get("payload", {}).get("headers", [])}
-            results.append({
-                "id": msg_id,
-                "subject": headers.get("Subject", "(no subject)"),
-                "from": headers.get("From", "Unknown"),
-                "date": headers.get("Date", ""),
-            })
+            results.append(
+                {
+                    "id": msg_id,
+                    "subject": headers.get("Subject", "(no subject)"),
+                    "from": headers.get("From", "Unknown"),
+                    "date": headers.get("Date", ""),
+                }
+            )
         return results
     except Exception:  # noqa: BLE001
         return []
@@ -2807,8 +2818,6 @@ async def _get_gmail_body(message_id: str) -> str:
         return body[:4000]
     except Exception:  # noqa: BLE001
         return "(Could not load email body)"
-
-
 
 
 def _register_core_handlers(app: Any) -> None:
@@ -2872,8 +2881,7 @@ def _register_core_handlers(app: Any) -> None:
             if match:
                 filename = match.get("name", "")
                 suggestion_msg = (
-                    f"💡 Did you mean to use `{filename}`? "
-                    f"Type `/files {filename}` to select it, or just ask away!"
+                    f"💡 Did you mean to use `{filename}`? Type `/files {filename}` to select it, or just ask away!"
                 )
                 await say(text=suggestion_msg, thread_ts=thread_ts)
 
@@ -2968,8 +2976,7 @@ def _register_core_handlers(app: Any) -> None:
             if match:
                 filename = match.get("name", "")
                 suggestion_msg = (
-                    f"💡 Did you mean to use `{filename}`? "
-                    f"Type `/files {filename}` to select it, or just ask away!"
+                    f"💡 Did you mean to use `{filename}`? Type `/files {filename}` to select it, or just ask away!"
                 )
                 await say(text=suggestion_msg)
 
@@ -3013,9 +3020,7 @@ def _register_core_handlers(app: Any) -> None:
         raw_text: str = (body.get("text") or "").strip()
 
         if not raw_text:
-            await say(
-                text="Usage: `/chat your question here`\nNeed ideas? Type `/help` to see examples."
-            )
+            await say(text="Usage: `/chat your question here`\nNeed ideas? Type `/help` to see examples.")
             return
 
         prompt, model_pref, use_simple = _parse_flags(raw_text)
@@ -3116,7 +3121,9 @@ def _register_core_handlers(app: Any) -> None:
         # /ai-files inventory
         try:
             if _AI_FILES_DIR.exists():
-                files = [f for f in _AI_FILES_DIR.iterdir() if f.is_file() and f.suffix.lower() in _ALLOWED_UPLOAD_EXTENSIONS]
+                files = [
+                    f for f in _AI_FILES_DIR.iterdir() if f.is_file() and f.suffix.lower() in _ALLOWED_UPLOAD_EXTENSIONS
+                ]
                 lines.append(f"📁 Storage: {len(files)} file(s)")
             else:
                 lines.append("📁 Storage: folder not found")
@@ -3252,7 +3259,6 @@ def _register_core_handlers(app: Any) -> None:
                 )
             )
 
-
     # ------------------------------------------------------------------
     # Handler: /research — Perplexity research pipeline slash command
     # ------------------------------------------------------------------
@@ -3317,7 +3323,6 @@ def _register_core_handlers(app: Any) -> None:
         await _process_batch(client, channel, thread_ts, user_files, action)
 
 
-
 def _register_file_handlers(app: Any) -> None:
     """Register file event handlers: file_shared, Block Kit action buttons, /files command, compare/translate."""
     # ------------------------------------------------------------------
@@ -3366,18 +3371,13 @@ def _register_file_handlers(app: Any) -> None:
         except Exception as exc:
             log.warning("_return_corrected_doc: upload failed for %s: %s", filename, exc)
 
-    async def _dispatch_file_action(
-        action_id: str, ack: Any, body: dict[str, Any], client: Any, say: Any
-    ) -> None:
+    async def _dispatch_file_action(action_id: str, ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
         await ack()
 
         user_id: str = (body.get("user") or {}).get("id", "unknown")
         actions: list[dict] = body.get("actions", [{}])
         file_id: str = (actions[0] if actions else {}).get("value", "")
-        channel: str = (
-            (body.get("channel") or {}).get("id", "")
-            or (body.get("container") or {}).get("channel_id", "")
-        )
+        channel: str = (body.get("channel") or {}).get("id", "") or (body.get("container") or {}).get("channel_id", "")
 
         if not file_id or not channel:
             await say(text="⚠️ Couldn't identify the file. Please upload it again.")
@@ -3385,9 +3385,7 @@ def _register_file_handlers(app: Any) -> None:
 
         file_obj = _file_registry.get(file_id)
         if not file_obj:
-            await say(
-                text="⚠️ I've lost track of that file — try uploading it again and I'll be ready."
-            )
+            await say(text="⚠️ I've lost track of that file — try uploading it again and I'll be ready.")
             return
 
         # Registry now stores {"file_obj": ..., "file_bytes": ...}
@@ -3484,7 +3482,7 @@ def _register_file_handlers(app: Any) -> None:
     @app.command("/files")
     async def handle_slash_files(ack: Any, body: dict[str, Any], say: Any, client: Any) -> None:
         await ack()
-        user_id: str = (body.get("user_id") or "unknown")
+        user_id: str = body.get("user_id") or "unknown"
         channel: str = body.get("channel_id", "")
         text: str = (body.get("text") or "").strip()
 
@@ -3528,10 +3526,7 @@ def _register_file_handlers(app: Any) -> None:
                 await client.chat_postEphemeral(
                     channel=channel,
                     user=user_id,
-                    text=(
-                        "📂 No files yet! Drop a Word doc into your OpenClaw folder "
-                        "and it'll appear here."
-                    ),
+                    text=("📂 No files yet! Drop a Word doc into your OpenClaw folder and it'll appear here."),
                 )
                 return
 
@@ -3542,14 +3537,18 @@ def _register_file_handlers(app: Any) -> None:
             for line in lines[1:21]:  # skip header line, cap at 20
                 stripped = line.strip()
                 if stripped:
-                    file_blocks.append({
-                        "type": "section",
-                        "text": {"type": "mrkdwn", "text": f"`{stripped}`"},
-                    })
-            file_blocks.append({
-                "type": "context",
-                "elements": [{"type": "mrkdwn", "text": "Tip: `/files budget.xlsx` to select a file"}],
-            })
+                    file_blocks.append(
+                        {
+                            "type": "section",
+                            "text": {"type": "mrkdwn", "text": f"`{stripped}`"},
+                        }
+                    )
+            file_blocks.append(
+                {
+                    "type": "context",
+                    "elements": [{"type": "mrkdwn", "text": "Tip: `/files budget.xlsx` to select a file"}],
+                }
+            )
             await client.chat_postEphemeral(
                 channel=channel,
                 user=user_id,
@@ -3602,9 +3601,11 @@ def _register_file_handlers(app: Any) -> None:
     # they have their own flows registered separately below.
     _excluded_from_generic = {"file_translate", "file_compare"}
     for _action_id in [k for k in _FILE_ACTION_PROMPTS.keys() if k not in _excluded_from_generic]:
+
         def _make_handler(aid: str) -> Any:
             async def handler(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
                 await _dispatch_file_action(aid, ack, body, client, say)
+
             handler.__name__ = f"handle_{aid}"
             return handler
 
@@ -3629,9 +3630,7 @@ def _register_slash_commands(app: Any) -> None:
         if summary.get("no_data"):
             text = "📊 *OpenClaw Usage* — No metrics recorded yet."
         else:
-            top_actions_lines = "\n".join(
-                f"  • {action}: {count}" for action, count in summary["top_actions"]
-            )
+            top_actions_lines = "\n".join(f"  • {action}: {count}" for action, count in summary["top_actions"])
             top_users_str = ", ".join(summary["top_users"]) or "—"
             text = (
                 f"📊 *OpenClaw Usage (Last 7 Days)*\n"
@@ -3768,7 +3767,8 @@ def _register_slash_commands(app: Any) -> None:
         _TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
         available: list[Path] = sorted(
             [f for f in _TEMPLATES_DIR.iterdir() if f.is_file() and f.suffix in {".xlsx", ".docx", ".pdf", ".txt"}]
-            if _TEMPLATES_DIR.exists() else []
+            if _TEMPLATES_DIR.exists()
+            else []
         )
 
         if not arg or arg == "list":
@@ -3784,8 +3784,7 @@ def _register_slash_commands(app: Any) -> None:
                 channel=channel_id,
                 user=user_id,
                 text=(
-                    f"📄 *Available templates ({len(available)})* — type `/template <name>` to download:\n\n"
-                    + names
+                    f"📄 *Available templates ({len(available)})* — type `/template <name>` to download:\n\n" + names
                 ),
             )
             return
@@ -3872,6 +3871,7 @@ def _register_slash_commands(app: Any) -> None:
             saved_at = note.get("saved_at", "")
             try:
                 import datetime
+
                 dt = datetime.datetime.fromisoformat(saved_at)
                 delta = datetime.datetime.now() - dt
                 days = delta.days
@@ -3879,16 +3879,25 @@ def _register_slash_commands(app: Any) -> None:
             except Exception:
                 when = saved_at[:10] if saved_at else "recently"
             preview = (note.get("text") or "")[:200].replace("\n", " ")
-            blocks.append({
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*{when}* — {preview}…" if len(note.get("text", "")) > 200 else f"*{when}* — {preview}"},
-            })
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*{when}* — {preview}…"
+                        if len(note.get("text", "")) > 200
+                        else f"*{when}* — {preview}",
+                    },
+                }
+            )
             blocks.append({"type": "divider"})
 
-        blocks.append({
-            "type": "context",
-            "elements": [{"type": "mrkdwn", "text": f"_Showing {len(recent)} of {len(user_notes)} saved notes_"}],
-        })
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [{"type": "mrkdwn", "text": f"_Showing {len(recent)} of {len(user_notes)} saved notes_"}],
+            }
+        )
 
         await client.chat_postEphemeral(
             channel=channel_id,
@@ -3914,9 +3923,9 @@ def _register_slash_commands(app: Any) -> None:
 
         entries = _file_history.get(user_id, [])
         matches = [
-            e for e in entries
-            if keyword in (e.get("name") or "").lower()
-            or keyword in (e.get("auto_brief") or "").lower()
+            e
+            for e in entries
+            if keyword in (e.get("name") or "").lower() or keyword in (e.get("auto_brief") or "").lower()
         ]
 
         if not matches:
@@ -3933,6 +3942,7 @@ def _register_slash_commands(app: Any) -> None:
             uploaded_at = entry.get("uploaded_at", "")
             try:
                 import datetime
+
                 dt = datetime.datetime.fromisoformat(uploaded_at)
                 delta = datetime.datetime.now() - dt
                 days = delta.days
@@ -4040,7 +4050,6 @@ def _register_slash_commands(app: Any) -> None:
         )
 
 
-
 def _register_integration_handlers(app: Any) -> None:
     """Register integration handlers: Gmail (/inbox, /email, /today, /calendar), Dropbox (/clawbox), channels (/clawchan)."""
     # ------------------------------------------------------------------
@@ -4069,23 +4078,23 @@ def _register_integration_handlers(app: Any) -> None:
                 text="📭 No unread emails in your inbox.",
             )
             return
-        blocks: list[dict] = [
-            {"type": "section", "text": {"type": "mrkdwn", "text": "📧 *Your unread emails:*"}}
-        ]
+        blocks: list[dict] = [{"type": "section", "text": {"type": "mrkdwn", "text": "📧 *Your unread emails:*"}}]
         for i, email in enumerate(emails, 1):
-            blocks.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*{i}.* {email['subject']}\n_From: {email['from']}_",
-                },
-                "accessory": {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "📖 Summarize"},
-                    "action_id": "gmail_summarize",
-                    "value": email["id"],
-                },
-            })
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*{i}.* {email['subject']}\n_From: {email['from']}_",
+                    },
+                    "accessory": {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "📖 Summarize"},
+                        "action_id": "gmail_summarize",
+                        "value": email["id"],
+                    },
+                }
+            )
         await client.chat_postEphemeral(
             channel=channel_id,
             user=user_id,
@@ -4175,6 +4184,7 @@ def _register_integration_handlers(app: Any) -> None:
                 return
 
             import os as _os
+
             _orig_user = _os.environ.get("GMAIL_USER")
             _orig_pass = _os.environ.get("GMAIL_APP_PASSWORD")
             _os.environ["GMAIL_USER"] = creds["user"]
@@ -4542,7 +4552,9 @@ def _register_integration_handlers(app: Any) -> None:
                         members = ch.get("num_members", "?")
                         is_private = "🔒" if ch.get("is_private") else "#"
                         lines.append(f"  {is_private} {name}  ({members} members)")
-                    lines.append(f"\n_{len(channels)} channel(s) total. Use `/clawchan archive <name>` to archive one._")
+                    lines.append(
+                        f"\n_{len(channels)} channel(s) total. Use `/clawchan archive <name>` to archive one._"
+                    )
                     msg = "\n".join(lines)
                 await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg)
             except Exception as exc:
@@ -4746,7 +4758,6 @@ def _register_integration_handlers(app: Any) -> None:
         )
 
 
-
 def _register_action_handlers(app: Any) -> None:
     """Register all @app.action handlers: file actions, retry/clarify, and Gmail summarize."""
 
@@ -4768,9 +4779,7 @@ def _register_action_handlers(app: Any) -> None:
         if isinstance(file_obj_entry, dict) and "file_obj" in file_obj_entry:
             file_obj_entry = file_obj_entry["file_obj"]
         filename = (file_obj_entry.get("name") or "the file") if file_obj_entry else "the file"
-        await say(
-            text=f"📄 Got *{filename}* as Document A. Now upload or share Document B and I'll compare them."
-        )
+        await say(text=f"📄 Got *{filename}* as Document A. Now upload or share Document B and I'll compare them.")
 
     # ------------------------------------------------------------------
     # Handler: 🌍 Translate — language picker + translation dispatch
@@ -4792,8 +4801,16 @@ def _register_action_handlers(app: Any) -> None:
         lang_options = [
             {"text": {"type": "plain_text", "text": lang}, "value": lang}
             for lang in [
-                "Spanish", "French", "German", "Italian", "Portuguese",
-                "Japanese", "Chinese (Simplified)", "Korean", "Arabic", "Russian",
+                "Spanish",
+                "French",
+                "German",
+                "Italian",
+                "Portuguese",
+                "Japanese",
+                "Chinese (Simplified)",
+                "Korean",
+                "Arabic",
+                "Russian",
             ]
         ]
         await client.chat_postEphemeral(
@@ -4981,6 +4998,7 @@ def create_slack_app() -> Any | None:  # type: ignore[return]
 # Public entry points
 # ---------------------------------------------------------------------------
 
+
 async def create_slack_handler() -> Any | None:  # type: ignore[return]
     """Return an AsyncSocketModeHandler configured for this app, or None."""
     global _BOT_USER_ID, _BOT_START_TIME
@@ -5033,6 +5051,7 @@ async def create_slack_handler() -> Any | None:  # type: ignore[return]
     # Start Dropbox watch loop (no-op when DROPBOX_ACCESS_TOKEN not set)
     try:
         from dropbox_sync import DROPBOX_CONFIGURED, dropbox_watch_loop
+
         if DROPBOX_CONFIGURED and SLACK_NOTIFY_USER_ID:
             asyncio.create_task(dropbox_watch_loop(app.client, SLACK_NOTIFY_USER_ID))
             log.info("Dropbox watch loop started")

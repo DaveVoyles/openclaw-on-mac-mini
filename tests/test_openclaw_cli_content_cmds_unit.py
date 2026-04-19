@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_content_cmds helpers."""
+
 from __future__ import annotations
 
 import json
@@ -15,6 +16,7 @@ from openclaw_cli_content_cmds import (
 # ---------------------------------------------------------------------------
 # _build_export_body — md
 # ---------------------------------------------------------------------------
+
 
 def test_export_body_md_header():
     body = _build_export_body([], "md", "2024-01-01", "2024-01-01T00:00:00")
@@ -58,6 +60,7 @@ def test_export_body_txt_dict_entry():
 # _compute_cmd_freq
 # ---------------------------------------------------------------------------
 
+
 def test_compute_cmd_freq_string_entries():
     freq = _compute_cmd_freq(["ls -la", "ls", "git status"])
     assert freq["ls"] == 2
@@ -77,6 +80,7 @@ def test_compute_cmd_freq_empty():
 # ---------------------------------------------------------------------------
 # _compute_rating_freq
 # ---------------------------------------------------------------------------
+
 
 def test_compute_rating_freq_numeric_strings():
     freq = _compute_rating_freq(["3", "5", "3"])
@@ -98,6 +102,7 @@ def test_compute_rating_freq_non_digit():
 # ---------------------------------------------------------------------------
 # _build_ascii_bar_rows
 # ---------------------------------------------------------------------------
+
 
 def test_build_ascii_bar_rows_empty():
     assert _build_ascii_bar_rows({}) == []
@@ -128,6 +133,7 @@ def test_build_ascii_bar_rows_caps_at_10():
 # ---------------------------------------------------------------------------
 # _build_session_stats_agg
 # ---------------------------------------------------------------------------
+
 
 def _make_session(**kwargs):
     defaults = dict(

@@ -56,6 +56,7 @@ def save_profile(profile: dict) -> None:
 # Update helpers
 # ---------------------------------------------------------------------------
 
+
 def _stamp(profile: dict, field: str) -> None:
     profile.setdefault("learned_at", {})[field] = time.time()
 

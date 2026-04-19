@@ -116,8 +116,7 @@ class TestResponseActionsInit:
         long_label = "A" * 200
         view = self._make_view(follow_ups=[long_label])
         btn = next(
-            (c for c in view.children
-             if isinstance(c, discord.ui.Button) and c.custom_id == "followup_0"),
+            (c for c in view.children if isinstance(c, discord.ui.Button) and c.custom_id == "followup_0"),
             None,
         )
         assert btn is not None

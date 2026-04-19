@@ -1,4 +1,5 @@
 """Tests for sms_ux.py — pure SMS formatting, validation, and rate limiting helpers."""
+
 from __future__ import annotations
 
 import time
@@ -19,6 +20,7 @@ from sms_ux import (
 # ===========================================================================
 # normalize_phone_number
 # ===========================================================================
+
 
 class TestNormalizePhoneNumber:
     def test_valid_e164_accepted(self):
@@ -43,6 +45,7 @@ class TestNormalizePhoneNumber:
 # mask_phone_number
 # ===========================================================================
 
+
 class TestMaskPhoneNumber:
     def test_normal_number_masked(self):
         result = mask_phone_number("+15551234567")
@@ -60,6 +63,7 @@ class TestMaskPhoneNumber:
 # ===========================================================================
 # validate_sms_body
 # ===========================================================================
+
 
 class TestValidateSmsBody:
     def test_valid_body_returned(self):
@@ -90,6 +94,7 @@ class TestValidateSmsBody:
 # ===========================================================================
 # _rate_limit_error
 # ===========================================================================
+
 
 class TestRateLimitError:
     def test_no_limit_when_fresh(self):
@@ -125,6 +130,7 @@ class TestRateLimitError:
 # format_sms_error
 # ===========================================================================
 
+
 class TestFormatSmsError:
     def test_sms_ux_error_returns_message(self):
         err = SMSUXError("❌ Bad number")
@@ -143,9 +149,11 @@ class TestFormatSmsError:
 # status_snapshot
 # ===========================================================================
 
+
 class TestStatusSnapshot:
     def test_returns_expected_keys(self):
         from sms_ux import SMSPrefsStore, status_snapshot
+
         store = SMSPrefsStore()
         prefs = store.get(1)
         prefs.phone_number = "+15551234567"
@@ -153,6 +161,7 @@ class TestStatusSnapshot:
 
         # Patch the global store
         import sms_ux
+
         original = sms_ux.sms_prefs
         sms_ux.sms_prefs = store
         try:
@@ -167,8 +176,10 @@ class TestStatusSnapshot:
 
     def test_remaining_sends_is_int(self):
         from sms_ux import SMSPrefsStore, status_snapshot
+
         store = SMSPrefsStore()
         import sms_ux
+
         original = sms_ux.sms_prefs
         sms_ux.sms_prefs = store
         try:

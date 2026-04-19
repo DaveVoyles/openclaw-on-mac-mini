@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_auth.py — token resolution helpers."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -22,6 +23,7 @@ from openclaw_cli_auth import (
 # Constants
 # ---------------------------------------------------------------------------
 
+
 class TestConstants:
     def test_keychain_service_is_string(self):
         assert isinstance(KEYCHAIN_SERVICE, str)
@@ -38,6 +40,7 @@ class TestConstants:
 # ---------------------------------------------------------------------------
 # OpenClawCliError
 # ---------------------------------------------------------------------------
+
 
 class TestOpenClawCliError:
     def test_is_runtime_error(self):
@@ -56,6 +59,7 @@ class TestOpenClawCliError:
 # TokenResolution
 # ---------------------------------------------------------------------------
 
+
 class TestTokenResolution:
     def test_creation(self):
         tr = TokenResolution(token="abc123", source="keychain")
@@ -70,6 +74,7 @@ class TestTokenResolution:
 # ---------------------------------------------------------------------------
 # auth_storage_path
 # ---------------------------------------------------------------------------
+
 
 class TestAuthStoragePath:
     def test_returns_path(self):
@@ -120,6 +125,7 @@ class TestAuthStoragePath:
 # read_keychain_token
 # ---------------------------------------------------------------------------
 
+
 class TestReadKeychainToken:
     def test_non_darwin_returns_empty(self):
         with patch("openclaw_cli_auth.sys") as mock_sys:
@@ -167,6 +173,7 @@ class TestReadKeychainToken:
 # write_keychain_token
 # ---------------------------------------------------------------------------
 
+
 class TestWriteKeychainToken:
     def test_empty_token_raises(self):
         with pytest.raises(OpenClawCliError, match="empty"):
@@ -207,6 +214,7 @@ class TestWriteKeychainToken:
 # ---------------------------------------------------------------------------
 # delete_keychain_token
 # ---------------------------------------------------------------------------
+
 
 class TestDeleteKeychainToken:
     def test_non_darwin_returns_false(self):

@@ -7,6 +7,7 @@ Helper utilities that still live in openclaw_cli.py are lazy-imported at call
 time inside the functions that need them — by that point openclaw_cli.py is
 fully loaded so there is no circularity.
 """
+
 from __future__ import annotations
 
 import re
@@ -79,27 +80,30 @@ _HEADING_EMOJIS: dict[int, str] = {
 # RenderContext — snapshot of runtime state, built by print_response()
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class RenderContext:
     """Snapshot of runtime rendering state passed to render helpers."""
+
     is_tty: bool
     is_rich: bool
     high_contrast: bool
     plain_mode: bool
     cols: int
-    theme_ansi: str = ""          # pre-computed _theme_ansi() result
+    theme_ansi: str = ""  # pre-computed _theme_ansi() result
     prefs: dict = field(default_factory=dict)
-    console: Any = None           # _RICH_CONSOLE instance
-    Panel: Any = None             # _RichPanel class
-    Text: Any = None              # _RichText class
-    Rule: Any = None              # _RichRule class
-    Table: Any = None             # _RichTable class
-    Markdown: Any = None          # _RichMarkdown class
+    console: Any = None  # _RICH_CONSOLE instance
+    Panel: Any = None  # _RichPanel class
+    Text: Any = None  # _RichText class
+    Rule: Any = None  # _RichRule class
+    Table: Any = None  # _RichTable class
+    Markdown: Any = None  # _RichMarkdown class
 
 
 # ---------------------------------------------------------------------------
 # Pure inline helpers (no globals, no ctx)
 # ---------------------------------------------------------------------------
+
 
 def _apply_inline_ansi(text: str) -> str:
     """Apply inline bold, italic, and code formatting via ANSI codes."""
@@ -124,9 +128,7 @@ def _separator_fill(width: int, *, high_contrast: bool = False, plain_mode: bool
     return char * max(1, width)
 
 
-def _response_footer_lines(
-    *, elapsed: float = 0.0, tokens: int = 0, model: str = ""
-) -> tuple[str, str]:
+def _response_footer_lines(*, elapsed: float = 0.0, tokens: int = 0, model: str = "") -> tuple[str, str]:
     """Return (headline, detail) strings for the response footer."""
     parts: list[str] = []
     if elapsed > 0:
@@ -150,6 +152,7 @@ def _motion_pause(stage: str) -> None:
 # ---------------------------------------------------------------------------
 # Table parsing helpers (pure)
 # ---------------------------------------------------------------------------
+
 
 def _is_kv_bullet_group(lines: list[str]) -> bool:
     """Return True if all lines look like pipe-separated key:value bullet rows."""
@@ -187,7 +190,7 @@ def _bullet_group_to_table(lines: list[str]) -> list[str]:
                 colon_idx = part.find(":")
                 if colon_idx > 0:
                     row_headers.append(part[:colon_idx].strip())
-                    val = re.sub(r"^\*+\s*", "", part[colon_idx + 1:].strip())
+                    val = re.sub(r"^\*+\s*", "", part[colon_idx + 1 :].strip())
                     row_values.append(val)
                 else:
                     row_headers.append(f"Col{len(row_headers) + 1}")
@@ -207,13 +210,11 @@ def _bullet_group_to_table(lines: list[str]) -> list[str]:
 
 def _unwrap_code_block_tables(text: str) -> str:
     """Unwrap fenced code blocks that contain only pipe-in-bullet table rows."""
+
     def _replace(m: re.Match) -> str:
         content = m.group(1).strip()
         non_empty = [line for line in content.split("\n") if line.strip()]
-        if len(non_empty) >= 2 and all(
-            re.match(r"^[•\-\*]\s+.+$", line) and " | " in line
-            for line in non_empty
-        ):
+        if len(non_empty) >= 2 and all(re.match(r"^[•\-\*]\s+.+$", line) and " | " in line for line in non_empty):
             return content
         return m.group(0)
 
@@ -269,6 +270,7 @@ def _parse_md_table(block: str) -> tuple[list[str], list[list[str]]] | None:
 # ---------------------------------------------------------------------------
 # ANSI table renderer (needs ctx for cols/high_contrast/plain_mode)
 # ---------------------------------------------------------------------------
+
 
 def _render_table_ansi(rows: list[list[str]], ctx: RenderContext) -> list[str]:
     """Render a list of rows as an ANSI-aligned table, capped to terminal width."""
@@ -355,6 +357,7 @@ def _render_table_ansi(rows: list[list[str]], ctx: RenderContext) -> list[str]:
 # Link helpers (ctx-aware)
 # ---------------------------------------------------------------------------
 
+
 def _make_clickable_link(url: str, text: str = "", *, ctx: RenderContext) -> str:
     """Return an OSC 8 clickable hyperlink if supported, otherwise plain URL."""
     if not ctx.prefs.get("clickable_links", True) or ctx.plain_mode:
@@ -379,9 +382,7 @@ def _linkify_response(text: str, ctx: RenderContext) -> str:
         if line.strip().startswith("```"):
             in_code = not in_code
         if not in_code and not line.startswith("|"):
-            line = _URL_PATTERN.sub(
-                lambda m: _make_clickable_link(m.group(1), ctx=ctx), line
-            )
+            line = _URL_PATTERN.sub(lambda m: _make_clickable_link(m.group(1), ctx=ctx), line)
         result.append(line)
     return "\n".join(result)
 
@@ -390,9 +391,8 @@ def _linkify_response(text: str, ctx: RenderContext) -> str:
 # Rich table renderer (ctx-aware)
 # ---------------------------------------------------------------------------
 
-def _render_md_table_rich(
-    headers: list[str], rows: list[list[str]], ctx: RenderContext
-) -> None:
+
+def _render_md_table_rich(headers: list[str], rows: list[list[str]], ctx: RenderContext) -> None:
     """Render a parsed markdown table using Rich with sensible column widths."""
     term_cols = ctx.cols
     n = len(headers)
@@ -436,6 +436,7 @@ def _render_md_table_rich(
 # ---------------------------------------------------------------------------
 # Core render functions
 # ---------------------------------------------------------------------------
+
 
 def _inject_heading_emojis(text: str, ctx: RenderContext) -> str:
     """Prepend emoji to markdown headings based on level."""
@@ -501,8 +502,7 @@ def _render_markdown_ansi(text: str, ctx: RenderContext) -> str:
                 in_code = False
                 if not (plain_mode or narrow):
                     result.append(
-                        f"  {border_style}╰"
-                        f"{_separator_fill(rule_width - 1, high_contrast=False)}╯{border_reset}"
+                        f"  {border_style}╰{_separator_fill(rule_width - 1, high_contrast=False)}╯{border_reset}"
                     )
                 code_lang = ""
             continue
@@ -672,7 +672,7 @@ def _preprocess_response_text(text: str) -> tuple[str, str | None]:
         best = max(all_matches, key=lambda m: len(m.group(1)))
         sources = best.group(0).strip()
         for m in reversed(all_matches):
-            text = text[: m.start()] + text[m.end():]
+            text = text[: m.start()] + text[m.end() :]
         text = text.rstrip()
 
     # Fallback: catch Sources blocks with no preceding blank line
@@ -682,7 +682,7 @@ def _preprocess_response_text(text: str) -> tuple[str, str | None]:
             best = max(all_loose, key=lambda m: len(m.group(1)))
             sources = best.group(0).strip()
             for m in reversed(all_loose):
-                text = text[: m.start()] + text[m.end():]
+                text = text[: m.start()] + text[m.end() :]
             text = text.rstrip()
 
     # D. Strip bare inline citation markers like [1], [2]
@@ -797,8 +797,7 @@ def _render_response_body(
             border_style = ctx.theme_ansi if ctx.high_contrast else _DM
             border_reset = _R if border_style else ""
             print(
-                f"\n  {border_style}╭─ 📎 Sources "
-                f"{_separator_fill(max(0, w - 14), high_contrast=False)}╮{border_reset}"
+                f"\n  {border_style}╭─ 📎 Sources {_separator_fill(max(0, w - 14), high_contrast=False)}╮{border_reset}"
             )
             for i, (display, url) in enumerate(src_items or [(sources, sources)]):
                 label = f"{i + 1}. " if src_items else ""
@@ -813,10 +812,7 @@ def _render_response_body(
                     else f"{_CY}{url}{_R}"
                 )
                 print(f"  {border_style}│{border_reset}  {_DM}{label}{_R}{name_part}{link}")
-            print(
-                f"  {border_style}╰"
-                f"{_separator_fill(w - 1, high_contrast=False)}╯{border_reset}"
-            )
+            print(f"  {border_style}╰{_separator_fill(w - 1, high_contrast=False)}╯{border_reset}")
     else:
         print(text)
         if sources:

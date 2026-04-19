@@ -33,9 +33,7 @@ async def test_track_topic_success(mock_tracker):
         assert result["topic"] == "Bitcoin"
         assert result["category"] == "Finance"
 
-        mock_tracker.enable_tracking.assert_called_once_with(
-            "Bitcoin", "Finance", "user123"
-        )
+        mock_tracker.enable_tracking.assert_called_once_with("Bitcoin", "Finance", "user123")
         mock_collect.assert_called_once_with("Bitcoin", "Finance")
 
 
@@ -201,9 +199,10 @@ async def test_get_topic_trajectory(mock_tracker):
 
     mock_tracker.is_trending.return_value = mock_analysis
 
-    with patch("skills.trend_skills.render_text_chart") as mock_chart, \
-         patch("skills.trend_skills._generate_analysis_text") as mock_analysis_text:
-
+    with (
+        patch("skills.trend_skills.render_text_chart") as mock_chart,
+        patch("skills.trend_skills._generate_analysis_text") as mock_analysis_text,
+    ):
         mock_chart.return_value = "📊 Chart here"
         mock_analysis_text.return_value = "Bitcoin is trending up"
 
@@ -239,6 +238,7 @@ async def test_get_topic_trajectory_no_data(mock_tracker):
 async def test_list_tracked_topics(mock_tracker):
     """Test listing tracked topics."""
     import time
+
     now = time.time()
 
     mock_tracker.get_tracked_topics.return_value = [
@@ -275,9 +275,10 @@ async def test_list_tracked_topics(mock_tracker):
 @pytest.mark.asyncio
 async def test_collect_data_point_news(mock_tracker):
     """Test collecting data from NewsAPI."""
-    with patch("skills.trend_skills.cfg") as mock_cfg, \
-         patch("skills.trend_skills.news_skills.search_news", new_callable=AsyncMock) as mock_news:
-
+    with (
+        patch("skills.trend_skills.cfg") as mock_cfg,
+        patch("skills.trend_skills.news_skills.search_news", new_callable=AsyncMock) as mock_news,
+    ):
         mock_cfg.newsapi_key = "test_key"
         mock_cfg.alphavantage_key = None
         mock_cfg.apisports_key = None
@@ -306,10 +307,11 @@ async def test_collect_data_point_news(mock_tracker):
 @pytest.mark.asyncio
 async def test_collect_data_point_finance(mock_tracker):
     """Test collecting data from Alpha Vantage."""
-    with patch("skills.trend_skills.cfg") as mock_cfg, \
-         patch("skills.trend_skills.finance_skills.get_stock_info", new_callable=AsyncMock) as mock_stock, \
-         patch("skills.trend_skills.news_skills.search_news", new_callable=AsyncMock) as mock_news:
-
+    with (
+        patch("skills.trend_skills.cfg") as mock_cfg,
+        patch("skills.trend_skills.finance_skills.get_stock_info", new_callable=AsyncMock) as mock_stock,
+        patch("skills.trend_skills.news_skills.search_news", new_callable=AsyncMock) as mock_news,
+    ):
         mock_cfg.newsapi_key = "test_key"
         mock_cfg.alphavantage_key = "test_key"
 

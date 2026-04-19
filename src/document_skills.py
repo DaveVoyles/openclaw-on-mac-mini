@@ -1,4 +1,5 @@
 """Document editing skills — read, edit, and create Word (.docx) and Excel (.xlsx) files."""
+
 import io
 import logging
 from pathlib import Path
@@ -7,6 +8,7 @@ log = logging.getLogger(__name__)
 
 
 # ── Word (.docx) ─────────────────────────────────────────────────────────
+
 
 async def read_word(file_bytes: bytes) -> str:
     """Extract all text from a .docx file. Returns plain text."""
@@ -111,6 +113,7 @@ async def create_word(title: str, content: str, headers: list[str] | None = None
 
 # ── Excel (.xlsx) ────────────────────────────────────────────────────────
 
+
 async def read_excel(file_bytes: bytes, sheet_name: str | None = None) -> str:
     """Extract data from an .xlsx file as formatted text.
 
@@ -140,7 +143,7 @@ async def read_excel(file_bytes: bytes, sheet_name: str | None = None) -> str:
                 for row in rows_data[1:]:
                     while len(row) < len(header):
                         row.append("")
-                    parts.append(" | ".join(row[:len(header)]))
+                    parts.append(" | ".join(row[: len(header)]))
             parts.append("")
 
         wb.close()
@@ -247,6 +250,7 @@ async def create_excel(title: str, headers: list[str], rows: list[list], sheet_n
 
 
 # ── Utility ──────────────────────────────────────────────────────────────
+
 
 def detect_format(filename: str) -> str | None:
     """Detect document format from filename extension."""

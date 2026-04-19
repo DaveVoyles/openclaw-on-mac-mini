@@ -28,6 +28,7 @@ def _reset_state():
 # _prune_feedback_event_buffer
 # ---------------------------------------------------------------------------
 
+
 class TestPruneFeedbackEventBuffer:
     def test_feedback_guardrails_coverage_keeps_events_within_window(self):
         now = 1000.0
@@ -68,6 +69,7 @@ class TestPruneFeedbackEventBuffer:
 # _apply_feedback_guardrails — accepted path
 # ---------------------------------------------------------------------------
 
+
 class TestApplyFeedbackGuardrailsAccepted:
     def test_first_event_accepted(self):
         accepted, reason = _apply_feedback_guardrails(
@@ -77,9 +79,7 @@ class TestApplyFeedbackGuardrailsAccepted:
         assert reason == "accepted"
 
     def test_different_ratings_both_accepted(self):
-        accepted1, _ = _apply_feedback_guardrails(
-            user_id=1, channel_id=2, message_id=3, rating="helpful", now=1000.0
-        )
+        accepted1, _ = _apply_feedback_guardrails(user_id=1, channel_id=2, message_id=3, rating="helpful", now=1000.0)
         accepted2, _ = _apply_feedback_guardrails(
             user_id=1, channel_id=2, message_id=3, rating="not_helpful", now=1001.0
         )
@@ -87,12 +87,8 @@ class TestApplyFeedbackGuardrailsAccepted:
         assert accepted2 is True
 
     def test_different_messages_both_accepted(self):
-        accepted1, _ = _apply_feedback_guardrails(
-            user_id=1, channel_id=2, message_id=100, rating="helpful", now=1000.0
-        )
-        accepted2, _ = _apply_feedback_guardrails(
-            user_id=1, channel_id=2, message_id=200, rating="helpful", now=1000.5
-        )
+        accepted1, _ = _apply_feedback_guardrails(user_id=1, channel_id=2, message_id=100, rating="helpful", now=1000.0)
+        accepted2, _ = _apply_feedback_guardrails(user_id=1, channel_id=2, message_id=200, rating="helpful", now=1000.5)
         assert accepted1 is True
         assert accepted2 is True
 
@@ -101,11 +97,10 @@ class TestApplyFeedbackGuardrailsAccepted:
 # _apply_feedback_guardrails — dedupe path
 # ---------------------------------------------------------------------------
 
+
 class TestApplyFeedbackGuardrailsDedupe:
     def test_duplicate_within_window_rejected(self):
-        _apply_feedback_guardrails(
-            user_id=1, channel_id=2, message_id=3, rating="helpful", now=1000.0
-        )
+        _apply_feedback_guardrails(user_id=1, channel_id=2, message_id=3, rating="helpful", now=1000.0)
         accepted, reason = _apply_feedback_guardrails(
             user_id=1, channel_id=2, message_id=3, rating="helpful", now=1000.1
         )
@@ -113,9 +108,7 @@ class TestApplyFeedbackGuardrailsDedupe:
         assert reason == "dedupe"
 
     def test_same_event_outside_window_accepted(self):
-        _apply_feedback_guardrails(
-            user_id=1, channel_id=2, message_id=3, rating="helpful", now=1000.0
-        )
+        _apply_feedback_guardrails(user_id=1, channel_id=2, message_id=3, rating="helpful", now=1000.0)
         accepted, reason = _apply_feedback_guardrails(
             user_id=1, channel_id=2, message_id=3, rating="helpful", now=1005.0
         )
@@ -128,14 +121,13 @@ class TestApplyFeedbackGuardrailsDedupe:
 # _apply_feedback_guardrails — user rate limit
 # ---------------------------------------------------------------------------
 
+
 class TestApplyFeedbackGuardrailsUserRateLimit:
     def test_user_rate_limit_hit(self):
         """After 6 unique events from same user in window, 7th should be rate limited."""
         now = 1000.0
         for i in range(6):
-            _apply_feedback_guardrails(
-                user_id=99, channel_id=10, message_id=i, rating="helpful", now=now + i * 0.5
-            )
+            _apply_feedback_guardrails(user_id=99, channel_id=10, message_id=i, rating="helpful", now=now + i * 0.5)
         # 7th unique message
         accepted, reason = _apply_feedback_guardrails(
             user_id=99, channel_id=10, message_id=100, rating="helpful", now=now + 5.0
@@ -148,6 +140,7 @@ class TestApplyFeedbackGuardrailsUserRateLimit:
 # _apply_feedback_guardrails — channel rate limit
 # ---------------------------------------------------------------------------
 
+
 class TestApplyFeedbackGuardrailsChannelRateLimit:
     def test_channel_rate_limit_hit(self):
         """After 40 unique events in same channel, 41st is rate limited."""
@@ -156,8 +149,7 @@ class TestApplyFeedbackGuardrailsChannelRateLimit:
         for i in range(40):
             user_id = i  # each event from different user
             _apply_feedback_guardrails(
-                user_id=user_id, channel_id=99, message_id=i, rating="helpful",
-                now=now + i * 0.1
+                user_id=user_id, channel_id=99, message_id=i, rating="helpful", now=now + i * 0.1
             )
         accepted, reason = _apply_feedback_guardrails(
             user_id=9999, channel_id=99, message_id=9999, rating="helpful", now=now + 5.0
@@ -169,6 +161,7 @@ class TestApplyFeedbackGuardrailsChannelRateLimit:
 # ---------------------------------------------------------------------------
 # _apply_feedback_guardrails — None/edge inputs
 # ---------------------------------------------------------------------------
+
 
 class TestApplyFeedbackGuardrailsEdgeCases:
     def test_none_user_id_normalizes(self):
@@ -185,9 +178,7 @@ class TestApplyFeedbackGuardrailsEdgeCases:
 
     def test_rating_normalized_lowercase(self):
         """HELPFUL and helpful should be treated the same."""
-        _apply_feedback_guardrails(
-            user_id=1, channel_id=2, message_id=3, rating="HELPFUL", now=1000.0
-        )
+        _apply_feedback_guardrails(user_id=1, channel_id=2, message_id=3, rating="HELPFUL", now=1000.0)
         accepted, reason = _apply_feedback_guardrails(
             user_id=1, channel_id=2, message_id=3, rating="helpful", now=1000.1
         )
@@ -195,9 +186,7 @@ class TestApplyFeedbackGuardrailsEdgeCases:
 
     def test_uses_monotonic_when_now_not_provided(self):
         """Should not raise when now=None."""
-        accepted, reason = _apply_feedback_guardrails(
-            user_id=1, channel_id=2, message_id=99, rating="helpful"
-        )
+        accepted, reason = _apply_feedback_guardrails(user_id=1, channel_id=2, message_id=99, rating="helpful")
         assert accepted is True
 
 
@@ -205,14 +194,11 @@ class TestApplyFeedbackGuardrailsEdgeCases:
 # _reset_feedback_guardrails_for_tests
 # ---------------------------------------------------------------------------
 
+
 class TestResetFeedbackGuardrailsForTests:
     def test_feedback_guardrails_coverage_reset_clears_state(self):
-        _apply_feedback_guardrails(
-            user_id=1, channel_id=2, message_id=3, rating="helpful", now=1000.0
-        )
+        _apply_feedback_guardrails(user_id=1, channel_id=2, message_id=3, rating="helpful", now=1000.0)
         _reset_feedback_guardrails_for_tests()
         # After reset, same event should be accepted again
-        accepted, _ = _apply_feedback_guardrails(
-            user_id=1, channel_id=2, message_id=3, rating="helpful", now=1000.0
-        )
+        accepted, _ = _apply_feedback_guardrails(user_id=1, channel_id=2, message_id=3, rating="helpful", now=1000.0)
         assert accepted is True

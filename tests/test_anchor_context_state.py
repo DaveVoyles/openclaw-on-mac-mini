@@ -436,8 +436,7 @@ def test_scoped_recall_alerts_filtered_by_thread():
 def test_scoped_recall_alerts_sorted_newest_first():
     from anchor_context_state import get_scoped_recall_alerts, record_scoped_recall_alert
 
-    record_scoped_recall_alert(category="x", message="old", channel_id=440, thread_id=None,
-                                metadata={"ts_override": 1})
+    record_scoped_recall_alert(category="x", message="old", channel_id=440, thread_id=None, metadata={"ts_override": 1})
     time.sleep(0.01)
     record_scoped_recall_alert(category="x", message="new", channel_id=440, thread_id=None)
     alerts = get_scoped_recall_alerts(channel_id=440)

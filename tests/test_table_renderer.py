@@ -20,8 +20,7 @@ SIMPLE_TABLE = """\
 """
 
 LARGE_TABLE = "\n".join(
-    ["| " + " | ".join([f"col{j}" for j in range(7)]) + " |",
-     "| " + " | ".join(["---"] * 7) + " |"]
+    ["| " + " | ".join([f"col{j}" for j in range(7)]) + " |", "| " + " | ".join(["---"] * 7) + " |"]
     + ["| " + " | ".join([f"val{i}{j}" for j in range(7)]) + " |" for i in range(10)]
 )
 
@@ -71,10 +70,7 @@ class TestShouldRenderTableImage:
         assert should_render_table_image(SIMPLE_TABLE) is False
 
     def test_many_rows_triggers_image(self):
-        big_table = (
-            "| A | B |\n|---|---|\n"
-            + "\n".join("| x | y |" for _ in range(10))
-        )
+        big_table = "| A | B |\n|---|---|\n" + "\n".join("| x | y |" for _ in range(10))
         assert should_render_table_image(big_table, min_rows_for_image=8) is True
 
     def test_many_cols_triggers_image(self):
@@ -121,6 +117,7 @@ class TestRenderTableImage:
     def test_no_pillow_returns_none(self, monkeypatch):
         """If Pillow is unavailable, render_table_image should return None."""
         import builtins
+
         real_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):

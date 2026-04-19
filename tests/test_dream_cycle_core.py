@@ -4,7 +4,6 @@ Complements test_dream_cycle.py which covers importance scoring, reachability,
 and index I/O.
 """
 
-
 import pytest
 
 import dream_cycle as mod
@@ -15,19 +14,22 @@ import dream_cycle as mod
 
 
 class TestClassifyCategory:
-    @pytest.mark.parametrize("text, expected", [
-        ("The openclaw bot is running on Discord", "identity"),
-        ("Dave prefers dark mode and EST timezone", "user"),
-        ("MonsterVision project repo on GitHub", "projects"),
-        ("Decided to migrate from SQLite to Postgres", "decisions"),
-        ("Lesson learned: never skip backups on Friday", "lessons"),
-        ("Docker container on NAS server via SSH", "environment"),
-        ("Our strategy and roadmap for Q3", "strategy"),
-        ("Open thread: pending review", "threads"),
-        ("Team member contact info", "people"),
-        ("Revenue and cost analysis", "business"),
-        ("Something completely unrelated", "general"),
-    ])
+    @pytest.mark.parametrize(
+        "text, expected",
+        [
+            ("The openclaw bot is running on Discord", "identity"),
+            ("Dave prefers dark mode and EST timezone", "user"),
+            ("MonsterVision project repo on GitHub", "projects"),
+            ("Decided to migrate from SQLite to Postgres", "decisions"),
+            ("Lesson learned: never skip backups on Friday", "lessons"),
+            ("Docker container on NAS server via SSH", "environment"),
+            ("Our strategy and roadmap for Q3", "strategy"),
+            ("Open thread: pending review", "threads"),
+            ("Team member contact info", "people"),
+            ("Revenue and cost analysis", "business"),
+            ("Something completely unrelated", "general"),
+        ],
+    )
     def test_keyword_classification(self, text, expected):
         assert mod._classify_category(text, {}) == expected
 
@@ -89,13 +91,16 @@ class TestExtractTags:
 
 
 class TestIsProcedural:
-    @pytest.mark.parametrize("text", [
-        "How to restart the server",
-        "Steps: first do X then Y",
-        "Workflow: build, test, deploy",
-        "Always do a backup first, then migrate",
-        "Run the command docker restart",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "How to restart the server",
+            "Steps: first do X then Y",
+            "Workflow: build, test, deploy",
+            "Always do a backup first, then migrate",
+            "Run the command docker restart",
+        ],
+    )
     def test_procedural_detected(self, text):
         assert mod._is_procedural(text) is True
 

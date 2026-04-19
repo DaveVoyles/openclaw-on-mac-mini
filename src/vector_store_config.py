@@ -46,11 +46,13 @@ def _get_embedding_function():
 
     try:
         from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
+
         log.info("Using Ollama embedding model: %s at %s", EMBEDDING_MODEL, OLLAMA_EMBED_URL)
         log.warning(
             "Custom embedding model active (%s). If you switched models, "
             "existing collections must be re-indexed (delete %s and restart).",
-            EMBEDDING_MODEL, CHROMA_DIR,
+            EMBEDDING_MODEL,
+            CHROMA_DIR,
         )
         return OllamaEmbeddingFunction(
             url=f"{OLLAMA_EMBED_URL}/api/embeddings",
@@ -83,12 +85,34 @@ _RECALL_GUARD_MIN_SIMILARITY = float(os.getenv("RECALL_GUARD_MIN_SIMILARITY", "0
 _RECALL_DOMAIN_DIRECTIVE_RE = re.compile(r"\buse\s*:?\s*(sports|wwe)\b", re.IGNORECASE)
 _RECALL_DOMAIN_TERMS: dict[str, tuple[str, ...]] = {
     "sports": (
-        "sports", "game", "games", "matchup", "schedule", "scores", "team",
-        "teams", "league", "espn", "ncaa", "nba", "nfl", "mlb", "nhl", "mls", "lacrosse",
+        "sports",
+        "game",
+        "games",
+        "matchup",
+        "schedule",
+        "scores",
+        "team",
+        "teams",
+        "league",
+        "espn",
+        "ncaa",
+        "nba",
+        "nfl",
+        "mlb",
+        "nhl",
+        "mls",
+        "lacrosse",
     ),
     "wwe": (
-        "wwe", "wrestling", "raw", "smackdown", "nxt", "wrestlemania",
-        "pay-per-view", "ppv", "premium live event",
+        "wwe",
+        "wrestling",
+        "raw",
+        "smackdown",
+        "nxt",
+        "wrestlemania",
+        "pay-per-view",
+        "ppv",
+        "premium live event",
     ),
 }
 

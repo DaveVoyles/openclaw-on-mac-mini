@@ -25,6 +25,7 @@ def store(tmp_path: Path) -> NotificationPrefsStore:
 # Defaults
 # ---------------------------------------------------------------------------
 
+
 class TestDefaults:
     def test_default_prefs_all_enabled(self, store: NotificationPrefsStore):
         prefs = store.get(1234)
@@ -42,6 +43,7 @@ class TestDefaults:
 # ---------------------------------------------------------------------------
 # Muting / Unmuting
 # ---------------------------------------------------------------------------
+
 
 class TestMuting:
     def test_muted_user_not_notified(self, store: NotificationPrefsStore):
@@ -70,6 +72,7 @@ class TestMuting:
 # Service Blocking
 # ---------------------------------------------------------------------------
 
+
 class TestServiceBlocking:
     def test_blocked_service_filtered(self, store: NotificationPrefsStore):
         prefs = store.get(10)
@@ -89,6 +92,7 @@ class TestServiceBlocking:
 # ---------------------------------------------------------------------------
 # Severity Filtering
 # ---------------------------------------------------------------------------
+
 
 class TestSeverityFiltering:
     def test_filter_all_passes_everything(self, store: NotificationPrefsStore):
@@ -120,6 +124,7 @@ class TestSeverityFiltering:
 # Disabled
 # ---------------------------------------------------------------------------
 
+
 class TestDisabled:
     def test_disabled_user_not_notified(self, store: NotificationPrefsStore):
         prefs = store.get(30)
@@ -131,6 +136,7 @@ class TestDisabled:
 # ---------------------------------------------------------------------------
 # Persistence (save / load round-trip)
 # ---------------------------------------------------------------------------
+
 
 class TestPersistence:
     def test_save_and_load_round_trip(self, tmp_path: Path):

@@ -1,4 +1,5 @@
 """Tests for ontology_skills.py — local graph memory skill."""
+
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -9,6 +10,7 @@ import ontology_skills
 # ---------------------------------------------------------------------------
 # _safe_json_loads
 # ---------------------------------------------------------------------------
+
 
 def test_safe_json_loads_valid_object():
     parsed, err = ontology_skills._safe_json_loads('{"id": "abc", "type": "Person"}')
@@ -37,6 +39,7 @@ def test_safe_json_loads_empty_string():
 # ---------------------------------------------------------------------------
 # _normalize_json
 # ---------------------------------------------------------------------------
+
 
 def test_normalize_json_empty_string():
     result = ontology_skills._normalize_json("")
@@ -72,6 +75,7 @@ def test_normalize_json_custom_default():
 # _entity_label
 # ---------------------------------------------------------------------------
 
+
 def test_entity_label_with_name():
     entity = {"id": "e1", "type": "Person", "properties": {"name": "Alice"}}
     assert ontology_skills._entity_label(entity) == "e1 [Person] Alice"
@@ -106,6 +110,7 @@ def test_entity_label_missing_id_and_type():
 # _format_entity
 # ---------------------------------------------------------------------------
 
+
 def test_format_entity_returns_json():
     entity = {"id": "e1", "type": "Person", "properties": {"name": "Alice"}}
     result = ontology_skills._format_entity(entity)
@@ -116,6 +121,7 @@ def test_format_entity_returns_json():
 # ---------------------------------------------------------------------------
 # _format_entity_list
 # ---------------------------------------------------------------------------
+
 
 def test_format_entity_list_empty():
     result = ontology_skills._format_entity_list([])
@@ -130,20 +136,14 @@ def test_format_entity_list_single_shows_full_json():
 
 
 def test_format_entity_list_multiple():
-    entities = [
-        {"id": f"e{i}", "type": "Thing", "properties": {"name": f"Item {i}"}}
-        for i in range(5)
-    ]
+    entities = [{"id": f"e{i}", "type": "Thing", "properties": {"name": f"Item {i}"}} for i in range(5)]
     result = ontology_skills._format_entity_list(entities)
     assert "Found 5" in result
     assert "Item 0" in result
 
 
 def test_format_entity_list_caps_at_10():
-    entities = [
-        {"id": f"e{i}", "type": "X", "properties": {"name": f"N{i}"}}
-        for i in range(15)
-    ]
+    entities = [{"id": f"e{i}", "type": "X", "properties": {"name": f"N{i}"}} for i in range(15)]
     result = ontology_skills._format_entity_list(entities)
     assert "Found 15" in result
     # Only 10 rendered as bullets
@@ -153,6 +153,7 @@ def test_format_entity_list_caps_at_10():
 # ---------------------------------------------------------------------------
 # _format_related
 # ---------------------------------------------------------------------------
+
 
 def test_format_related_empty():
     result = ontology_skills._format_related([])
@@ -175,9 +176,7 @@ def test_format_related_with_direction():
 
 
 def test_format_related_without_direction():
-    items = [
-        {"entity": {"id": "e3", "type": "Org", "properties": {"name": "Acme"}}, "relation": "works_for"}
-    ]
+    items = [{"entity": {"id": "e3", "type": "Org", "properties": {"name": "Acme"}}, "relation": "works_for"}]
     result = ontology_skills._format_related(items)
     assert "works_for" in result
     assert "Acme" in result
@@ -187,9 +186,11 @@ def test_format_related_without_direction():
 # _run_ontology — script missing
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_run_ontology_script_missing():
     from pathlib import Path
+
     nonexistent = Path("/nonexistent/ontology.py")
     with patch.object(ontology_skills, "_ONTOLOGY_SCRIPT", nonexistent):
         rc, out, err = await ontology_skills._run_ontology(["create"])
@@ -200,6 +201,7 @@ async def test_run_ontology_script_missing():
 # ---------------------------------------------------------------------------
 # ontology_create_entity
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_create_entity_invalid_json():
@@ -270,6 +272,7 @@ async def test_create_entity_vector_store_called():
 # ontology_get_entity
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_entity_success():
     entity = {"id": "e1", "type": "Person", "properties": {"name": "Dave"}}
@@ -303,6 +306,7 @@ async def test_get_entity_bad_json_output():
 # ontology_query
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_query_success():
     entities = [{"id": "e1", "type": "Person", "properties": {"name": "Alice"}}]
@@ -335,6 +339,7 @@ async def test_query_subprocess_error():
 # ---------------------------------------------------------------------------
 # ontology_update_entity
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_update_entity_success():
@@ -376,6 +381,7 @@ async def test_update_entity_bad_json_output():
 # ontology_relate
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_relate_success():
     rel = {"from": "e1", "rel": "knows", "to": "e2"}
@@ -416,6 +422,7 @@ async def test_relate_bad_json_output():
 # ---------------------------------------------------------------------------
 # ontology_get_related
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_get_related_success():
@@ -467,6 +474,7 @@ async def test_get_related_bad_json_output():
 # ---------------------------------------------------------------------------
 # ontology_validate
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_validate_success():

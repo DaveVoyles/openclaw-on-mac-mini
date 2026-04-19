@@ -7,6 +7,7 @@ Covers the 5 partial features added in Wave 25, Lane 1:
   4. [draft] badge in _make_prompt when draft_active=True
   5. _print_usage() output starts with 2 spaces
 """
+
 from __future__ import annotations
 
 from io import StringIO
@@ -15,6 +16,7 @@ from unittest.mock import MagicMock, patch
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_mock_store():
     store = MagicMock()
@@ -58,6 +60,7 @@ def _run_approval(risk_level_name: str, response: str = "y") -> tuple[bool, str,
 # ---------------------------------------------------------------------------
 # Feature 1: Approval recap wired after HIGH/CRITICAL approval resolves
 # ---------------------------------------------------------------------------
+
 
 def test_recap_called_after_high_approval_approved():
     result, _out, mock_recap = _run_approval("HIGH", "y")
@@ -105,6 +108,7 @@ def test_recap_dict_has_recovery_hint_key():
 # ---------------------------------------------------------------------------
 # Feature 2: Risk-level explanation line in the approval block
 # ---------------------------------------------------------------------------
+
 
 def test_high_risk_explanation_in_output(monkeypatch, capsys):
     import openclaw_cli_actions as _act
@@ -189,6 +193,7 @@ def test_high_risk_explanation_is_single_line(monkeypatch, capsys):
 # Feature 3: Watch retry prints '↺ Watch auto-retried (attempt N): reason'
 # ---------------------------------------------------------------------------
 
+
 def test_watch_retry_print_contains_arrow_symbol(capsys):
     """Verify the ↺ symbol appears when a transient watch error fires."""
     import openclaw_cli_watch as watch
@@ -227,6 +232,7 @@ def test_watch_retry_message_format_includes_reason():
 # ---------------------------------------------------------------------------
 # Feature 4: [draft] badge in _make_prompt when draft_active=True
 # ---------------------------------------------------------------------------
+
 
 def test_make_prompt_draft_badge_appears_when_draft_active(monkeypatch):
     import openclaw_cli as cli
@@ -287,6 +293,7 @@ def test_make_prompt_draft_badge_tty_styling(monkeypatch):
 # ---------------------------------------------------------------------------
 # Feature 5: _print_usage output starts with 2 spaces
 # ---------------------------------------------------------------------------
+
 
 def test_print_usage_starts_with_two_spaces():
     from openclaw_cli_actions import _print_usage

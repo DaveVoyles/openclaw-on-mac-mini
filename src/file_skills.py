@@ -7,6 +7,7 @@ Supported formats:
               .docx (via python-docx)
               .xlsx .xls (via openpyxl)
 """
+
 import logging
 from pathlib import Path
 
@@ -14,13 +15,34 @@ log = logging.getLogger(__name__)
 
 AI_FILES_DIR = Path("/ai-files")
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB cap (rich docs can be larger)
-MAX_TEXT_CHARS = 200_000           # cap extracted text sent to LLM
+MAX_TEXT_CHARS = 200_000  # cap extracted text sent to LLM
 
 TEXT_EXTENSIONS = {
-    ".txt", ".md", ".markdown", ".rst", ".csv", ".json", ".jsonl",
-    ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf", ".log",
-    ".py", ".js", ".ts", ".sh", ".bash", ".html", ".xml", ".css",
-    ".sql", ".r", ".R",
+    ".txt",
+    ".md",
+    ".markdown",
+    ".rst",
+    ".csv",
+    ".json",
+    ".jsonl",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".conf",
+    ".log",
+    ".py",
+    ".js",
+    ".ts",
+    ".sh",
+    ".bash",
+    ".html",
+    ".xml",
+    ".css",
+    ".sql",
+    ".r",
+    ".R",
 }
 PDF_EXTENSIONS = {".pdf"}
 WORD_EXTENSIONS = {".docx"}
@@ -40,6 +62,7 @@ def _read_pdf(path: Path) -> str:
     """Extract text from a PDF using pypdf."""
     try:
         import pypdf
+
         reader = pypdf.PdfReader(str(path))
         pages = []
         for i, page in enumerate(reader.pages):
@@ -57,6 +80,7 @@ def _read_docx(path: Path) -> str:
     """Extract text from a .docx file using python-docx."""
     try:
         from docx import Document
+
         doc = Document(str(path))
         parts = []
         for para in doc.paragraphs:
@@ -75,6 +99,7 @@ def _read_excel(path: Path) -> str:
     """Extract data from an .xlsx/.xls file using openpyxl."""
     try:
         import openpyxl
+
         wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
         parts = []
         for sheet_name in wb.sheetnames:
@@ -184,10 +209,7 @@ async def read_local_file(path: str) -> str:
                 content = content[:MAX_TEXT_CHARS] + f"\n… (truncated at {MAX_TEXT_CHARS:,} chars)"
             return f"Excel contents of {path} ({size:,} bytes):\n\n{content}"
 
-        return (
-            f"Unsupported file type ({suffix}): {path}. "
-            f"Supported: text/code, .pdf, .docx, .xlsx"
-        )
+        return f"Unsupported file type ({suffix}): {path}. Supported: text/code, .pdf, .docx, .xlsx"
 
     return await asyncio.to_thread(_read)
 

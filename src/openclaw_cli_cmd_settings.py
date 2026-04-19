@@ -12,6 +12,7 @@ Allowed direct imports: openclaw_cli_prefs (constants/pure helpers),
                         openclaw_cli_ui_core (ANSI codes, _CMD_CONTINUE-compat).
 All openclaw_cli.py globals accessed via _m() to respect test monkeypatching.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -49,12 +50,14 @@ _CMD_CONTINUE: str = "continue"  # matches openclaw_cli._CMD_CONTINUE
 def _m() -> Any:
     """Lazy import of openclaw_cli — avoids circular import, respects test monkeypatching."""
     import openclaw_cli as _cli  # noqa: PLC0415
+
     return _cli
 
 
 # ---------------------------------------------------------------------------
 # Helpers moved wholesale from main (only called by _cmd_theme)
 # ---------------------------------------------------------------------------
+
 
 def _print_theme_preview(theme_name: str, *, persisted: bool) -> None:
     """Print a compact theme preview without requiring Rich."""
@@ -64,10 +67,7 @@ def _print_theme_preview(theme_name: str, *, persisted: bool) -> None:
     _, ansi_code = _THEMES[normalized]
     swatch = f"{ansi_code}{'━' * 8}{_R}" if is_tty else "--------"
     state = "saved" if persisted else "preview"
-    print(
-        f"  Theme {state}: {_B}{normalized}{_R} — "
-        f"{_THEME_DESCRIPTIONS.get(normalized, 'accent theme')} {swatch}"
-    )
+    print(f"  Theme {state}: {_B}{normalized}{_R} — {_THEME_DESCRIPTIONS.get(normalized, 'accent theme')} {swatch}")
     print(f"  {m._theme_ansi()}{'─' * 14}{_R} {m._status_emoji('healthy')} accent sample")
     print(f"  {m._e('💡', '[tip]')} Try /theme next, /theme prev, or /emoji preview for quick comparisons.")
 
@@ -88,6 +88,7 @@ def _cycle_theme(direction: str) -> None:
 # ---------------------------------------------------------------------------
 # Settings command handlers
 # ---------------------------------------------------------------------------
+
 
 def _cmd_theme(ctx: "ChatCommandContext") -> str:
     """Handler for /theme — display or set the UI colour theme."""
@@ -184,8 +185,10 @@ def _cmd_colorscheme(ctx: "ChatCommandContext") -> str:
                 m._RICH_CONSOLE.print(f"  {primary}■{reset}  [bold]{name}[/]  [dim]{label}{active}[/]")
             m._RICH_CONSOLE.print("\n  [dim]Use /colorscheme <name> to activate[/]\n")
         else:
+
             def current_marker(n: str) -> str:
                 return " ← active" if n == current else ""
+
             print("\n🎨 Color Schemes\n")
             for name, scheme in m._EXTENDED_SCHEMES.items():
                 p = scheme.get("primary", "")
@@ -413,7 +416,9 @@ def _cmd_paste(ctx: "ChatCommandContext") -> str:  # noqa: ARG001
     print(f"\n  {_B}Pasting multi-line text into OpenClaw{_R}\n")
     print(f"  {_DM}When you paste text with newlines, each newline is normally treated as Enter.{_R}")
     print(f"  {_DM}Use one of these options to paste a multi-line query as a single message:{_R}\n")
-    print(f"  {m._e('①', '1.')} {_B}/multiline{_R}  — toggle multiline mode, then paste, then type {_B}\\end{_R} to submit")
+    print(
+        f"  {m._e('①', '1.')} {_B}/multiline{_R}  — toggle multiline mode, then paste, then type {_B}\\end{_R} to submit"
+    )
     print(f"  {m._e('②', '2.')} {_B}Bracketed paste{_R} — automatic on supported terminals (iTerm2, Terminal.app)")
     print("              OpenClaw detects paste markers and buffers lines automatically.")
     print(f"  {m._e('③', '3.')} {_B}iTerm2 shortcut{_R} — Edit → Paste Special → Paste Escaping Special Characters")
@@ -449,31 +454,34 @@ def _cmd_accessibility(ctx: "ChatCommandContext") -> str:
     if sub in ("status", ""):
         try:
             import shutil as _shutil
+
             cols = _shutil.get_terminal_size(fallback=(80, 24)).columns
         except (OSError, AttributeError, ValueError):  # noqa: BLE001
             cols = 80
 
-        rm   = "ON" if m._a11y_reduced_motion() else "off"
-        pm   = "ON" if m._a11y_plain_mode()     else "off"
-        hc   = "ON" if m._a11y_high_contrast()  else "off"
+        rm = "ON" if m._a11y_reduced_motion() else "off"
+        pm = "ON" if m._a11y_plain_mode() else "off"
+        hc = "ON" if m._a11y_high_contrast() else "off"
         layout = m._effective_layout_mode()
         preset = m._layout_preset_name() or "single-pane"
         preset_fallback = m._layout_preset_fallback(width=cols, is_tty=m._IS_TTY)
         rich = "yes" if m._RICH_AVAILABLE else "no"
-        tty  = "yes" if m._IS_TTY else "no"
+        tty = "yes" if m._IS_TTY else "no"
 
         if m._RICH_AVAILABLE and m._IS_TTY:
             lines = m._RichText()
-            lines.append(f"  Reduced motion:   {rm}\n",   style="bold" if rm == "ON" else "dim")
-            lines.append(f"  Plain mode:       {pm}\n",   style="bold" if pm == "ON" else "dim")
-            lines.append(f"  High contrast:    {hc}\n",   style="bold" if hc == "ON" else "dim")
+            lines.append(f"  Reduced motion:   {rm}\n", style="bold" if rm == "ON" else "dim")
+            lines.append(f"  Plain mode:       {pm}\n", style="bold" if pm == "ON" else "dim")
+            lines.append(f"  High contrast:    {hc}\n", style="bold" if hc == "ON" else "dim")
             lines.append(f"  Layout mode:      {layout}\n", style="dim")
             lines.append(f"  Layout preset:    {preset}\n", style="dim")
             lines.append(f"  Preset fallback:  {preset_fallback}\n", style="dim")
             lines.append(f"  Rich available:   {rich}\n", style="dim")
-            lines.append(f"  TTY detected:     {tty}\n",  style="dim")
+            lines.append(f"  TTY detected:     {tty}\n", style="dim")
             lines.append(f"  Terminal width:   {cols} columns", style="dim")
-            m._RICH_CONSOLE.print(m._RichPanel(lines, title=f"{m._e('♿', '[a11y]')} Accessibility Status", border_style="cyan"))
+            m._RICH_CONSOLE.print(
+                m._RichPanel(lines, title=f"{m._e('♿', '[a11y]')} Accessibility Status", border_style="cyan")
+            )
         else:
             print(f"{m._e('♿', '[a11y]')} Accessibility Status")
             print(f"  Reduced motion:   {rm}")

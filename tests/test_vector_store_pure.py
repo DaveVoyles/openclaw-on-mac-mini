@@ -2,6 +2,7 @@
 
 Tests focus on testable pure functions to avoid requiring a real ChromaDB instance.
 """
+
 from __future__ import annotations
 
 from vector_store import (
@@ -20,6 +21,7 @@ from vector_store import (
 # ===========================================================================
 # consume_recall_guard_notes / _set_recall_guard_notes
 # ===========================================================================
+
 
 class TestRecallGuardNotes:
     def test_vector_store_pure_empty_initially(self):
@@ -47,6 +49,7 @@ class TestRecallGuardNotes:
 # _extract_explicit_recall_domains
 # ===========================================================================
 
+
 class TestExtractExplicitRecallDomains:
     def test_no_directive_returns_empty(self):
         assert _extract_explicit_recall_domains("what is the weather?") == set()
@@ -61,6 +64,7 @@ class TestExtractExplicitRecallDomains:
 # ===========================================================================
 # _infer_recall_domains
 # ===========================================================================
+
 
 class TestInferRecallDomains:
     def test_vector_store_pure_empty_string_v2(self):
@@ -82,6 +86,7 @@ class TestInferRecallDomains:
 # _normalize_scope_id
 # ===========================================================================
 
+
 class TestNormalizeScopeId:
     def test_vector_store_pure_none_returns_none(self):
         assert _normalize_scope_id(None) is None
@@ -102,6 +107,7 @@ class TestNormalizeScopeId:
 # ===========================================================================
 # _combine_scope_where
 # ===========================================================================
+
 
 class TestCombineScopeWhere:
     def test_no_scope_returns_base(self):
@@ -131,6 +137,7 @@ class TestCombineScopeWhere:
 # _is_legacy_metadata
 # ===========================================================================
 
+
 class TestIsLegacyMetadata:
     def test_no_channel_or_thread_is_legacy(self):
         assert _is_legacy_metadata({}) is True
@@ -148,6 +155,7 @@ class TestIsLegacyMetadata:
 # ===========================================================================
 # _allow_fallback_result
 # ===========================================================================
+
 
 class TestAllowFallbackResult:
     def test_matching_channel_no_thread(self):
@@ -171,6 +179,7 @@ class TestAllowFallbackResult:
 # _compaction_priority
 # ===========================================================================
 
+
 class TestCompactionPriority:
     def test_higher_access_count_sorts_later(self):
         p_low = _compaction_priority("doc1", {"access_count": 0})
@@ -189,6 +198,7 @@ class TestCompactionPriority:
 # ===========================================================================
 # _retention_window_seconds
 # ===========================================================================
+
 
 class TestRetentionWindowSeconds:
     def test_standard_is_positive(self):

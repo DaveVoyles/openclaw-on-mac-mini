@@ -6,6 +6,7 @@ Covers:
   - _context_pressure_snapshot() reflects model-registry source
   - _emit_context_overflow_warning() fires at 80%+ threshold, once per band
 """
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -19,6 +20,7 @@ import openclaw_cli_session_display as sd
 # ===========================================================================
 # 1. MODEL_CONTEXT_WINDOWS — structure and prefix matching
 # ===========================================================================
+
 
 class TestModelContextWindows:
     def test_dict_has_expected_keys(self):
@@ -100,6 +102,7 @@ class TestModelContextWindows:
 # 2. _resolve_context_limit_profile — model-registry path
 # ===========================================================================
 
+
 class TestResolveContextLimitProfile:
     def test_known_model_uses_registry(self, monkeypatch):
         monkeypatch.setattr(sd, "_PREFS", {"last_model": "", "route_mode": ""})
@@ -140,6 +143,7 @@ class TestResolveContextLimitProfile:
 # ===========================================================================
 # 3. _context_pressure_snapshot — model-registry integration
 # ===========================================================================
+
 
 class TestContextPressureSnapshotWithRegistry:
     def test_gpt4o_limit_used_correctly(self, monkeypatch):

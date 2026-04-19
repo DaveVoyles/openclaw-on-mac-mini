@@ -216,39 +216,22 @@ def _get_channel_profile_db() -> sqlite3.Connection:
 
 
 def _ensure_channel_profile_schema(db: sqlite3.Connection) -> None:
-    cols = {
-        row["name"]
-        for row in db.execute("PRAGMA table_info(channel_profiles)").fetchall()
-    }
+    cols = {row["name"] for row in db.execute("PRAGMA table_info(channel_profiles)").fetchall()}
     if "memory_retention_class" not in cols:
-        db.execute(
-            "ALTER TABLE channel_profiles "
-            "ADD COLUMN memory_retention_class TEXT NOT NULL DEFAULT 'standard'"
-        )
+        db.execute("ALTER TABLE channel_profiles ADD COLUMN memory_retention_class TEXT NOT NULL DEFAULT 'standard'")
     if "memory_budget_items" not in cols:
-        db.execute(
-            "ALTER TABLE channel_profiles "
-            "ADD COLUMN memory_budget_items INTEGER NOT NULL DEFAULT 200"
-        )
+        db.execute("ALTER TABLE channel_profiles ADD COLUMN memory_budget_items INTEGER NOT NULL DEFAULT 200")
     if "retrieval_profile" not in cols:
-        db.execute(
-            "ALTER TABLE channel_profiles "
-            "ADD COLUMN retrieval_profile TEXT NOT NULL DEFAULT 'auto'"
-        )
+        db.execute("ALTER TABLE channel_profiles ADD COLUMN retrieval_profile TEXT NOT NULL DEFAULT 'auto'")
     if "retrieval_min_results_override" not in cols:
-        db.execute(
-            "ALTER TABLE channel_profiles "
-            "ADD COLUMN retrieval_min_results_override INTEGER NOT NULL DEFAULT 0"
-        )
+        db.execute("ALTER TABLE channel_profiles ADD COLUMN retrieval_min_results_override INTEGER NOT NULL DEFAULT 0")
     if "retrieval_max_query_variants_override" not in cols:
         db.execute(
-            "ALTER TABLE channel_profiles "
-            "ADD COLUMN retrieval_max_query_variants_override INTEGER NOT NULL DEFAULT 0"
+            "ALTER TABLE channel_profiles ADD COLUMN retrieval_max_query_variants_override INTEGER NOT NULL DEFAULT 0"
         )
     if "retrieval_provider_attempt_cap_override" not in cols:
         db.execute(
-            "ALTER TABLE channel_profiles "
-            "ADD COLUMN retrieval_provider_attempt_cap_override INTEGER NOT NULL DEFAULT 0"
+            "ALTER TABLE channel_profiles ADD COLUMN retrieval_provider_attempt_cap_override INTEGER NOT NULL DEFAULT 0"
         )
 
 
@@ -857,18 +840,21 @@ def get_current_user_id() -> str | None:
 def get_channel_roles() -> dict[int, str]:
     """Return the channel-role mapping owned by bot.py."""
     import bot  # noqa: PLC0415 — intentional late import
+
     return bot._CHANNEL_ROLES
 
 
 def get_channel_prompts() -> dict[str, str]:
     """Return the channel-prompt mapping owned by bot.py."""
     import bot  # noqa: PLC0415 — intentional late import
+
     return bot._CHANNEL_PROMPTS
 
 
 def set_channel_config(roles: dict[int, str], prompts: dict[str, str]) -> None:
     """Update channel config in-place (called by bot.py after loading config)."""
     import bot  # noqa: PLC0415 — intentional late import
+
     bot._CHANNEL_ROLES.clear()
     bot._CHANNEL_ROLES.update(roles)
     bot._CHANNEL_PROMPTS.clear()

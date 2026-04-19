@@ -301,10 +301,12 @@ tasks:
             call_order.append("action2")
             return "Result 2"
 
-        engine.register_skills({
-            "action1": action1,
-            "action2": action2,
-        })
+        engine.register_skills(
+            {
+                "action1": action1,
+                "action2": action2,
+            }
+        )
 
         workflow = engine.create_workflow(
             name="Simple Workflow",
@@ -340,11 +342,13 @@ tasks:
         async def action3():
             return "action3 done"
 
-        engine.register_skills({
-            "action1": action1,
-            "action2": action2,
-            "action3": action3,
-        })
+        engine.register_skills(
+            {
+                "action1": action1,
+                "action2": action2,
+                "action3": action3,
+            }
+        )
 
         workflow = engine.create_workflow(
             name="Parallel Workflow",
@@ -369,10 +373,12 @@ tasks:
         async def failing_action():
             raise ValueError("Failed")
 
-        engine.register_skills({
-            "success_action": success_action,
-            "failing_action": failing_action,
-        })
+        engine.register_skills(
+            {
+                "success_action": success_action,
+                "failing_action": failing_action,
+            }
+        )
 
         workflow = engine.create_workflow(
             name="Failing Workflow",
@@ -398,10 +404,12 @@ tasks:
         async def failing_action():
             return "Error: Failed"  # Returns error string, not exception
 
-        engine.register_skills({
-            "success_action": success_action,
-            "failing_action": failing_action,
-        })
+        engine.register_skills(
+            {
+                "success_action": success_action,
+                "failing_action": failing_action,
+            }
+        )
 
         workflow = engine.create_workflow(
             name="Partial Workflow",
@@ -483,12 +491,14 @@ class TestWorkflowIntegration:
             results["summary"] = f"Sent to {channel}"
             return results["summary"]
 
-        engine.register_skills({
-            "get_weather": get_weather,
-            "search_news": search_news,
-            "get_stock_prices": get_stock_prices,
-            "send_discord_message": send_discord_message,
-        })
+        engine.register_skills(
+            {
+                "get_weather": get_weather,
+                "search_news": search_news,
+                "get_stock_prices": get_stock_prices,
+                "send_discord_message": send_discord_message,
+            }
+        )
 
         workflow = engine.create_from_template("morning-briefing")
         execution = await engine.execute_workflow(workflow.workflow_id)
@@ -498,7 +508,6 @@ class TestWorkflowIntegration:
         assert "news" in results
         assert "stocks" in results
         assert "summary" in results
-
 
 
 # ---------------------------------------------------------------------------
@@ -594,6 +603,7 @@ class TestExecuteWorkflowEdgeCases:
     @pytest.mark.asyncio
     async def test_execute_workflow_partial_status(self, engine):
         """Workflow with some failing tasks gets PARTIAL status with continue_on_error."""
+
         async def ok_skill():
             return "OK"
 
@@ -639,6 +649,7 @@ class TestLLMWorkflowSkills:
     @pytest.mark.asyncio
     async def test_run_workflow_success(self, engine, temp_workflow_dir):
         """run_workflow executes and returns success message."""
+
         async def simple_skill():
             return "done"
 

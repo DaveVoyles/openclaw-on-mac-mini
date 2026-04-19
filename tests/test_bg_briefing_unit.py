@@ -1,4 +1,5 @@
 """test_bg_briefing_unit.py — Unit tests for src/bg_briefing.py."""
+
 from __future__ import annotations
 
 import datetime
@@ -45,9 +46,13 @@ for _mod in [
     "calendar_skills",
     "health_history",
     "reminder_manager",
-    "google", "google.genai", "google.genai.types",
+    "google",
+    "google.genai",
+    "google.genai.types",
     "aiohttp",
-    "pandas", "psutil", "prometheus_client",
+    "pandas",
+    "psutil",
+    "prometheus_client",
 ]:
     _try_stub(_mod)
 

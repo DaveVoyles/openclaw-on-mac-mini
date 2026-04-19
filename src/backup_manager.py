@@ -104,6 +104,7 @@ class BackupManager:
             }
 
             import json
+
             manifest_file = backup_path / "manifest.json"
             with open(manifest_file, "w") as f:
                 json.dump(manifest, f, indent=2)
@@ -247,6 +248,7 @@ class BackupManager:
         archive_path = backup_path.parent / f"{backup_path.name}.tar.gz"
 
         import tarfile
+
         with tarfile.open(archive_path, "w:gz") as tar:
             tar.add(backup_path, arcname=backup_path.name)
 
@@ -274,7 +276,9 @@ class BackupManager:
         )
         subprocess.run(
             [
-                "rsync", "-avz", "--progress",
+                "rsync",
+                "-avz",
+                "--progress",
                 str(backup_path),
                 f"{self.nas_user}@{self.nas_host}:{self.nas_path}/",
             ],
@@ -292,10 +296,9 @@ class BackupManager:
             except (OSError, IOError, subprocess.CalledProcessError) as exc:
                 last_exc = exc
                 if attempt < MAX_UPLOAD_ATTEMPTS - 1:
-                    delay = UPLOAD_RETRY_DELAY * (2 ** attempt)
+                    delay = UPLOAD_RETRY_DELAY * (2**attempt)
                     log.warning(
-                        f"  ⚠️ Upload attempt {attempt + 1}/{MAX_UPLOAD_ATTEMPTS} failed "
-                        f"(retry in {delay:.0f}s): {exc}"
+                        f"  ⚠️ Upload attempt {attempt + 1}/{MAX_UPLOAD_ATTEMPTS} failed (retry in {delay:.0f}s): {exc}"
                     )
                     await asyncio.sleep(delay)
         raise last_exc  # type: ignore[misc]
@@ -319,10 +322,7 @@ class BackupManager:
             return
         remote_hash = result.stdout.split()[0]
         if local_hash != remote_hash:
-            raise ValueError(
-                f"Checksum mismatch after NAS upload! "
-                f"local={local_hash[:16]}… remote={remote_hash[:16]}…"
-            )
+            raise ValueError(f"Checksum mismatch after NAS upload! local={local_hash[:16]}… remote={remote_hash[:16]}…")
         log.info(f"  ✓ Checksum verified ({local_hash[:16]}…)")
 
     async def _upload_to_nas(self, backup_path: Path) -> bool:
@@ -389,7 +389,8 @@ class BackupManager:
 
         last_backup = backups[0]
         total_size = sum(
-            f.stat().st_size for backup in backups
+            f.stat().st_size
+            for backup in backups
             for f in (backup.rglob("*") if backup.is_dir() else [backup])
             if f.is_file()
         )
@@ -398,9 +399,9 @@ class BackupManager:
             "last_backup": {
                 "path": str(last_backup),
                 "timestamp": datetime.fromtimestamp(last_backup.stat().st_mtime).isoformat(),
-                "size_bytes": last_backup.stat().st_size if last_backup.is_file() else sum(
-                    f.stat().st_size for f in last_backup.rglob("*") if f.is_file()
-                ),
+                "size_bytes": last_backup.stat().st_size
+                if last_backup.is_file()
+                else sum(f.stat().st_size for f in last_backup.rglob("*") if f.is_file()),
             },
             "total_backups": len(backups),
             "total_size_bytes": total_size,
@@ -429,6 +430,7 @@ class BackupManager:
             # If compressed, extract first
             if backup_path.suffix == ".gz":
                 import tarfile
+
                 extract_dir = backup_path.parent / backup_path.stem.replace(".tar", "")
                 with tarfile.open(backup_path, "r:gz") as tar:
                     tar.extractall(backup_path.parent)
@@ -438,6 +440,7 @@ class BackupManager:
             manifest_file = backup_path / "manifest.json"
             if manifest_file.exists():
                 import json
+
                 with open(manifest_file) as f:
                     manifest = json.load(f)
             else:

@@ -156,11 +156,7 @@ def test_regex_bypass_pattern_coverage():
     ]
 
     for query in should_match:
-        assert _HIGH_CONFIDENCE_SEARCH_RE.search(query), (
-            f"Expected match but got none: {query!r}"
-        )
+        assert _HIGH_CONFIDENCE_SEARCH_RE.search(query), f"Expected match but got none: {query!r}"
 
     for query in should_not_match:
-        assert not _HIGH_CONFIDENCE_SEARCH_RE.search(query), (
-            f"Expected no match but got one: {query!r}"
-        )
+        assert not _HIGH_CONFIDENCE_SEARCH_RE.search(query), f"Expected no match but got one: {query!r}"

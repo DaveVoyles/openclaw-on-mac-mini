@@ -1,4 +1,5 @@
 """Tests for patreon_recovery.py — recovery action selection and history."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -31,6 +32,7 @@ def _health(status, message="", metadata=None, issues=None, action_items=None):
 # RecoveryResult dataclass
 # ===========================================================================
 
+
 class TestRecoveryResult:
     def test_fields(self):
         r = RecoveryResult(
@@ -47,6 +49,7 @@ class TestRecoveryResult:
 # ===========================================================================
 # _determine_recovery_action
 # ===========================================================================
+
 
 class TestDetermineRecoveryAction:
     def setup_method(self):
@@ -94,6 +97,7 @@ class TestDetermineRecoveryAction:
 # attempt_recovery
 # ===========================================================================
 
+
 class TestAttemptRecovery:
     @pytest.mark.asyncio
     async def test_patreon_recovery_ok_status_returns_none_v2(self):
@@ -131,9 +135,7 @@ class TestAttemptRecovery:
         mgr._max_history = 3
         # Fill history to exactly max
         for i in range(3):
-            mgr._recovery_history.append(
-                RecoveryResult(RecoveryAction.NONE, True, f"msg{i}", datetime.now())
-            )
+            mgr._recovery_history.append(RecoveryResult(RecoveryAction.NONE, True, f"msg{i}", datetime.now()))
         health = _health(PatreonHealthStatus.CRITICAL, metadata={"container_status": "stopped"})
         mock_result = RecoveryResult(
             action=RecoveryAction.START_CONTAINER,
@@ -151,6 +153,7 @@ class TestAttemptRecovery:
 # get_recovery_history / clear_history
 # ===========================================================================
 
+
 class TestRecoveryHistory:
     def test_patreon_recovery_empty_initially(self):
         mgr = PatreonRecoveryManager()
@@ -159,16 +162,12 @@ class TestRecoveryHistory:
     def test_patreon_recovery_limit_respected(self):
         mgr = PatreonRecoveryManager()
         for i in range(20):
-            mgr._recovery_history.append(
-                RecoveryResult(RecoveryAction.NONE, True, f"msg{i}", datetime.now())
-            )
+            mgr._recovery_history.append(RecoveryResult(RecoveryAction.NONE, True, f"msg{i}", datetime.now()))
         assert len(mgr.get_recovery_history(limit=5)) == 5
 
     def test_clear_history(self):
         mgr = PatreonRecoveryManager()
-        mgr._recovery_history.append(
-            RecoveryResult(RecoveryAction.NONE, True, "x", datetime.now())
-        )
+        mgr._recovery_history.append(RecoveryResult(RecoveryAction.NONE, True, "x", datetime.now()))
         mgr.clear_history()
         assert mgr.get_recovery_history() == []
 
@@ -177,15 +176,18 @@ class TestRecoveryHistory:
 # get_recovery_manager singleton
 # ===========================================================================
 
+
 class TestGetRecoveryManager:
     def test_returns_instance(self):
         import patreon_recovery as mod
+
         mod._recovery_manager = None  # reset singleton
         mgr = get_recovery_manager()
         assert isinstance(mgr, PatreonRecoveryManager)
 
     def test_returns_same_instance_twice(self):
         import patreon_recovery as mod
+
         mod._recovery_manager = None
         mgr1 = get_recovery_manager()
         mgr2 = get_recovery_manager()

@@ -4,6 +4,7 @@ bot_helpers.py — Discord bot utility functions.
 Module-level helpers extracted from bot.py. Import from here to avoid
 circular imports: bot.py imports bot_helpers, not vice-versa.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -68,7 +69,9 @@ def _resolve_channel_thread_scope(
     return resolved_channel_id, resolved_thread_id
 
 
-def make_discord_stream_handler(channel: Any) -> tuple[
+def make_discord_stream_handler(
+    channel: Any,
+) -> tuple[
     Any,  # on_partial_chunk coroutine callable
     Any,  # get_placeholder callable → discord.Message | None
 ]:
@@ -89,6 +92,7 @@ def make_discord_stream_handler(channel: Any) -> tuple[
     _placeholder_claimed: list[bool] = [False]
 
     if _SHOW_THINKING_PLACEHOLDER:
+
         async def _send_thinking_placeholder() -> None:
             if _placeholder_claimed[0]:
                 return

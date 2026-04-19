@@ -275,9 +275,7 @@ class PatreonAlertManager:
                 else "never",
                 "last_status": state.last_status.value,
                 "alert_count": state.alert_count,
-                "cooldown_remaining": max(
-                    0, ALERT_COOLDOWN_SECONDS - (time.time() - state.last_alert_time)
-                ),
+                "cooldown_remaining": max(0, ALERT_COOLDOWN_SECONDS - (time.time() - state.last_alert_time)),
             }
             for key, state in self._alert_states.items()
         }

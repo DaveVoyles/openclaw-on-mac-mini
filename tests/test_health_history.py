@@ -1,4 +1,5 @@
 """Tests for src/health_history.py — HealthHistory with SQLite."""
+
 import time
 
 import pytest
@@ -64,9 +65,7 @@ class TestHealthHistoryDisk:
         # Record same usage twice — stable, slope = 0
         history.record_disk("/", 500.0, 100.0, 400.0, 20.0)
         # Adjust timestamps slightly so regression has data
-        history.db.execute(
-            "UPDATE disk_usage SET timestamp = timestamp - 86400 WHERE rowid = 1"
-        )
+        history.db.execute("UPDATE disk_usage SET timestamp = timestamp - 86400 WHERE rowid = 1")
         history.record_disk("/", 500.0, 100.0, 400.0, 20.0)
         result = history.predict_full("/")
         assert "stable" in result["prediction"].lower() or result["days_until_full"] is None

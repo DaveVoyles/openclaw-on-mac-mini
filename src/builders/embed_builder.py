@@ -22,24 +22,26 @@ import discord
 
 class EmbedColor(IntEnum):
     """Brand-consistent color palette for OpenClaw embeds."""
-    DEFAULT = 0x5865F2   # Discord blurple
-    SUCCESS = 0x57F287   # Green
-    ERROR   = 0xED4245   # Red
-    WARNING = 0xFEE75C   # Yellow
-    INFO    = 0x5865F2   # Blurple
-    SPORTS  = 0xFF6B35   # Orange
-    FINANCE = 0x2ECC71   # Money green
-    NEWS    = 0x3498DB   # Blue
-    AI      = 0x9B59B6   # Purple
+
+    DEFAULT = 0x5865F2  # Discord blurple
+    SUCCESS = 0x57F287  # Green
+    ERROR = 0xED4245  # Red
+    WARNING = 0xFEE75C  # Yellow
+    INFO = 0x5865F2  # Blurple
+    SPORTS = 0xFF6B35  # Orange
+    FINANCE = 0x2ECC71  # Money green
+    NEWS = 0x3498DB  # Blue
+    AI = 0x9B59B6  # Purple
 
 
 # Backward-compatible alias
 class EmbedColors:
     """Deprecated: use EmbedColor instead."""
+
     SUCCESS = int(EmbedColor.SUCCESS)
-    ERROR   = int(EmbedColor.ERROR)
+    ERROR = int(EmbedColor.ERROR)
     WARNING = int(EmbedColor.WARNING)
-    INFO    = int(EmbedColor.INFO)
+    INFO = int(EmbedColor.INFO)
     NEUTRAL = 0x808080
 
 
@@ -105,38 +107,23 @@ class EmbedBuilder:
 
     @classmethod
     def error(cls, title: str, description: str) -> discord.Embed:
-        return (cls(f"❌ {title}", EmbedColor.ERROR)
-                .description(description)
-                .footer()
-                .timestamp()
-                .build())
+        return cls(f"❌ {title}", EmbedColor.ERROR).description(description).footer().timestamp().build()
 
     @classmethod
     def success(cls, title: str, description: str) -> discord.Embed:
-        return (cls(f"✅ {title}", EmbedColor.SUCCESS)
-                .description(description)
-                .footer()
-                .timestamp()
-                .build())
+        return cls(f"✅ {title}", EmbedColor.SUCCESS).description(description).footer().timestamp().build()
 
     @classmethod
     def info(cls, title: str, description: str) -> discord.Embed:
-        return (cls(f"ℹ️ {title}", EmbedColor.INFO)
-                .description(description)
-                .footer()
-                .timestamp()
-                .build())
+        return cls(f"ℹ️ {title}", EmbedColor.INFO).description(description).footer().timestamp().build()
 
     @classmethod
     def warning(cls, title: str, description: str) -> discord.Embed:
-        return (cls(f"⚠️ {title}", EmbedColor.WARNING)
-                .description(description)
-                .footer()
-                .timestamp()
-                .build())
+        return cls(f"⚠️ {title}", EmbedColor.WARNING).description(description).footer().timestamp().build()
 
 
 # Convenience factory functions (backward-compatible)
+
 
 def success_embed(title: str, message: str) -> discord.Embed:
     return EmbedBuilder.success(title, message)

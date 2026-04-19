@@ -233,7 +233,7 @@ class TestCliDownloadHandlers:
         req = _fake_request()
         resp = await mod.openclaw_cli_download_handler(req)
         assert resp.content_type == "text/plain"
-        assert "attachment; filename=\"openclaw_cli.py\"" == resp.headers["Content-Disposition"]
+        assert 'attachment; filename="openclaw_cli.py"' == resp.headers["Content-Disposition"]
         assert "OpenClawCliError" in resp.text
         assert "def main(" in resp.text
 
@@ -242,7 +242,7 @@ class TestCliDownloadHandlers:
         req.match_info = {"name": "openclaw_cli_actions.py"}
         resp = await mod.openclaw_cli_support_download_handler(req)
         assert resp.content_type == "text/plain"
-        assert "attachment; filename=\"openclaw_cli_actions.py\"" == resp.headers["Content-Disposition"]
+        assert 'attachment; filename="openclaw_cli_actions.py"' == resp.headers["Content-Disposition"]
         assert "class ShellCommandResult" in resp.text
 
     async def test_cli_installer_download_returns_shell_script(self):
@@ -251,7 +251,7 @@ class TestCliDownloadHandlers:
         req.host = "192.168.1.93:8765"
         resp = await mod.openclaw_cli_installer_handler(req)
         assert resp.content_type == "text/plain"
-        assert "attachment; filename=\"openclaw-cli-installer.sh\"" == resp.headers["Content-Disposition"]
+        assert 'attachment; filename="openclaw-cli-installer.sh"' == resp.headers["Content-Disposition"]
         assert "/downloads/openclaw_cli.py" in resp.text
         assert "/downloads/openclaw-cli-support/openclaw_cli_actions.py" in resp.text
         assert "/downloads/openclaw-cli-support/openclaw_cli_sessions.py" in resp.text
@@ -270,7 +270,7 @@ class TestCliDownloadHandlers:
         req.host = "192.168.1.93:8765"
         resp = await mod.openclaw_cli_remote_installer_handler(req)
         assert resp.content_type == "text/plain"
-        assert "attachment; filename=\"openclaw-cli-remote-installer.sh\"" == resp.headers["Content-Disposition"]
+        assert 'attachment; filename="openclaw-cli-remote-installer.sh"' == resp.headers["Content-Disposition"]
         assert "ENABLE_REMOTE_LOGIN=1" in resp.text
 
     def test_cli_installer_script_runs_end_to_end(self):
@@ -313,7 +313,7 @@ class TestCliDownloadHandlers:
             assert "TARGET_SHELL=bash" in completed.stdout
             assert "export OPENCLAW_TOKEN" in completed.stdout
             assert "STATUS=passed" in completed.stdout
-            assert '--url http://example.test --health' in completed.stdout
+            assert "--url http://example.test --health" in completed.stdout
 
     def test_cli_installer_reports_download_failures(self):
         from dashboard.helpers import build_openclaw_cli_installer
@@ -494,6 +494,7 @@ exit 0
 class TestCommandList:
     def test_returns_list_of_categories(self):
         from dashboard.helpers import _command_list
+
         cmds = _command_list()
         assert isinstance(cmds, list)
         assert len(cmds) > 0
@@ -756,8 +757,7 @@ class TestAgentSessionApis:
             for i in range(10)
         ]
         many_retries = [
-            {"poll": i, "attempt": 1, "error": f"err {i}", "transient": True, "created_at": ""}
-            for i in range(8)
+            {"poll": i, "attempt": 1, "error": f"err {i}", "transient": True, "created_at": ""} for i in range(8)
         ]
         watch_state = {
             "checkpoints": many_checkpoints,
@@ -809,42 +809,69 @@ class TestAgentSessionApis:
             lessons=[],
             context={},
             steps=[
-                SimpleNamespace(num=1, description="Audit APIs", status="done", output="", worker_id="", depends_on=[], is_complete=True),
-                SimpleNamespace(num=2, description="Wire dashboard", status="in-progress", output="", worker_id="", depends_on=[1], is_complete=False),
+                SimpleNamespace(
+                    num=1,
+                    description="Audit APIs",
+                    status="done",
+                    output="",
+                    worker_id="",
+                    depends_on=[],
+                    is_complete=True,
+                ),
+                SimpleNamespace(
+                    num=2,
+                    description="Wire dashboard",
+                    status="in-progress",
+                    output="",
+                    worker_id="",
+                    depends_on=[1],
+                    is_complete=False,
+                ),
             ],
         )
 
-        with patch.object(
-            api_mod,
-            "export_cli_session",
-            return_value={
-                "session": {"session_id": "sess-123", "plan_id": "plan-77", "task_id": "task-42", "checkpoint_count": 2},
-                "events": [{"kind": "analyze", "content": "summarize repo"}],
-                "outputs": [{"name": "report.md"}],
-                "watch_state": {"goal": "watch for regressions"},
-            },
-        ), patch.object(api_mod, "list_cli_sessions", return_value=[fake_session_summary]), patch.dict(
-            "sys.modules",
-            {
-                "agent_loop": MagicMock(load_plan=MagicMock(return_value=fake_plan), list_plans=MagicMock(return_value=[fake_plan])),
-                "mission_control": MagicMock(
-                    _load_tasks=MagicMock(
-                        return_value={
-                            "tasks": [
-                                {
-                                    "id": "task-42",
-                                    "title": "Review dashboard",
-                                    "status": "in_progress",
-                                    "priority": "high",
-                                    "description": "Validate the new control-plane views.",
-                                    "subtasks": [{"title": "API", "done": True}],
-                                    "comments": [{"author": "Dave", "text": "Looks good"}],
-                                }
-                            ]
-                        }
-                    )
-                ),
-            },
+        with (
+            patch.object(
+                api_mod,
+                "export_cli_session",
+                return_value={
+                    "session": {
+                        "session_id": "sess-123",
+                        "plan_id": "plan-77",
+                        "task_id": "task-42",
+                        "checkpoint_count": 2,
+                    },
+                    "events": [{"kind": "analyze", "content": "summarize repo"}],
+                    "outputs": [{"name": "report.md"}],
+                    "watch_state": {"goal": "watch for regressions"},
+                },
+            ),
+            patch.object(api_mod, "list_cli_sessions", return_value=[fake_session_summary]),
+            patch.dict(
+                "sys.modules",
+                {
+                    "agent_loop": MagicMock(
+                        load_plan=MagicMock(return_value=fake_plan), list_plans=MagicMock(return_value=[fake_plan])
+                    ),
+                    "mission_control": MagicMock(
+                        _load_tasks=MagicMock(
+                            return_value={
+                                "tasks": [
+                                    {
+                                        "id": "task-42",
+                                        "title": "Review dashboard",
+                                        "status": "in_progress",
+                                        "priority": "high",
+                                        "description": "Validate the new control-plane views.",
+                                        "subtasks": [{"title": "API", "done": True}],
+                                        "comments": [{"author": "Dave", "text": "Looks good"}],
+                                    }
+                                ]
+                            }
+                        )
+                    ),
+                },
+            ),
         ):
             resp = await api_mod.api_agent_session_detail_handler(req)
 
@@ -862,18 +889,26 @@ class TestAgentSessionApis:
         req.match_info = {"session_id": "sess-123", "action": "force-checkpoint"}
         req.headers = {"X-OpenClaw-Actor": "dashboard-ui"}
 
-        with patch.object(api_mod, "require_cli_session", return_value=SimpleNamespace(session_id="sess-123")), patch.object(
-            api_mod,
-            "load_cli_watch_state",
-            return_value={"status": "running", "mode": "analyze", "interventions": []},
-        ), patch.object(
-            api_mod,
-            "queue_cli_watch_intervention",
-            return_value={"request_id": "ctl-1", "action": "force-checkpoint", "status": "pending"},
-        ) as queue_intervention, patch.object(
-            api_mod,
-            "export_cli_session",
-            return_value={"session": {"session_id": "sess-123"}, "watch_state": {"interventions": [{"status": "pending"}]}},
+        with (
+            patch.object(api_mod, "require_cli_session", return_value=SimpleNamespace(session_id="sess-123")),
+            patch.object(
+                api_mod,
+                "load_cli_watch_state",
+                return_value={"status": "running", "mode": "analyze", "interventions": []},
+            ),
+            patch.object(
+                api_mod,
+                "queue_cli_watch_intervention",
+                return_value={"request_id": "ctl-1", "action": "force-checkpoint", "status": "pending"},
+            ) as queue_intervention,
+            patch.object(
+                api_mod,
+                "export_cli_session",
+                return_value={
+                    "session": {"session_id": "sess-123"},
+                    "watch_state": {"interventions": [{"status": "pending"}]},
+                },
+            ),
         ):
             resp = await api_mod.api_agent_session_intervention_handler(req)
 
@@ -921,17 +956,42 @@ class TestControlPlaneApis:
             lessons=["Keep it additive"],
             context={"summary": "Dashboard work"},
             steps=[
-                SimpleNamespace(num=1, description="Add APIs", status="done", output="", worker_id="", depends_on=[], is_complete=True),
-                SimpleNamespace(num=2, description="Add UI", status="in-progress", output="In progress", worker_id="", depends_on=[1], is_complete=False),
+                SimpleNamespace(
+                    num=1,
+                    description="Add APIs",
+                    status="done",
+                    output="",
+                    worker_id="",
+                    depends_on=[],
+                    is_complete=True,
+                ),
+                SimpleNamespace(
+                    num=2,
+                    description="Add UI",
+                    status="in-progress",
+                    output="In progress",
+                    worker_id="",
+                    depends_on=[1],
+                    is_complete=False,
+                ),
             ],
         )
 
-        with patch.object(api_mod, "list_cli_sessions", return_value=[fake_session]), patch.dict(
-            "sys.modules",
-            {
-                "agent_loop": MagicMock(load_plan=MagicMock(return_value=fake_plan), list_plans=MagicMock(return_value=[fake_plan])),
-                "mission_control": MagicMock(_load_tasks=MagicMock(return_value={"tasks": [{"id": "task-9", "title": "Review", "status": "review"}]})),
-            },
+        with (
+            patch.object(api_mod, "list_cli_sessions", return_value=[fake_session]),
+            patch.dict(
+                "sys.modules",
+                {
+                    "agent_loop": MagicMock(
+                        load_plan=MagicMock(return_value=fake_plan), list_plans=MagicMock(return_value=[fake_plan])
+                    ),
+                    "mission_control": MagicMock(
+                        _load_tasks=MagicMock(
+                            return_value={"tasks": [{"id": "task-9", "title": "Review", "status": "review"}]}
+                        )
+                    ),
+                },
+            ),
         ):
             resp = await api_mod.api_plans_handler(req)
             detail_resp = await api_mod.api_plan_detail_handler(detail_req)
@@ -987,7 +1047,9 @@ class TestControlPlaneApis:
             run_count=2,
             args={"scope": "all"},
         )
-        fake_scheduler = MagicMock(list_tasks=MagicMock(return_value=[scheduled_task]), get=MagicMock(return_value=scheduled_task))
+        fake_scheduler = MagicMock(
+            list_tasks=MagicMock(return_value=[scheduled_task]), get=MagicMock(return_value=scheduled_task)
+        )
         fake_plan = SimpleNamespace(
             plan_id="plan-1",
             goal="Control plane",
@@ -1001,29 +1063,34 @@ class TestControlPlaneApis:
             steps=[],
         )
 
-        with patch.object(api_mod, "list_cli_sessions", return_value=[fake_session]), patch.dict(
-            "sys.modules",
-            {
-                "mission_control": MagicMock(
-                    _load_tasks=MagicMock(
-                        return_value={
-                            "tasks": [
-                                {
-                                    "id": "task-1",
-                                    "title": "Mission task",
-                                    "status": "in_progress",
-                                    "priority": "medium",
-                                    "description": "Track review work",
-                                    "subtasks": [{"title": "API", "done": False}],
-                                    "comments": [],
-                                }
-                            ]
-                        }
-                    )
-                ),
-                "scheduler": MagicMock(scheduler=fake_scheduler),
-                "agent_loop": MagicMock(load_plan=MagicMock(return_value=fake_plan), list_plans=MagicMock(return_value=[fake_plan])),
-            },
+        with (
+            patch.object(api_mod, "list_cli_sessions", return_value=[fake_session]),
+            patch.dict(
+                "sys.modules",
+                {
+                    "mission_control": MagicMock(
+                        _load_tasks=MagicMock(
+                            return_value={
+                                "tasks": [
+                                    {
+                                        "id": "task-1",
+                                        "title": "Mission task",
+                                        "status": "in_progress",
+                                        "priority": "medium",
+                                        "description": "Track review work",
+                                        "subtasks": [{"title": "API", "done": False}],
+                                        "comments": [],
+                                    }
+                                ]
+                            }
+                        )
+                    ),
+                    "scheduler": MagicMock(scheduler=fake_scheduler),
+                    "agent_loop": MagicMock(
+                        load_plan=MagicMock(return_value=fake_plan), list_plans=MagicMock(return_value=[fake_plan])
+                    ),
+                },
+            ),
         ):
             resp = await api_mod.api_task_status_handler(req)
             detail_resp = await api_mod.api_task_status_detail_handler(detail_req)
@@ -1084,7 +1151,9 @@ class TestScheduleDashboardApis:
             run_count=2,
             args={"scope": "all"},
         )
-        scheduler_mod = MagicMock(scheduler=MagicMock(toggle=MagicMock(return_value=False), get=MagicMock(return_value=fake_task)))
+        scheduler_mod = MagicMock(
+            scheduler=MagicMock(toggle=MagicMock(return_value=False), get=MagicMock(return_value=fake_task))
+        )
 
         with patch.dict("sys.modules", {"scheduler": scheduler_mod}):
             resp = await api_mod.api_schedule_toggle_handler(req)
@@ -1097,7 +1166,12 @@ class TestScheduleDashboardApis:
     async def test_schedule_update_handler_updates_task(self):
         req = _fake_request(
             method="POST",
-            json_payload={"name": "nightly_report", "prompt": "run report", "cron_expression": "0 6 * * *", "interval_minutes": ""},
+            json_payload={
+                "name": "nightly_report",
+                "prompt": "run report",
+                "cron_expression": "0 6 * * *",
+                "interval_minutes": "",
+            },
         )
         req.match_info = {"task_id": "sched-2"}
         updated_task = SimpleNamespace(
@@ -1382,7 +1456,10 @@ class TestQualityMetricsApi:
         assert payload["top_recurring_failures"][0]["count"] >= payload["top_recurring_failures"][-1]["count"]
         assert isinstance(payload["top_quality_failure_categories"], list)
         assert len(payload["top_quality_failure_categories"]) <= 6
-        assert payload["top_quality_failure_categories"][0]["count"] >= payload["top_quality_failure_categories"][-1]["count"]
+        assert (
+            payload["top_quality_failure_categories"][0]["count"]
+            >= payload["top_quality_failure_categories"][-1]["count"]
+        )
         assert "quality_failure_categories" in payload
         assert isinstance(payload["quality_failure_categories"]["counts"], dict)
         assert payload["quality_failure_categories"]["counts"].get("requested_item_shortfall", 0) >= 2
@@ -1393,9 +1470,7 @@ class TestQualityMetricsApi:
     @pytest.mark.asyncio
     async def test_quality_metrics_fallback_contains_new_sections(self):
         req = _fake_request()
-        metrics_mod = MagicMock(
-            get_quality_event_snapshot=MagicMock(side_effect=RuntimeError("boom"))
-        )
+        metrics_mod = MagicMock(get_quality_event_snapshot=MagicMock(side_effect=RuntimeError("boom")))
         with patch.dict("sys.modules", {"metrics_collector": metrics_mod}):
             resp = await mod.api_quality_metrics_handler(req)
 
@@ -1657,7 +1732,9 @@ class TestRunsApi:
                 "effective_profile": {"tone": "direct"},
             }
         ]
-        with patch.dict("sys.modules", {"error_tracker": MagicMock(get_recent_outcomes=MagicMock(return_value=fake_entries))}):
+        with patch.dict(
+            "sys.modules", {"error_tracker": MagicMock(get_recent_outcomes=MagicMock(return_value=fake_entries))}
+        ):
             resp = await mod.api_runs_handler(req)
 
         assert resp.status == 200
@@ -1760,7 +1837,9 @@ class TestQualityEvalApi:
                 }
             ),
         )
-        with patch.dict("sys.modules", {"runtime_state": runtime_state_mock, "offline_quality_eval": offline_quality_eval_mock}):
+        with patch.dict(
+            "sys.modules", {"runtime_state": runtime_state_mock, "offline_quality_eval": offline_quality_eval_mock}
+        ):
             resp = await mod.api_quality_eval_handler(req)
 
         assert resp.status == 200
@@ -1835,13 +1914,16 @@ class TestChannelProfileAssistantApi:
                 }
             )
         )
-        with patch.dict("sys.modules", {"runtime_state": runtime_state_mock, "audit": MagicMock(audit_log=MagicMock())}):
+        with patch.dict(
+            "sys.modules", {"runtime_state": runtime_state_mock, "audit": MagicMock(audit_log=MagicMock())}
+        ):
             resp = await mod.api_channel_profile_recommendation_action_handler(req)
 
         assert resp.status == 200
         payload = json.loads(resp.text)
         assert payload["ok"] is True
         assert payload["recommendation"]["status"] == "approved"
+
 
 # --- Merged from test_command_docs_sync.py ---
 import importlib.util
@@ -1874,4 +1956,3 @@ def test_command_docs_match_runtime_source_of_truth():
         "docs/COMMANDS.md is out of sync with dashboard command source. "
         "Regenerate it from src/dashboard/helpers.py::render_command_reference_markdown()."
     )
-

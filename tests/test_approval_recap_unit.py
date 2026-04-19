@@ -1,4 +1,5 @@
 """Unit tests for post-approval recap, auto-retry note, and _print_usage helper."""
+
 from __future__ import annotations
 
 from io import StringIO
@@ -12,6 +13,7 @@ from openclaw_cli_actions import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _capture_recap(recap: dict, *, tty: bool = False) -> str:
     """Run _print_approval_recap and return captured stdout."""
@@ -32,70 +34,83 @@ def _capture_usage(msg: str, *, tty: bool = False) -> str:
 # _print_approval_recap — approved case
 # ---------------------------------------------------------------------------
 
+
 def test_recap_approved_prints_decision():
-    out = _capture_recap({
-        "action": "shell.exec",
-        "target": "ls -la",
-        "decision": "approved",
-        "execution_outcome": "exit 0",
-        "recovery_hint": None,
-    })
+    out = _capture_recap(
+        {
+            "action": "shell.exec",
+            "target": "ls -la",
+            "decision": "approved",
+            "execution_outcome": "exit 0",
+            "recovery_hint": None,
+        }
+    )
     assert "approved" in out
     assert "denied" not in out
 
 
 def test_recap_approved_prints_action():
-    out = _capture_recap({
-        "action": "shell.exec",
-        "target": "ls -la",
-        "decision": "approved",
-        "execution_outcome": "exit 0",
-        "recovery_hint": None,
-    })
+    out = _capture_recap(
+        {
+            "action": "shell.exec",
+            "target": "ls -la",
+            "decision": "approved",
+            "execution_outcome": "exit 0",
+            "recovery_hint": None,
+        }
+    )
     assert "shell.exec" in out
 
 
 def test_recap_approved_prints_target():
-    out = _capture_recap({
-        "action": "shell.exec",
-        "target": "ls -la",
-        "decision": "approved",
-        "execution_outcome": "exit 0",
-        "recovery_hint": None,
-    })
+    out = _capture_recap(
+        {
+            "action": "shell.exec",
+            "target": "ls -la",
+            "decision": "approved",
+            "execution_outcome": "exit 0",
+            "recovery_hint": None,
+        }
+    )
     assert "ls -la" in out
 
 
 def test_recap_approved_prints_execution_outcome():
-    out = _capture_recap({
-        "action": "shell.exec",
-        "target": "rm build/",
-        "decision": "approved",
-        "execution_outcome": "exit 0",
-        "recovery_hint": None,
-    })
+    out = _capture_recap(
+        {
+            "action": "shell.exec",
+            "target": "rm build/",
+            "decision": "approved",
+            "execution_outcome": "exit 0",
+            "recovery_hint": None,
+        }
+    )
     assert "exit 0" in out
 
 
 def test_recap_approved_no_recovery_hint_when_none():
-    out = _capture_recap({
-        "action": "shell.exec",
-        "target": "rm build/",
-        "decision": "approved",
-        "execution_outcome": "exit 0",
-        "recovery_hint": None,
-    })
+    out = _capture_recap(
+        {
+            "action": "shell.exec",
+            "target": "rm build/",
+            "decision": "approved",
+            "execution_outcome": "exit 0",
+            "recovery_hint": None,
+        }
+    )
     assert "hint" not in out
 
 
 def test_recap_approved_shows_recovery_hint_when_provided():
-    out = _capture_recap({
-        "action": "shell.exec",
-        "target": "rm -rf dist/",
-        "decision": "approved",
-        "execution_outcome": "exit 1",
-        "recovery_hint": "check your VCS",
-    })
+    out = _capture_recap(
+        {
+            "action": "shell.exec",
+            "target": "rm -rf dist/",
+            "decision": "approved",
+            "execution_outcome": "exit 1",
+            "recovery_hint": "check your VCS",
+        }
+    )
     assert "check your VCS" in out
 
 
@@ -103,49 +118,58 @@ def test_recap_approved_shows_recovery_hint_when_provided():
 # _print_approval_recap — denied case
 # ---------------------------------------------------------------------------
 
+
 def test_recap_denied_prints_decision():
-    out = _capture_recap({
-        "action": "file.edit",
-        "target": "pyproject.toml",
-        "decision": "denied",
-        "execution_outcome": None,
-        "recovery_hint": "adjust the diff first",
-    })
+    out = _capture_recap(
+        {
+            "action": "file.edit",
+            "target": "pyproject.toml",
+            "decision": "denied",
+            "execution_outcome": None,
+            "recovery_hint": "adjust the diff first",
+        }
+    )
     assert "denied" in out
     assert "approved" not in out
 
 
 def test_recap_denied_prints_action_and_target():
-    out = _capture_recap({
-        "action": "file.edit",
-        "target": "pyproject.toml",
-        "decision": "denied",
-        "execution_outcome": None,
-        "recovery_hint": "adjust the diff first",
-    })
+    out = _capture_recap(
+        {
+            "action": "file.edit",
+            "target": "pyproject.toml",
+            "decision": "denied",
+            "execution_outcome": None,
+            "recovery_hint": "adjust the diff first",
+        }
+    )
     assert "file.edit" in out
     assert "pyproject.toml" in out
 
 
 def test_recap_denied_no_execution_outcome():
-    out = _capture_recap({
-        "action": "file.edit",
-        "target": "pyproject.toml",
-        "decision": "denied",
-        "execution_outcome": None,
-        "recovery_hint": None,
-    })
+    out = _capture_recap(
+        {
+            "action": "file.edit",
+            "target": "pyproject.toml",
+            "decision": "denied",
+            "execution_outcome": None,
+            "recovery_hint": None,
+        }
+    )
     assert "outcome" not in out
 
 
 def test_recap_denied_prints_recovery_hint():
-    out = _capture_recap({
-        "action": "file.edit",
-        "target": "pyproject.toml",
-        "decision": "denied",
-        "execution_outcome": None,
-        "recovery_hint": "use /rollback last",
-    })
+    out = _capture_recap(
+        {
+            "action": "file.edit",
+            "target": "pyproject.toml",
+            "decision": "denied",
+            "execution_outcome": None,
+            "recovery_hint": "use /rollback last",
+        }
+    )
     assert "use /rollback last" in out
 
 
@@ -153,14 +177,17 @@ def test_recap_denied_prints_recovery_hint():
 # _print_approval_recap — edge cases
 # ---------------------------------------------------------------------------
 
+
 def test_recap_unknown_decision_falls_through():
-    out = _capture_recap({
-        "action": "shell.exec",
-        "target": "echo hi",
-        "decision": "unknown",
-        "execution_outcome": None,
-        "recovery_hint": None,
-    })
+    out = _capture_recap(
+        {
+            "action": "shell.exec",
+            "target": "echo hi",
+            "decision": "unknown",
+            "execution_outcome": None,
+            "recovery_hint": None,
+        }
+    )
     assert "Approval recap" in out
 
 
@@ -189,19 +216,23 @@ def test_recap_contains_ansi_when_tty(monkeypatch):
     with patch("openclaw_cli_actions.sys") as mock_sys:
         mock_sys.stdout.isatty.return_value = True
         import openclaw_cli_actions as _act
-        _act._print_approval_recap({
-            "action": "shell.exec",
-            "target": "ls",
-            "decision": "approved",
-            "execution_outcome": "exit 0",
-            "recovery_hint": None,
-        })
+
+        _act._print_approval_recap(
+            {
+                "action": "shell.exec",
+                "target": "ls",
+                "decision": "approved",
+                "execution_outcome": "exit 0",
+                "recovery_hint": None,
+            }
+        )
     # We just verify the function runs without error when TTY is True
 
 
 # ---------------------------------------------------------------------------
 # _print_usage helper
 # ---------------------------------------------------------------------------
+
 
 def test_print_usage_outputs_message():
     out = _capture_usage("Usage: /files add <path>")
@@ -221,6 +252,7 @@ def test_print_usage_no_ansi_when_not_tty():
 # ---------------------------------------------------------------------------
 # Auto-retry note — quality retry in llm/chat.py
 # ---------------------------------------------------------------------------
+
 
 def test_quality_retry_prints_auto_retry_note(capsys):
     """Simulate the quality-retry gate and verify the ↺ note is printed."""
@@ -276,6 +308,7 @@ def test_quality_retry_note_not_printed_when_copilot_disabled(capsys):
 # Recap skipped for low-risk actions — validate contract via recap dict
 # ---------------------------------------------------------------------------
 
+
 def test_recap_only_called_for_high_critical(monkeypatch):
     """_print_approval_recap should only be invoked for HIGH/CRITICAL risk.
 
@@ -313,12 +346,14 @@ def test_recap_only_called_for_high_critical(monkeypatch):
 
 
 def test_recap_approved_edit_includes_summary():
-    out = _capture_recap({
-        "action": "file.edit",
-        "target": "src/foo.py",
-        "decision": "approved",
-        "execution_outcome": "Updated file with requested replacement.",
-        "recovery_hint": "use /rollback last to undo this edit if needed.",
-    })
+    out = _capture_recap(
+        {
+            "action": "file.edit",
+            "target": "src/foo.py",
+            "decision": "approved",
+            "execution_outcome": "Updated file with requested replacement.",
+            "recovery_hint": "use /rollback last to undo this edit if needed.",
+        }
+    )
     assert "Updated file with requested replacement." in out
     assert "use /rollback last" in out

@@ -3,6 +3,7 @@ Extended tests for src/error_tracker.py — covering previously uncovered functi
 get_recent_outcomes, get_error_stats, check_error_patterns, execute_fix,
 get_past_incidents, record_incident.
 """
+
 import json
 import time
 from pathlib import Path
@@ -15,6 +16,7 @@ import error_tracker as mod
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def isolated_journal(tmp_path, monkeypatch):
@@ -60,6 +62,7 @@ def _write_entry(journal: Path, **kwargs):
 # ---------------------------------------------------------------------------
 # record_outcome
 # ---------------------------------------------------------------------------
+
 
 def test_record_outcome_writes_to_journal(isolated_journal):
     mod.record_outcome(user_id=1, question="hello", model_used="gemini", success=True)
@@ -148,6 +151,7 @@ def test_record_outcome_handles_write_failure(monkeypatch):
 # get_recent_outcomes
 # ---------------------------------------------------------------------------
 
+
 def test_get_recent_outcomes_empty_file(isolated_journal):
     result = mod.get_recent_outcomes()
     assert result == []
@@ -203,6 +207,7 @@ def test_get_recent_outcomes_skips_invalid_json(isolated_journal):
 # ---------------------------------------------------------------------------
 # get_error_stats
 # ---------------------------------------------------------------------------
+
 
 def test_get_error_stats_empty():
     stats = mod.get_error_stats()
@@ -266,6 +271,7 @@ def test_get_error_stats_model_breakdown(isolated_journal):
 # ---------------------------------------------------------------------------
 # check_error_patterns
 # ---------------------------------------------------------------------------
+
 
 def test_check_error_patterns_empty():
     patterns = mod.check_error_patterns()
@@ -389,6 +395,7 @@ def test_check_error_patterns_model_failures_critical(isolated_journal):
 # execute_fix
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_execute_fix_low_confidence_skips():
     diag = {"fix_type": "restart_service", "fix_target": "sonarr", "confidence": 0.4}
@@ -492,6 +499,7 @@ async def test_execute_fix_clear_circuit_breaker_success():
 # get_past_incidents
 # ---------------------------------------------------------------------------
 
+
 def test_get_past_incidents_no_file(isolated_incidents):
     isolated_incidents.unlink(missing_ok=True)
     result = mod.get_past_incidents()
@@ -523,17 +531,11 @@ def test_get_past_incidents_filter_by_type(isolated_incidents):
     isolated_incidents.write_text(json.dumps(incidents))
     result = mod.get_past_incidents(pattern_type="high_failure_rate")
     assert len(result) == 2
-    assert all(
-        any(p["type"] == "high_failure_rate" for p in i["patterns"])
-        for i in result
-    )
+    assert all(any(p["type"] == "high_failure_rate" for p in i["patterns"]) for i in result)
 
 
 def test_get_past_incidents_respects_limit(isolated_incidents):
-    incidents = [
-        {"ts": i, "patterns": [{"type": "high_failure_rate"}], "diagnosis": {}, "fix": {}}
-        for i in range(10)
-    ]
+    incidents = [{"ts": i, "patterns": [{"type": "high_failure_rate"}], "diagnosis": {}, "fix": {}} for i in range(10)]
     isolated_incidents.write_text(json.dumps(incidents))
     result = mod.get_past_incidents(limit=3)
     assert len(result) == 3
@@ -548,6 +550,7 @@ def test_get_past_incidents_handles_bad_json(isolated_incidents):
 # ---------------------------------------------------------------------------
 # record_incident
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_record_incident_creates_file(isolated_incidents):
@@ -597,8 +600,13 @@ async def test_record_incident_successful_fix_tries_rule(isolated_incidents, mon
 
     with patch.dict("sys.modules", {"rules_engine": fake_rules}):
         patterns = [{"type": "high_failure_rate", "severity": "critical", "detail": "5/5", "count": 5}]
-        diag = {"cause": "overload", "fix_type": "restart_service", "fix_target": "sonarr",
-                "confidence": 0.9, "explanation": "Service was down"}
+        diag = {
+            "cause": "overload",
+            "fix_type": "restart_service",
+            "fix_target": "sonarr",
+            "confidence": 0.9,
+            "explanation": "Service was down",
+        }
         fix = {"action_taken": "restart_service:sonarr", "success": True, "detail": "Restarted"}
         await mod.record_incident(patterns, diag, fix)
 
@@ -618,8 +626,13 @@ async def test_record_incident_no_rule_on_failure(isolated_incidents, monkeypatc
 
     with patch.dict("sys.modules", {"rules_engine": fake_rules}):
         patterns = [{"type": "high_failure_rate", "severity": "critical", "detail": "5/5", "count": 5}]
-        diag = {"cause": "overload", "fix_type": "manual_required", "fix_target": "",
-                "confidence": 0.5, "explanation": "No fix available"}
+        diag = {
+            "cause": "overload",
+            "fix_type": "manual_required",
+            "fix_target": "",
+            "confidence": 0.5,
+            "explanation": "No fix available",
+        }
         fix = {"action_taken": "manual_required", "success": False, "detail": "needs human"}
         await mod.record_incident(patterns, diag, fix)
 

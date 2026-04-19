@@ -151,9 +151,11 @@ class TestIndexIO:
 # _compute_health
 # ---------------------------------------------------------------------------
 
+
 class TestComputeHealth:
     def _fresh_entry(self, eid="e1", relations=None, category="identity"):
         import datetime
+
         today = datetime.date.today().isoformat()
         return {"id": eid, "lastReferenced": today, "category": category, "relations": relations or []}
 
@@ -194,6 +196,7 @@ class TestComputeHealth:
 # _fallback_insights
 # ---------------------------------------------------------------------------
 
+
 class TestFallbackInsights:
     def test_high_activity_produces_insight(self):
         changes = {"added": 10, "skipped": 0, "updated": 0}
@@ -214,6 +217,7 @@ class TestFallbackInsights:
 # ---------------------------------------------------------------------------
 # _find_by_source_id / _next_id / _build_relations
 # ---------------------------------------------------------------------------
+
 
 class TestIndexHelpers:
     def test_find_by_source_id_found(self):
@@ -255,6 +259,7 @@ class TestIndexHelpers:
 # _classify_category / _classify_type / _extract_tags / _is_procedural
 # ---------------------------------------------------------------------------
 
+
 class TestClassifiers:
     def test_classify_category_discord(self):
         cat = mod._classify_category("The Discord bot has a new skill.", {})
@@ -291,6 +296,7 @@ class TestClassifiers:
 # DreamCycle.__init__ and run (mocked)
 # ---------------------------------------------------------------------------
 
+
 class TestDreamCycleInit:
     def test_init_sets_paths(self, tmp_path):
         dc = mod.DreamCycle(data_dir=tmp_path)
@@ -302,6 +308,7 @@ class TestDreamCycleInit:
     async def test_run_calls_phases(self, tmp_path, monkeypatch):
         """run() delegates to _run_phases which we stub."""
         from unittest.mock import AsyncMock
+
         dc = mod.DreamCycle(data_dir=tmp_path)
         monkeypatch.setattr(dc, "_run_phases", AsyncMock(return_value="✅ Dream done"))
         result = await dc.run()
@@ -314,8 +321,10 @@ class TestDreamCycleInit:
         from unittest.mock import patch
 
         dc = mod.DreamCycle(data_dir=tmp_path)
+
         async def _slow(*a, **kw):
             raise _asyncio.TimeoutError()
+
         monkeypatch.setattr(dc, "_run_phases", _slow)
 
         with patch("dream_cycle.asyncio.timeout", side_effect=_asyncio.TimeoutError):
@@ -330,6 +339,7 @@ class TestDreamCycleInit:
 # ---------------------------------------------------------------------------
 # dream_now / get_memory_health (top-level wrappers)
 # ---------------------------------------------------------------------------
+
 
 class TestDreamNow:
     @pytest.mark.asyncio

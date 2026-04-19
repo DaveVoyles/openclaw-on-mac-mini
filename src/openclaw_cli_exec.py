@@ -4,6 +4,7 @@ openclaw_cli_exec — Shell command execution, progress animation, and footer re
 Imports from: openclaw_cli_ui_core (ANSI palette)
 Does NOT import from openclaw_cli.py.
 """
+
 from __future__ import annotations
 
 import sys

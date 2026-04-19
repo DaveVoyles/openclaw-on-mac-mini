@@ -47,12 +47,13 @@ def _b(name: str, local_val: Any) -> Any:
     orig = _ORIG.get(name)
     if orig is not None and local_val is not orig:
         return local_val  # this module was patched — use the patched value
-    bot_mod = _sys.modules.get('bot')
+    bot_mod = _sys.modules.get("bot")
     if bot_mod is not None:
         bot_val = getattr(bot_mod, name, _SENTINEL)
         if bot_val is not _SENTINEL:
             return bot_val
     return local_val
+
 
 # ---------------------------------------------------------------------------
 # Ask-failure helpers
@@ -374,11 +375,7 @@ def _score_answer_quality(
     meta = final_meta if isinstance(final_meta, dict) else {}
 
     item_count = _count_markdown_table_items(text)
-    bullet_count = sum(
-        1
-        for line in text.splitlines()
-        if line.strip().startswith(("- ", "* ", "• "))
-    )
+    bullet_count = sum(1 for line in text.splitlines() if line.strip().startswith(("- ", "* ", "• ")))
     total_items = max(item_count, bullet_count)
 
     domains = _extract_distinct_source_domains(text)
@@ -656,13 +653,7 @@ def _build_ask_recovery_block(final_meta: dict[str, Any] | None) -> str | None:
         if evidence_low or status == "low"
         else "Confidence: mixed — verify key details if they are high impact."
     )
-    return (
-        "\n\n"
-        "> ℹ️ **Recovery note:**\n"
-        f"> - {coverage_line}\n"
-        f"> - 🧭 {scope_hint}\n"
-        f"> - 🔎 {confidence_line}\n"
-    )
+    return f"\n\n> ℹ️ **Recovery note:**\n> - {coverage_line}\n> - 🧭 {scope_hint}\n> - 🔎 {confidence_line}\n"
 
 
 # ---------------------------------------------------------------------------
@@ -720,10 +711,11 @@ async def _run_quality_auto_repair(
     W11-4: returns repair_skipped / repair_improved flags for caller transparency.
     """
     profile_values = _b("get_effective_channel_profile", get_effective_channel_profile)()
-    profile_name = str(
-        (profile_values.get("retrieval_profile") if isinstance(profile_values, dict) else None)
-        or "general"
-    ).strip().lower()
+    profile_name = (
+        str((profile_values.get("retrieval_profile") if isinstance(profile_values, dict) else None) or "general")
+        .strip()
+        .lower()
+    )
     if profile_name == "auto":
         profile_name = "general"
 
@@ -921,7 +913,9 @@ async def _run_quality_auto_repair(
                 retry_summary["repair_improved"] = True
                 retry_summary["outcome"] = "improved_copilot"
                 improved_meta["answer_quality_retry"] = retry_summary
-                _b("_record_quality_metric", _record_quality_metric)("ask_quality_retry_improved_copilot", context=context)
+                _b("_record_quality_metric", _record_quality_metric)(
+                    "ask_quality_retry_improved_copilot", context=context
+                )
                 return {
                     "response_text": second_result.response_text,
                     "model_used": second_result.model_used,
@@ -949,17 +943,20 @@ async def _run_quality_auto_repair(
         "repair_improved": False,
     }
 
+
 # ---------------------------------------------------------------------------
 # Originals registry — populated after all definitions so _b() can detect patches
 # ---------------------------------------------------------------------------
-_ORIG.update({
-    "_score_answer_quality": _score_answer_quality,
-    "_record_quality_metric": _record_quality_metric,
-    "_record_budget_policy_metric": _record_budget_policy_metric,
-    "_should_package_as_attachment": _should_package_as_attachment,
-    "get_effective_channel_profile": get_effective_channel_profile,
-    "get_latency_load_snapshot": get_latency_load_snapshot,
-    "apply_repair_budget": apply_repair_budget,
-    "_safe_score_answer_quality": _safe_score_answer_quality,
-    "_quality_retry_improved": _quality_retry_improved,
-})
+_ORIG.update(
+    {
+        "_score_answer_quality": _score_answer_quality,
+        "_record_quality_metric": _record_quality_metric,
+        "_record_budget_policy_metric": _record_budget_policy_metric,
+        "_should_package_as_attachment": _should_package_as_attachment,
+        "get_effective_channel_profile": get_effective_channel_profile,
+        "get_latency_load_snapshot": get_latency_load_snapshot,
+        "apply_repair_budget": apply_repair_budget,
+        "_safe_score_answer_quality": _safe_score_answer_quality,
+        "_quality_retry_improved": _quality_retry_improved,
+    }
+)

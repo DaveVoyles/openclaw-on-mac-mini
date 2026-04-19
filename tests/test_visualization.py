@@ -35,7 +35,7 @@ def sample_stock_data():
             {"date": "2024-01-11", "open": 171.0, "high": 173.0, "low": 170.0, "close": 172.5, "volume": 1100000},
             {"date": "2024-01-12", "open": 172.5, "high": 175.0, "low": 172.0, "close": 174.0, "volume": 1200000},
             {"date": "2024-01-15", "open": 174.0, "high": 176.0, "low": 173.0, "close": 175.5, "volume": 1300000},
-        ]
+        ],
     }
 
 
@@ -49,7 +49,7 @@ def sample_trend_data():
             {"date": "2024-01-11", "value": 382.5},
             {"date": "2024-01-12", "value": 385.0},
             {"date": "2024-01-15", "value": 387.5},
-        ]
+        ],
     }
 
 
@@ -64,7 +64,7 @@ def sample_comparison_data():
                     {"date": "2024-01-10", "value": 170.0},
                     {"date": "2024-01-11", "value": 172.5},
                     {"date": "2024-01-12", "value": 174.0},
-                ]
+                ],
             },
             {
                 "ticker": "MSFT",
@@ -72,8 +72,8 @@ def sample_comparison_data():
                     {"date": "2024-01-10", "value": 380.0},
                     {"date": "2024-01-11", "value": 382.5},
                     {"date": "2024-01-12", "value": 385.0},
-                ]
-            }
+                ],
+            },
         ]
     }
 
@@ -182,7 +182,7 @@ class TestCreateTrendChart:
             "data": [
                 {"date": "2024-01-10", "close": 220.0},
                 {"date": "2024-01-11", "close": 225.0},
-            ]
+            ],
         }
 
         with patch("src.visualization._save_chart") as mock_save:
@@ -233,18 +233,9 @@ class TestCreateComparisonChart:
         """Test comparison with multiple assets."""
         data = {
             "assets": [
-                {
-                    "ticker": "AAPL",
-                    "data": [{"date": "2024-01-10", "value": 170}]
-                },
-                {
-                    "ticker": "MSFT",
-                    "data": [{"date": "2024-01-10", "value": 380}]
-                },
-                {
-                    "ticker": "GOOGL",
-                    "data": [{"date": "2024-01-10", "value": 140}]
-                }
+                {"ticker": "AAPL", "data": [{"date": "2024-01-10", "value": 170}]},
+                {"ticker": "MSFT", "data": [{"date": "2024-01-10", "value": 380}]},
+                {"ticker": "GOOGL", "data": [{"date": "2024-01-10", "value": 140}]},
             ]
         }
 
@@ -271,6 +262,7 @@ class TestClearCache:
         """Test clearing cache with files."""
         # Populate cache
         from datetime import datetime
+
         _chart_cache["key1"] = (Path("data/charts/test1.png"), datetime.now())
         _chart_cache["key2"] = (Path("data/charts/test2.png"), datetime.now())
 

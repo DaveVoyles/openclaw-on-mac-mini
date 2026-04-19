@@ -110,6 +110,7 @@ def _is_snoozed(alert_key: str) -> bool:
 # W13-1 — Severity-based alert routing
 # ---------------------------------------------------------------------------
 
+
 async def send_severity_alert(
     bot: discord.Client,
     *,
@@ -170,7 +171,7 @@ async def send_severity_alert(
     # Build embed
     _color = color or (discord.Color.red() if effective_severity == "critical" else discord.Color.orange())
     embed = discord.Embed(title=title, description=description, color=_color)
-    for field_name, field_value, inline in (embed_fields or []):
+    for field_name, field_value, inline in embed_fields or []:
         embed.add_field(name=field_name, value=field_value, inline=inline)
     embed.set_footer(text=f"Severity: {effective_severity.upper()} • {component}")
 
@@ -335,11 +336,15 @@ def format_trend_alert(analysis: TrendAnalysis, alert_type: str = "TRENDING") ->
 
     # Sentiment metrics
     sent_emoji = "🟢" if analysis.current_sentiment > 0.3 else "🔴" if analysis.current_sentiment < -0.3 else "⚪"
-    sent_label = "Bullish" if analysis.current_sentiment > 0.3 else "Bearish" if analysis.current_sentiment < -0.3 else "Neutral"
-    sent_change = f"({'+' if analysis.sentiment_change_24h > 0 else ''}{analysis.sentiment_change_24h:.2f})" if analysis.sentiment_change_24h != 0 else ""
-    description_parts.append(
-        f"**Sentiment:** {sent_emoji} {analysis.current_sentiment:.2f} {sent_label} {sent_change}"
+    sent_label = (
+        "Bullish" if analysis.current_sentiment > 0.3 else "Bearish" if analysis.current_sentiment < -0.3 else "Neutral"
     )
+    sent_change = (
+        f"({'+' if analysis.sentiment_change_24h > 0 else ''}{analysis.sentiment_change_24h:.2f})"
+        if analysis.sentiment_change_24h != 0
+        else ""
+    )
+    description_parts.append(f"**Sentiment:** {sent_emoji} {analysis.current_sentiment:.2f} {sent_label} {sent_change}")
 
     # Trend direction
     trend_arrow = "🔥" if analysis.trend_direction == "up" else "❄️" if analysis.trend_direction == "down" else "➡️"
@@ -410,7 +415,9 @@ def format_text_alert(analysis: TrendAnalysis, alert_type: str = "TRENDING") -> 
 
     volume_arrow = "↑" if analysis.volume_change_pct > 0 else "↓" if analysis.volume_change_pct < 0 else "→"
     sent_emoji = "🟢" if analysis.current_sentiment > 0.3 else "🔴" if analysis.current_sentiment < -0.3 else "⚪"
-    sent_label = "Bullish" if analysis.current_sentiment > 0.3 else "Bearish" if analysis.current_sentiment < -0.3 else "Neutral"
+    sent_label = (
+        "Bullish" if analysis.current_sentiment > 0.3 else "Bearish" if analysis.current_sentiment < -0.3 else "Neutral"
+    )
 
     lines = [
         f"{emoji} {alert_type} ALERT",
@@ -527,9 +534,7 @@ async def check_and_alert_all(
     return alerted_topics
 
 
-def render_text_chart(
-    topic: str, category: str = "", hours: int = 24, width: int = 40
-) -> str:
+def render_text_chart(topic: str, category: str = "", hours: int = 24, width: int = 40) -> str:
     """
     Render a simple ASCII/emoji chart of volume over time.
 

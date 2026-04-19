@@ -20,15 +20,18 @@ class TestModelPreference:
     def test_default_preference_is_auto(self, tmp_path, monkeypatch):
         import memory
         import memory_preferences
+
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
         monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
         # No file on disk → should return config default
         from config import cfg
+
         assert memory.get_model_preference(12345) == cfg.default_model_preference
 
     def test_set_and_get_preference(self, tmp_path, monkeypatch):
         import memory
         import memory_preferences
+
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
         monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
         result = memory.set_model_preference(12345, "gemini")
@@ -39,6 +42,7 @@ class TestModelPreference:
     def test_set_preference_local(self, tmp_path, monkeypatch):
         import memory
         import memory_preferences
+
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
         monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
         result = memory.set_model_preference(12345, "local")
@@ -49,6 +53,7 @@ class TestModelPreference:
     def test_set_preference_auto(self, tmp_path, monkeypatch):
         import memory
         import memory_preferences
+
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
         monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
         # Set to gemini first, then back to auto
@@ -60,6 +65,7 @@ class TestModelPreference:
     def test_set_invalid_preference(self, tmp_path, monkeypatch):
         import memory
         import memory_preferences
+
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
         monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
         result = memory.set_model_preference(12345, "gpt4")
@@ -69,6 +75,7 @@ class TestModelPreference:
     def test_set_preference_copilot(self, tmp_path, monkeypatch):
         import memory
         import memory_preferences
+
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
         monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
         result = memory.set_model_preference(12345, "copilot")
@@ -79,6 +86,7 @@ class TestModelPreference:
     def test_preference_persists_to_disk(self, tmp_path, monkeypatch):
         import memory
         import memory_preferences
+
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
         monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
         memory.set_model_preference(99, "local")
@@ -91,6 +99,7 @@ class TestModelPreference:
     def test_preference_case_insensitive(self, tmp_path, monkeypatch):
         import memory
         import memory_preferences
+
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
         monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
         result = memory.set_model_preference(12345, "GEMINI")
@@ -100,6 +109,7 @@ class TestModelPreference:
     def test_set_preference_accepts_claude_alias(self, tmp_path, monkeypatch):
         import memory
         import memory_preferences
+
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
         monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
         result = memory.set_model_preference(12345, "claude")
@@ -110,6 +120,7 @@ class TestModelPreference:
     def test_set_invalid_preference_includes_did_you_mean(self, tmp_path, monkeypatch):
         import memory
         import memory_preferences
+
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
         monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
         result = memory.set_model_preference(12345, "gemni")
@@ -183,7 +194,7 @@ class TestChatModelPreference:
 
         import llm
 
-        chat_module = sys.modules['llm.chat']
+        chat_module = sys.modules["llm.chat"]
 
         with (
             patch.object(llm, "LOCAL_LLM_ENABLED", True),
@@ -203,7 +214,7 @@ class TestChatModelPreference:
 
         import llm
 
-        chat_module = sys.modules['llm.chat']
+        chat_module = sys.modules["llm.chat"]
 
         with (
             patch.object(llm, "LOCAL_LLM_ENABLED", True),
@@ -220,7 +231,7 @@ class TestChatModelPreference:
 
         import llm
 
-        chat_module = sys.modules['llm.chat']
+        chat_module = sys.modules["llm.chat"]
 
         with patch.object(chat_module, "LOCAL_LLM_ENABLED", False):
             text, hist, model = await llm.chat("hello", model_preference="local")
@@ -234,14 +245,19 @@ class TestChatModelPreference:
 
         import llm
 
-        chat_module = sys.modules['llm.chat']
+        chat_module = sys.modules["llm.chat"]
 
         mock_model = MagicMock()
         with (
             patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
             patch.object(chat_module, "_get_model", new_callable=AsyncMock, return_value=mock_model),
-            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini says hi", [], "gemini-2.5-flash")),
+            patch.object(
+                chat_module,
+                "_gemini_chat",
+                new_callable=AsyncMock,
+                return_value=("Gemini says hi", [], "gemini-2.5-flash"),
+            ),
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock) as mock_local,
         ):
             mock_rl.check.return_value = True
@@ -258,7 +274,7 @@ class TestChatModelPreference:
 
         import llm
 
-        chat_module = sys.modules['llm.chat']
+        chat_module = sys.modules["llm.chat"]
 
         with patch.object(chat_module, "GOOGLE_API_KEY", ""):
             text, hist, model = await llm.chat("hello", model_preference="gemini")
@@ -272,14 +288,22 @@ class TestChatModelPreference:
 
         import llm
 
-        chat_module = sys.modules['llm.chat']
+        chat_module = sys.modules["llm.chat"]
 
         with (
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
-            patch("model_router.classify_query", return_value=SimpleNamespace(model_type="copilot", model="", reason="test")),
+            patch(
+                "model_router.classify_query",
+                return_value=SimpleNamespace(model_type="copilot", model="", reason="test"),
+            ),
             patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value="Copilot response"),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
-            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
+            patch.object(
+                chat_module,
+                "_gemini_chat",
+                new_callable=AsyncMock,
+                return_value=("Gemini response", [], "gemini-2.5-flash"),
+            ),
         ):
             mock_rl.check.return_value = True
             text, hist, model = await llm.chat("hello", model_preference="auto")
@@ -296,10 +320,18 @@ class TestChatModelPreference:
 
         with (
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
-            patch("model_router.classify_query", return_value=SimpleNamespace(model_type="copilot", model="", reason="test")),
+            patch(
+                "model_router.classify_query",
+                return_value=SimpleNamespace(model_type="copilot", model="", reason="test"),
+            ),
             patch("llm.providers.chat_openai", new_callable=AsyncMock, side_effect=[None, "Claude fallback response"]),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
-            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
+            patch.object(
+                chat_module,
+                "_gemini_chat",
+                new_callable=AsyncMock,
+                return_value=("Gemini response", [], "gemini-2.5-flash"),
+            ),
         ):
             mock_rl.check.return_value = True
             text, _hist, model = await llm.chat("hello", model_preference="auto")
@@ -322,7 +354,12 @@ class TestChatModelPreference:
             patch("answer_policy.is_low_quality", return_value=False),
             patch("llm.providers.chat_openai", new_callable=AsyncMock) as mock_openai,
             patch.object(chat_module, "_rate_limiter") as mock_rl,
-            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
+            patch.object(
+                chat_module,
+                "_gemini_chat",
+                new_callable=AsyncMock,
+                return_value=("Gemini response", [], "gemini-2.5-flash"),
+            ),
         ):
             mock_rl.check.return_value = True
             text, _hist, model = await llm.chat("hello", model_preference="auto")
@@ -365,15 +402,22 @@ class TestChatModelPreference:
 
         import llm
 
-        chat_module = sys.modules['llm.chat']
+        chat_module = sys.modules["llm.chat"]
 
         mock_model = MagicMock()
         with (
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
             patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value="One moment while I look that up."),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
-            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
-            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
+            patch.object(
+                chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})
+            ),
+            patch.object(
+                chat_module,
+                "_gemini_chat",
+                new_callable=AsyncMock,
+                return_value=("Gemini response", [], "gemini-2.5-flash"),
+            ),
         ):
             mock_rl.check.return_value = True
             text, hist, model = await llm.chat("hello", model_preference="auto")
@@ -409,7 +453,7 @@ class TestChatStreamModelPreference:
 
         import llm
 
-        chat_module = sys.modules['llm.chat']
+        chat_module = sys.modules["llm.chat"]
 
         with (
             patch.object(llm, "LOCAL_LLM_ENABLED", True),
@@ -431,7 +475,7 @@ class TestChatStreamModelPreference:
 
         import llm
 
-        chat_module = sys.modules['llm.chat']
+        chat_module = sys.modules["llm.chat"]
 
         with (
             patch.object(llm, "LOCAL_LLM_ENABLED", True),
@@ -450,7 +494,7 @@ class TestChatStreamModelPreference:
 
         import llm
 
-        chat_module = sys.modules['llm.chat']
+        chat_module = sys.modules["llm.chat"]
 
         mock_model = MagicMock()
         mock_model.model_name = "gemini-2.5-flash"
@@ -460,7 +504,12 @@ class TestChatStreamModelPreference:
             patch.object(chat_module, "_rate_limiter") as mock_rl,
             patch.object(chat_module, "_get_model", new_callable=AsyncMock, return_value=mock_model),
             patch.object(chat_module, "_needs_tools", return_value=True),
-            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini answer", [], "gemini-2.5-flash")),
+            patch.object(
+                chat_module,
+                "_gemini_chat",
+                new_callable=AsyncMock,
+                return_value=("Gemini answer", [], "gemini-2.5-flash"),
+            ),
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock) as mock_local,
         ):
             mock_rl.check.return_value = True
@@ -486,9 +535,13 @@ class TestChatStreamModelPreference:
         with (
             patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
-            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(
+                chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history
+            ),
             patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
-            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
+            patch.object(
+                chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})
+            ),
             patch.object(
                 chat_module,
                 "_gemini_chat",
@@ -525,14 +578,26 @@ class TestChatStreamModelPreference:
         with (
             patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
-            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(
+                chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history
+            ),
             patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
-            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
-            patch("model_routing_policy.select_web_search_route", return_value=SimpleNamespace(prefer_search=False, reason="test")),
+            patch.object(
+                chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})
+            ),
+            patch(
+                "model_routing_policy.select_web_search_route",
+                return_value=SimpleNamespace(prefer_search=False, reason="test"),
+            ),
             patch("model_router.classify_query", return_value=SimpleNamespace(model_type="openai")),
             patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value="One moment while I look that up."),
             patch("model_router.is_ollama_alive", new_callable=AsyncMock, return_value=True),
-            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
+            patch.object(
+                chat_module,
+                "_gemini_chat",
+                new_callable=AsyncMock,
+                return_value=("Gemini response", [], "gemini-2.5-flash"),
+            ),
         ):
             mock_rl.check.return_value = True
             chunks = []
@@ -554,13 +619,23 @@ class TestChatStreamModelPreference:
         with (
             patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
-            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(
+                chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history
+            ),
             patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
-            patch("model_router.classify_query", return_value=SimpleNamespace(model_type="copilot", model="", reason="test")),
+            patch(
+                "model_router.classify_query",
+                return_value=SimpleNamespace(model_type="copilot", model="", reason="test"),
+            ),
             patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value="Copilot stream response"),
             patch("model_router.is_ollama_alive", new_callable=AsyncMock, return_value=True),
-            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
+            patch.object(
+                chat_module,
+                "_gemini_chat",
+                new_callable=AsyncMock,
+                return_value=("Gemini response", [], "gemini-2.5-flash"),
+            ),
         ):
             mock_rl.check.return_value = True
             chunks = []
@@ -582,13 +657,23 @@ class TestChatStreamModelPreference:
         with (
             patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
-            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(
+                chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history
+            ),
             patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
-            patch("model_router.classify_query", return_value=SimpleNamespace(model_type="copilot", model="", reason="test")),
+            patch(
+                "model_router.classify_query",
+                return_value=SimpleNamespace(model_type="copilot", model="", reason="test"),
+            ),
             patch("llm.providers.chat_openai", new_callable=AsyncMock, side_effect=[None, "Claude stream fallback"]),
             patch("model_router.is_ollama_alive", new_callable=AsyncMock, return_value=True),
-            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
+            patch.object(
+                chat_module,
+                "_gemini_chat",
+                new_callable=AsyncMock,
+                return_value=("Gemini response", [], "gemini-2.5-flash"),
+            ),
         ):
             mock_rl.check.return_value = True
             chunks = []
@@ -613,9 +698,13 @@ class TestChatStreamModelPreference:
         with (
             patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
-            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(
+                chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history
+            ),
             patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
-            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
+            patch.object(
+                chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})
+            ),
             patch.object(
                 chat_module,
                 "_gemini_chat",
@@ -650,10 +739,19 @@ class TestChatStreamModelPreference:
         with (
             patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
-            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(
+                chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history
+            ),
             patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
-            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
-            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, side_effect=RuntimeError("Gemini circuit breaker is open")),
+            patch.object(
+                chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})
+            ),
+            patch.object(
+                chat_module,
+                "_gemini_chat",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("Gemini circuit breaker is open"),
+            ),
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value=None),
         ):
             mock_rl.check.return_value = True
@@ -680,9 +778,13 @@ class TestChatStreamModelPreference:
         with (
             patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
-            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(
+                chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history
+            ),
             patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
-            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
+            patch.object(
+                chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})
+            ),
             patch.object(
                 chat_module,
                 "_gemini_chat",
@@ -718,10 +820,19 @@ class TestChatStreamModelPreference:
         with (
             patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
-            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(
+                chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history
+            ),
             patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
-            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
-            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, side_effect=RuntimeError("Gemini circuit breaker is open")),
+            patch.object(
+                chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})
+            ),
+            patch.object(
+                chat_module,
+                "_gemini_chat",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("Gemini circuit breaker is open"),
+            ),
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value=None),
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
             patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value="Recovered through Copilot."),
@@ -750,15 +861,32 @@ class TestChatStreamModelPreference:
         with (
             patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
-            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(
+                chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history
+            ),
             patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
-            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
-            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, side_effect=RuntimeError("Gemini circuit breaker is open")),
+            patch.object(
+                chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})
+            ),
+            patch.object(
+                chat_module,
+                "_gemini_chat",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("Gemini circuit breaker is open"),
+            ),
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value=None),
             patch("llm.providers.COPILOT_PROXY_ENABLED", False),
-            patch.object(chat_module, "_get_tool_declarations", return_value=[{"name": "generate_sports_watch_report"}]),
-            patch.object(chat_module, "route_tool_declarations", return_value=([{"name": "generate_sports_watch_report"}], {})),
-            patch("skills.reporting_skills.generate_sports_watch_report", new_callable=AsyncMock, return_value="Direct sports answer"),
+            patch.object(
+                chat_module, "_get_tool_declarations", return_value=[{"name": "generate_sports_watch_report"}]
+            ),
+            patch.object(
+                chat_module, "route_tool_declarations", return_value=([{"name": "generate_sports_watch_report"}], {})
+            ),
+            patch(
+                "skills.reporting_skills.generate_sports_watch_report",
+                new_callable=AsyncMock,
+                return_value="Direct sports answer",
+            ),
         ):
             mock_rl.check.return_value = True
             chunks = []
@@ -786,14 +914,26 @@ class TestChatStreamModelPreference:
 
         with (
             patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
-            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(
+                chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history
+            ),
             patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
-            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
-            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, side_effect=RuntimeError("Gemini circuit breaker is open")),
+            patch.object(
+                chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})
+            ),
+            patch.object(
+                chat_module,
+                "_gemini_chat",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("Gemini circuit breaker is open"),
+            ),
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value=None),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
-            patch("model_routing_policy.select_web_search_route", return_value=SimpleNamespace(prefer_search=False, reason="test")),
+            patch(
+                "model_routing_policy.select_web_search_route",
+                return_value=SimpleNamespace(prefer_search=False, reason="test"),
+            ),
             patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value="Recovered through Copilot."),
         ):
             mock_rl.check.return_value = True
@@ -819,10 +959,19 @@ class TestChatStreamModelPreference:
         with (
             patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
-            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(
+                chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history
+            ),
             patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
-            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
-            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, side_effect=RuntimeError("Gemini circuit breaker is open")),
+            patch.object(
+                chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})
+            ),
+            patch.object(
+                chat_module,
+                "_gemini_chat",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("Gemini circuit breaker is open"),
+            ),
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, side_effect=local_timeout),
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
             patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value="Recovered through Copilot."),
@@ -851,10 +1000,19 @@ class TestChatStreamModelPreference:
         with (
             patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
-            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(
+                chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history
+            ),
             patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
-            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
-            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, side_effect=RuntimeError("Gemini circuit breaker is open")),
+            patch.object(
+                chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})
+            ),
+            patch.object(
+                chat_module,
+                "_gemini_chat",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("Gemini circuit breaker is open"),
+            ),
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value=None),
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
             patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value=fallback_reply),

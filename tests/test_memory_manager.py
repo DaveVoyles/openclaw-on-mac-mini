@@ -24,6 +24,7 @@ class _MemoryManagerFacade:
     _content_id = staticmethod(memory_module._mem_content_id)
     _unique_id = staticmethod(memory_module._mem_unique_id)
 
+
 memory_manager = _MemoryManagerFacade()
 
 
@@ -114,9 +115,7 @@ class TestStore:
 
     @pytest.mark.asyncio
     async def test_store_survives_vector_failure(self):
-        mock_vs = _make_mock_vector_store(
-            add_memory_deduped=AsyncMock(side_effect=RuntimeError("boom"))
-        )
+        mock_vs = _make_mock_vector_store(add_memory_deduped=AsyncMock(side_effect=RuntimeError("boom")))
         mock_qmd = _make_mock_qmd()
         with patch.dict(sys.modules, {"vector_store": mock_vs, "qmd": mock_qmd}):
             result = await memory_manager.store("fact")
@@ -134,14 +133,19 @@ class TestRecall:
     @pytest.mark.asyncio
     async def test_recall_merges_vector_and_rules(self):
         mock_vs = _make_mock_vector_store(
-            search_all=AsyncMock(return_value=[
-                {"text": "fact1", "metadata": {"source": "user"}, "similarity": 0.9,
-                 "collection": "memories", "id": "m1"},
-            ])
+            search_all=AsyncMock(
+                return_value=[
+                    {
+                        "text": "fact1",
+                        "metadata": {"source": "user"},
+                        "similarity": 0.9,
+                        "collection": "memories",
+                        "id": "m1",
+                    },
+                ]
+            )
         )
-        mock_rules = _make_mock_rules(
-            get_relevant_rules=AsyncMock(return_value=["Always use metric units"])
-        )
+        mock_rules = _make_mock_rules(get_relevant_rules=AsyncMock(return_value=["Always use metric units"]))
         with patch.dict(sys.modules, {"vector_store": mock_vs, "rules_engine": mock_rules}):
             results = await memory_manager.recall("units")
 
@@ -151,10 +155,11 @@ class TestRecall:
     @pytest.mark.asyncio
     async def test_recall_without_rules(self):
         mock_vs = _make_mock_vector_store(
-            search_all=AsyncMock(return_value=[
-                {"text": "fact1", "metadata": {}, "similarity": 0.9,
-                 "collection": "memories", "id": "m1"},
-            ])
+            search_all=AsyncMock(
+                return_value=[
+                    {"text": "fact1", "metadata": {}, "similarity": 0.9, "collection": "memories", "id": "m1"},
+                ]
+            )
         )
         with patch.dict(sys.modules, {"vector_store": mock_vs}):
             results = await memory_manager.recall("test", include_rules=False)
@@ -164,12 +169,8 @@ class TestRecall:
 
     @pytest.mark.asyncio
     async def test_recall_survives_all_failures(self):
-        mock_vs = _make_mock_vector_store(
-            search_all=AsyncMock(side_effect=RuntimeError("boom"))
-        )
-        mock_rules = _make_mock_rules(
-            get_relevant_rules=AsyncMock(side_effect=RuntimeError("boom"))
-        )
+        mock_vs = _make_mock_vector_store(search_all=AsyncMock(side_effect=RuntimeError("boom")))
+        mock_rules = _make_mock_rules(get_relevant_rules=AsyncMock(side_effect=RuntimeError("boom")))
         with patch.dict(sys.modules, {"vector_store": mock_vs, "rules_engine": mock_rules}):
             results = await memory_manager.recall("anything")
 
@@ -178,11 +179,18 @@ class TestRecall:
     @pytest.mark.asyncio
     async def test_recall_respects_top_k(self):
         mock_vs = _make_mock_vector_store(
-            search_all=AsyncMock(return_value=[
-                {"text": f"fact{i}", "metadata": {}, "similarity": 0.9 - i * 0.01,
-                 "collection": "memories", "id": f"m{i}"}
-                for i in range(10)
-            ])
+            search_all=AsyncMock(
+                return_value=[
+                    {
+                        "text": f"fact{i}",
+                        "metadata": {},
+                        "similarity": 0.9 - i * 0.01,
+                        "collection": "memories",
+                        "id": f"m{i}",
+                    }
+                    for i in range(10)
+                ]
+            )
         )
         with patch.dict(sys.modules, {"vector_store": mock_vs}):
             results = await memory_manager.recall("test", top_k=3, include_rules=False)
@@ -207,9 +215,7 @@ class TestForget:
 
     @pytest.mark.asyncio
     async def test_forget_survives_failure(self):
-        mock_vs = _make_mock_vector_store(
-            delete_document=AsyncMock(side_effect=RuntimeError("boom"))
-        )
+        mock_vs = _make_mock_vector_store(delete_document=AsyncMock(side_effect=RuntimeError("boom")))
         with patch.dict(sys.modules, {"vector_store": mock_vs}):
             removed = await memory_manager.forget("nonexistent")
 
@@ -224,24 +230,19 @@ class TestForget:
 class TestStats:
     @pytest.mark.asyncio
     async def test_stats_aggregates_all_backends(self):
-        mock_vs = _make_mock_vector_store(
-            get_stats=AsyncMock(return_value={"memories": {"count": 10}})
-        )
-        mock_qmd = _make_mock_qmd(
-            list_memories=AsyncMock(return_value="• fact1\n• fact2\n• fact3")
-        )
-        mock_rules = _make_mock_rules(
-            get_all_rules=AsyncMock(return_value=[{"id": "r1"}, {"id": "r2"}])
-        )
-        mock_profile = _make_mock_profile(
-            load_profile=MagicMock(return_value={"preferences": {"tz": "UTC"}})
-        )
-        with patch.dict(sys.modules, {
-            "vector_store": mock_vs,
-            "qmd": mock_qmd,
-            "rules_engine": mock_rules,
-            "user_profile": mock_profile,
-        }):
+        mock_vs = _make_mock_vector_store(get_stats=AsyncMock(return_value={"memories": {"count": 10}}))
+        mock_qmd = _make_mock_qmd(list_memories=AsyncMock(return_value="• fact1\n• fact2\n• fact3"))
+        mock_rules = _make_mock_rules(get_all_rules=AsyncMock(return_value=[{"id": "r1"}, {"id": "r2"}]))
+        mock_profile = _make_mock_profile(load_profile=MagicMock(return_value={"preferences": {"tz": "UTC"}}))
+        with patch.dict(
+            sys.modules,
+            {
+                "vector_store": mock_vs,
+                "qmd": mock_qmd,
+                "rules_engine": mock_rules,
+                "user_profile": mock_profile,
+            },
+        ):
             result = await memory_manager.stats()
 
         assert result["vector_store"] == {"memories": {"count": 10}}
@@ -253,12 +254,15 @@ class TestStats:
     async def test_stats_survives_all_failures(self):
         # Inject modules that raise on every attribute access
         broken = MagicMock(side_effect=RuntimeError("boom"))
-        with patch.dict(sys.modules, {
-            "vector_store": broken,
-            "qmd": broken,
-            "rules_engine": broken,
-            "user_profile": broken,
-        }):
+        with patch.dict(
+            sys.modules,
+            {
+                "vector_store": broken,
+                "qmd": broken,
+                "rules_engine": broken,
+                "user_profile": broken,
+            },
+        ):
             result = await memory_manager.stats()
 
         assert "vector_store" in result

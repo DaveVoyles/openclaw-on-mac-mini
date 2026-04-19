@@ -1,4 +1,5 @@
 """Tests for src/cog_helpers.py — truncate_for_embed, split_response, require_auth."""
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -9,6 +10,7 @@ import cog_helpers as ch  # noqa: E402
 # ---------------------------------------------------------------------------
 # truncate_for_embed
 # ---------------------------------------------------------------------------
+
 
 class TestTruncateForEmbed:
     def test_short_text_returned_unchanged(self):
@@ -38,6 +40,7 @@ class TestTruncateForEmbed:
 # ---------------------------------------------------------------------------
 # split_response
 # ---------------------------------------------------------------------------
+
 
 class TestSplitResponse:
     def test_short_text_returns_single_chunk(self):
@@ -86,6 +89,7 @@ class TestSplitResponse:
 # ---------------------------------------------------------------------------
 # require_auth
 # ---------------------------------------------------------------------------
+
 
 class TestRequireAuth:
     def test_returns_non_none(self):

@@ -29,11 +29,10 @@ _FEEDBACK_CHANNEL_EVENTS: dict[int, list[float]] = {}
 
 def _fg_const(name: str, local_val):
     """Read constant from bot module if available (test monkeypatching), else use local."""
-    m = _sys.modules.get('bot')
+    m = _sys.modules.get("bot")
     if m is not None and hasattr(m, name):
         return getattr(m, name)
     return local_val
-
 
 
 def _prune_feedback_event_buffer(events: list[float], now: float, window_seconds: float) -> list[float]:
@@ -60,13 +59,17 @@ def _apply_feedback_guardrails(
     user_key = (safe_user_id, safe_channel_id)
 
     with _FEEDBACK_GUARDRAIL_LOCK:
-        dedupe_cutoff = resolved_now - max(0.0, _fg_const("_FEEDBACK_DEDUPE_WINDOW_SECONDS", _FEEDBACK_DEDUPE_WINDOW_SECONDS))
+        dedupe_cutoff = resolved_now - max(
+            0.0, _fg_const("_FEEDBACK_DEDUPE_WINDOW_SECONDS", _FEEDBACK_DEDUPE_WINDOW_SECONDS)
+        )
         for key, ts in list(_FEEDBACK_RECENT_EVENTS.items()):
             if ts < dedupe_cutoff:
                 _FEEDBACK_RECENT_EVENTS.pop(key, None)
 
         previous_ts = _FEEDBACK_RECENT_EVENTS.get(dedupe_key)
-        if previous_ts is not None and (resolved_now - previous_ts) < _fg_const("_FEEDBACK_DEDUPE_WINDOW_SECONDS", _FEEDBACK_DEDUPE_WINDOW_SECONDS):
+        if previous_ts is not None and (resolved_now - previous_ts) < _fg_const(
+            "_FEEDBACK_DEDUPE_WINDOW_SECONDS", _FEEDBACK_DEDUPE_WINDOW_SECONDS
+        ):
             return False, "dedupe"
 
         user_events = _prune_feedback_event_buffer(

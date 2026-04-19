@@ -232,11 +232,7 @@ async def create_calendar_event(
                 data = await resp.json()
                 event_id = data.get("id", "?")
                 html_link = data.get("htmlLink", "")
-                result = (
-                    f"✅ Event created: **{summary}**\n"
-                    f"Start: {start_time} | End: {end_time}\n"
-                    f"ID: `{event_id}`"
-                )
+                result = f"✅ Event created: **{summary}**\nStart: {start_time} | End: {end_time}\nID: `{event_id}`"
                 if html_link:
                     result += f"\n{html_link}"
                 return result
@@ -256,12 +252,8 @@ async def get_todays_events() -> str:
         return "❌ Failed to obtain Google access token."
 
     now = datetime.datetime.now(datetime.timezone.utc)
-    time_min = now.replace(hour=0, minute=0, second=0, microsecond=0).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
-    time_max = now.replace(hour=23, minute=59, second=59, microsecond=0).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
+    time_min = now.replace(hour=0, minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+    time_max = now.replace(hour=23, minute=59, second=59, microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
     params = {
         "maxResults": "15",
         "orderBy": "startTime",
@@ -424,10 +416,7 @@ async def read_drive_file(file_id: str) -> str:
             params={"fields": "id,name,mimeType"},
         ) as meta_resp:
             if meta_resp.status == 403:
-                return (
-                    "❌ Drive API returned 403 Forbidden. "
-                    "Ensure the refresh token has `drive.readonly` scope."
-                )
+                return "❌ Drive API returned 403 Forbidden. Ensure the refresh token has `drive.readonly` scope."
             if meta_resp.status != 200:
                 body = await meta_resp.text()
                 return f"❌ Drive metadata error {meta_resp.status}: {body[:200]}"
@@ -493,12 +482,8 @@ async def upload_drive_file(name: str, content: str, folder_id: str = "") -> str
 
     body = (
         f"--{boundary}\r\n"
-        f"Content-Type: application/json; charset=UTF-8\r\n\r\n"
-        + _json.dumps(metadata)
-        + f"\r\n--{boundary}\r\n"
-        f"Content-Type: text/plain; charset=UTF-8\r\n\r\n"
-        + content
-        + f"\r\n--{boundary}--"
+        f"Content-Type: application/json; charset=UTF-8\r\n\r\n" + _json.dumps(metadata) + f"\r\n--{boundary}\r\n"
+        f"Content-Type: text/plain; charset=UTF-8\r\n\r\n" + content + f"\r\n--{boundary}--"
     )
 
     headers = {
@@ -529,11 +514,7 @@ async def upload_drive_file(name: str, content: str, folder_id: str = "") -> str
         return f"❌ Drive upload failed: {e}"
 
     file_id = data.get("id", "?")
-    return (
-        f"✅ File uploaded to Google Drive.\n"
-        f"Name: **{name}**\n"
-        f"ID: `{file_id}`"
-    )
+    return f"✅ File uploaded to Google Drive.\nName: **{name}**\nID: `{file_id}`"
 
 
 # ---------------------------------------------------------------------------

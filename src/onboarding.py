@@ -85,9 +85,7 @@ class OnboardingManager:
                 "current_step": progress.current_step.value,
                 "completed_steps": progress.completed_steps,
                 "skipped": progress.skipped,
-                "completed_at": progress.completed_at.isoformat()
-                if progress.completed_at
-                else None,
+                "completed_at": progress.completed_at.isoformat() if progress.completed_at else None,
             }
 
         with open(self.progress_file, "w") as f:
@@ -162,9 +160,7 @@ class OnboardingManager:
         """Get user's onboarding progress."""
         return self._user_progress.get(user_id)
 
-    async def send_welcome_message(
-        self, user: discord.User, channel: discord.TextChannel
-    ):
+    async def send_welcome_message(self, user: discord.User, channel: discord.TextChannel):
         """Send welcome message to a new user."""
         embed = Embed(
             title="🎉 Welcome to OpenClaw!",
@@ -207,9 +203,7 @@ class OnboardingManager:
         # Start onboarding
         self.start_onboarding(str(user.id))
 
-    async def send_step_message(
-        self, user: discord.User, channel: discord.TextChannel, step: TutorialStep
-    ) -> Embed:
+    async def send_step_message(self, user: discord.User, channel: discord.TextChannel, step: TutorialStep) -> Embed:
         """Send tutorial step message."""
         step_content = self._get_step_content(step)
 
@@ -262,9 +256,7 @@ class OnboardingManager:
             },
             TutorialStep.BASIC_COMMANDS: {
                 "title": "Basic Commands",
-                "description": (
-                    "Here are the most important commands to get started:"
-                ),
+                "description": ("Here are the most important commands to get started:"),
                 "example": (
                     "`/ask question:What is the weather?` - Ask me anything\n"
                     "`/help` - See all available commands\n"
@@ -279,9 +271,7 @@ class OnboardingManager:
             },
             TutorialStep.SCHEDULED_TASKS: {
                 "title": "Scheduled Tasks & Reminders",
-                "description": (
-                    "Automate recurring tasks with the scheduler:"
-                ),
+                "description": ("Automate recurring tasks with the scheduler:"),
                 "example": (
                     "`/schedule-task` - Create a new scheduled task\n"
                     "`/list-tasks` - View all scheduled tasks\n"
@@ -295,9 +285,7 @@ class OnboardingManager:
             },
             TutorialStep.API_INTEGRATIONS: {
                 "title": "API Integrations",
-                "description": (
-                    "I integrate with many external services:"
-                ),
+                "description": ("I integrate with many external services:"),
                 "example": (
                     "🌤️ Weather forecasts\n"
                     "📧 Email sending (Gmail, SMTP)\n"
@@ -314,9 +302,7 @@ class OnboardingManager:
             },
             TutorialStep.DASHBOARD_ACCESS: {
                 "title": "Web Dashboard",
-                "description": (
-                    "Access the web dashboard for advanced features:"
-                ),
+                "description": ("Access the web dashboard for advanced features:"),
                 "example": (
                     "📊 Real-time metrics and analytics\n"
                     "📝 Conversation history browser\n"
@@ -332,9 +318,7 @@ class OnboardingManager:
             },
             TutorialStep.ADVANCED_FEATURES: {
                 "title": "Advanced Features",
-                "description": (
-                    "Power user features for automation:"
-                ),
+                "description": ("Power user features for automation:"),
                 "example": (
                     "🧠 Long-term memory with semantic search\n"
                     "📊 Goal and habit tracking\n"
@@ -351,10 +335,7 @@ class OnboardingManager:
             },
             TutorialStep.COMMUNITY_RESOURCES: {
                 "title": "Community & Resources",
-                "description": (
-                    "You've completed the tutorial! 🎉\n\n"
-                    "Here are some resources to continue learning:"
-                ),
+                "description": ("You've completed the tutorial! 🎉\n\nHere are some resources to continue learning:"),
                 "example": (
                     "📖 README.md - Full documentation\n"
                     "🎯 IMPLEMENTATION_SUMMARY.md - Feature guide\n"

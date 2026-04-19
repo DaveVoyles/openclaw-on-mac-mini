@@ -1,4 +1,5 @@
 """Tests for src/habit_tracker.py — HabitTracker CRUD + streak + sparkline."""
+
 import json
 from datetime import datetime, timedelta, timezone
 

@@ -1,4 +1,5 @@
 """Tests for cogs/calendar_cog.py."""
+
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -59,12 +60,14 @@ def _make_cog():
 
 # ── __init__ ──────────────────────────────────────────────────────────────────
 
+
 def test_calendar_cog_init():
     cog = _make_cog()
     assert cog.bot is not None
 
 
 # ── calendar_today ────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_calendar_today_success():
@@ -93,6 +96,7 @@ async def test_calendar_today_error():
 
 # ── calendar_upcoming ─────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_calendar_upcoming_success():
     cog = _make_cog()
@@ -119,18 +123,23 @@ async def test_calendar_upcoming_error():
 
 # ── calendar_add ──────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_calendar_add_success():
     cog = _make_cog()
     inter = _make_interaction()
 
     import datetime
+
     fake_dt = datetime.datetime(2025, 1, 15, 14, 0)
 
-    with patch("dateutil.parser.parse", return_value=fake_dt), \
-         patch("calendar_skills.create_calendar_event", new=AsyncMock(return_value="Event created")):
+    with (
+        patch("dateutil.parser.parse", return_value=fake_dt),
+        patch("calendar_skills.create_calendar_event", new=AsyncMock(return_value="Event created")),
+    ):
         await cog.calendar_add.callback(
-            cog, inter,
+            cog,
+            inter,
             title="Team Meeting",
             when="Wednesday 2pm",
             description="Quarterly sync",
@@ -148,7 +157,8 @@ async def test_calendar_add_error():
 
     with patch("dateutil.parser.parse", side_effect=ValueError("Cannot parse")):
         await cog.calendar_add.callback(
-            cog, inter,
+            cog,
+            inter,
             title="Meeting",
             when="invalid date",
         )
@@ -158,6 +168,7 @@ async def test_calendar_add_error():
 
 
 # ── calendar_delete ───────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_calendar_delete_success():

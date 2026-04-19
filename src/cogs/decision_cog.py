@@ -59,9 +59,7 @@ class DecisionCog(commands.GroupCog, group_name="decision", group_description="D
 
         weights = parse_role_weights(role_weights)
         embed = discord.Embed(title=f"🗳️ Decision Poll: {question}", color=discord.Color.blurple())
-        embed.description = "\n".join(
-            f"{NUMBER_EMOJIS[i]} {choice}" for i, choice in enumerate(choices)
-        )
+        embed.description = "\n".join(f"{NUMBER_EMOJIS[i]} {choice}" for i, choice in enumerate(choices))
         if weights:
             human = ", ".join(f"{k}:{v:g}" for k, v in weights.items())
             embed.add_field(name="Role weights", value=human, inline=False)
@@ -122,7 +120,9 @@ class DecisionCog(commands.GroupCog, group_name="decision", group_description="D
                             member = None
                     if member:
                         role_names = [r.name for r in member.roles if r.name != "@everyone"]
-                votes.append(DecisionVote(user_id=user.id, user_name=user.display_name, option_index=i, roles=role_names))
+                votes.append(
+                    DecisionVote(user_id=user.id, user_name=user.display_name, option_index=i, roles=role_names)
+                )
 
         outcome = compute_weighted_outcome(question=question, options=choices, votes=votes, role_weights=role_weights)
 
@@ -152,9 +152,7 @@ class DecisionCog(commands.GroupCog, group_name="decision", group_description="D
             color=discord.Color.green(),
         )
         lines = []
-        for option, weighted, raw in zip(
-            outcome["options"], outcome["weighted_totals"], outcome["raw_totals"]
-        ):
+        for option, weighted, raw in zip(outcome["options"], outcome["weighted_totals"], outcome["raw_totals"]):
             lines.append(f"• {option}: **{weighted}** weighted ({raw} votes)")
         result.add_field(name="Outcome", value="\n".join(lines), inline=False)
         result.add_field(

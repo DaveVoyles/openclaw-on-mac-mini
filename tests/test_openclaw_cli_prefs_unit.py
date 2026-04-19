@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_prefs.py."""
+
 from __future__ import annotations
 
 import json
@@ -12,6 +13,7 @@ import openclaw_cli_prefs as mod
 # ---------------------------------------------------------------------------
 # _normalize_theme_name
 # ---------------------------------------------------------------------------
+
 
 def test_normalize_theme_name_valid_themes():
     for name in ("default", "green", "yellow", "magenta", "cyan", "mono"):
@@ -43,6 +45,7 @@ def test_normalize_theme_name_case_insensitive():
 # _prefs_dir_path
 # ---------------------------------------------------------------------------
 
+
 def test_prefs_dir_path_uses_env_override(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("OPENCLAW_CLI_HOME", "/custom/home")
     path = mod._prefs_dir_path()
@@ -59,6 +62,7 @@ def test_prefs_dir_path_default_is_home_dotopenclaw(monkeypatch: pytest.MonkeyPa
 # _prefs_file_path
 # ---------------------------------------------------------------------------
 
+
 def test_prefs_file_path_ends_with_prefs_json(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("OPENCLAW_CLI_HOME", raising=False)
     path = mod._prefs_file_path()
@@ -74,6 +78,7 @@ def test_prefs_file_path_respects_env_override(monkeypatch: pytest.MonkeyPatch):
 # ---------------------------------------------------------------------------
 # _emoji_pack_name
 # ---------------------------------------------------------------------------
+
 
 def test_emoji_pack_name_returns_classic_by_default():
     with patch.dict(mod._PREFS, {"emoji_pack": "classic", "emoji": True}):
@@ -97,6 +102,7 @@ def test_emoji_pack_name_falls_back_on_emoji_bool():
 # ---------------------------------------------------------------------------
 # _normalize_personalization_prefs
 # ---------------------------------------------------------------------------
+
 
 def test_normalize_personalization_clamps_layout():
     with patch.dict(mod._PREFS, {"layout": "super-verbose"}):
@@ -150,7 +156,10 @@ def test_normalize_personalization_theme():
 # _load_prefs
 # ---------------------------------------------------------------------------
 
-def test_openclaw_cli_prefs_unit_load_prefs_silently_ignores_missing_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+
+def test_openclaw_cli_prefs_unit_load_prefs_silently_ignores_missing_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
     monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
     # No prefs.json in the temp dir — should not raise
     mod._load_prefs()
@@ -181,6 +190,7 @@ def test_load_prefs_ignores_invalid_json(monkeypatch: pytest.MonkeyPatch, tmp_pa
 # _save_prefs
 # ---------------------------------------------------------------------------
 
+
 def test_save_prefs_creates_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
     mod._save_prefs()
@@ -201,6 +211,7 @@ def test_save_prefs_writes_valid_json(monkeypatch: pytest.MonkeyPatch, tmp_path:
 # _prefs_set
 # ---------------------------------------------------------------------------
 
+
 def test_prefs_set_updates_in_memory(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
     with patch.dict(mod._PREFS, {}):
@@ -219,6 +230,7 @@ def test_prefs_set_persists_to_file(monkeypatch: pytest.MonkeyPatch, tmp_path: P
 # ---------------------------------------------------------------------------
 # Constants / data structures
 # ---------------------------------------------------------------------------
+
 
 def test_themes_dict_has_expected_entries():
     assert "default" in mod._THEMES

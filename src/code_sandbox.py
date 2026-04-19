@@ -41,28 +41,36 @@ async def run_code(
         return "", "No code provided.", 1
 
     # Write code to a temp file that we'll mount into the container
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".py", prefix="openclaw_sandbox_", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", prefix="openclaw_sandbox_", delete=False) as f:
         f.write(code)
         code_path = f.name
     os.chmod(code_path, 0o600)
 
     try:
         cmd = [
-            "docker", "run",
+            "docker",
+            "run",
             "--rm",
-            "--network", "none",
+            "--network",
+            "none",
             "--read-only",
-            "--memory", SANDBOX_MEM_LIMIT,
-            "--cpus", "1.0",
-            "--cap-drop", "ALL",
-            "--security-opt", "no-new-privileges:true",
-            "--tmpfs", "/tmp:rw,noexec,nosuid,size=50m",
-            "--name", f"openclaw-sandbox-{secrets.token_hex(8)}",
-            "-v", f"{code_path}:/sandbox/code.py:ro",
+            "--memory",
+            SANDBOX_MEM_LIMIT,
+            "--cpus",
+            "1.0",
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges:true",
+            "--tmpfs",
+            "/tmp:rw,noexec,nosuid,size=50m",
+            "--name",
+            f"openclaw-sandbox-{secrets.token_hex(8)}",
+            "-v",
+            f"{code_path}:/sandbox/code.py:ro",
             SANDBOX_IMAGE,
-            "python", "/sandbox/code.py",
+            "python",
+            "/sandbox/code.py",
         ]
 
         proc = await asyncio.create_subprocess_exec(
@@ -92,7 +100,9 @@ async def run_code(
         # Kill the container if it's still running
         try:
             kill_proc = await asyncio.create_subprocess_exec(
-                "docker", "kill", f"openclaw-sandbox-{os.getpid()}-{id(code) % 100000}",
+                "docker",
+                "kill",
+                f"openclaw-sandbox-{os.getpid()}-{id(code) % 100000}",
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )

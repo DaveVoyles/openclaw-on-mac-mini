@@ -37,9 +37,7 @@ async def _sentry(method: str, path: str, **kwargs) -> Any:
         "Content-Type": "application/json",
     }
     async with aiohttp.ClientSession(headers=headers) as s:
-        async with s.request(
-            method, f"{cfg.sentry_url}/api/0/{path}", **kwargs
-        ) as r:
+        async with s.request(method, f"{cfg.sentry_url}/api/0/{path}", **kwargs) as r:
             r.raise_for_status()
             return await r.json()
 
@@ -87,9 +85,7 @@ class SentryCog(commands.Cog):
                 )
 
             if not data:
-                await interaction.followup.send(
-                    "✅ No unresolved issues found.", ephemeral=True
-                )
+                await interaction.followup.send("✅ No unresolved issues found.", ephemeral=True)
                 return
 
             scope = f"`{project}`" if project else "org-wide"
@@ -104,19 +100,14 @@ class SentryCog(commands.Cog):
                 count = issue.get("count", "?")
                 last_seen = _fmt_dt(issue.get("lastSeen", ""))
                 issue_id = issue.get("id", "")
-                lines.append(
-                    f"{emoji} **{title}**\n"
-                    f"  ID: `{issue_id}` · {count} events · last seen {last_seen}"
-                )
+                lines.append(f"{emoji} **{title}**\n  ID: `{issue_id}` · {count} events · last seen {last_seen}")
 
             embed.description = truncate_for_embed("\n\n".join(lines))
             embed.set_footer(text=f"Sentry · {cfg.sentry_org}")
             await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception:  # broad: intentional
             log.exception("sentry issues failed")
-            await interaction.followup.send(
-                "❌ Failed to fetch Sentry issues.", ephemeral=True
-            )
+            await interaction.followup.send("❌ Failed to fetch Sentry issues.", ephemeral=True)
 
     # ── /sentry projects ──────────────────────────────────────────────────
 
@@ -127,14 +118,10 @@ class SentryCog(commands.Cog):
             await interaction.followup.send(_SETUP_MSG, ephemeral=True)
             return
         try:
-            data = await _sentry(
-                "GET", f"organizations/{cfg.sentry_org}/projects/"
-            )
+            data = await _sentry("GET", f"organizations/{cfg.sentry_org}/projects/")
 
             if not data:
-                await interaction.followup.send(
-                    "No projects found in this org.", ephemeral=True
-                )
+                await interaction.followup.send("No projects found in this org.", ephemeral=True)
                 return
 
             embed = discord.Embed(
@@ -153,9 +140,7 @@ class SentryCog(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception:  # broad: intentional
             log.exception("sentry projects failed")
-            await interaction.followup.send(
-                "❌ Failed to fetch Sentry projects.", ephemeral=True
-            )
+            await interaction.followup.send("❌ Failed to fetch Sentry projects.", ephemeral=True)
 
     # ── /sentry resolve ───────────────────────────────────────────────────
 
@@ -175,20 +160,14 @@ class SentryCog(commands.Cog):
                 params={"id": issue_id},
                 json={"status": "resolved"},
             )
-            await interaction.followup.send(
-                f"✅ Issue `#{issue_id}` marked as resolved.", ephemeral=True
-            )
+            await interaction.followup.send(f"✅ Issue `#{issue_id}` marked as resolved.", ephemeral=True)
         except Exception:  # broad: intentional
             log.exception("sentry resolve failed")
-            await interaction.followup.send(
-                f"❌ Failed to resolve issue `#{issue_id}`.", ephemeral=True
-            )
+            await interaction.followup.send(f"❌ Failed to resolve issue `#{issue_id}`.", ephemeral=True)
 
     # ── /sentry stats ─────────────────────────────────────────────────────
 
-    @sentry.command(
-        name="stats", description="Hourly error rate for a project (last 24h)"
-    )
+    @sentry.command(name="stats", description="Hourly error rate for a project (last 24h)")
     @app_commands.describe(project="Project slug")
     async def sentry_stats(
         self,
@@ -202,13 +181,9 @@ class SentryCog(commands.Cog):
         try:
             if not project:
                 # Fall back to first available project
-                projects = await _sentry(
-                    "GET", f"organizations/{cfg.sentry_org}/projects/"
-                )
+                projects = await _sentry("GET", f"organizations/{cfg.sentry_org}/projects/")
                 if not projects:
-                    await interaction.followup.send(
-                        "No projects found in this org.", ephemeral=True
-                    )
+                    await interaction.followup.send("No projects found in this org.", ephemeral=True)
                     return
                 project = projects[0]["slug"]
 
@@ -219,9 +194,7 @@ class SentryCog(commands.Cog):
             )
 
             if not data:
-                await interaction.followup.send(
-                    f"No stats available for `{project}`.", ephemeral=True
-                )
+                await interaction.followup.send(f"No stats available for `{project}`.", ephemeral=True)
                 return
 
             # data is a list of [timestamp_seconds, count] pairs
@@ -248,9 +221,7 @@ class SentryCog(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception:  # broad: intentional
             log.exception("sentry stats failed")
-            await interaction.followup.send(
-                "❌ Failed to fetch Sentry stats.", ephemeral=True
-            )
+            await interaction.followup.send("❌ Failed to fetch Sentry stats.", ephemeral=True)
 
 
 async def setup(bot) -> None:

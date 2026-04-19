@@ -34,7 +34,7 @@ def _register_code_commands(bot: commands.Bot) -> None:
             description=description,
             color=discord.Color.gold(),
         )
-        embed.set_footer(text="Run /ask \"commit these changes\" to commit via LLM")
+        embed.set_footer(text='Run /ask "commit these changes" to commit via LLM')
         await interaction.followup.send(embed=embed)
         audit_log(interaction.user, "diff")
 
@@ -93,6 +93,7 @@ def _register_code_commands(bot: commands.Bot) -> None:
             out_file = discord.File(io.BytesIO(stdout.encode()), filename="output.txt")
 
         from typing import Any
+
         kwargs: dict[str, Any] = {"content": None, "embed": embed}
         if out_file:
             kwargs["attachments"] = [out_file]

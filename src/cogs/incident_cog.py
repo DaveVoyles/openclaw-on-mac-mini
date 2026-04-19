@@ -142,9 +142,7 @@ class IncidentCog(commands.Cog, name="Incident"):
 
     @staticmethod
     def _incident_operator_next_steps() -> str:
-        return (
-            "Next steps: `/incident status` • `/incident timeline` • `/incident resolve`"
-        )
+        return "Next steps: `/incident status` • `/incident timeline` • `/incident resolve`"
 
     async def cog_command_error(
         self,
@@ -163,7 +161,9 @@ class IncidentCog(commands.Cog, name="Incident"):
         else:
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @incident_group.command(name="start", description="Start an incident with Copilot summary and approval-gated actions")
+    @incident_group.command(
+        name="start", description="Start an incident with Copilot summary and approval-gated actions"
+    )
     @app_commands.describe(
         title="Short incident title",
         severity="Incident severity",
@@ -205,13 +205,16 @@ class IncidentCog(commands.Cog, name="Incident"):
 
         created_thread = await self._try_create_thread(interaction, incident)
         if created_thread is not None:
-            incident = incident_store.set_context(
-                incident["id"],
-                channel_id=channel_id,
-                channel_name=channel_name,
-                thread_id=created_thread.id,
-                thread_name=created_thread.name,
-            ) or incident
+            incident = (
+                incident_store.set_context(
+                    incident["id"],
+                    channel_id=channel_id,
+                    channel_name=channel_name,
+                    thread_id=created_thread.id,
+                    thread_name=created_thread.name,
+                )
+                or incident
+            )
 
         target_channel = created_thread or channel
         if target_channel and hasattr(target_channel, "send"):
@@ -279,7 +282,9 @@ class IncidentCog(commands.Cog, name="Incident"):
         if incident.get("thread_id"):
             embed.add_field(name="Incident Room", value=f"<#{incident['thread_id']}>", inline=False)
         if causes:
-            embed.add_field(name="Suspected Causes", value="\n".join(f"• {cause}" for cause in causes[:4])[:1000], inline=False)
+            embed.add_field(
+                name="Suspected Causes", value="\n".join(f"• {cause}" for cause in causes[:4])[:1000], inline=False
+            )
         if actions:
             action_lines = []
             for action in actions[:5]:
@@ -290,15 +295,16 @@ class IncidentCog(commands.Cog, name="Incident"):
             embed.add_field(
                 name="Copilot Status",
                 value=(
-                    "⚠️ Report unavailable — continue manual ops in this room.\n"
-                    f"{self._incident_operator_next_steps()}"
+                    f"⚠️ Report unavailable — continue manual ops in this room.\n{self._incident_operator_next_steps()}"
                 )[:1000],
                 inline=False,
             )
 
-        action_view = IncidentActionView(incident_id=incident["id"], actions=actions) if any(
-            action.get("executable") for action in actions
-        ) else None
+        action_view = (
+            IncidentActionView(incident_id=incident["id"], actions=actions)
+            if any(action.get("executable") for action in actions)
+            else None
+        )
         if target_channel and hasattr(target_channel, "send"):
             await target_channel.send(embed=embed, view=action_view)
         else:
@@ -327,7 +333,9 @@ class IncidentCog(commands.Cog, name="Incident"):
         )
         await progress.done(f"Incident #{incident['id']} started")
         await interaction.followup.send(embed=launch_embed)
-        audit_log(interaction.user, "incident_start", f"incident#{incident['id']} {incident['severity']} {incident['title']}")
+        audit_log(
+            interaction.user, "incident_start", f"incident#{incident['id']} {incident['severity']} {incident['title']}"
+        )
 
     @incident_group.command(name="create", description="Create a new incident room entry")
     @app_commands.describe(
@@ -366,13 +374,16 @@ class IncidentCog(commands.Cog, name="Incident"):
 
         created_thread = await self._try_create_thread(interaction, incident)
         if created_thread is not None:
-            incident = incident_store.set_context(
-                incident["id"],
-                channel_id=channel_id,
-                channel_name=channel_name,
-                thread_id=created_thread.id,
-                thread_name=created_thread.name,
-            ) or incident
+            incident = (
+                incident_store.set_context(
+                    incident["id"],
+                    channel_id=channel_id,
+                    channel_name=channel_name,
+                    thread_id=created_thread.id,
+                    thread_name=created_thread.name,
+                )
+                or incident
+            )
 
         embed = discord.Embed(
             title=f"🚨 Incident #{incident['id']} Created",
@@ -386,7 +397,9 @@ class IncidentCog(commands.Cog, name="Incident"):
         if incident.get("thread_id"):
             embed.add_field(name="Incident Room", value=f"<#{incident['thread_id']}>", inline=False)
 
-        audit_log(interaction.user, "incident_create", f"incident#{incident['id']} {incident['severity']} {incident['title']}")
+        audit_log(
+            interaction.user, "incident_create", f"incident#{incident['id']} {incident['severity']} {incident['title']}"
+        )
         await interaction.response.send_message(embed=embed)
 
     @incident_group.command(name="status", description="View or update incident status")
@@ -420,7 +433,9 @@ class IncidentCog(commands.Cog, name="Incident"):
                 actor_name=str(interaction.user),
             )
         except ValueError as exc:
-            await interaction.response.send_message(embed=build_error_embed(exc, context="/incident status"), ephemeral=True)
+            await interaction.response.send_message(
+                embed=build_error_embed(exc, context="/incident status"), ephemeral=True
+            )
             return
 
         if incident is None:
@@ -497,7 +512,9 @@ class IncidentCog(commands.Cog, name="Incident"):
             else:
                 incidents = incident_store.list_recent(limit=limit, status=selected_state)
         except ValueError as exc:
-            await interaction.response.send_message(embed=build_error_embed(exc, context="/incident list"), ephemeral=True)
+            await interaction.response.send_message(
+                embed=build_error_embed(exc, context="/incident list"), ephemeral=True
+            )
             return
 
         if not incidents:
@@ -517,7 +534,11 @@ class IncidentCog(commands.Cog, name="Incident"):
         incident_id: int | None = None,
         limit: app_commands.Range[int, 1, 20] = 10,
     ) -> None:
-        incident = incident_store.get_incident(incident_id) if incident_id is not None else self._resolve_incident_from_context(interaction)
+        incident = (
+            incident_store.get_incident(incident_id)
+            if incident_id is not None
+            else self._resolve_incident_from_context(interaction)
+        )
         if incident is None:
             await interaction.response.send_message(
                 "❌ Incident not found. Provide `incident_id` or run this inside an incident thread.",
@@ -527,7 +548,9 @@ class IncidentCog(commands.Cog, name="Incident"):
 
         timeline = incident_store.get_timeline(incident["id"], limit=limit)
         if not timeline:
-            await interaction.response.send_message(f"ℹ️ Incident #{incident['id']} has no timeline entries yet.", ephemeral=True)
+            await interaction.response.send_message(
+                f"ℹ️ Incident #{incident['id']} has no timeline entries yet.", ephemeral=True
+            )
             return
 
         await interaction.response.send_message(embed=self._timeline_embed(incident, timeline))

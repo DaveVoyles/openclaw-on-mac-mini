@@ -160,11 +160,7 @@ async def test_send_chunks_attachment_embed_includes_recovery_summary(monkeypatc
 async def test_send_chunks_preserves_summary_lines_below_copy_safe_table():
     cog = mod.ReportsCog(_DummyBot())
     interaction = SimpleNamespace(followup=SimpleNamespace(send=AsyncMock()))
-    body = (
-        "| Team | Record |\n| --- | --- |\n| Wolves | 10-2 |\n\n"
-        "- ✅ Summary line\n"
-        "- 📌 Next action"
-    )
+    body = "| Team | Record |\n| --- | --- |\n| Wolves | 10-2 |\n\n- ✅ Summary line\n- 📌 Next action"
 
     await cog._send_chunks(
         interaction,
@@ -285,7 +281,9 @@ class _InteractionStub:
         self.user = SimpleNamespace(id=user_id, display_name=display_name)
         self.channel_id = channel_id
         self.channel = SimpleNamespace(name=channel_name)
-        self.response = SimpleNamespace(send_message=AsyncMock(), defer=AsyncMock(), is_done=MagicMock(return_value=True))
+        self.response = SimpleNamespace(
+            send_message=AsyncMock(), defer=AsyncMock(), is_done=MagicMock(return_value=True)
+        )
         self.followup = SimpleNamespace(send=AsyncMock())
 
 
@@ -390,9 +388,7 @@ async def test_recap_package_thread_generates_report_and_packages(monkeypatch):
     cog = mod.ReportsCog(_DummyBot())
     interaction = _InteractionStub(channel_id=999)
 
-    fake_reporting = types.SimpleNamespace(
-        generate_channel_recap_report=AsyncMock(return_value="Thread recap body")
-    )
+    fake_reporting = types.SimpleNamespace(generate_channel_recap_report=AsyncMock(return_value="Thread recap body"))
     monkeypatch.setitem(sys.modules, "skills.reporting_skills", fake_reporting)
     package_mock = AsyncMock()
     monkeypatch.setattr(cog, "_package_response", package_mock)
@@ -440,8 +436,9 @@ async def test_recap_weekly_happy_path(monkeypatch):
     monkeypatch.setattr(cog, "_send_chunks", send_chunks_mock)
     monkeypatch.setattr(mod, "record_channel_profile_signal", lambda *a, **kw: None)
 
-    await cog.recap_weekly.callback(cog, interaction, days=7, focus="", style="highlights",
-                                    save_to_vault=False, schedule_weekly=False)
+    await cog.recap_weekly.callback(
+        cog, interaction, days=7, focus="", style="highlights", save_to_vault=False, schedule_weekly=False
+    )
 
     interaction.response.defer.assert_awaited_once()
     fake_reporting.generate_channel_recap_report.assert_awaited_once_with(
@@ -449,8 +446,11 @@ async def test_recap_weekly_happy_path(monkeypatch):
     )
     send_chunks_mock.assert_awaited_once()
     _, kwargs = send_chunks_mock.await_args
-    assert "Weekly Recap" in (send_chunks_mock.await_args[1].get("title") or
-                               send_chunks_mock.await_args[0][1] if send_chunks_mock.await_args[0] else "Weekly Recap")
+    assert "Weekly Recap" in (
+        send_chunks_mock.await_args[1].get("title") or send_chunks_mock.await_args[0][1]
+        if send_chunks_mock.await_args[0]
+        else "Weekly Recap"
+    )
 
 
 @pytest.mark.asyncio
@@ -469,8 +469,9 @@ async def test_recap_weekly_no_history_warning(monkeypatch):
     monkeypatch.setattr(cog, "_send_chunks", send_chunks_mock)
     monkeypatch.setattr(mod, "record_channel_profile_signal", lambda *a, **kw: None)
 
-    await cog.recap_weekly.callback(cog, interaction, days=7, focus="", style="highlights",
-                                    save_to_vault=False, schedule_weekly=False)
+    await cog.recap_weekly.callback(
+        cog, interaction, days=7, focus="", style="highlights", save_to_vault=False, schedule_weekly=False
+    )
 
     send_chunks_mock.assert_awaited_once()
     # The ⚠️ warning body should be passed through unchanged
@@ -492,8 +493,9 @@ async def test_recap_weekly_llm_error_passthrough(monkeypatch):
     monkeypatch.setattr(cog, "_send_chunks", send_chunks_mock)
     monkeypatch.setattr(mod, "record_channel_profile_signal", lambda *a, **kw: None)
 
-    await cog.recap_weekly.callback(cog, interaction, days=3, focus="bugs", style="action-items",
-                                    save_to_vault=False, schedule_weekly=False)
+    await cog.recap_weekly.callback(
+        cog, interaction, days=3, focus="bugs", style="action-items", save_to_vault=False, schedule_weekly=False
+    )
 
     send_chunks_mock.assert_awaited_once()
     call_kwargs = send_chunks_mock.await_args.kwargs
@@ -506,14 +508,13 @@ async def test_recap_weekly_save_to_vault(monkeypatch):
     cog = mod.ReportsCog(_DummyBot())
     interaction = _InteractionStub(channel_id=88)
 
-    fake_reporting = types.SimpleNamespace(
-        generate_channel_recap_report=AsyncMock(return_value="## Recap\n- Done")
-    )
+    fake_reporting = types.SimpleNamespace(generate_channel_recap_report=AsyncMock(return_value="## Recap\n- Done"))
     monkeypatch.setitem(sys.modules, "skills.reporting_skills", fake_reporting)
     monkeypatch.setattr(cog, "_send_chunks", AsyncMock())
     monkeypatch.setattr(mod, "record_channel_profile_signal", lambda *a, **kw: None)
     monkeypatch.setattr(
-        mod, "ProgressTracker",
+        mod,
+        "ProgressTracker",
         MagicMock(return_value=MagicMock(start=AsyncMock(), update=AsyncMock(), done=AsyncMock())),
     )
 
@@ -522,8 +523,9 @@ async def test_recap_weekly_save_to_vault(monkeypatch):
     )
     monkeypatch.setitem(sys.modules, "obsidian_writer", fake_obsidian)
 
-    await cog.recap_weekly.callback(cog, interaction, days=7, focus="", style="highlights",
-                                    save_to_vault=True, schedule_weekly=False)
+    await cog.recap_weekly.callback(
+        cog, interaction, days=7, focus="", style="highlights", save_to_vault=True, schedule_weekly=False
+    )
 
     interaction.followup.send.assert_awaited_once()
     msg = interaction.followup.send.await_args.args[0]
@@ -536,14 +538,13 @@ async def test_recap_weekly_schedule_weekly(monkeypatch):
     cog = mod.ReportsCog(_DummyBot())
     interaction = _InteractionStub(channel_id=99)
 
-    fake_reporting = types.SimpleNamespace(
-        generate_channel_recap_report=AsyncMock(return_value="## Recap\n- Done")
-    )
+    fake_reporting = types.SimpleNamespace(generate_channel_recap_report=AsyncMock(return_value="## Recap\n- Done"))
     monkeypatch.setitem(sys.modules, "skills.reporting_skills", fake_reporting)
     monkeypatch.setattr(cog, "_send_chunks", AsyncMock())
     monkeypatch.setattr(mod, "record_channel_profile_signal", lambda *a, **kw: None)
     monkeypatch.setattr(
-        mod, "ProgressTracker",
+        mod,
+        "ProgressTracker",
         MagicMock(return_value=MagicMock(start=AsyncMock(), update=AsyncMock(), done=AsyncMock())),
     )
 
@@ -551,8 +552,9 @@ async def test_recap_weekly_schedule_weekly(monkeypatch):
     fake_scheduler = SimpleNamespace(create=lambda **_kw: fake_task)
     monkeypatch.setattr(mod, "scheduler", fake_scheduler)
 
-    await cog.recap_weekly.callback(cog, interaction, days=7, focus="", style="highlights",
-                                    save_to_vault=False, schedule_weekly=True)
+    await cog.recap_weekly.callback(
+        cog, interaction, days=7, focus="", style="highlights", save_to_vault=False, schedule_weekly=True
+    )
 
     interaction.followup.send.assert_awaited_once()
     msg = interaction.followup.send.await_args.args[0]

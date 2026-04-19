@@ -15,6 +15,7 @@ class OpenClawError(Exception):
 # API / network errors
 # ---------------------------------------------------------------------------
 
+
 class APIError(OpenClawError):
     """Raised when an external API call fails (non-2xx, parse error, etc.)."""
 
@@ -36,9 +37,7 @@ class TimeoutError(OpenClawError):
     """Raised when an external API call times out."""
 
     def __init__(self, service: str, timeout_seconds: float | None = None):
-        super().__init__(
-            f"{service} timed out" + (f" after {timeout_seconds}s" if timeout_seconds else "")
-        )
+        super().__init__(f"{service} timed out" + (f" after {timeout_seconds}s" if timeout_seconds else ""))
         self.service = service
         self.timeout_seconds = timeout_seconds
 
@@ -68,6 +67,7 @@ class APIConnectionError(APIError):
 # Tool / skill errors
 # ---------------------------------------------------------------------------
 
+
 class ToolError(OpenClawError):
     """Raised when a Gemini tool/skill execution fails."""
 
@@ -80,6 +80,7 @@ class ToolError(OpenClawError):
 # ---------------------------------------------------------------------------
 # Configuration / infrastructure errors
 # ---------------------------------------------------------------------------
+
 
 class ConfigError(OpenClawError):
     """Raised for missing or invalid configuration (API keys, env vars, etc.)."""
@@ -106,6 +107,7 @@ class StorageError(OpenClawError):
 # ---------------------------------------------------------------------------
 # Request / validation errors
 # ---------------------------------------------------------------------------
+
 
 class InvalidRequestError(OpenClawError):
     """Raised when request parameters are invalid."""
@@ -140,6 +142,7 @@ class ResourceNotFoundError(OpenClawError):
 # ---------------------------------------------------------------------------
 # Authorization errors
 # ---------------------------------------------------------------------------
+
 
 class PermissionError(OpenClawError):
     """Raised when a user lacks permission for an action."""

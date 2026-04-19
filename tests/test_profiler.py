@@ -85,7 +85,7 @@ class TestGetCpuStatsDict:
 
     def test_profiler_returns_dict_while_profiling(self, fresh_profiler):
         fresh_profiler.start_cpu_profiling()
-        _ = [i ** 2 for i in range(100)]
+        _ = [i**2 for i in range(100)]
         result = fresh_profiler.get_cpu_stats_dict()
         assert isinstance(result, dict)
         # Should have some entries
@@ -156,8 +156,10 @@ class TestProfileMemoryDecorator:
     def test_decorator_preserves_function_when_no_memory_profiler(self):
         # When MEMORY_PROFILER_AVAILABLE is False, should return func unchanged
         with patch("profiler.MEMORY_PROFILER_AVAILABLE", False):
+
             def my_func():
                 return 42
+
             result = profile_memory(my_func)
             assert result() == 42
 

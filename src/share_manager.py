@@ -25,6 +25,7 @@ DB_PATH = Path("/memory/shares.db")
 
 class ShareDuration(Enum):
     """Share link expiration durations"""
+
     HOURS_24 = "24h"
     DAYS_7 = "7d"
     DAYS_30 = "30d"
@@ -44,6 +45,7 @@ class ShareDuration(Enum):
 
 class ResourceType(Enum):
     """Types of shareable resources"""
+
     DASHBOARD = "dashboard"
     QUERY = "query"
     REPORT = "report"
@@ -54,21 +56,23 @@ class ResourceType(Enum):
 # Data models
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ShareLink:
     """Shareable link with token-based auth"""
-    id: int                          # Internal share ID
-    token: str                       # Unique share token (UUID)
-    resource_type: ResourceType      # Type of shared resource
-    resource_id: str                 # ID of shared resource
-    created_by: int                  # User who created the share
-    created_at: float                # Creation timestamp
-    expires_at: Optional[float]      # Expiration timestamp (None = never)
-    is_public: bool                  # Public (anyone with link) or private
-    view_count: int                  # Number of times accessed
-    last_accessed: Optional[float]   # Last access timestamp
-    is_active: bool                  # Share active or revoked
-    metadata: dict[str, Any]         # Additional metadata
+
+    id: int  # Internal share ID
+    token: str  # Unique share token (UUID)
+    resource_type: ResourceType  # Type of shared resource
+    resource_id: str  # ID of shared resource
+    created_by: int  # User who created the share
+    created_at: float  # Creation timestamp
+    expires_at: Optional[float]  # Expiration timestamp (None = never)
+    is_public: bool  # Public (anyone with link) or private
+    view_count: int  # Number of times accessed
+    last_accessed: Optional[float]  # Last access timestamp
+    is_active: bool  # Share active or revoked
+    metadata: dict[str, Any]  # Additional metadata
 
     @property
     def is_expired(self) -> bool:
@@ -105,6 +109,7 @@ class ShareLink:
 # ---------------------------------------------------------------------------
 # Database schema
 # ---------------------------------------------------------------------------
+
 
 def _init_db(conn: sqlite3.Connection) -> None:
     """Initialize database schema"""
@@ -173,6 +178,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
 # Share Manager
 # ---------------------------------------------------------------------------
 
+
 class ShareManager:
     """Manages public sharing of resources with token-based authentication"""
 
@@ -237,7 +243,9 @@ class ShareManager:
 
         log.info(
             "Created share link for %s/%s (token=%s, expires=%s)",
-            resource_type.value, resource_id, token[:8] + "...",
+            resource_type.value,
+            resource_id,
+            token[:8] + "...",
             duration.value,
         )
         return share

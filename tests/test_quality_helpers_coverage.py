@@ -36,6 +36,7 @@ from quality_helpers import (
 # _explainability_note_from_meta
 # ---------------------------------------------------------------------------
 
+
 class TestExplainabilityNoteFromMeta:
     def test_returns_empty_for_none(self):
         assert _explainability_note_from_meta(None) == ""
@@ -57,6 +58,7 @@ class TestExplainabilityNoteFromMeta:
 # _append_explainability_footer
 # ---------------------------------------------------------------------------
 
+
 class TestAppendExplainabilityFooter:
     def test_no_note_returns_base(self):
         assert _append_explainability_footer("base", "") == "base"
@@ -75,6 +77,7 @@ class TestAppendExplainabilityFooter:
 # ---------------------------------------------------------------------------
 # _build_ask_context_controls
 # ---------------------------------------------------------------------------
+
 
 class TestBuildAskContextControls:
     def test_empty_inputs_returns_empty_dict(self):
@@ -110,6 +113,7 @@ class TestBuildAskContextControls:
 # ---------------------------------------------------------------------------
 # _build_ask_timeout_message
 # ---------------------------------------------------------------------------
+
 
 class TestBuildAskTimeoutMessage:
     def test_contains_elapsed_seconds(self):
@@ -162,6 +166,7 @@ class TestBuildAskTimeoutMessage:
 # _classify_ask_failure
 # ---------------------------------------------------------------------------
 
+
 class TestClassifyAskFailure:
     def test_timeout_in_message(self):
         assert _classify_ask_failure("request timed out") == "timeout"
@@ -195,6 +200,7 @@ class TestClassifyAskFailure:
 # ---------------------------------------------------------------------------
 # _build_ask_failure_message
 # ---------------------------------------------------------------------------
+
 
 class TestBuildAskFailureMessage:
     def test_contains_category_title_timeout(self):
@@ -230,6 +236,7 @@ class TestBuildAskFailureMessage:
 # _count_markdown_table_items
 # ---------------------------------------------------------------------------
 
+
 class TestCountMarkdownTableItems:
     def test_empty_text_returns_zero(self):
         assert _count_markdown_table_items("") == 0
@@ -254,6 +261,7 @@ class TestCountMarkdownTableItems:
 # ---------------------------------------------------------------------------
 # _extract_distinct_source_domains
 # ---------------------------------------------------------------------------
+
 
 class TestExtractDistinctSourceDomains:
     def test_empty_returns_empty_set(self):
@@ -282,6 +290,7 @@ class TestExtractDistinctSourceDomains:
 # ---------------------------------------------------------------------------
 # _extract_reported_evidence_completeness
 # ---------------------------------------------------------------------------
+
 
 class TestExtractReportedEvidenceCompleteness:
     def test_no_data_returns_none_false(self):
@@ -319,6 +328,7 @@ class TestExtractReportedEvidenceCompleteness:
 # _extract_requested_item_count
 # ---------------------------------------------------------------------------
 
+
 class TestExtractRequestedItemCount:
     def test_quality_helpers_coverage_no_count_returns_none(self):
         assert _extract_requested_item_count("what happened today?") is None
@@ -343,6 +353,7 @@ class TestExtractRequestedItemCount:
 # _with_requested_item_target
 # ---------------------------------------------------------------------------
 
+
 class TestWithRequestedItemTarget:
     def test_adds_requested_count(self):
         result = _with_requested_item_target(None, question="give me top 5 stories")
@@ -360,6 +371,7 @@ class TestWithRequestedItemTarget:
 # ---------------------------------------------------------------------------
 # _score_answer_quality
 # ---------------------------------------------------------------------------
+
 
 class TestScoreAnswerQuality:
     def test_empty_text_returns_low_score(self):
@@ -416,6 +428,7 @@ class TestScoreAnswerQuality:
 # _safe_score_answer_quality
 # ---------------------------------------------------------------------------
 
+
 class TestSafeScoreAnswerQuality:
     def test_normal_case(self):
         result = _safe_score_answer_quality("some answer text")
@@ -438,6 +451,7 @@ class TestSafeScoreAnswerQuality:
 # ---------------------------------------------------------------------------
 # _build_coverage_summary_for_embed
 # ---------------------------------------------------------------------------
+
 
 class TestBuildCoverageSummaryForEmbed:
     def test_quality_helpers_coverage_none_meta_returns_none(self):
@@ -485,6 +499,7 @@ class TestBuildCoverageSummaryForEmbed:
 # ---------------------------------------------------------------------------
 # _build_ask_recovery_block
 # ---------------------------------------------------------------------------
+
 
 class TestBuildAskRecoveryBlock:
     def test_quality_helpers_coverage_none_meta_returns_none_v2(self):
@@ -537,6 +552,7 @@ class TestBuildAskRecoveryBlock:
 # _build_quality_broadening_prompt
 # ---------------------------------------------------------------------------
 
+
 class TestBuildQualityBroadeningPrompt:
     def test_contains_original_question(self):
         result = _build_quality_broadening_prompt("my question", ["low coverage"])
@@ -554,6 +570,7 @@ class TestBuildQualityBroadeningPrompt:
 # ---------------------------------------------------------------------------
 # _quality_retry_improved
 # ---------------------------------------------------------------------------
+
 
 class TestQualityRetryImproved:
     def test_status_upgrade_to_high(self):
@@ -582,6 +599,7 @@ class TestQualityRetryImproved:
 # _run_quality_auto_repair (async)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_run_quality_auto_repair_skips_when_high_quality():
     """High-quality answers skip retry."""
@@ -589,7 +607,15 @@ async def test_run_quality_auto_repair_skips_when_high_quality():
 
     mock_profile = MagicMock(return_value={"retrieval_profile": "general"})
     mock_snapshot = MagicMock(return_value=None)
-    mock_policy = MagicMock(return_value={"load_tier": "normal", "decision": "allow", "degrade_mode": "normal", "degrade_reasons": [], "metrics_available": True})
+    mock_policy = MagicMock(
+        return_value={
+            "load_tier": "normal",
+            "decision": "allow",
+            "degrade_mode": "normal",
+            "degrade_reasons": [],
+            "metrics_available": True,
+        }
+    )
     mock_budget = MagicMock(return_value={"max_attempts": 1, "timeout_seconds": 45})
     mock_metric = MagicMock()
 
@@ -628,7 +654,15 @@ async def test_run_quality_auto_repair_runs_retry_on_low_quality():
 
     mock_profile = MagicMock(return_value={"retrieval_profile": "general"})
     mock_snapshot = MagicMock(return_value=None)
-    mock_policy = MagicMock(return_value={"load_tier": "normal", "decision": "allow", "degrade_mode": "normal", "degrade_reasons": [], "metrics_available": True})
+    mock_policy = MagicMock(
+        return_value={
+            "load_tier": "normal",
+            "decision": "allow",
+            "degrade_mode": "normal",
+            "degrade_reasons": [],
+            "metrics_available": True,
+        }
+    )
     mock_budget = MagicMock(return_value={"max_attempts": 1, "timeout_seconds": 45})
 
     with (
@@ -637,7 +671,9 @@ async def test_run_quality_auto_repair_runs_retry_on_low_quality():
         patch.object(mod, "apply_repair_budget", mock_budget),
         patch.object(mod, "_record_quality_metric", MagicMock()),
         patch.object(mod, "_record_budget_policy_metric", MagicMock()),
-        patch.object(mod, "_safe_score_answer_quality", MagicMock(return_value={"score": 85, "status": "high", "reasons": []})),
+        patch.object(
+            mod, "_safe_score_answer_quality", MagicMock(return_value={"score": 85, "status": "high", "reasons": []})
+        ),
         patch.object(mod, "_quality_retry_improved", MagicMock(return_value=True)),
     ):
         with patch("ask_orchestrator.select_latency_budget_policy", mock_policy):

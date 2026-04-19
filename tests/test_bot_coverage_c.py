@@ -85,6 +85,7 @@ class TestOnAppCommandErrorTransformerError:
     @pytest.mark.asyncio
     async def test_transformer_error_logs_warning(self, monkeypatch, caplog):
         import logging
+
         interaction = _make_interaction()
         interaction.command = None
         interaction.guild_id = None
@@ -208,18 +209,14 @@ class TestResponseActionsFollowUpButtons:
         long_label = "A" * 100
         view = _make_view(follow_ups=[long_label])
         # Find a button whose label comes from the follow-up (not a fixed label)
-        fu_buttons = [
-            b for b in view.children
-            if hasattr(b, "label") and b.label and b.label.startswith("A")
-        ]
+        fu_buttons = [b for b in view.children if hasattr(b, "label") and b.label and b.label.startswith("A")]
         assert len(fu_buttons) == 1
         assert len(fu_buttons[0].label) <= 80
 
     def test_follow_up_buttons_have_secondary_style(self):
         view = _make_view(follow_ups=["Some follow-up?"])
         fu_buttons = [
-            b for b in view.children
-            if hasattr(b, "custom_id") and b.custom_id and b.custom_id.startswith("followup_")
+            b for b in view.children if hasattr(b, "custom_id") and b.custom_id and b.custom_id.startswith("followup_")
         ]
         assert len(fu_buttons) == 1
         assert fu_buttons[0].style == discord.ButtonStyle.secondary
@@ -227,7 +224,8 @@ class TestResponseActionsFollowUpButtons:
     def test_follow_up_buttons_have_correct_custom_ids(self):
         view = _make_view(follow_ups=["First?", "Second?", "Third?"])
         custom_ids = [
-            b.custom_id for b in view.children
+            b.custom_id
+            for b in view.children
             if hasattr(b, "custom_id") and b.custom_id and b.custom_id.startswith("followup_")
         ]
         assert set(custom_ids) == {"followup_0", "followup_1", "followup_2"}
@@ -288,7 +286,7 @@ class TestLockThreadBtn:
         mock_set_lock.assert_called_once_with(
             user_id=10,
             mode="thread",
-            channel_id=200,   # falls back to self._channel_id
+            channel_id=200,  # falls back to self._channel_id
             thread_id=None,
         )
 
@@ -375,10 +373,7 @@ class TestFollowupCallbackExecution:
         monkeypatch.setattr(ra_mod, "_generate_follow_ups", AsyncMock(return_value=[]))
 
         # Get the follow-up button (custom_id = "followup_0")
-        fu_btn = next(
-            b for b in view.children
-            if hasattr(b, "custom_id") and b.custom_id == "followup_0"
-        )
+        fu_btn = next(b for b in view.children if hasattr(b, "custom_id") and b.custom_id == "followup_0")
         # The callback is set directly (not via discord.ui.button decorator), so call it directly
         await fu_btn.callback(interaction)
 
@@ -396,10 +391,7 @@ class TestFollowupCallbackExecution:
         monkeypatch.setattr(ra_mod, "llm_chat", AsyncMock(side_effect=RuntimeError("llm crashed")))
         monkeypatch.setattr(ra_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
 
-        fu_btn = next(
-            b for b in view.children
-            if hasattr(b, "custom_id") and b.custom_id == "followup_0"
-        )
+        fu_btn = next(b for b in view.children if hasattr(b, "custom_id") and b.custom_id == "followup_0")
         await fu_btn.callback(interaction)
 
         call_text = str(interaction.followup.send.call_args)

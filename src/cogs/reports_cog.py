@@ -124,6 +124,7 @@ class ReportsCog(commands.Cog, name="Reports"):
                 render_table_image,
                 should_render_table_image,
             )
+
             table_text = extract_table_text(body)
             if table_text and should_render_table_image(table_text):
                 img_bytes = render_table_image(table_text)
@@ -589,8 +590,7 @@ class ReportsCog(commands.Cog, name="Reports"):
                 alert_only=False,
             )
             await interaction.followup.send(
-                f"📅 Scheduled this recap as `{task.task_id}` for Mondays at 09:00. "
-                "Manage it later with `/schedule`."
+                f"📅 Scheduled this recap as `{task.task_id}` for Mondays at 09:00. Manage it later with `/schedule`."
             )
 
         audit_log(

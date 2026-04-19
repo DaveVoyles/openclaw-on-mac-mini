@@ -88,6 +88,7 @@ _STREAM_EDIT_INTERVAL = 3.0
 # Module-level pipeline helpers (extracted from handle_ask nested functions)
 # ---------------------------------------------------------------------------
 
+
 async def _ask_think(
     status: str,
     *,
@@ -152,7 +153,9 @@ def _ask_update_history(
 ) -> None:
     conv.update_from_llm(updated_history)
     conversation_store.auto_save_thread(
-        interaction.user.id, interaction.channel_id, str(interaction.user.display_name),
+        interaction.user.id,
+        interaction.channel_id,
+        str(interaction.user.display_name),
     )
 
 
@@ -167,7 +170,7 @@ async def _ask_handle_partial_chunk(
     if now - last_edit_ref[0] < _STREAM_EDIT_INTERVAL:
         return
     try:
-        preview = chunk_text[:_EMBED_LIMIT - 50] + "\n\n*⏳ streaming…*"
+        preview = chunk_text[: _EMBED_LIMIT - 50] + "\n\n*⏳ streaming…*"
         embed = discord.Embed(description=preview, color=discord.Color.purple())
         embed.set_author(
             name=f"Replying to: {display_question}",
@@ -196,9 +199,7 @@ async def _ask_run_retry_stream(
 ) -> Any:
     # Phase 21: Cross-provider quality retry — if Gemini produced a low-quality
     # answer, retry with Copilot for a genuinely different response.
-    _retry_pref = (
-        "copilot" if (model_used or "").startswith("gemini") else model_pref
-    )
+    _retry_pref = "copilot" if (model_used or "").startswith("gemini") else model_pref
     return await run_ask_stream(
         llm_stream=llm_chat_stream,
         user_message=retry_question,
@@ -228,7 +229,11 @@ def _ask_build_footer(
 ) -> str:
     elapsed = time.monotonic() - ask_start
     display_model = model_used.replace("models/", "") if model_used else "unknown"
-    if "gemini" not in display_model.lower() and "gpt" not in display_model.lower() and "claude" not in display_model.lower():
+    if (
+        "gemini" not in display_model.lower()
+        and "gpt" not in display_model.lower()
+        and "claude" not in display_model.lower()
+    ):
         rate_str = "local · unlimited"
     else:
         rate_str = get_rate_info()
@@ -260,9 +265,11 @@ async def _ask_post_response_learning(
     response_text: str,
 ) -> None:
     from runtime_state import request_context
+
     with request_context(channel_id=context_channel_id, thread_id=context_thread_id):
         try:
             from rules_engine import add_rule, detect_correction, extract_rule
+
             if detect_correction(question):
                 prev_bot_msg = ""
                 for msg in reversed(conv.history[:-1]):
@@ -275,9 +282,7 @@ async def _ask_post_response_learning(
                     if rule:
                         await add_rule(rule, question[:300])
                         try:
-                            await interaction.followup.send(
-                                f"📝 Got it — I'll remember: *{rule}*", ephemeral=True
-                            )
+                            await interaction.followup.send(f"📝 Got it — I'll remember: *{rule}*", ephemeral=True)
                         except discord.HTTPException as exc:
                             log.debug("Correction followup send failed: %s", exc)
         except (ImportError, AttributeError, ValueError) as e:
@@ -285,12 +290,14 @@ async def _ask_post_response_learning(
 
         try:
             from user_profile import learn_from_message
+
             await learn_from_message(question, response_text)
         except (ImportError, AttributeError, ValueError) as e:
             log.debug("Profile learning failed (non-critical): %s", e)
 
         try:
             from fact_extractor import extract_and_store_facts, should_extract
+
             if should_extract(interaction.user.id, question):
                 await extract_and_store_facts(question, response_text, interaction.user.id)
         except (ImportError, AttributeError, ValueError) as e:
@@ -298,13 +305,12 @@ async def _ask_post_response_learning(
 
         try:
             from goal_tracker import detect_goal, extract_and_store_goal
+
             if detect_goal(question):
                 goal = await extract_and_store_goal(question, interaction.user.id)
                 if goal:
                     try:
-                        await interaction.followup.send(
-                            f"🎯 Tracking goal: *{goal}*", ephemeral=True
-                        )
+                        await interaction.followup.send(f"🎯 Tracking goal: *{goal}*", ephemeral=True)
                     except discord.HTTPException as exc:
                         log.debug("Goal followup send failed: %s", exc)
         except (ImportError, AttributeError, ValueError) as e:
@@ -312,6 +318,7 @@ async def _ask_post_response_learning(
 
 
 # ---------------------------------------------------------------------------
+
 
 async def _ask_prepare_response_payload(
     *,
@@ -339,7 +346,10 @@ async def _ask_prepare_response_payload(
     if response_text and model_used != "error":
         stripped = response_text.strip()
         is_empty = len(stripped) < 10
-        is_echo = stripped.lower().replace("'", "").replace('"', "") == question.lower().replace("'", "").replace('"', "")[:len(stripped)]
+        is_echo = (
+            stripped.lower().replace("'", "").replace('"', "")
+            == question.lower().replace("'", "").replace('"', "")[: len(stripped)]
+        )
         if is_empty or is_echo:
             log.warning("Empty/echo response detected for: %.80s (response: %.80s)", question, stripped)
             response_text = (
@@ -364,6 +374,7 @@ async def _ask_prepare_response_payload(
     # Routing telemetry audit record
     try:
         from llm import telemetry as _telemetry
+
         _telem_provider = model_used.split("/")[0] if model_used not in ("error", "timeout", "unknown") else model_used
         _telem_latency = (time.monotonic() - ask_start) * 1000
         _telemetry.record(
@@ -383,6 +394,7 @@ async def _ask_prepare_response_payload(
     table_image_file = None
     try:
         from table_renderer import extract_table_text, render_table_image, should_render_table_image
+
         table_text = extract_table_text(response_text)
         if table_text and should_render_table_image(table_text):
             img_bytes = render_table_image(table_text)
@@ -439,6 +451,7 @@ async def _ask_prepare_response_payload(
 
 
 # ---------------------------------------------------------------------------
+
 
 async def _ask_deliver_response(
     *,
@@ -501,12 +514,17 @@ async def _ask_deliver_response(
             attachments.append(file_attachment[0])
         try:
             await interaction.edit_original_response(
-                content=None, embed=embed, attachments=attachments, view=action_view,
+                content=None,
+                embed=embed,
+                attachments=attachments,
+                view=action_view,
             )
         except discord.NotFound:
             log.warning("Interaction expired, using followup for long response file")
             await interaction.followup.send(
-                embed=embed, file=md_file, view=action_view,
+                embed=embed,
+                file=md_file,
+                view=action_view,
             )
 
     # Normal path: split across embeds
@@ -579,6 +597,7 @@ async def _ask_deliver_response(
 
 # ---------------------------------------------------------------------------
 
+
 async def _ask_finalize(
     *,
     interaction: discord.Interaction,
@@ -598,6 +617,7 @@ async def _ask_finalize(
 
     try:
         from error_tracker import record_outcome
+
         explainability = final_meta.get("explainability") if isinstance(final_meta.get("explainability"), dict) else {}
         scope_mode = final_meta.get("scope_mode") or explainability.get("scope_mode")
         lock_mode = explainability.get("lock_mode")
@@ -626,6 +646,7 @@ async def _ask_finalize(
 
     try:
         from spending import record_response_time
+
         elapsed_ms = (time.monotonic() - ask_start) * 1000
         record_response_time(elapsed_ms, model=model_used)
     except (ImportError, AttributeError, ValueError) as exc:
@@ -633,17 +654,20 @@ async def _ask_finalize(
 
     conversation_store.cleanup_expired()
 
-    asyncio.get_running_loop().create_task(_ask_post_response_learning(
-        context_channel_id=context_channel_id,
-        context_thread_id=context_thread_id,
-        conv=conv,
-        question=question,
-        interaction=interaction,
-        response_text=response_text,
-    ))
+    asyncio.get_running_loop().create_task(
+        _ask_post_response_learning(
+            context_channel_id=context_channel_id,
+            context_thread_id=context_thread_id,
+            conv=conv,
+            question=question,
+            interaction=interaction,
+            response_text=response_text,
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
+
 
 async def _ask_inject_recall_and_rules(
     conv: Any,
@@ -659,6 +683,7 @@ async def _ask_inject_recall_and_rules(
     await think_hook("Recalling relevant memories…")
     try:
         import vector_store
+
         context_hits = await vector_store.recall(
             retrieval_question,
             top_k=3,
@@ -667,39 +692,48 @@ async def _ask_inject_recall_and_rules(
             cross_channel=cross_channel_retrieval,
         )
         if context_hits:
-            conv.history.append({
-                "role": "model",
-                "parts": [f"[Relevant context from memory]\n{context_hits}"],
-            })
+            conv.history.append(
+                {
+                    "role": "model",
+                    "parts": [f"[Relevant context from memory]\n{context_hits}"],
+                }
+            )
     except Exception as e:  # broad: intentional
         log.debug("Contextual recall skipped: %s", e)
 
     await think_hook("Checking learned rules…")
     try:
         from rules_engine import get_relevant_rules
+
         rules = await get_relevant_rules(question, top_k=3)
         if rules:
             rules_block = "\n".join(f"• {r}" for r in rules)
-            conv.history.append({
-                "role": "model",
-                "parts": [f"[Learned rules — follow these]\n{rules_block}"],
-            })
+            conv.history.append(
+                {
+                    "role": "model",
+                    "parts": [f"[Learned rules — follow these]\n{rules_block}"],
+                }
+            )
     except (ImportError, AttributeError, ValueError, RuntimeError) as e:
         log.debug("Rules injection skipped: %s", e)
 
     try:
         from user_profile import get_profile_prompt
+
         profile_ctx = get_profile_prompt()
         if profile_ctx:
-            conv.history.append({
-                "role": "model",
-                "parts": [profile_ctx],
-            })
+            conv.history.append(
+                {
+                    "role": "model",
+                    "parts": [profile_ctx],
+                }
+            )
     except (ImportError, AttributeError, ValueError, RuntimeError) as e:
         log.debug("Profile injection skipped: %s", e)
 
 
 # ---------------------------------------------------------------------------
+
 
 async def _ask_inject_conv_context(
     conv: Any,
@@ -726,12 +760,13 @@ async def _ask_inject_conv_context(
                             if embed.description:
                                 report_text += embed.description + "\n"
                 if report_text:
-                    conv.history.append({
-                        "role": "model",
-                        "parts": [f"[Previous Research Report]\n{report_text[:8000]}"],
-                    })
-                    log.info("Injected research context (%d chars) for thread: %s",
-                             len(report_text), thread_name)
+                    conv.history.append(
+                        {
+                            "role": "model",
+                            "parts": [f"[Previous Research Report]\n{report_text[:8000]}"],
+                        }
+                    )
+                    log.info("Injected research context (%d chars) for thread: %s", len(report_text), thread_name)
             except (discord.HTTPException, AttributeError) as e:
                 log.debug("Research context injection failed: %s", e)
 
@@ -740,6 +775,7 @@ async def _ask_inject_conv_context(
     if not conv.history:
         try:
             import vector_store
+
             hits = await vector_store.search(
                 vector_store.CONVERSATIONS_COLLECTION,
                 retrieval_question,
@@ -764,21 +800,24 @@ async def _ask_inject_conv_context(
     # Channel role injection
     if not conv.history:
         from runtime_state import get_channel_prompts, get_channel_roles
+
         channel_role = get_channel_roles().get(interaction.channel_id)
         if channel_role:
             role_prompt = get_channel_prompts().get(channel_role, "")
             if role_prompt:
-                conv.history.append({
-                    "role": "model",
-                    "parts": [f"📌 *{channel_role.capitalize()} mode active.* {role_prompt}"],
-                })
-                log.debug("Injected %s channel role prompt for channel %d",
-                          channel_role, interaction.channel_id)
+                conv.history.append(
+                    {
+                        "role": "model",
+                        "parts": [f"📌 *{channel_role.capitalize()} mode active.* {role_prompt}"],
+                    }
+                )
+                log.debug("Injected %s channel role prompt for channel %d", channel_role, interaction.channel_id)
 
     return thread_hint
 
 
 # ---------------------------------------------------------------------------
+
 
 async def _build_ask_context(
     interaction: discord.Interaction,
@@ -797,8 +836,8 @@ async def _build_ask_context(
     rewrote the prompt.
     """
     from trace_context import TraceContext, _current_trace
-    _trace = TraceContext(command="ask", user_id=interaction.user.id,
-                          channel_id=interaction.channel_id)
+
+    _trace = TraceContext(command="ask", user_id=interaction.user.id, channel_id=interaction.channel_id)
     _trace_token = _current_trace.set(_trace)
     log.info("ask_cmd start question=%.80s", question)
 
@@ -812,12 +851,18 @@ async def _build_ask_context(
     _progress_start = time.monotonic()
 
     _think = functools.partial(
-        _ask_think, interaction=interaction, question=question,
-        progress_lines=_progress_lines, progress_start=_progress_start,
+        _ask_think,
+        interaction=interaction,
+        question=question,
+        progress_lines=_progress_lines,
+        progress_start=_progress_start,
     )
     _on_tool_call = functools.partial(
-        _ask_on_tool_call, interaction=interaction, question=question,
-        progress_lines=_progress_lines, progress_start=_progress_start,
+        _ask_on_tool_call,
+        interaction=interaction,
+        question=question,
+        progress_lines=_progress_lines,
+        progress_start=_progress_start,
     )
 
     if attachment:
@@ -830,6 +875,7 @@ async def _build_ask_context(
             question = await _handle_doc_attachment(attachment, question)
 
     from llm.context import _extract_cross_channel_opt_in
+
     retrieval_question, cross_channel_retrieval = _extract_cross_channel_opt_in(question)
 
     conv = conversation_store.get(
@@ -862,12 +908,14 @@ async def _build_ask_context(
         context_controls["channel_name"] = channel.parent.name
 
     from llm import _needs_tools as llm_needs_tools
+
     model_pref, upgraded_to_gemini = normalize_model_preference(
-        question, model_pref, llm_needs_tools,
+        question,
+        model_pref,
+        llm_needs_tools,
     )
     guardrail_note = (
-        "\n\n> ⚡ *Auto-upgraded to Gemini (your query requires tool access)*"
-        if upgraded_to_gemini else ""
+        "\n\n> ⚡ *Auto-upgraded to Gemini (your query requires tool access)*" if upgraded_to_gemini else ""
     )
 
     return {
@@ -933,8 +981,12 @@ async def _route_and_stream(
         )
 
         _model_labels = {
-            "auto": "smart routing", "local": "Gemma (local)", "gemini": "Gemini",
-            "openai": "GPT-4o", "anthropic": "Claude", "copilot": "Copilot",
+            "auto": "smart routing",
+            "local": "Gemma (local)",
+            "gemini": "Gemini",
+            "openai": "GPT-4o",
+            "anthropic": "Claude",
+            "copilot": "Copilot",
         }
         await think_hook(f"Routing to {_model_labels.get(model_pref, model_pref)}…")
         _last_edit_ref: list[float] = [0.0]
@@ -942,11 +994,15 @@ async def _route_and_stream(
 
         try:
             _update_history = functools.partial(
-                _ask_update_history, conv=conv, interaction=interaction,
+                _ask_update_history,
+                conv=conv,
+                interaction=interaction,
             )
             _handle_partial_chunk = functools.partial(
-                _ask_handle_partial_chunk, interaction=interaction,
-                display_question=display_question, last_edit_ref=_last_edit_ref,
+                _ask_handle_partial_chunk,
+                interaction=interaction,
+                display_question=display_question,
+                last_edit_ref=_last_edit_ref,
             )
 
             result = await run_ask_stream(
@@ -975,15 +1031,22 @@ async def _route_and_stream(
 
             _is_memory_store = bool(_MEMORY_STORE_RE.search(question))
             quality_meta = _safe_score_answer_quality(
-                response_text, final_meta=_final_meta, context="ask",
+                response_text,
+                final_meta=_final_meta,
+                context="ask",
             )
             _run_retry_stream = functools.partial(
                 _ask_run_retry_stream,
-                model_used=model_used, model_pref=model_pref,
-                conv=conv, interaction=interaction,
-                context_channel_id=context_channel_id, context_thread_id=context_thread_id,
-                on_tool_call=on_tool_call, on_partial_chunk=_handle_partial_chunk,
-                update_history=_update_history, context_controls=context_controls,
+                model_used=model_used,
+                model_pref=model_pref,
+                conv=conv,
+                interaction=interaction,
+                context_channel_id=context_channel_id,
+                context_thread_id=context_thread_id,
+                on_tool_call=on_tool_call,
+                on_partial_chunk=_handle_partial_chunk,
+                update_history=_update_history,
+                context_controls=context_controls,
                 routing_profile=user_routing_profile,
             )
 
@@ -1016,10 +1079,10 @@ async def _route_and_stream(
             if recovery_block and "Recovery note" not in response_text and not _is_memory_store:
                 # W4-1: Strip duplicate sources — if response already has a Sources section,
                 # remove it from the recovery block before appending.
-                if re.search(r'(?:\*\*Sources\*\*|Sources)\s*:', response_text, re.IGNORECASE):
+                if re.search(r"(?:\*\*Sources\*\*|Sources)\s*:", response_text, re.IGNORECASE):
                     recovery_block = re.sub(
-                        r'\n{0,2}(?:\*\*Sources\*\*|Sources):?\s*\n(?:(?:[-*]|\d+\.)\s+.+\n?)+',
-                        '',
+                        r"\n{0,2}(?:\*\*Sources\*\*|Sources):?\s*\n(?:(?:[-*]|\d+\.)\s+.+\n?)+",
+                        "",
                         recovery_block,
                         flags=re.IGNORECASE,
                     ).rstrip()
@@ -1059,6 +1122,7 @@ async def _route_and_stream(
 
 
 # ---------------------------------------------------------------------------
+
 
 async def handle_ask(
     interaction: discord.Interaction,
@@ -1177,6 +1241,7 @@ async def handle_metrics(interaction: discord.Interaction) -> None:
     """Handler for /metrics — shows last 20 routing telemetry entries."""
     await interaction.response.defer(ephemeral=True)
     from llm import telemetry as _telemetry
+
     records = _telemetry.tail(20)
     summary = _telemetry.summarise(records)
     await interaction.followup.send(summary, ephemeral=True)

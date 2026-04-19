@@ -5,6 +5,7 @@ Covers:
 - Watch completion recap printing (success and exhausted-retries paths)
 - _print_status_bar() resilience when no watch state is available
 """
+
 from __future__ import annotations
 
 from io import StringIO
@@ -197,4 +198,3 @@ class TestWatchCompletionRecap:
     def test_exhausted_recap_starts_with_spaces(self):
         line = _format_exhausted_recap(1)
         assert line.startswith("  ")
-

@@ -80,6 +80,7 @@ def _require_internal(request: web.Request) -> web.Response | None:
 # Route handlers
 # ---------------------------------------------------------------------------
 
+
 def _git_sha() -> str:
     """Return the current HEAD commit SHA (short form), or 'unknown'.
 
@@ -95,7 +96,9 @@ def _git_sha() -> str:
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, timeout=2,
+            capture_output=True,
+            text=True,
+            timeout=2,
             cwd=Path(__file__).parent.parent,
         )
         return result.stdout.strip() or "unknown"
@@ -124,6 +127,7 @@ async def _health_handler(request: web.Request) -> web.Response:
     # Lightweight DB check (timeout=2 to keep /health fast)
     try:
         from thread_store import DB_PATH as _health_db_path
+
         conn = sqlite3.connect(str(_health_db_path), timeout=2)
         conn.execute("SELECT 1")
         conn.close()
@@ -134,6 +138,7 @@ async def _health_handler(request: web.Request) -> web.Response:
     # Vector store check (best-effort import only)
     try:
         from vector_store import _get_client
+
         _get_client().heartbeat()
         checks["vector_store"] = "ok"
     except Exception:
@@ -216,6 +221,7 @@ async def _smoke_handler(request: web.Request) -> web.Response:
     try:
         t0 = time.monotonic()
         from llm import _get_model
+
         model = await asyncio.wait_for(_get_model(), timeout=10)
         resp = await asyncio.wait_for(
             asyncio.to_thread(model.generate_content, "Say hello"),
@@ -234,6 +240,7 @@ async def _smoke_handler(request: web.Request) -> web.Response:
     # 2. ollama
     try:
         from llm import LOCAL_LLM_ENABLED, _ollama_available
+
         if not LOCAL_LLM_ENABLED:
             checks["ollama"] = {"status": "skipped", "reason": "LOCAL_LLM_ENABLED=false"}
         else:
@@ -253,6 +260,7 @@ async def _smoke_handler(request: web.Request) -> web.Response:
     try:
         t0 = time.monotonic()
         from vector_store import _get_client
+
         client = _get_client()
         client.heartbeat()
         latency = round((time.monotonic() - t0) * 1000)
@@ -266,6 +274,7 @@ async def _smoke_handler(request: web.Request) -> web.Response:
         import sqlite3 as _sqlite3
 
         from thread_store import DB_PATH as _threads_db_path
+
         t0 = time.monotonic()
         conn = _sqlite3.connect(str(_threads_db_path), timeout=5)
         try:
@@ -282,6 +291,7 @@ async def _smoke_handler(request: web.Request) -> web.Response:
     # 5. config
     try:
         from config import cfg as _cfg
+
         if _cfg.discord_bot_token and _cfg.google_api_key:
             checks["config"] = {"status": "pass"}
         else:
@@ -299,6 +309,7 @@ async def _smoke_handler(request: web.Request) -> web.Response:
     # 6. skill_registry
     try:
         from skills import SKILLS as _skills
+
         count = len(_skills)
         has_search = "search_web" in _skills
         if count > 0 and has_search:
@@ -329,8 +340,10 @@ async def _trigger_scan_handler(request: web.Request) -> web.Response:
         return auth_error
 
     from discord_background import _run_proactive_scan
+
     bot = request.app["bot"]
     from bg_tasks import managed_task
+
     managed_task(_run_proactive_scan(bot), name="proactive-scan", timeout=300.0)
     return web.json_response({"status": "scan triggered"})
 
@@ -384,13 +397,18 @@ async def _webhook_handler(request: web.Request) -> web.Response:
                 _error_keywords = {"error", "fail", "critical", "down", "unhealthy", "exception", "warning"}
                 payload_lower = json.dumps(payload).lower()
                 event_lower = (payload.get("eventType") or payload.get("event") or "").lower()
-                is_error_event = (
-                    any(kw in payload_lower for kw in _error_keywords)
-                    or event_lower in ("error", "warning", "applicationupdate", "health")
+                is_error_event = any(kw in payload_lower for kw in _error_keywords) or event_lower in (
+                    "error",
+                    "warning",
+                    "applicationupdate",
+                    "health",
                 )
                 if is_error_event:
                     from bg_tasks import managed_task
-                    managed_task(_analyze_webhook_event(source, payload, channel), name="analyze-webhook-event", timeout=60.0)
+
+                    managed_task(
+                        _analyze_webhook_event(source, payload, channel), name="analyze-webhook-event", timeout=60.0
+                    )
 
         return web.json_response({"ok": True})
 
@@ -419,10 +437,7 @@ def _is_authorized_bearer(request: web.Request, secret: str) -> bool:
     auth = request.headers.get("Authorization", "").strip()
     alt = request.headers.get("X-OpenClaw-Token", "").strip()
     expected = f"Bearer {secret}"
-    return (
-        hmac.compare_digest(auth.encode(), expected.encode())
-        or hmac.compare_digest(alt.encode(), secret.encode())
-    )
+    return hmac.compare_digest(auth.encode(), expected.encode()) or hmac.compare_digest(alt.encode(), secret.encode())
 
 
 def _require_api_action_auth(request: web.Request) -> web.Response | None:
@@ -452,6 +467,7 @@ async def _health_llm_handler(request: web.Request) -> web.Response:
             proxy_is_healthy,
             token_usage_summary,
         )
+
         _providers_available = True
     except (ImportError, Exception):
         COPILOT_PROXY_ENABLED = False
@@ -466,6 +482,7 @@ async def _health_llm_handler(request: web.Request) -> web.Response:
     # Ollama
     try:
         from config import cfg as _cfg
+
         ollama_url = _cfg.ollama_url
         async with aiohttp.ClientSession() as s:
             async with s.get(
@@ -482,10 +499,7 @@ async def _health_llm_handler(request: web.Request) -> web.Response:
 
     # Circuit-breaker state for all known providers (plus any that have tripped).
     _known_providers = {"copilot", "openai", "anthropic", "ollama"}
-    circuit_state = {
-        p: {"open": _is_open(p)}
-        for p in sorted(_known_providers | set(_circuit.keys()))
-    }
+    circuit_state = {p: {"open": _is_open(p)} for p in sorted(_known_providers | set(_circuit.keys()))}
 
     any_ok = any(v == "ok" for v in checks.values())
     status_code = 200 if any_ok else 503
@@ -506,10 +520,7 @@ async def _health_llm_circuit_handler(request: web.Request) -> web.Response:
     from llm.providers import _circuit, _is_open
 
     _known_providers = {"copilot", "openai", "anthropic", "ollama"}
-    circuit_state = {
-        p: {"open": _is_open(p)}
-        for p in sorted(_known_providers | set(_circuit.keys()))
-    }
+    circuit_state = {p: {"open": _is_open(p)} for p in sorted(_known_providers | set(_circuit.keys()))}
     return web.json_response(circuit_state)
 
 
@@ -541,8 +552,7 @@ async def _health_llm_reset_handler(request: web.Request) -> web.Response:
         reset_list = all_providers
 
     circuit_state = {
-        p: {"open": _is_open(p)}
-        for p in sorted(_known_providers | set(_circuit.keys()) | set(PROVIDER_FALLBACK_CHAIN))
+        p: {"open": _is_open(p)} for p in sorted(_known_providers | set(_circuit.keys()) | set(PROVIDER_FALLBACK_CHAIN))
     }
     return web.json_response({"reset": reset_list, "circuit_state": circuit_state})
 
@@ -554,6 +564,7 @@ async def _health_memory_handler(request: web.Request) -> web.Response:
     # ChromaDB
     try:
         from vector_store import _get_client
+
         client = _get_client()
         client.heartbeat()
         checks["chromadb"] = "ok"
@@ -567,6 +578,7 @@ async def _health_memory_handler(request: web.Request) -> web.Response:
         import sqlite3 as _sqlite3
 
         from thread_store import DB_PATH as _threads_db_path
+
         conn = _sqlite3.connect(str(_threads_db_path), timeout=3)
         try:
             conn.execute("SELECT 1 FROM threads LIMIT 1")
@@ -596,6 +608,7 @@ async def _health_services_handler(request: web.Request) -> web.Response:
     # NAS connectivity
     try:
         from config import cfg as _cfg
+
         nas_host = getattr(_cfg, "nas_host", "") or os.getenv("NAS_HOST", "")
         if nas_host:
             async with aiohttp.ClientSession() as s:
@@ -612,6 +625,7 @@ async def _health_services_handler(request: web.Request) -> web.Response:
     # Scheduler
     try:
         from scheduler import scheduler
+
         task_count = len(scheduler.list_tasks())
         checks["scheduler"] = f"ok ({task_count} tasks)"
     except Exception:  # broad: intentional — health probe catches any connectivity failure
@@ -649,6 +663,7 @@ async def _cli_update_handler(request: web.Request) -> web.Response:
 async def _cli_update_meta_handler(request: web.Request) -> web.Response:
     """Return SHA256 hashes of the CLI source files for update checking."""
     import hashlib
+
     src_dir = Path(__file__).parent
     meta: dict[str, str] = {}
     for fname in sorted(_CLI_UPDATE_WHITELIST):
@@ -663,18 +678,18 @@ async def _cli_update_meta_handler(request: web.Request) -> web.Response:
 # ---------------------------------------------------------------------------
 
 _OAI_MODELS = [
-    {"id": "openclaw-auto",      "object": "model", "created": 1700000000, "owned_by": "openclaw"},
-    {"id": "openclaw-gemini",    "object": "model", "created": 1700000000, "owned_by": "openclaw"},
-    {"id": "openclaw-copilot",   "object": "model", "created": 1700000000, "owned_by": "openclaw"},
-    {"id": "openclaw-openai",    "object": "model", "created": 1700000000, "owned_by": "openclaw"},
+    {"id": "openclaw-auto", "object": "model", "created": 1700000000, "owned_by": "openclaw"},
+    {"id": "openclaw-gemini", "object": "model", "created": 1700000000, "owned_by": "openclaw"},
+    {"id": "openclaw-copilot", "object": "model", "created": 1700000000, "owned_by": "openclaw"},
+    {"id": "openclaw-openai", "object": "model", "created": 1700000000, "owned_by": "openclaw"},
     {"id": "openclaw-anthropic", "object": "model", "created": 1700000000, "owned_by": "openclaw"},
 ]
 
 _OAI_MODEL_MAP: dict[str, str] = {
-    "openclaw-auto":      "auto",
-    "openclaw-gemini":    "gemini",
-    "openclaw-copilot":   "copilot",
-    "openclaw-openai":    "openai",
+    "openclaw-auto": "auto",
+    "openclaw-gemini": "gemini",
+    "openclaw-copilot": "copilot",
+    "openclaw-openai": "openai",
     "openclaw-anthropic": "anthropic",
 }
 
@@ -724,22 +739,26 @@ async def _v1_chat_completions_handler(request: web.Request) -> web.Response | w
             log.error("_v1_chat_completions_handler error: %s", exc)
             return web.json_response({"error": str(exc)}, status=500)
 
-        return web.json_response({
-            "id": completion_id,
-            "object": "chat.completion",
-            "created": created_ts,
-            "model": result.get("model", model_name),
-            "choices": [{
-                "index": 0,
-                "message": {"role": "assistant", "content": result.get("response", "")},
-                "finish_reason": "stop",
-            }],
-            "usage": {
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "total_tokens": result.get("tokens", 0),
-            },
-        })
+        return web.json_response(
+            {
+                "id": completion_id,
+                "object": "chat.completion",
+                "created": created_ts,
+                "model": result.get("model", model_name),
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "content": result.get("response", "")},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": result.get("tokens", 0),
+                },
+            }
+        )
 
     # --- Streaming path ---
     resp = web.StreamResponse(
@@ -804,6 +823,7 @@ async def _v1_chat_completions_handler(request: web.Request) -> web.Response | w
 # Public entry point
 # ---------------------------------------------------------------------------
 
+
 async def start_health_server(bot) -> web.AppRunner:
     """Create and start the aiohttp web application. Returns the AppRunner for cleanup."""
     app = web.Application()
@@ -829,6 +849,7 @@ async def start_health_server(bot) -> web.AppRunner:
     # shares the existing aiohttp server instead of spawning a second one.
     try:
         from slack_bot import _handle_upload
+
         app.router.add_post("/upload", _handle_upload)
         log.info("POST /upload route registered (Wave 4 file upload endpoint)")
     except Exception as exc:
@@ -837,6 +858,7 @@ async def start_health_server(bot) -> web.AppRunner:
     # Wave 12: Dropbox OAuth2 callback — GET /dropbox/callback
     try:
         from slack_bot import _handle_dropbox_oauth_callback
+
         app.router.add_get("/dropbox/callback", _handle_dropbox_oauth_callback)
         log.info("GET /dropbox/callback route registered (Wave 12 Dropbox OAuth2)")
     except Exception as exc:

@@ -3,6 +3,7 @@
 This is a leaf module with zero dependencies on other openclaw_cli_* modules.
 All other modules may safely import from here without circular-import risk.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

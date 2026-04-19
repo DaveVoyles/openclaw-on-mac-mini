@@ -6,6 +6,7 @@ Handlers (_cmd_*) remain in openclaw_cli.py; only inner pure helpers live here.
 Allowed imports: openclaw_cli_sessions, openclaw_cli_ui_core, stdlib only.
 Do NOT import from openclaw_cli — circular import.
 """
+
 from __future__ import annotations
 
 import re
@@ -14,6 +15,7 @@ from typing import Any
 # ---------------------------------------------------------------------------
 # Local copy of _format_elapsed_compact (pure stdlib; avoids circular import)
 # ---------------------------------------------------------------------------
+
 
 def _format_elapsed_compact(seconds: Any) -> str:
     """Format a duration in seconds to a compact human-readable string."""
@@ -35,6 +37,7 @@ def _format_elapsed_compact(seconds: Any) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_events helpers
 # ---------------------------------------------------------------------------
+
 
 def _build_event_label(ev: dict, excerpt_len: int = 80) -> str:
     """Build the display label for a single event row, including timing metadata.
@@ -128,6 +131,7 @@ def _event_recovery_actions(
 # _cmd_search helpers
 # ---------------------------------------------------------------------------
 
+
 def _highlight_ansi(text: str, query: str, ql: str, hl_on: str, hl_off: str) -> str:
     """Highlight the first query match in *text* using ANSI escape codes.
 
@@ -157,6 +161,7 @@ def _highlight_rich(text: str, query: str) -> str:
 # ---------------------------------------------------------------------------
 # _cmd_plan helpers
 # ---------------------------------------------------------------------------
+
 
 def _build_plan_focus_lines(
     lines: list[str],
@@ -210,6 +215,7 @@ def _build_plan_focus_lines(
 # _cmd_handoff helpers
 # ---------------------------------------------------------------------------
 
+
 def _build_handoff_check_lines(check: dict) -> list[str]:
     """Build plain-text display lines for a handoff readiness check result.
 
@@ -247,6 +253,7 @@ def _build_handoff_check_lines(check: dict) -> list[str]:
 # _print_workspace_capsule / _cmd_workspace helpers
 # ---------------------------------------------------------------------------
 
+
 def _build_workspace_capsule_plain_lines(capsule: dict) -> list[str]:
     """Build plain-text display lines for a workspace capsule.
 
@@ -283,7 +290,5 @@ def _build_workspace_capsule_plain_lines(capsule: dict) -> list[str]:
         lines.extend(f"  - {item.get('name', '')}" for item in recent_outputs[:3])
     if bookmarks:
         lines.append("recent bookmarks:")
-        lines.extend(
-            f"  - [{item.get('id', '')}] {item.get('label', '')}" for item in bookmarks[-3:]
-        )
+        lines.extend(f"  - [{item.get('id', '')}] {item.get('label', '')}" for item in bookmarks[-3:])
     return lines

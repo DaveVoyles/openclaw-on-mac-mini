@@ -14,7 +14,7 @@ class TestTryParseJson:
         assert result == {"key": "value"}
 
     def test_json_utils_valid_array(self):
-        result = try_parse_json('[1, 2, 3]')
+        result = try_parse_json("[1, 2, 3]")
         assert result == [1, 2, 3]
 
     def test_json_utils_invalid_json_returns_none(self):
@@ -51,9 +51,9 @@ class TestExtractJsonBlock:
         assert result == '{"name": "Alice", "age": 30}'
 
     def test_raw_json_array_in_prose(self):
-        text = 'Result: [1, 2, 3] done.'
+        text = "Result: [1, 2, 3] done."
         result = extract_json_block(text)
-        assert result == '[1, 2, 3]'
+        assert result == "[1, 2, 3]"
 
     def test_json_utils_no_json_returns_none(self):
         assert extract_json_block("no json here") is None
@@ -100,11 +100,11 @@ class TestRepairJson:
         assert result == {"a": 1}
 
     def test_trailing_comma_in_array(self):
-        result = repair_json('[1, 2, 3,]')
+        result = repair_json("[1, 2, 3,]")
         assert result == [1, 2, 3]
 
     def test_missing_closing_bracket_repaired(self):
-        result = repair_json('[1, 2, 3')
+        result = repair_json("[1, 2, 3")
         assert result is not None
         assert isinstance(result, list)
 

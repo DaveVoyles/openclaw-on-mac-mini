@@ -113,9 +113,7 @@ class PatreonRecoveryManager:
 
         return RecoveryAction.NONE
 
-    async def _execute_recovery(
-        self, action: RecoveryAction, health_result: PatreonHealthResult
-    ) -> RecoveryResult:
+    async def _execute_recovery(self, action: RecoveryAction, health_result: PatreonHealthResult) -> RecoveryResult:
         """Execute a recovery action."""
         timestamp = datetime.now()
 

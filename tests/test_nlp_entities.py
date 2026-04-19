@@ -229,7 +229,8 @@ class TestEnrichRouteTextAndHints:
     def test_plex_activity_bundle_disambiguates_service(self):
         # With no service entities but plex-activity bundle, service resolves to plex
         _, hints = enrich_route_text_and_hints(
-            "this service is acting up", {},
+            "this service is acting up",
+            {},
             matched_bundle_names={"plex-activity"},
         )
         assert hints["disambiguated_references"]["service"] == "plex"

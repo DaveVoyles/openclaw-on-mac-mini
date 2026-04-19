@@ -11,9 +11,7 @@ def _route_names(prompt: str) -> tuple[set[str], dict]:
 
 
 def test_route_tool_declarations_prefers_weekly_recap():
-    names, info = _route_names(
-        "Give me a recap of this channel from the last week with highlights and action items."
-    )
+    names, info = _route_names("Give me a recap of this channel from the last week with highlights and action items.")
     assert info["strategy"] == "shortlist"
     assert "generate_channel_recap_report" in names
 

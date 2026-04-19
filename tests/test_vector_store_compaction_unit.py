@@ -84,6 +84,7 @@ class TestGetDecayedDocuments:
     @pytest.mark.asyncio
     async def test_returns_only_decayed_docs(self):
         import time as _time
+
         old_time = _time.time() - (31 * 86400)  # older than 30 days
 
         mock_col = MagicMock()

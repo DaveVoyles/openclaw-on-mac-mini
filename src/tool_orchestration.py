@@ -52,23 +52,17 @@ class ToolProviderContext:
 class ToolProviderAdapter(Protocol):
     """Provider-specific adapter for tool-capable orchestration."""
 
-    def create_session(self, *, model: Any, history: list[dict]) -> Any:
-        ...
+    def create_session(self, *, model: Any, history: list[dict]) -> Any: ...
 
-    def extract_tool_calls(self, response: Any) -> list[ToolCallRequest]:
-        ...
+    def extract_tool_calls(self, response: Any) -> list[ToolCallRequest]: ...
 
-    def latest_user_query(self, session: Any) -> str:
-        ...
+    def latest_user_query(self, session: Any) -> str: ...
 
-    def build_tool_result_message(self, tool_results: list[ToolCallResult]) -> Any:
-        ...
+    def build_tool_result_message(self, tool_results: list[ToolCallResult]) -> Any: ...
 
-    async def send_tool_result_message(self, session: Any, message: Any) -> Any:
-        ...
+    async def send_tool_result_message(self, session: Any, message: Any) -> Any: ...
 
-    def build_direct_text_response(self, text: str) -> Any:
-        ...
+    def build_direct_text_response(self, text: str) -> Any: ...
 
     def extract_final_text(
         self,
@@ -77,28 +71,22 @@ class ToolProviderAdapter(Protocol):
         session: Any,
         *,
         max_rounds: int,
-    ) -> str:
-        ...
+    ) -> str: ...
 
-    def extract_history(self, session: Any) -> list[dict]:
-        ...
+    def extract_history(self, session: Any) -> list[dict]: ...
 
     def merge_direct_final_history(
         self,
         history: list[dict],
         text: str,
-    ) -> list[dict]:
-        ...
+    ) -> list[dict]: ...
 
 
 def _backfill_tool_query(
     tool_call: ToolCallRequest,
     latest_user_query: str,
 ) -> ToolCallRequest:
-    if (
-        tool_call.name == "generate_sports_watch_report"
-        and not str(tool_call.args.get("query") or "").strip()
-    ):
+    if tool_call.name == "generate_sports_watch_report" and not str(tool_call.args.get("query") or "").strip():
         return ToolCallRequest(
             name=tool_call.name,
             args={**tool_call.args, "query": latest_user_query},
@@ -117,11 +105,7 @@ def _latest_user_query_from_gemini(session: Any) -> str:
         if getattr(content, "role", "") != "user":
             continue
         parts = getattr(content, "parts", None) or []
-        text = "".join(
-            getattr(part, "text", "")
-            for part in parts
-            if getattr(part, "text", "")
-        ).strip()
+        text = "".join(getattr(part, "text", "") for part in parts if getattr(part, "text", "")).strip()
         if not text:
             continue
         question_match = re.search(r"User's question:\s*(.+)$", text, re.DOTALL)
@@ -250,7 +234,7 @@ class GeminiToolAdapter:
         history = []
         for content in session.get_history():
             parts = []
-            for part in (content.parts or []):
+            for part in content.parts or []:
                 if hasattr(part, "text") and part.text:
                     parts.append(part.text)
                 elif hasattr(part, "function_call") and part.function_call and part.function_call.name:
@@ -348,10 +332,7 @@ class ToolOrchestrator:
 
             latest_user_query = self._adapter.latest_user_query(session)
             if latest_user_query:
-                tool_calls = [
-                    _backfill_tool_query(tool_call, latest_user_query)
-                    for tool_call in tool_calls
-                ]
+                tool_calls = [_backfill_tool_query(tool_call, latest_user_query) for tool_call in tool_calls]
 
             log.info(
                 "%s function call(s) [round %d] trace=%s: %s",
@@ -376,10 +357,9 @@ class ToolOrchestrator:
                     except Exception as exc:  # broad: intentional
                         log.debug("notification_callback pre-call failed: %s", exc)
 
-            results = await asyncio.gather(*[
-                self._execute_tool_call(tool_call.name, tool_call.args)
-                for tool_call in tool_calls
-            ])
+            results = await asyncio.gather(
+                *[self._execute_tool_call(tool_call.name, tool_call.args) for tool_call in tool_calls]
+            )
 
             if on_tool_call:
                 for tool_call, result in zip(tool_calls, results):

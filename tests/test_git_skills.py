@@ -16,6 +16,7 @@ import git_skills as gs
 # _run_git
 # ---------------------------------------------------------------------------
 
+
 class TestRunGit:
     @pytest.mark.asyncio
     async def test_returns_stdout_on_success(self):
@@ -33,11 +34,14 @@ class TestRunGit:
     @pytest.mark.asyncio
     async def test_handles_timeout(self, monkeypatch):
         """If the subprocess times out, should return an error string."""
+
         async def mock_create_subprocess_exec(*args, **kwargs):
             mock_proc = MagicMock()
+
             async def slow_communicate():
                 await asyncio.sleep(100)
                 return b"", b""
+
             mock_proc.communicate = slow_communicate
             return mock_proc
 
@@ -49,6 +53,7 @@ class TestRunGit:
 # ---------------------------------------------------------------------------
 # Webfetch
 # ---------------------------------------------------------------------------
+
 
 class TestWebfetch:
     @pytest.mark.asyncio
@@ -62,6 +67,7 @@ class TestWebfetch:
 # ---------------------------------------------------------------------------
 # GIT_SKILLS dict
 # ---------------------------------------------------------------------------
+
 
 class TestGitSkillsDict:
     def test_expected_skills_present(self):
@@ -77,6 +83,7 @@ class TestGitSkillsDict:
 # git_log
 # ---------------------------------------------------------------------------
 
+
 class TestGitLog:
     @pytest.mark.asyncio
     async def test_git_log_uses_limit(self):
@@ -89,6 +96,7 @@ class TestGitLog:
 # ---------------------------------------------------------------------------
 # git_diff
 # ---------------------------------------------------------------------------
+
 
 class TestGitDiff:
     @pytest.mark.asyncio
@@ -107,6 +115,7 @@ class TestGitDiff:
 # ---------------------------------------------------------------------------
 # git_commit
 # ---------------------------------------------------------------------------
+
 
 class TestGitCommit:
     @pytest.mark.asyncio

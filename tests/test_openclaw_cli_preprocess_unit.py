@@ -1,15 +1,16 @@
 """Unit tests for URL sanitization and domain blocklist in openclaw_cli_preprocess."""
+
 import os
 import sys
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import importlib
 
-mod = importlib.import_module('openclaw_cli_preprocess')
-_sanitize_source_url = getattr(mod, '_sanitize_source_url', None)
+mod = importlib.import_module("openclaw_cli_preprocess")
+_sanitize_source_url = getattr(mod, "_sanitize_source_url", None)
 pytestmark = pytest.mark.smoke
 
 if _sanitize_source_url is None:

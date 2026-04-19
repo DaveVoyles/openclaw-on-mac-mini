@@ -110,12 +110,8 @@ class EmailCog(commands.Cog):
 
             result = await read_email_by_id(msg_id=id, provider=provider)
             if len(result) > 3000:
-                file = discord.File(
-                    io.BytesIO(result.encode()), filename=f"email_{id}.txt"
-                )
-                await interaction.followup.send(
-                    f"📧 Email {id} (full content attached)", file=file, ephemeral=True
-                )
+                file = discord.File(io.BytesIO(result.encode()), filename=f"email_{id}.txt")
+                await interaction.followup.send(f"📧 Email {id} (full content attached)", file=file, ephemeral=True)
             else:
                 embed = discord.Embed(
                     title=f"📧 Email ID {id} ({provider})",

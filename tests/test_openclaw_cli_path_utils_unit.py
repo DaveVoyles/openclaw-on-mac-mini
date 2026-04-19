@@ -1,4 +1,5 @@
 """Unit tests for openclaw_cli_path_utils.py — pure helper functions."""
+
 from __future__ import annotations
 
 import openclaw_cli_path_utils as mod
@@ -6,6 +7,7 @@ import openclaw_cli_path_utils as mod
 # ---------------------------------------------------------------------------
 # _dedupe_preserve_order
 # ---------------------------------------------------------------------------
+
 
 def test_dedupe_empty():
     assert mod._dedupe_preserve_order([]) == []
@@ -34,6 +36,7 @@ def test_dedupe_preserves_order_of_first_seen():
 # ---------------------------------------------------------------------------
 # _detect_file_paths
 # ---------------------------------------------------------------------------
+
 
 def test_detect_file_paths_finds_src_paths():
     text = "See src/main.py for details."
@@ -75,6 +78,7 @@ def test_detect_file_paths_deduplicates():
 # output_name_from_title
 # ---------------------------------------------------------------------------
 
+
 def test_output_name_from_title_basic():
     result = mod.output_name_from_title("My Report", default_stem="report", suffix=".md")
     assert result.endswith(".md")
@@ -103,6 +107,7 @@ def test_output_name_from_title_truncates_at_40():
 # missing_feature_hint
 # ---------------------------------------------------------------------------
 
+
 def test_missing_feature_hint_contains_feature():
     hint = mod.missing_feature_hint("rich-tables")
     assert "rich-tables" in hint
@@ -121,6 +126,7 @@ def test_missing_feature_hint_mentions_standalone():
 # ---------------------------------------------------------------------------
 # _a11y_plain / _a11y_reduced
 # ---------------------------------------------------------------------------
+
 
 def test_a11y_plain_false_by_default():
     assert mod._a11y_plain({}) is False
@@ -144,6 +150,7 @@ def test_a11y_reduced_true_when_set():
 # _make_clickable_link
 # ---------------------------------------------------------------------------
 
+
 def test_make_clickable_link_plain_mode_returns_url():
     result = mod._make_clickable_link("https://example.com", prefs={"plain_mode": True}, is_tty=True)
     assert result == "https://example.com"
@@ -155,9 +162,7 @@ def test_make_clickable_link_no_tty_returns_url():
 
 
 def test_make_clickable_link_clickable_links_off_returns_url():
-    result = mod._make_clickable_link(
-        "https://example.com", "label", prefs={"clickable_links": False}, is_tty=True
-    )
+    result = mod._make_clickable_link("https://example.com", "label", prefs={"clickable_links": False}, is_tty=True)
     assert result == "label"
 
 
@@ -169,6 +174,7 @@ def test_make_clickable_link_tty_enabled_returns_osc8():
 # ---------------------------------------------------------------------------
 # _suggest_followups
 # ---------------------------------------------------------------------------
+
 
 def test_suggest_followups_returns_at_most_three():
     suggestions = mod._suggest_followups("tell me about error handling")
@@ -203,15 +209,14 @@ def test_suggest_followups_deduplicates():
 
 
 def test_suggest_followups_path_in_response_adds_view():
-    suggestions = mod._suggest_followups(
-        "what is this", response_text="See src/main.py for details."
-    )
+    suggestions = mod._suggest_followups("what is this", response_text="See src/main.py for details.")
     assert any("/view" in s for s in suggestions)
 
 
 # ---------------------------------------------------------------------------
 # _linkify_response
 # ---------------------------------------------------------------------------
+
 
 def test_linkify_response_plain_mode_unchanged():
     text = "Visit https://example.com now"

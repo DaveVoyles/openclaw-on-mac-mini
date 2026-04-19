@@ -15,9 +15,13 @@ import cogs.doc_cog as mod
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
+
 class _FakeTree:
-    def add_command(self, *a, **k): pass
-    def remove_command(self, *a, **k): pass
+    def add_command(self, *a, **k):
+        pass
+
+    def remove_command(self, *a, **k):
+        pass
 
 
 class _FakeBot:
@@ -52,13 +56,14 @@ def _make_cog():
 
 # ── Helper functions ──────────────────────────────────────────────────────────
 
+
 def test_parse_json_clean():
     result = mod._parse_json('{"key": "value"}')
     assert result == {"key": "value"}
 
 
 def test_parse_json_with_markdown_fences():
-    raw = "```json\n{\"hello\": \"world\"}\n```"
+    raw = '```json\n{"hello": "world"}\n```'
     result = mod._parse_json(raw)
     assert result == {"hello": "world"}
 
@@ -114,6 +119,7 @@ async def test_generate_sheet_content():
 
 # ── /doc read ────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_doc_read_wrong_extension():
     cog = _make_cog()
@@ -131,8 +137,10 @@ async def test_doc_read_success_short():
     inter = _make_interaction()
     file = _make_attachment(filename="test.docx")
 
-    with patch("cogs.doc_cog.read_word", AsyncMock(return_value="Short document content")), \
-         patch("cogs.doc_cog.audit_log"):
+    with (
+        patch("cogs.doc_cog.read_word", AsyncMock(return_value="Short document content")),
+        patch("cogs.doc_cog.audit_log"),
+    ):
         await cog.doc_read.callback(cog, inter, file=file)
 
     inter.followup.send.assert_awaited_once()
@@ -149,8 +157,7 @@ async def test_doc_read_success_long():
 
     long_text = "x" * 5000
 
-    with patch("cogs.doc_cog.read_word", AsyncMock(return_value=long_text)), \
-         patch("cogs.doc_cog.audit_log"):
+    with patch("cogs.doc_cog.read_word", AsyncMock(return_value=long_text)), patch("cogs.doc_cog.audit_log"):
         await cog.doc_read.callback(cog, inter, file=file)
 
     inter.followup.send.assert_awaited_once()
@@ -164,8 +171,7 @@ async def test_doc_read_empty_document():
     inter = _make_interaction()
     file = _make_attachment(filename="test.docx")
 
-    with patch("cogs.doc_cog.read_word", AsyncMock(return_value="   ")), \
-         patch("cogs.doc_cog.audit_log"):
+    with patch("cogs.doc_cog.read_word", AsyncMock(return_value="   ")), patch("cogs.doc_cog.audit_log"):
         await cog.doc_read.callback(cog, inter, file=file)
 
     msg = inter.followup.send.call_args[0][0]
@@ -188,6 +194,7 @@ async def test_doc_read_exception():
 
 # ── /doc edit ────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_doc_edit_wrong_extension():
     cog = _make_cog()
@@ -206,10 +213,12 @@ async def test_doc_edit_success():
 
     edits = {"old text": "new text"}
 
-    with patch("cogs.doc_cog.read_word", AsyncMock(return_value="old text here")), \
-         patch("cogs.doc_cog._parse_edit_instructions", AsyncMock(return_value=edits)), \
-         patch("cogs.doc_cog.edit_word", AsyncMock(return_value=b"modified docx")), \
-         patch("cogs.doc_cog.audit_log"):
+    with (
+        patch("cogs.doc_cog.read_word", AsyncMock(return_value="old text here")),
+        patch("cogs.doc_cog._parse_edit_instructions", AsyncMock(return_value=edits)),
+        patch("cogs.doc_cog.edit_word", AsyncMock(return_value=b"modified docx")),
+        patch("cogs.doc_cog.audit_log"),
+    ):
         await cog.doc_edit.callback(cog, inter, file=file, instructions="replace old with new")
 
     inter.followup.send.assert_awaited_once()
@@ -223,8 +232,10 @@ async def test_doc_edit_no_edits_determined():
     inter = _make_interaction()
     file = _make_attachment(filename="test.docx")
 
-    with patch("cogs.doc_cog.read_word", AsyncMock(return_value="content")), \
-         patch("cogs.doc_cog._parse_edit_instructions", AsyncMock(return_value={})):
+    with (
+        patch("cogs.doc_cog.read_word", AsyncMock(return_value="content")),
+        patch("cogs.doc_cog._parse_edit_instructions", AsyncMock(return_value={})),
+    ):
         await cog.doc_edit.callback(cog, inter, file=file, instructions="do something vague")
 
     msg = inter.followup.send.call_args[0][0]
@@ -237,8 +248,10 @@ async def test_doc_edit_json_decode_error():
     inter = _make_interaction()
     file = _make_attachment(filename="test.docx")
 
-    with patch("cogs.doc_cog.read_word", AsyncMock(return_value="content")), \
-         patch("cogs.doc_cog._parse_edit_instructions", AsyncMock(side_effect=json.JSONDecodeError("err", "doc", 0))):
+    with (
+        patch("cogs.doc_cog.read_word", AsyncMock(return_value="content")),
+        patch("cogs.doc_cog._parse_edit_instructions", AsyncMock(side_effect=json.JSONDecodeError("err", "doc", 0))),
+    ):
         await cog.doc_edit.callback(cog, inter, file=file, instructions="bad instructions")
 
     assert "invalid edit instructions" in inter.followup.send.call_args[0][0]
@@ -260,14 +273,17 @@ async def test_doc_edit_exception():
 
 # ── /doc create ───────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_doc_create_success():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.doc_cog._generate_doc_content", AsyncMock(return_value=("My Report", "Content here.", ["Intro"]))), \
-         patch("cogs.doc_cog.create_word", AsyncMock(return_value=b"docx bytes")), \
-         patch("cogs.doc_cog.audit_log"):
+    with (
+        patch("cogs.doc_cog._generate_doc_content", AsyncMock(return_value=("My Report", "Content here.", ["Intro"]))),
+        patch("cogs.doc_cog.create_word", AsyncMock(return_value=b"docx bytes")),
+        patch("cogs.doc_cog.audit_log"),
+    ):
         await cog.doc_create.callback(cog, inter, instructions="Create a report about AI")
 
     inter.followup.send.assert_awaited_once()
@@ -301,6 +317,7 @@ async def test_doc_create_exception():
 
 # ── /sheet read ───────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_sheet_read_wrong_extension():
     cog = _make_cog()
@@ -317,8 +334,10 @@ async def test_sheet_read_success_short():
     inter = _make_interaction()
     file = _make_attachment(filename="data.xlsx")
 
-    with patch("cogs.doc_cog.read_excel", AsyncMock(return_value="| Col1 | Col2 |\n| A | B |")), \
-         patch("cogs.doc_cog.audit_log"):
+    with (
+        patch("cogs.doc_cog.read_excel", AsyncMock(return_value="| Col1 | Col2 |\n| A | B |")),
+        patch("cogs.doc_cog.audit_log"),
+    ):
         await cog.sheet_read.callback(cog, inter, file=file)
 
     embed = inter.followup.send.call_args.kwargs.get("embed")
@@ -333,8 +352,7 @@ async def test_sheet_read_success_long():
 
     long_text = "| Col | \n" * 1000
 
-    with patch("cogs.doc_cog.read_excel", AsyncMock(return_value=long_text)), \
-         patch("cogs.doc_cog.audit_log"):
+    with patch("cogs.doc_cog.read_excel", AsyncMock(return_value=long_text)), patch("cogs.doc_cog.audit_log"):
         await cog.sheet_read.callback(cog, inter, file=file)
 
     kwargs = inter.followup.send.call_args.kwargs
@@ -347,8 +365,7 @@ async def test_sheet_read_empty():
     inter = _make_interaction()
     file = _make_attachment(filename="data.xlsx")
 
-    with patch("cogs.doc_cog.read_excel", AsyncMock(return_value="")), \
-         patch("cogs.doc_cog.audit_log"):
+    with patch("cogs.doc_cog.read_excel", AsyncMock(return_value="")), patch("cogs.doc_cog.audit_log"):
         await cog.sheet_read.callback(cog, inter, file=file)
 
     assert "empty" in inter.followup.send.call_args[0][0]
@@ -370,6 +387,7 @@ async def test_sheet_read_exception():
 
 # ── /sheet edit ───────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_sheet_edit_wrong_extension():
     cog = _make_cog()
@@ -388,10 +406,12 @@ async def test_sheet_edit_success():
 
     edits = [{"cell": "A1", "value": "New Value"}]
 
-    with patch("cogs.doc_cog.read_excel", AsyncMock(return_value="| A | B |\n| old | data |")), \
-         patch("cogs.doc_cog._parse_edit_instructions", AsyncMock(return_value=edits)), \
-         patch("cogs.doc_cog.edit_excel", AsyncMock(return_value=b"modified xlsx")), \
-         patch("cogs.doc_cog.audit_log"):
+    with (
+        patch("cogs.doc_cog.read_excel", AsyncMock(return_value="| A | B |\n| old | data |")),
+        patch("cogs.doc_cog._parse_edit_instructions", AsyncMock(return_value=edits)),
+        patch("cogs.doc_cog.edit_excel", AsyncMock(return_value=b"modified xlsx")),
+        patch("cogs.doc_cog.audit_log"),
+    ):
         await cog.sheet_edit.callback(cog, inter, file=file, instructions="set A1 to New Value")
 
     embed = inter.followup.send.call_args.kwargs.get("embed")
@@ -405,8 +425,10 @@ async def test_sheet_edit_no_edits():
     inter = _make_interaction()
     file = _make_attachment(filename="data.xlsx")
 
-    with patch("cogs.doc_cog.read_excel", AsyncMock(return_value="content")), \
-         patch("cogs.doc_cog._parse_edit_instructions", AsyncMock(return_value=[])):
+    with (
+        patch("cogs.doc_cog.read_excel", AsyncMock(return_value="content")),
+        patch("cogs.doc_cog._parse_edit_instructions", AsyncMock(return_value=[])),
+    ):
         await cog.sheet_edit.callback(cog, inter, file=file, instructions="vague instruction")
 
     assert "Could not determine" in inter.followup.send.call_args[0][0]
@@ -418,8 +440,10 @@ async def test_sheet_edit_json_error():
     inter = _make_interaction()
     file = _make_attachment(filename="data.xlsx")
 
-    with patch("cogs.doc_cog.read_excel", AsyncMock(return_value="content")), \
-         patch("cogs.doc_cog._parse_edit_instructions", AsyncMock(side_effect=json.JSONDecodeError("e", "d", 0))):
+    with (
+        patch("cogs.doc_cog.read_excel", AsyncMock(return_value="content")),
+        patch("cogs.doc_cog._parse_edit_instructions", AsyncMock(side_effect=json.JSONDecodeError("e", "d", 0))),
+    ):
         await cog.sheet_edit.callback(cog, inter, file=file, instructions="bad")
 
     assert "invalid edit instructions" in inter.followup.send.call_args[0][0]
@@ -441,14 +465,20 @@ async def test_sheet_edit_exception():
 
 # ── /sheet create ─────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_sheet_create_success():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.doc_cog._generate_sheet_content", AsyncMock(return_value=("Budget 2024", ["Month", "Amount"], [["Jan", 100], ["Feb", 200]]))), \
-         patch("cogs.doc_cog.create_excel", AsyncMock(return_value=b"xlsx bytes")), \
-         patch("cogs.doc_cog.audit_log"):
+    with (
+        patch(
+            "cogs.doc_cog._generate_sheet_content",
+            AsyncMock(return_value=("Budget 2024", ["Month", "Amount"], [["Jan", 100], ["Feb", 200]])),
+        ),
+        patch("cogs.doc_cog.create_excel", AsyncMock(return_value=b"xlsx bytes")),
+        patch("cogs.doc_cog.audit_log"),
+    ):
         await cog.sheet_create.callback(cog, inter, instructions="Create a budget spreadsheet")
 
     embed = inter.followup.send.call_args.kwargs.get("embed")
@@ -483,9 +513,11 @@ async def test_sheet_create_exception():
 
 # ── cog_app_command_error ─────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_cog_app_command_error_check_failure_not_done():
     from discord import app_commands
+
     cog = _make_cog()
     inter = _make_interaction(done=False)
     err = app_commands.CheckFailure("Not authorized")
@@ -497,6 +529,7 @@ async def test_cog_app_command_error_check_failure_not_done():
 @pytest.mark.asyncio
 async def test_cog_app_command_error_check_failure_done():
     from discord import app_commands
+
     cog = _make_cog()
     inter = _make_interaction(done=True)
     err = app_commands.CheckFailure("Denied")
@@ -507,6 +540,7 @@ async def test_cog_app_command_error_check_failure_done():
 @pytest.mark.asyncio
 async def test_cog_app_command_error_other_error_not_done():
     from discord import app_commands
+
     cog = _make_cog()
     inter = _make_interaction(done=False)
     err = app_commands.AppCommandError("unexpected")
@@ -518,6 +552,7 @@ async def test_cog_app_command_error_other_error_not_done():
 @pytest.mark.asyncio
 async def test_cog_app_command_error_other_error_done():
     from discord import app_commands
+
     cog = _make_cog()
     inter = _make_interaction(done=True)
     err = app_commands.AppCommandError("something went wrong")
@@ -528,6 +563,7 @@ async def test_cog_app_command_error_other_error_done():
 
 # ── _SaveToNASView ────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_save_to_nas_view_success():
     view = mod._SaveToNASView(file_bytes=b"content", filename="test.docx")
@@ -537,8 +573,7 @@ async def test_save_to_nas_view_success():
     mock_nas.nas_create_folder = AsyncMock()
     mock_nas.nas_write_file = AsyncMock(return_value="Saved successfully")
 
-    with patch.dict(sys.modules, {"nas": mock_nas}), \
-         patch("cogs.doc_cog.audit_log"):
+    with patch.dict(sys.modules, {"nas": mock_nas}), patch("cogs.doc_cog.audit_log"):
         # Button.callback takes just (interaction,) after binding to view
         await view.save_nas.callback(inter)
 
@@ -551,8 +586,7 @@ async def test_save_to_nas_view_failure():
     view = mod._SaveToNASView(file_bytes=b"content", filename="test.docx")
     inter = _make_interaction()
 
-    with patch.dict(sys.modules, {"nas": None}), \
-         patch("cogs.doc_cog.audit_log"):
+    with patch.dict(sys.modules, {"nas": None}), patch("cogs.doc_cog.audit_log"):
         await view.save_nas.callback(inter)
 
     inter.followup.send.assert_awaited_once()

@@ -41,10 +41,7 @@ class TestParseHealActions:
 
     def test_multiple_directives(self):
         analysis = (
-            "Some analysis text\n"
-            "SELF_HEAL: restart_container radarr\n"
-            "More text\n"
-            "SELF_HEAL: restart_container sabnzbd\n"
+            "Some analysis text\nSELF_HEAL: restart_container radarr\nMore text\nSELF_HEAL: restart_container sabnzbd\n"
         )
         actions = mod._parse_heal_actions(analysis)
         assert len(actions) == 2
@@ -95,9 +92,11 @@ class TestExecuteSelfHealing:
     @pytest.mark.asyncio
     async def test_restart_calls_restart_container(self):
         # restart_container and audit_log live in bg_healing, not discord_background
-        with patch.object(healing_mod, "_parse_heal_actions", return_value=[("restart_container", "sonarr")]), \
-             patch("bg_healing.restart_container", new_callable=AsyncMock, return_value="OK") as mock_rc, \
-             patch("bg_healing.audit_log"):
+        with (
+            patch.object(healing_mod, "_parse_heal_actions", return_value=[("restart_container", "sonarr")]),
+            patch("bg_healing.restart_container", new_callable=AsyncMock, return_value="OK") as mock_rc,
+            patch("bg_healing.audit_log"),
+        ):
             cleaned, results = await mod._execute_self_healing("SELF_HEAL: restart_container sonarr")
             mock_rc.assert_awaited_once_with("sonarr")
             assert any("sonarr" in r for r in results)
@@ -128,6 +127,7 @@ class TestBackgroundTaskSupervisor:
     async def _reset_bg_tasks(self):
         """Cancel any leftover background tasks before each test to prevent state pollution."""
         import bg_tasks as _bt
+
         # Cancel any lingering tasks from prior tests
         for task in list(_bt._BACKGROUND_TASKS.values()):
             task.cancel()
@@ -197,8 +197,11 @@ class TestBackgroundTaskSupervisor:
         monkeypatch.setattr(tasks_mod, "get_collector", lambda: mock_collector)
 
         class _ZeroDelay:
-            def next_delay(self): return 0
-            def mark_clean(self): pass
+            def next_delay(self):
+                return 0
+
+            def mark_clean(self):
+                pass
 
         monkeypatch.setattr(tasks_mod, "_BackoffTracker", _ZeroDelay)
         tasks_mod._BACKGROUND_BACKOFF.clear()
@@ -235,7 +238,9 @@ class TestQualityDriftAlertRouting:
             },
         }
 
-        with patch("dashboard.api_handlers._build_offline_quality_calibration_payload", return_value=calibration_payload):
+        with patch(
+            "dashboard.api_handlers._build_offline_quality_calibration_payload", return_value=calibration_payload
+        ):
             first = await mod._check_quality_drift_alert(bot)
             second = await mod._check_quality_drift_alert(bot)
 

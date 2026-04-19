@@ -100,7 +100,10 @@ class CalendarCog(commands.Cog):
 
             # Try to detect a range like "Friday 2pm-4pm" or "3pm - 5pm"
             import re
-            range_match = re.search(r"(\d{1,2}(?::\d{2})?(?:am|pm)?)\s*[-–]\s*(\d{1,2}(?::\d{2})?(?:am|pm))", when, re.IGNORECASE)
+
+            range_match = re.search(
+                r"(\d{1,2}(?::\d{2})?(?:am|pm)?)\s*[-–]\s*(\d{1,2}(?::\d{2})?(?:am|pm))", when, re.IGNORECASE
+            )
             if range_match:
                 base = when[: range_match.start()].strip()
                 start_part = base + " " + range_match.group(1)

@@ -1,4 +1,5 @@
 """Track and query service health check history."""
+
 import logging
 import sqlite3
 import time
@@ -31,9 +32,7 @@ class HealthHistory:
                 timestamp REAL NOT NULL
             )
         """)
-        self.db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_service_ts ON health_checks(service, timestamp)"
-        )
+        self.db.execute("CREATE INDEX IF NOT EXISTS idx_service_ts ON health_checks(service, timestamp)")
         self.db.execute("""
             CREATE TABLE IF NOT EXISTS disk_usage (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

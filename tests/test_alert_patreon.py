@@ -1,4 +1,5 @@
 """Tests for alert_patreon.py — PatreonAlertManager cooldown and routing logic."""
+
 from __future__ import annotations
 
 import time
@@ -32,6 +33,7 @@ def _make_result(
 # AlertState
 # ===========================================================================
 
+
 class TestAlertState:
     def test_alert_patreon_defaults(self):
         state = AlertState()
@@ -42,6 +44,7 @@ class TestAlertState:
 # ===========================================================================
 # PatreonAlertManager._should_send_alert
 # ===========================================================================
+
 
 class TestShouldSendAlert:
     def setup_method(self):
@@ -96,6 +99,7 @@ class TestShouldSendAlert:
 
     def test_alert_after_cooldown_passes(self):
         from alert_patreon import ALERT_COOLDOWN_SECONDS
+
         result = _make_result(status=PatreonHealthStatus.CRITICAL, message="container is stopped")
         state = AlertState()
         state.last_alert_time = time.time() - ALERT_COOLDOWN_SECONDS - 1
@@ -108,6 +112,7 @@ class TestShouldSendAlert:
 # ===========================================================================
 # PatreonAlertManager.reset_alert_state / get_alert_status
 # ===========================================================================
+
 
 class TestAlertManagerState:
     def setup_method(self):
@@ -145,6 +150,7 @@ class TestAlertManagerState:
 # ===========================================================================
 # send_alert_if_needed (mocked Discord)
 # ===========================================================================
+
 
 class TestSendAlertIfNeeded:
     @pytest.mark.asyncio

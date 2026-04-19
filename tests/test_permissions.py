@@ -96,9 +96,7 @@ class TestIsServiceAllowed:
 
     def test_denied_service(self, monkeypatch, tmp_path):
         perms_file = tmp_path / "permissions.yaml"
-        perms_file.write_text(
-            "commands:\n  search:\n    denied_services:\n      - bing\n"
-        )
+        perms_file.write_text("commands:\n  search:\n    denied_services:\n      - bing\n")
         monkeypatch.setattr(mod, "CONFIG_DIR", tmp_path)
         monkeypatch.setattr(mod, "_permissions_cache", None)
         monkeypatch.setattr(mod, "_permissions_mtime", 0.0)
@@ -107,9 +105,7 @@ class TestIsServiceAllowed:
 
     def test_allowed_services_whitelist(self, monkeypatch, tmp_path):
         perms_file = tmp_path / "permissions.yaml"
-        perms_file.write_text(
-            "commands:\n  search:\n    allowed_services:\n      - google\n"
-        )
+        perms_file.write_text("commands:\n  search:\n    allowed_services:\n      - google\n")
         monkeypatch.setattr(mod, "CONFIG_DIR", tmp_path)
         monkeypatch.setattr(mod, "_permissions_cache", None)
         monkeypatch.setattr(mod, "_permissions_mtime", 0.0)

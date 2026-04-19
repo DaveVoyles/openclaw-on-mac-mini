@@ -1,6 +1,5 @@
 """Tests for model_aliases.py and constants.py — pure modules, no mocking needed."""
 
-
 from constants import (
     APPROVAL_TTL,
     ATTACHMENT_TEXT_MAX_CHARS,
@@ -46,6 +45,7 @@ from model_aliases import (
 # normalize_model_input
 # ---------------------------------------------------------------------------
 
+
 class TestNormalizeModelInput:
     def test_model_aliases_constants_empty_string_returns_empty(self):
         assert normalize_model_input("") == ""
@@ -83,6 +83,7 @@ class TestNormalizeModelInput:
 # ---------------------------------------------------------------------------
 # model_input_suggestion
 # ---------------------------------------------------------------------------
+
 
 class TestModelInputSuggestion:
     def test_model_aliases_constants_empty_input_returns_empty(self):
@@ -126,6 +127,7 @@ class TestModelInputSuggestion:
 # ---------------------------------------------------------------------------
 # constants sanity checks
 # ---------------------------------------------------------------------------
+
 
 class TestConstantSanity:
     """Verify constants have sane values — catches accidental regressions."""

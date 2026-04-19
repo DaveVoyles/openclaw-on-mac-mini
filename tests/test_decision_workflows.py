@@ -82,6 +82,7 @@ def test_compute_weighted_outcome_ignores_invalid_options_and_uses_max_role_weig
     assert outcome["participant_count"] == 1
     assert outcome["participants"][0]["applied_weight"] == 2.0
 
+
 # --- Merged from test_decision_store.py ---
 """Tests for DecisionStore persistence and retrieval."""
 
@@ -98,8 +99,22 @@ def test_decision_store_persists_and_lists_recent(tmp_path):
         "winner_option": "Now",
         "winner_weighted_score": 2.5,
         "participants": [
-            {"user_id": 1, "user_name": "alice", "option_index": 0, "option": "Now", "roles": ["PM"], "applied_weight": 2.0},
-            {"user_id": 2, "user_name": "bob", "option_index": 1, "option": "Tomorrow", "roles": ["QA"], "applied_weight": 1.0},
+            {
+                "user_id": 1,
+                "user_name": "alice",
+                "option_index": 0,
+                "option": "Now",
+                "roles": ["PM"],
+                "applied_weight": 2.0,
+            },
+            {
+                "user_id": 2,
+                "user_name": "bob",
+                "option_index": 1,
+                "option": "Tomorrow",
+                "roles": ["QA"],
+                "applied_weight": 1.0,
+            },
         ],
         "role_weights": {"pm": 2.0},
     }
@@ -125,4 +140,3 @@ def test_decision_store_persists_and_lists_recent(tmp_path):
     recent = store.list_recent(limit=5, channel_id=111)
     assert len(recent) == 1
     assert recent[0]["id"] == decision_id
-

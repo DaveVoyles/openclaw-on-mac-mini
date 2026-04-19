@@ -15,15 +15,11 @@ log = logging.getLogger(__name__)
 _attachment_sessions = SessionManager(timeout=30, name="attachments")
 
 
-async def handle_image_attachment(
-    attachment: discord.Attachment, question: str
-) -> str:
+async def handle_image_attachment(attachment: discord.Attachment, question: str) -> str:
     """Download and analyze an image attachment via Gemini vision."""
     try:
         session = await _attachment_sessions.get()
-        async with session.get(
-            attachment.url, timeout=aiohttp.ClientTimeout(total=30)
-        ) as resp:
+        async with session.get(attachment.url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
             if resp.status == 200:
                 img_bytes = await resp.read()
                 mime = (attachment.content_type or "").split(";")[0].strip()
@@ -34,21 +30,15 @@ async def handle_image_attachment(
     return question
 
 
-async def handle_doc_attachment(
-    attachment: discord.Attachment, question: str
-) -> str:
+async def handle_doc_attachment(attachment: discord.Attachment, question: str) -> str:
     """Download and analyze a document attachment via Gemini."""
     try:
         session = await _attachment_sessions.get()
-        async with session.get(
-            attachment.url, timeout=aiohttp.ClientTimeout(total=30)
-        ) as resp:
+        async with session.get(attachment.url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
             if resp.status == 200:
                 raw = await resp.read()
                 try:
-                    doc_text = raw.decode("utf-8", errors="replace")[
-                        :ATTACHMENT_TEXT_MAX_CHARS
-                    ]
+                    doc_text = raw.decode("utf-8", errors="replace")[:ATTACHMENT_TEXT_MAX_CHARS]
                     combined_query = (
                         f"{question}\n\n--- Attached Document (first {ATTACHMENT_TEXT_MAX_CHARS} chars) ---\n"
                         f"{doc_text}\n"

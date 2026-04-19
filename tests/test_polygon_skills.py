@@ -150,7 +150,7 @@ class TestGetStockQuote:
             mock_session = AsyncMock()
             mock_session.get = MagicMock(return_value=mock_response)
 
-            with patch.object(type(_sessions), 'get', return_value=mock_session):
+            with patch.object(type(_sessions), "get", return_value=mock_session):
                 result = await get_stock_quote("AAPL")
 
                 assert result["status"] == "ok"
@@ -175,7 +175,7 @@ class TestGetStockQuote:
             mock_session = AsyncMock()
             mock_session.get = MagicMock(return_value=mock_response)
 
-            with patch.object(type(_sessions), 'get', return_value=mock_session):
+            with patch.object(type(_sessions), "get", return_value=mock_session):
                 result = await get_stock_quote("AAPL")
 
                 assert result["status"] == "error"
@@ -209,7 +209,7 @@ class TestGetStockQuote:
             mock_session = AsyncMock()
             mock_session.get = MagicMock(return_value=mock_response)
 
-            with patch.object(type(_sessions), 'get', return_value=mock_session):
+            with patch.object(type(_sessions), "get", return_value=mock_session):
                 # First call - should hit API
                 result1 = await get_stock_quote("AAPL")
                 assert result1["status"] == "ok"
@@ -238,7 +238,7 @@ class TestGetMarketStatus:
             "currencies": {
                 "fx": "open",
                 "crypto": "open",
-            }
+            },
         }
 
         with patch("skills.polygon_skills.cfg") as mock_cfg:
@@ -253,7 +253,7 @@ class TestGetMarketStatus:
             mock_session = AsyncMock()
             mock_session.get = MagicMock(return_value=mock_response)
 
-            with patch.object(type(_sessions), 'get', return_value=mock_session):
+            with patch.object(type(_sessions), "get", return_value=mock_session):
                 result = await get_market_status()
 
                 assert result["status"] == "ok"
@@ -301,7 +301,7 @@ class TestGetStockHistory:
             mock_session = AsyncMock()
             mock_session.get = MagicMock(return_value=mock_response)
 
-            with patch.object(type(_sessions), 'get', return_value=mock_session):
+            with patch.object(type(_sessions), "get", return_value=mock_session):
                 result = await get_stock_history("AAPL", days=30)
 
                 assert result["status"] == "ok"

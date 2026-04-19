@@ -1,4 +1,5 @@
 """Unit tests for Wave 9 RequestTrace dataclass and trace footer helpers."""
+
 from __future__ import annotations
 
 import importlib

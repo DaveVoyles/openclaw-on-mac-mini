@@ -1,4 +1,5 @@
 """Tests for src/fact_extractor.py — should_extract (pure logic, no external deps)."""
+
 import pytest
 
 # fact_extractor module-level code only uses standard library — no stubs needed

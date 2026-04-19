@@ -34,13 +34,15 @@ async def test_search_web_retries_provider_fallback_when_low_results(monkeypatch
 
     async def fake_perplexity(query: str, num_results: int = 5, *, return_hits: bool = False):
         calls.append("perplexity")
-        hits = [{
-            "title": "Single synthetic recap",
-            "url": "https://example.com/one",
-            "snippet": "Only one item",
-            "provider": "perplexity",
-            "source": "Perplexity",
-        }]
+        hits = [
+            {
+                "title": "Single synthetic recap",
+                "url": "https://example.com/one",
+                "snippet": "Only one item",
+                "provider": "perplexity",
+                "source": "Perplexity",
+            }
+        ]
         if return_hits:
             return "perplexity", hits
         return "perplexity"
@@ -48,9 +50,27 @@ async def test_search_web_retries_provider_fallback_when_low_results(monkeypatch
     async def fake_firecrawl(query: str, num_results: int = 5, *, return_hits: bool = False):
         calls.append("firecrawl")
         hits = [
-            {"title": "Game A", "url": "https://example.com/a", "snippet": "A", "provider": "firecrawl", "source": "Firecrawl"},
-            {"title": "Game B", "url": "https://example.com/b", "snippet": "B", "provider": "firecrawl", "source": "Firecrawl"},
-            {"title": "Game C", "url": "https://example.com/c", "snippet": "C", "provider": "firecrawl", "source": "Firecrawl"},
+            {
+                "title": "Game A",
+                "url": "https://example.com/a",
+                "snippet": "A",
+                "provider": "firecrawl",
+                "source": "Firecrawl",
+            },
+            {
+                "title": "Game B",
+                "url": "https://example.com/b",
+                "snippet": "B",
+                "provider": "firecrawl",
+                "source": "Firecrawl",
+            },
+            {
+                "title": "Game C",
+                "url": "https://example.com/c",
+                "snippet": "C",
+                "provider": "firecrawl",
+                "source": "Firecrawl",
+            },
         ]
         if return_hits:
             return "firecrawl", hits
@@ -82,8 +102,20 @@ async def test_search_web_merges_and_dedupes_without_collapsing_distinct_games(m
 
     async def fake_perplexity(query: str, num_results: int = 5, *, return_hits: bool = False):
         hits = [
-            {"title": "Maryland vs Hopkins", "url": "https://example.com/game-1", "snippet": "Game 1", "provider": "perplexity", "source": "Perplexity"},
-            {"title": "Virginia vs Duke", "url": "https://example.com/game-2", "snippet": "Game 2", "provider": "perplexity", "source": "Perplexity"},
+            {
+                "title": "Maryland vs Hopkins",
+                "url": "https://example.com/game-1",
+                "snippet": "Game 1",
+                "provider": "perplexity",
+                "source": "Perplexity",
+            },
+            {
+                "title": "Virginia vs Duke",
+                "url": "https://example.com/game-2",
+                "snippet": "Game 2",
+                "provider": "perplexity",
+                "source": "Perplexity",
+            },
         ]
         if return_hits:
             return "perplexity", hits
@@ -91,8 +123,20 @@ async def test_search_web_merges_and_dedupes_without_collapsing_distinct_games(m
 
     async def fake_firecrawl(query: str, num_results: int = 5, *, return_hits: bool = False):
         hits = [
-            {"title": "Maryland vs Hopkins", "url": "https://example.com/game-1?utm_source=test", "snippet": "dup", "provider": "firecrawl", "source": "Firecrawl"},
-            {"title": "Notre Dame vs Syracuse", "url": "https://example.com/game-3", "snippet": "Game 3", "provider": "firecrawl", "source": "Firecrawl"},
+            {
+                "title": "Maryland vs Hopkins",
+                "url": "https://example.com/game-1?utm_source=test",
+                "snippet": "dup",
+                "provider": "firecrawl",
+                "source": "Firecrawl",
+            },
+            {
+                "title": "Notre Dame vs Syracuse",
+                "url": "https://example.com/game-3",
+                "snippet": "Game 3",
+                "provider": "firecrawl",
+                "source": "Firecrawl",
+            },
         ]
         if return_hits:
             return "firecrawl", hits
@@ -127,12 +171,30 @@ async def test_search_web_expands_query_for_sports_context_when_needed(monkeypat
         calls.append(query)
         if "weekend" in query:
             hits = [
-                {"title": "Weekend slate", "url": "https://example.com/weekend", "snippet": "weekend", "provider": "perplexity", "source": "Perplexity"},
-                {"title": "TV schedule", "url": "https://example.com/tv", "snippet": "tv", "provider": "perplexity", "source": "Perplexity"},
+                {
+                    "title": "Weekend slate",
+                    "url": "https://example.com/weekend",
+                    "snippet": "weekend",
+                    "provider": "perplexity",
+                    "source": "Perplexity",
+                },
+                {
+                    "title": "TV schedule",
+                    "url": "https://example.com/tv",
+                    "snippet": "tv",
+                    "provider": "perplexity",
+                    "source": "Perplexity",
+                },
             ]
         else:
             hits = [
-                {"title": "Only one", "url": "https://example.com/one", "snippet": "one", "provider": "perplexity", "source": "Perplexity"},
+                {
+                    "title": "Only one",
+                    "url": "https://example.com/one",
+                    "snippet": "one",
+                    "provider": "perplexity",
+                    "source": "Perplexity",
+                },
             ]
         if return_hits:
             return "perplexity", hits
@@ -164,13 +226,15 @@ async def test_search_web_records_low_results_metric(monkeypatch, _disable_scrip
     monkeypatch.setattr(mod, "get_latency_load_snapshot", lambda **_: None)
 
     async def fake_perplexity(_query: str, num_results: int = 5, *, return_hits: bool = False):
-        hits = [{
-            "title": "Only one",
-            "url": "https://example.com/one",
-            "snippet": "one",
-            "provider": "perplexity",
-            "source": "Perplexity",
-        }]
+        hits = [
+            {
+                "title": "Only one",
+                "url": "https://example.com/one",
+                "snippet": "one",
+                "provider": "perplexity",
+                "source": "Perplexity",
+            }
+        ]
         if return_hits:
             return "perplexity", hits
         return "perplexity"
@@ -192,7 +256,9 @@ async def test_search_web_records_low_results_metric(monkeypatch, _disable_scrip
 
 
 @pytest.mark.asyncio
-async def test_e2e_incident_summary_search_surfaces_conflicts_with_quality_warning(monkeypatch, _disable_script_providers):
+async def test_e2e_incident_summary_search_surfaces_conflicts_with_quality_warning(
+    monkeypatch, _disable_script_providers
+):
     monkeypatch.setattr(mod, "PERPLEXITY_API_KEY", "test-key")
     monkeypatch.setattr(mod, "FIRECRAWL_API_KEY", "test-key")
     monkeypatch.setattr(mod, "TAVILY_API_KEY", "")
@@ -261,9 +327,7 @@ def test_resolve_retrieval_profile_settings_returns_default_profile():
 
 
 def test_resolve_retrieval_profile_settings_channel_name_ignored():
-    settings = retrieval_profiles.resolve_retrieval_profile_settings(
-        "sports recap", channel_name="sports"
-    )
+    settings = retrieval_profiles.resolve_retrieval_profile_settings("sports recap", channel_name="sports")
     assert settings["topic_class"] == "general"
 
 
@@ -289,7 +353,6 @@ async def test_search_web_applies_default_profile_to_reliable_path(
     assert captured["min_results"] == 3
     assert captured["expansion_context"] == ""
     assert captured["provider_attempt_cap"] >= 3
-
 
 
 def test_rank_hits_for_evidence_prioritizes_trusted_and_fresh_sources():

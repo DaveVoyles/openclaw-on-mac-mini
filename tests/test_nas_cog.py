@@ -1,4 +1,5 @@
 """Tests for cogs/nas_cog.py."""
+
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -59,6 +60,7 @@ def _make_cog():
 
 # ── __init__ ──────────────────────────────────────────────────────────────────
 
+
 def test_nas_cog_init():
     cog = _make_cog()
     assert cog.bot is not None
@@ -66,9 +68,11 @@ def test_nas_cog_init():
 
 # ── cog_command_error ─────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_nas_cog_cog_command_error_not_done():
     from discord import app_commands
+
     cog = _make_cog()
     inter = _make_interaction(done=False)
     err = app_commands.AppCommandError("NAS error")
@@ -80,6 +84,7 @@ async def test_nas_cog_cog_command_error_not_done():
 @pytest.mark.asyncio
 async def test_nas_cog_cog_command_error_done():
     from discord import app_commands
+
     cog = _make_cog()
     inter = _make_interaction(done=True)
     err = app_commands.AppCommandError("NAS error")
@@ -89,13 +94,16 @@ async def test_nas_cog_cog_command_error_done():
 
 # ── status_cmd ────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_nas_cog_status_cmd_success():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.nas_cog.get_nas_storage_health", new=AsyncMock(return_value="🟢 All healthy")), \
-         patch("cogs.nas_cog.audit_log") as mock_audit:
+    with (
+        patch("cogs.nas_cog.get_nas_storage_health", new=AsyncMock(return_value="🟢 All healthy")),
+        patch("cogs.nas_cog.audit_log") as mock_audit,
+    ):
         await cog.status_cmd.callback(cog, inter)
 
     inter.response.defer.assert_awaited_once()
@@ -118,13 +126,16 @@ async def test_status_cmd_exception():
 
 # ── health_cmd ────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_health_cmd_success():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.nas_cog.get_disk_smart_status", new=AsyncMock(return_value="All drives OK")), \
-         patch("cogs.nas_cog.audit_log") as mock_audit:
+    with (
+        patch("cogs.nas_cog.get_disk_smart_status", new=AsyncMock(return_value="All drives OK")),
+        patch("cogs.nas_cog.audit_log") as mock_audit,
+    ):
         await cog.health_cmd.callback(cog, inter)
 
     inter.followup.send.assert_awaited_once()
@@ -144,13 +155,16 @@ async def test_health_cmd_exception():
 
 # ── alerts_cmd ────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_alerts_cmd_success():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.nas_cog.get_nas_alerts", new=AsyncMock(return_value="No alerts")), \
-         patch("cogs.nas_cog.audit_log") as mock_audit:
+    with (
+        patch("cogs.nas_cog.get_nas_alerts", new=AsyncMock(return_value="No alerts")),
+        patch("cogs.nas_cog.audit_log") as mock_audit,
+    ):
         await cog.alerts_cmd.callback(cog, inter)
 
     inter.followup.send.assert_awaited_once()
@@ -170,13 +184,16 @@ async def test_alerts_cmd_exception():
 
 # ── browse_cmd ────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_browse_cmd_success():
     cog = _make_cog()
     inter = _make_interaction()
 
-    with patch("cogs.nas_cog.nas_list_folder", new=AsyncMock(return_value="folder1\nfolder2")), \
-         patch("cogs.nas_cog.audit_log") as mock_audit:
+    with (
+        patch("cogs.nas_cog.nas_list_folder", new=AsyncMock(return_value="folder1\nfolder2")),
+        patch("cogs.nas_cog.audit_log") as mock_audit,
+    ):
         await cog.browse_cmd.callback(cog, inter, path="/volume1")
 
     inter.followup.send.assert_awaited_once()

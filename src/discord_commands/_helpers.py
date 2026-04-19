@@ -17,11 +17,7 @@ log = logging.getLogger(__name__)
 # Auth helpers
 # ---------------------------------------------------------------------------
 
-ALLOWED_USER_IDS = [
-    int(uid.strip())
-    for uid in os.getenv("ALLOWED_USER_IDS", "").split(",")
-    if uid.strip()
-]
+ALLOWED_USER_IDS = [int(uid.strip()) for uid in os.getenv("ALLOWED_USER_IDS", "").split(",") if uid.strip()]
 
 
 def _is_allowed(interaction: discord.Interaction) -> bool:

@@ -66,6 +66,7 @@ class TestRecord:
 
     async def test_record_updates_daily_bucket(self, tracker):
         import datetime
+
         today = datetime.date.today().isoformat()
         await tracker.record(500, 250)
         assert today in tracker._data["daily"]

@@ -76,9 +76,7 @@ async def extract_and_store_facts(
             return []
 
         facts = [
-            line.strip().lstrip("- •·")
-            for line in text.split("\n")
-            if line.strip() and line.strip().upper() != "NONE"
+            line.strip().lstrip("- •·") for line in text.split("\n") if line.strip() and line.strip().upper() != "NONE"
         ]
         facts = [f for f in facts if len(f) > 10]  # Filter out noise
 
@@ -133,9 +131,7 @@ async def _store_fact(fact: str, user_id: int) -> None:
         log.debug("Dedup check failed, storing anyway: %s", exc)
 
     # Generate unique ID
-    fact_id = hashlib.md5(
-        f"{fact}_{user_id}_{int(time.time())}".encode()
-    ).hexdigest()[:12]
+    fact_id = hashlib.md5(f"{fact}_{user_id}_{int(time.time())}".encode()).hexdigest()[:12]
 
     # Store in ChromaDB
     await vector_store.add_document(
@@ -154,6 +150,7 @@ async def _store_fact(fact: str, user_id: int) -> None:
     # Also store in QMD (best-effort)
     try:
         from qmd import remember_fact
+
         await remember_fact(fact, tags="auto-extracted", source="auto-extracted")
     except (ImportError, OSError, ValueError, AttributeError) as exc:
         log.debug("QMD store for auto-extracted fact failed: %s", exc)

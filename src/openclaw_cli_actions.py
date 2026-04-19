@@ -17,6 +17,7 @@ from subprocess_utils import run as run_subprocess
 try:
     from approval_models import RiskLevel
 except ImportError:
+
     class RiskLevel(Enum):
         LOW = "LOW"
         MEDIUM = "MEDIUM"
@@ -27,6 +28,7 @@ except ImportError:
 try:
     from approval_store import approval_store as approval_store
 except ImportError:
+
     @dataclass
     class _FallbackApprovalRequest:
         request_id: str
@@ -121,11 +123,18 @@ def infer_command_risk(command_parts: list[str]) -> RiskLevel:
     """Best-effort command risk classification for CLI approvals."""
     normalized = " ".join(command_parts).lower().strip()
     first = str(command_parts[0] or "").lower() if command_parts else ""
-    if first == "rm" or any(token in normalized for token in ("mkfs", "shutdown", "reboot", "diskutil erase", "git reset --hard")):
+    if first == "rm" or any(
+        token in normalized for token in ("mkfs", "shutdown", "reboot", "diskutil erase", "git reset --hard")
+    ):
         return RiskLevel.CRITICAL
-    if first in {"docker", "brew", "chmod", "chown", "kill"} or any(token in normalized for token in ("pip install", "npm install", "git checkout", "git clean")):
+    if first in {"docker", "brew", "chmod", "chown", "kill"} or any(
+        token in normalized for token in ("pip install", "npm install", "git checkout", "git clean")
+    ):
         return RiskLevel.HIGH
-    if any(token in normalized for token in ("python", "pytest", "make", "git status", "git diff", "ls", "cat", "rg", "grep")):
+    if any(
+        token in normalized
+        for token in ("python", "pytest", "make", "git status", "git diff", "ls", "cat", "rg", "grep")
+    ):
         return RiskLevel.MEDIUM
     return RiskLevel.LOW
 
@@ -135,7 +144,18 @@ def infer_file_edit_risk(path: str | os.PathLike[str]) -> RiskLevel:
     normalized = str(path).lower()
     if any(token in normalized for token in (".env", ".pem", ".key", "secrets", "id_rsa")):
         return RiskLevel.CRITICAL
-    if any(token in normalized for token in ("docker-compose", "compose.yaml", ".github/workflows", "package.json", "pyproject.toml", "makefile", "requirements")):
+    if any(
+        token in normalized
+        for token in (
+            "docker-compose",
+            "compose.yaml",
+            ".github/workflows",
+            "package.json",
+            "pyproject.toml",
+            "makefile",
+            "requirements",
+        )
+    ):
         return RiskLevel.HIGH
     return RiskLevel.MEDIUM
 
@@ -380,11 +400,11 @@ def request_cli_approval(
             recovery_hint=recovery_hint,
         )
     if review_overlay_supported:
-        prompt_suffix = ' [y]es/[n]o/[r]eview/[o]verlay: '
+        prompt_suffix = " [y]es/[n]o/[r]eview/[o]verlay: "
     elif review_supported:
-        prompt_suffix = ' [y]es/[n]o/[r]eview: '
+        prompt_suffix = " [y]es/[n]o/[r]eview: "
     else:
-        prompt_suffix = ' [y/N]: '
+        prompt_suffix = " [y/N]: "
     prompt = (
         f"\n{prefix}{risk_colored} risk  {_dim}`{action}`{_reset}"
         f"  on  {_dim}`{target}`{_reset}"
@@ -420,12 +440,12 @@ def request_cli_approval(
             )
             continue
         retry_hint = (
-            'Enter y to approve, n to deny, r to review again, or o for the overlay.'
+            "Enter y to approve, n to deny, r to review again, or o for the overlay."
             if review_overlay_supported
             else (
-                'Enter y to approve, n to deny, or r to review again.'
+                "Enter y to approve, n to deny, or r to review again."
                 if review_supported
-                else 'Enter y to approve or n to deny.'
+                else "Enter y to approve or n to deny."
             )
         )
         print(f"  {_dim}{retry_hint}{_reset}")
@@ -435,13 +455,15 @@ def request_cli_approval(
         resolver_id=0,
         resolver_name="openclaw-cli prompt",
     )
-    _print_approval_recap({
-        "action": action,
-        "target": target,
-        "decision": "approved" if approved else "denied",
-        "execution_outcome": None,
-        "recovery_hint": recovery_hint,
-    })
+    _print_approval_recap(
+        {
+            "action": action,
+            "target": target,
+            "decision": "approved" if approved else "denied",
+            "execution_outcome": None,
+            "recovery_hint": recovery_hint,
+        }
+    )
     return approved
 
 
@@ -565,8 +587,10 @@ def _print_approval_recap(recap: dict[str, Any], *, use_rich: bool = False) -> N
     outcome = recap.get("execution_outcome")
     hint = recap.get("recovery_hint")
 
-    decision_icon = f"{green}✓ approved{reset}" if decision == "approved" else (
-        f"{red}✗ denied{reset}" if decision == "denied" else decision
+    decision_icon = (
+        f"{green}✓ approved{reset}"
+        if decision == "approved"
+        else (f"{red}✗ denied{reset}" if decision == "denied" else decision)
     )
 
     print(f"  {bold}Approval recap{reset}")

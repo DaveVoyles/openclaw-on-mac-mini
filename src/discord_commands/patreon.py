@@ -24,9 +24,7 @@ def _register_patreon_commands(bot: commands.Bot) -> None:
     # ------------------------------------------------------------------
 
     @bot.tree.command(name="patreon", description="Check Patreon/MonsterVision status")
-    @app_commands.describe(
-        action="""Status: Show health status | Refresh: Show cookie refresh guide"""
-    )
+    @app_commands.describe(action="""Status: Show health status | Refresh: Show cookie refresh guide""")
     @app_commands.choices(
         action=[
             app_commands.Choice(name="status", value="status"),
@@ -55,9 +53,7 @@ def _register_patreon_commands(bot: commands.Bot) -> None:
 
         except Exception as exc:  # broad: intentional
             log.error(f"Error checking Patreon status: {exc}", exc_info=True)
-            await interaction.followup.send(
-                f"❌ Error checking Patreon status: {exc}", ephemeral=True
-            )
+            await interaction.followup.send(f"❌ Error checking Patreon status: {exc}", ephemeral=True)
             audit_log(interaction.user, "patreon_status", result="error")
 
 
@@ -218,12 +214,7 @@ def _create_cookie_refresh_embed() -> discord.Embed:
     # Step 4: Restart
     embed.add_field(
         name="4️⃣ Restart Container",
-        value=(
-            "```bash\n"
-            "docker restart monstervision\n"
-            "```\n"
-            "Wait ~30 seconds for container to fully start."
-        ),
+        value=("```bash\ndocker restart monstervision\n```\nWait ~30 seconds for container to fully start."),
         inline=False,
     )
 

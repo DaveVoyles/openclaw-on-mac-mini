@@ -57,6 +57,7 @@ async def _compact_scope_if_needed(
 
     def _compact() -> dict[str, Any] | None:
         from vector_store_client import _get_collection  # lazy — avoids circular dep
+
         col = _get_collection(collection_name)
         where = _combine_scope_where(None, channel_id=channel_id, thread_id=thread_id)
         if col.count() == 0:
@@ -148,16 +149,19 @@ async def get_decayed_documents(
 
     def _scan():
         from vector_store_client import _get_collection  # lazy — avoids circular dep
+
         col = _get_collection(collection_name)
         if col.count() == 0:
             return []
         # ChromaDB where filters on metadata
         try:
             results = col.get(
-                where={"$and": [
-                    {"last_accessed": {"$lt": cutoff}},
-                    {"access_count": {"$lt": min_access_count}},
-                ]},
+                where={
+                    "$and": [
+                        {"last_accessed": {"$lt": cutoff}},
+                        {"access_count": {"$lt": min_access_count}},
+                    ]
+                },
                 include=["metadatas", "documents"],
             )
         except Exception as exc:  # broad: intentional — ChromaDB can raise various errors (RuntimeError, etc.)
@@ -170,11 +174,13 @@ async def get_decayed_documents(
             last_acc = meta.get("last_accessed", 0)
             acc_count = meta.get("access_count", 0)
             if last_acc < cutoff and acc_count < min_access_count:
-                docs.append({
-                    "id": doc_id,
-                    "metadata": meta,
-                    "text": results["documents"][i] if results.get("documents") else "",
-                })
+                docs.append(
+                    {
+                        "id": doc_id,
+                        "metadata": meta,
+                        "text": results["documents"][i] if results.get("documents") else "",
+                    }
+                )
         return docs
 
     loop = asyncio.get_running_loop()
@@ -188,6 +194,7 @@ async def mark_decayed(collection_name: str, doc_ids: list[str]) -> int:
 
     def _mark():
         from vector_store_client import _get_collection  # lazy — avoids circular dep
+
         col = _get_collection(collection_name)
         count = 0
         for doc_id in doc_ids:
@@ -218,6 +225,7 @@ async def bump_access(collection_name: str, doc_ids: list[str]) -> None:
 
     def _bump():
         from vector_store_client import _get_collection  # lazy — avoids circular dep
+
         col = _get_collection(collection_name)
         for doc_id in doc_ids:
             try:

@@ -24,6 +24,7 @@ async def _get_session() -> aiohttp.ClientSession:
     """Return the shared HTTP session via the SessionManager."""
     return await _sessions.get()
 
+
 HOST = _cfg.docker_host_ip
 DNS_TEST_HOST = _cfg.dns_test_host
 PING_TEST_HOST = _cfg.ping_test_host
@@ -60,6 +61,7 @@ def _find_tailscale() -> Optional[str]:
     for path in _TAILSCALE_PATHS:
         try:
             import os as _os
+
             if _os.path.isfile(path) and _os.access(path, _os.X_OK):
                 return path
         except OSError as exc:
@@ -177,9 +179,16 @@ async def run_speed_test() -> str:
 
     # Download a 10MB test file from Cloudflare
     rc, out, err = await _run(
-        ["curl", "-s", "-o", "/dev/null", "-w", "%{speed_download}",
-         "https://speed.cloudflare.com/__down?bytes=10000000"],
-        timeout=30
+        [
+            "curl",
+            "-s",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{speed_download}",
+            "https://speed.cloudflare.com/__down?bytes=10000000",
+        ],
+        timeout=30,
     )
     if rc == 0 and out.strip():
         try:
@@ -193,6 +202,7 @@ async def run_speed_test() -> str:
 
     # DNS latency
     import time
+
     start = time.monotonic()
     try:
         await asyncio.wait_for(

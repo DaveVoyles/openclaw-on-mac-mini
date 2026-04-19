@@ -37,6 +37,7 @@ log = logging.getLogger("openclaw.media_cog")
 # Overseerr interactive views
 # ---------------------------------------------------------------------------
 
+
 class _ApproveButton(discord.ui.Button["PendingRequestView"]):
     def __init__(self, request_id: int, title: str, *, row: int) -> None:
         super().__init__(
@@ -89,6 +90,7 @@ class PendingRequestView(discord.ui.View):
             self.add_item(_ApproveButton(req_id, title, row=i))
             self.add_item(_DenyButton(req_id, title, row=i))
 
+
 # Maps known NL intent keywords to skills + default intervals
 _WATCH_SKILL_MAP = {
     "disk": ("get_nas_storage_health", 60),
@@ -127,11 +129,13 @@ class MediaCog(commands.Cog, name="Media"):
         query="Search term (e.g. 'Breaking Bad')",
         media_type="'tv', 'movie', or 'all' (default: all)",
     )
-    @app_commands.choices(media_type=[
-        app_commands.Choice(name="All", value="all"),
-        app_commands.Choice(name="TV Shows", value="tv"),
-        app_commands.Choice(name="Movies", value="movie"),
-    ])
+    @app_commands.choices(
+        media_type=[
+            app_commands.Choice(name="All", value="all"),
+            app_commands.Choice(name="TV Shows", value="tv"),
+            app_commands.Choice(name="Movies", value="movie"),
+        ]
+    )
     async def search_cmd(self, interaction: discord.Interaction, query: str, media_type: str = "all") -> None:
         await interaction.response.defer()
         result = await search_media(query, media_type)
@@ -236,7 +240,7 @@ class MediaCog(commands.Cog, name="Media"):
             tasks = [t for t in scheduler.list_tasks() if t.created_by.startswith("watch:")]
             if not tasks:
                 await interaction.response.send_message(
-                    "👁️ No active watches. Use `/watch add condition:\"check disk every hour\"`.",
+                    '👁️ No active watches. Use `/watch add condition:"check disk every hour"`.',
                     ephemeral=True,
                 )
                 return
@@ -274,9 +278,9 @@ class MediaCog(commands.Cog, name="Media"):
         if not condition:
             await interaction.response.send_message(
                 "❌ Describe what to watch. Examples:\n"
-                "• `/watch add condition:\"check disk usage every hour\"`\n"
-                "• `/watch add condition:\"monitor plex every 5 minutes\"`\n"
-                "• `/watch add condition:\"alert if downloads stall every 10 min\"`",
+                '• `/watch add condition:"check disk usage every hour"`\n'
+                '• `/watch add condition:"monitor plex every 5 minutes"`\n'
+                '• `/watch add condition:"alert if downloads stall every 10 min"`',
                 ephemeral=True,
             )
             return
@@ -324,7 +328,6 @@ class MediaCog(commands.Cog, name="Media"):
         await interaction.response.send_message(embed=embed)
         audit_log(interaction.user, "watch_add", detail=f"{task.task_id} {matched_skill} every {interval}m")
 
-
     # ------------------------------------------------------------------
     # /overseerr command group
     # ------------------------------------------------------------------
@@ -338,7 +341,9 @@ class MediaCog(commands.Cog, name="Media"):
         await interaction.response.defer()
         data = await _overseerr_get("/request?filter=pending&take=25&sort=added")
         if isinstance(data, str):
-            await interaction.followup.send(embed=build_error_embed(Exception(str(data)), context="/overseerr pending"), ephemeral=True)
+            await interaction.followup.send(
+                embed=build_error_embed(Exception(str(data)), context="/overseerr pending"), ephemeral=True
+            )
             return
 
         results = data.get("results", []) if isinstance(data, dict) else []

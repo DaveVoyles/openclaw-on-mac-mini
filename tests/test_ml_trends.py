@@ -49,19 +49,25 @@ def clean_db():
         volume = 100 + (i * 2)  # Increasing trend
         sentiment = 0.5 + (0.01 * i)  # Slight positive drift
 
-        conn.execute("""
+        conn.execute(
+            """
             INSERT INTO trend_data (timestamp, topic, category, volume, sentiment, sources)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (timestamp, "AI", "news", volume, sentiment, "source1,source2"))
+        """,
+            (timestamp, "AI", "news", volume, sentiment, "source1,source2"),
+        )
 
     # Add some anomalies
     anomaly_times = [base_time + timedelta(days=10), base_time + timedelta(days=20)]
     for anomaly_time in anomaly_times:
         timestamp = anomaly_time.timestamp()
-        conn.execute("""
+        conn.execute(
+            """
             INSERT INTO trend_data (timestamp, topic, category, volume, sentiment, sources)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (timestamp, "AI", "news", 500, 0.95, "spike_source"))
+        """,
+            (timestamp, "AI", "news", 500, 0.95, "spike_source"),
+        )
 
     conn.commit()
     conn.close()
@@ -275,6 +281,7 @@ def test_confidence_interval_structure(clean_db):
     analyzer = MLTrendAnalyzer(db_path=clean_db)
 
     import asyncio
+
     result = asyncio.run(analyzer.forecast_trend("AI", "news", forecast_days=5))
 
     if result.confidence_intervals:

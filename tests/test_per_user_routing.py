@@ -23,10 +23,12 @@ sys.modules.setdefault("config", _stub_config)
 _stub_mrp = types.ModuleType("model_routing_policy")
 _stub_mrp.VALID_ROUTING_PROFILES = {"copilot-first", "balanced", "gemini-first", "cost-saver"}  # type: ignore[attr-defined]
 
+
 def _normalize_routing_profile(p: str) -> str:
     p = p.strip().lower().replace("_", "-")
     valid = {"copilot-first", "balanced", "gemini-first", "cost-saver"}
     return p if p in valid else "copilot-first"
+
 
 _stub_mrp.normalize_routing_profile = _normalize_routing_profile  # type: ignore[attr-defined]
 sys.modules.setdefault("model_routing_policy", _stub_mrp)
@@ -42,12 +44,14 @@ sys.modules.setdefault("model_input_helpers", _stub_helpers)
 # Import the module under test using a temp directory for prefs storage
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def isolated_prefs_dir(tmp_path):
     """Patch _PREFS_DIR to a temp directory so tests don't pollute real prefs."""
     import pathlib
 
     import memory_preferences as mp
+
     original = mp._PREFS_DIR
     mp._PREFS_DIR = pathlib.Path(tmp_path / "prefs")
     mp._PREFS_DIR.mkdir(parents=True, exist_ok=True)

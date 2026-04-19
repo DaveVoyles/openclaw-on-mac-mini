@@ -100,9 +100,13 @@ def get_error_stats(hours: int = 24) -> dict:
     entries = get_recent_outcomes(hours=hours)
     if not entries:
         return {
-            "total": 0, "successes": 0, "failures": 0,
-            "success_rate": 1.0, "avg_latency_ms": 0,
-            "recent_errors": [], "model_breakdown": {},
+            "total": 0,
+            "successes": 0,
+            "failures": 0,
+            "success_rate": 1.0,
+            "avg_latency_ms": 0,
+            "recent_errors": [],
+            "model_breakdown": {},
         }
 
     successes = sum(1 for e in entries if e.get("success"))
@@ -118,7 +122,8 @@ def get_error_stats(hours: int = 24) -> dict:
             "error": e.get("error", "")[:100],
             "model": e.get("model_used", ""),
         }
-        for e in reversed(entries) if not e.get("success")
+        for e in reversed(entries)
+        if not e.get("success")
     ][:5]
 
     # Model breakdown
@@ -158,12 +163,14 @@ def check_error_patterns(window_minutes: int = 30) -> list[dict]:
     total = len(entries)
     failures = sum(1 for e in entries if not e.get("success"))
     if total >= 3 and failures / total > 0.3:
-        patterns.append({
-            "type": "high_failure_rate",
-            "severity": "critical" if failures / total > 0.5 else "warning",
-            "detail": f"{failures}/{total} failures ({int(failures / total * 100)}%) in last {window_minutes} min",
-            "count": failures,
-        })
+        patterns.append(
+            {
+                "type": "high_failure_rate",
+                "severity": "critical" if failures / total > 0.5 else "warning",
+                "detail": f"{failures}/{total} failures ({int(failures / total * 100)}%) in last {window_minutes} min",
+                "count": failures,
+            }
+        )
 
     # Pattern 2: Same error repeated 3+ times
     error_counts: dict[str, int] = {}
@@ -173,49 +180,56 @@ def check_error_patterns(window_minutes: int = 30) -> list[dict]:
             error_counts[key] = error_counts.get(key, 0) + 1
     for error_msg, count in error_counts.items():
         if count >= 3:
-            patterns.append({
-                "type": "repeated_error",
-                "severity": "warning",
-                "detail": f"'{error_msg[:60]}' occurred {count} times",
-                "count": count,
-            })
+            patterns.append(
+                {
+                    "type": "repeated_error",
+                    "severity": "warning",
+                    "detail": f"'{error_msg[:60]}' occurred {count} times",
+                    "count": count,
+                }
+            )
 
     # Pattern 3: Ollama timeout streak
     recent = entries[-10:]
     ollama_timeouts = sum(
-        1 for e in recent
-        if any("Ollama" in n or "timed out" in n for n in e.get("routing_notes", []))
+        1 for e in recent if any("Ollama" in n or "timed out" in n for n in e.get("routing_notes", []))
     )
     if ollama_timeouts >= 3:
-        patterns.append({
-            "type": "ollama_timeout_streak",
-            "severity": "warning",
-            "detail": f"Ollama timed out {ollama_timeouts} of last {len(recent)} queries",
-            "count": ollama_timeouts,
-        })
+        patterns.append(
+            {
+                "type": "ollama_timeout_streak",
+                "severity": "warning",
+                "detail": f"Ollama timed out {ollama_timeouts} of last {len(recent)} queries",
+                "count": ollama_timeouts,
+            }
+        )
 
     # Pattern 4: Specific model failures
     for model, counts in get_error_stats(hours=1).get("model_breakdown", {}).items():
         if counts.get("failures", 0) >= 3 and counts.get("total", 0) > 0:
             rate = counts["failures"] / counts["total"]
             if rate > 0.5:
-                patterns.append({
-                    "type": "model_failures",
-                    "severity": "critical" if rate > 0.8 else "warning",
-                    "detail": f"Model '{model}' failing {int(rate * 100)}% ({counts['failures']}/{counts['total']})",
-                    "count": counts["failures"],
-                })
+                patterns.append(
+                    {
+                        "type": "model_failures",
+                        "severity": "critical" if rate > 0.8 else "warning",
+                        "detail": f"Model '{model}' failing {int(rate * 100)}% ({counts['failures']}/{counts['total']})",
+                        "count": counts["failures"],
+                    }
+                )
 
     # Pattern 5: High latency streak (avg > 15s for last 5 queries)
     recent_latencies = [e.get("latency_ms", 0) for e in entries[-5:] if e.get("latency_ms")]
     if recent_latencies and sum(recent_latencies) / len(recent_latencies) > 15000:
         avg = int(sum(recent_latencies) / len(recent_latencies))
-        patterns.append({
-            "type": "high_latency",
-            "severity": "warning",
-            "detail": f"Average latency {avg}ms over last {len(recent_latencies)} queries",
-            "count": len(recent_latencies),
-        })
+        patterns.append(
+            {
+                "type": "high_latency",
+                "severity": "warning",
+                "detail": f"Average latency {avg}ms over last {len(recent_latencies)} queries",
+                "count": len(recent_latencies),
+            }
+        )
 
     return patterns
 
@@ -223,6 +237,7 @@ def check_error_patterns(window_minutes: int = 30) -> list[dict]:
 # ---------------------------------------------------------------------------
 # E3: Auto-Diagnosis
 # ---------------------------------------------------------------------------
+
 
 async def diagnose_error_pattern(
     patterns: list[dict],
@@ -242,27 +257,31 @@ async def diagnose_error_pattern(
     """
     from llm_client import quick_generate
 
-    _default = {"cause": "unknown", "severity": "low", "fix_type": "manual_required",
-                "fix_target": "", "confidence": 0.0}
+    _default = {
+        "cause": "unknown",
+        "severity": "low",
+        "fix_type": "manual_required",
+        "fix_target": "",
+        "confidence": 0.0,
+    }
 
-    pattern_desc = "\n".join(
-        f"- [{p['severity'].upper()}] {p['type']}: {p['detail']}"
-        for p in patterns
-    )
+    pattern_desc = "\n".join(f"- [{p['severity'].upper()}] {p['type']}: {p['detail']}" for p in patterns)
 
     error_samples = ""
     if recent_errors:
         error_samples = "\nRecent error samples:\n" + "\n".join(
-            f"- [{e.get('model_used', '?')}] {e.get('error', 'no error msg')[:150]}"
-            for e in recent_errors[:5]
+            f"- [{e.get('model_used', '?')}] {e.get('error', 'no error msg')[:150]}" for e in recent_errors[:5]
         )
 
     container_context = ""
     try:
         import subprocess
+
         result = subprocess.run(
             ["docker", "ps", "--format", "{{.Names}}\t{{.Status}}"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if result.returncode == 0:
             container_context = f"\nContainer status:\n{result.stdout[:500]}"
@@ -291,29 +310,42 @@ async def diagnose_error_pattern(
         if not text:
             return {**_default, "explanation": "No API key or generation failed"}
         from json_utils import repair_json
+
         result = repair_json(text)
         if isinstance(result, dict) and "cause" in result:
-            valid_fixes = {"restart_service", "switch_model", "increase_timeout",
-                           "clear_circuit_breaker", "manual_required", "none"}
+            valid_fixes = {
+                "restart_service",
+                "switch_model",
+                "increase_timeout",
+                "clear_circuit_breaker",
+                "manual_required",
+                "none",
+            }
             if result.get("fix_type") not in valid_fixes:
                 result["fix_type"] = "manual_required"
             return result
 
-        return {**_default, "severity": "medium", "confidence": 0.3,
-                "cause": text[:200], "explanation": text[:300]}
+        return {**_default, "severity": "medium", "confidence": 0.3, "cause": text[:200], "explanation": text[:300]}
     except Exception as e:  # broad: intentional
-        return {**_default, "cause": str(e),
-                "explanation": f"Diagnosis failed: {e}"}
+        return {**_default, "cause": str(e), "explanation": f"Diagnosis failed: {e}"}
 
 
 # ---------------------------------------------------------------------------
 # E4: Auto-Fix
 # ---------------------------------------------------------------------------
 
-_SAFE_RESTART_TARGETS = frozenset({
-    "sonarr", "radarr", "lidarr", "prowlarr",
-    "sabnzbd", "qbittorrent", "tautulli", "overseerr",
-})
+_SAFE_RESTART_TARGETS = frozenset(
+    {
+        "sonarr",
+        "radarr",
+        "lidarr",
+        "prowlarr",
+        "sabnzbd",
+        "qbittorrent",
+        "tautulli",
+        "overseerr",
+    }
+)
 
 
 async def execute_fix(diagnosis: dict) -> dict:
@@ -326,16 +358,19 @@ async def execute_fix(diagnosis: dict) -> dict:
     confidence = diagnosis.get("confidence", 0.0)
 
     if confidence < 0.6:
-        return {"action_taken": "skipped", "success": False,
-                "detail": f"Confidence too low ({confidence:.0%}) for auto-fix"}
+        return {
+            "action_taken": "skipped",
+            "success": False,
+            "detail": f"Confidence too low ({confidence:.0%}) for auto-fix",
+        }
 
     if fix_type == "restart_service":
         target = fix_target.lower().strip()
         if target not in _SAFE_RESTART_TARGETS:
-            return {"action_taken": "skipped", "success": False,
-                    "detail": f"'{target}' not in safe restart list"}
+            return {"action_taken": "skipped", "success": False, "detail": f"'{target}' not in safe restart list"}
         try:
             from skills import restart_container
+
             result = await restart_container(target)
             log.info("Auto-fix: restarted %s → %s", target, result[:80])
             return {"action_taken": f"restart_service:{target}", "success": True, "detail": result}
@@ -344,34 +379,48 @@ async def execute_fix(diagnosis: dict) -> dict:
 
     elif fix_type == "switch_model":
         log.info("Auto-fix: recommending model switch to '%s'", fix_target or "gemini")
-        return {"action_taken": f"switch_model:{fix_target or 'gemini'}",
-                "success": True,
-                "detail": f"Recommended switching to {fix_target or 'gemini'}. "
-                          "Users can override with /model set."}
+        return {
+            "action_taken": f"switch_model:{fix_target or 'gemini'}",
+            "success": True,
+            "detail": f"Recommended switching to {fix_target or 'gemini'}. Users can override with /model set.",
+        }
 
     elif fix_type == "clear_circuit_breaker":
         try:
             from tool_health import circuit_breaker
+
             target = fix_target.lower().strip()
             if target and target in circuit_breaker._tools:
                 circuit_breaker._tools[target].failures = 0
                 circuit_breaker._tools[target].last_failure = 0
                 log.info("Auto-fix: cleared circuit breaker for %s", target)
-                return {"action_taken": f"clear_circuit_breaker:{target}",
-                        "success": True, "detail": f"Circuit breaker reset for {target}"}
-            return {"action_taken": "clear_circuit_breaker", "success": False,
-                    "detail": f"Tool '{target}' not found in circuit breaker"}
+                return {
+                    "action_taken": f"clear_circuit_breaker:{target}",
+                    "success": True,
+                    "detail": f"Circuit breaker reset for {target}",
+                }
+            return {
+                "action_taken": "clear_circuit_breaker",
+                "success": False,
+                "detail": f"Tool '{target}' not found in circuit breaker",
+            }
         except (ImportError, AttributeError, KeyError) as e:
             return {"action_taken": "clear_circuit_breaker", "success": False, "detail": str(e)}
 
     elif fix_type == "increase_timeout":
-        return {"action_taken": "increase_timeout", "success": True,
-                "detail": f"Recommendation: increase timeout for {fix_target}. "
-                          "Adjust OLLAMA_TIMEOUT or LLM timeout in .env."}
+        return {
+            "action_taken": "increase_timeout",
+            "success": True,
+            "detail": f"Recommendation: increase timeout for {fix_target}. "
+            "Adjust OLLAMA_TIMEOUT or LLM timeout in .env.",
+        }
 
     else:
-        return {"action_taken": "manual_required", "success": False,
-                "detail": diagnosis.get("explanation", "Manual intervention needed")}
+        return {
+            "action_taken": "manual_required",
+            "success": False,
+            "detail": diagnosis.get("explanation", "Manual intervention needed"),
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -417,6 +466,7 @@ async def record_incident(
     if fix_result.get("success"):
         try:
             from rules_engine import add_rule
+
             pattern_types = ", ".join(p["type"] for p in patterns)
             rule_text = (
                 f"When error pattern '{pattern_types}' is detected: "
@@ -439,10 +489,7 @@ def get_past_incidents(pattern_type: str = "", limit: int = 5) -> list[dict]:
     try:
         incidents = json.loads(INCIDENTS_FILE.read_text())
         if pattern_type:
-            incidents = [
-                i for i in incidents
-                if any(p.get("type") == pattern_type for p in i.get("patterns", []))
-            ]
+            incidents = [i for i in incidents if any(p.get("type") == pattern_type for p in i.get("patterns", []))]
         return incidents[-limit:]
     except (OSError, json.JSONDecodeError) as e:
         log.warning("Failed to load error incidents: %s", e)

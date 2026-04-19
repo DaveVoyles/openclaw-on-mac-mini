@@ -115,8 +115,7 @@ class PerformanceMonitor:
         # Record operation time
         self._operation_times[trace.operation].append(duration)
         if len(self._operation_times[trace.operation]) > 1000:
-            self._operation_times[trace.operation] = \
-                self._operation_times[trace.operation][-1000:]
+            self._operation_times[trace.operation] = self._operation_times[trace.operation][-1000:]
 
         # Check if slow
         if duration > self.slow_query_threshold:
@@ -134,8 +133,7 @@ class PerformanceMonitor:
         )
         self._slow_queries.append(slow_query)
         logger.warning(
-            f"Slow query detected: {trace.operation} took {duration:.2f}s "
-            f"(threshold: {self.slow_query_threshold}s)"
+            f"Slow query detected: {trace.operation} took {duration:.2f}s (threshold: {self.slow_query_threshold}s)"
         )
 
     def get_slow_queries(self, limit: int = 20) -> List[SlowQuery]:
@@ -161,10 +159,7 @@ class PerformanceMonitor:
 
     def get_all_stats(self) -> Dict[str, Dict[str, float]]:
         """Get statistics for all operations."""
-        return {
-            op: self.get_operation_stats(op)
-            for op in self._operation_times.keys()
-        }
+        return {op: self.get_operation_stats(op) for op in self._operation_times.keys()}
 
     def start_memory_tracking(self):
         """Start tracking memory allocations."""
@@ -186,10 +181,12 @@ class PerformanceMonitor:
             self.start_memory_tracking()
 
         snapshot = tracemalloc.take_snapshot()
-        self._memory_snapshots.append({
-            "timestamp": datetime.now(),
-            "snapshot": snapshot,
-        })
+        self._memory_snapshots.append(
+            {
+                "timestamp": datetime.now(),
+                "snapshot": snapshot,
+            }
+        )
         return snapshot
 
     def detect_memory_leaks(self) -> List[str]:
@@ -206,10 +203,7 @@ class PerformanceMonitor:
         leaks = []
         for stat in top_stats[:10]:
             if stat.size_diff > 0:
-                leaks.append(
-                    f"{stat.traceback}: +{stat.size_diff / 1024:.1f} KB "
-                    f"({stat.count_diff} allocations)"
-                )
+                leaks.append(f"{stat.traceback}: +{stat.size_diff / 1024:.1f} KB ({stat.count_diff} allocations)")
 
         return leaks
 
@@ -260,8 +254,10 @@ def get_monitor() -> PerformanceMonitor:
 
 # Decorators for performance monitoring
 
+
 def monitor_performance(operation: Optional[str] = None):
     """Decorator to monitor function performance."""
+
     def decorator(func: Callable) -> Callable:
         op_name = operation or f"{func.__module__}.{func.__name__}"
 
@@ -296,6 +292,7 @@ def monitor_performance(operation: Optional[str] = None):
 
 def alert_slow_queries(threshold: float = 1.0):
     """Decorator to alert on slow queries."""
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs):
@@ -304,10 +301,7 @@ def alert_slow_queries(threshold: float = 1.0):
             duration = time.time() - start_time
 
             if duration > threshold:
-                logger.warning(
-                    f"Slow query: {func.__name__} took {duration:.2f}s "
-                    f"(threshold: {threshold}s)"
-                )
+                logger.warning(f"Slow query: {func.__name__} took {duration:.2f}s (threshold: {threshold}s)")
 
             return result
 
@@ -318,10 +312,7 @@ def alert_slow_queries(threshold: float = 1.0):
             duration = time.time() - start_time
 
             if duration > threshold:
-                logger.warning(
-                    f"Slow query: {func.__name__} took {duration:.2f}s "
-                    f"(threshold: {threshold}s)"
-                )
+                logger.warning(f"Slow query: {func.__name__} took {duration:.2f}s (threshold: {threshold}s)")
 
             return result
 

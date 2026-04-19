@@ -50,11 +50,13 @@ class ChannelProfileCog(commands.GroupCog, group_name="channel-profile"):
 
     @app_commands.command(name="show", description="Show active profile defaults for this channel/thread")
     @app_commands.describe(scope="auto, channel, or thread scope")
-    @app_commands.choices(scope=[
-        app_commands.Choice(name="auto", value="auto"),
-        app_commands.Choice(name="channel", value="channel"),
-        app_commands.Choice(name="thread", value="thread"),
-    ])
+    @app_commands.choices(
+        scope=[
+            app_commands.Choice(name="auto", value="auto"),
+            app_commands.Choice(name="channel", value="channel"),
+            app_commands.Choice(name="thread", value="thread"),
+        ]
+    )
     async def show(
         self,
         interaction: discord.Interaction,
@@ -82,11 +84,13 @@ class ChannelProfileCog(commands.GroupCog, group_name="channel-profile"):
 
     @app_commands.command(name="recommendations", description="Show profile recommendations for this scope")
     @app_commands.describe(scope="auto, channel, or thread scope", include_history="Include rejected/reverted history")
-    @app_commands.choices(scope=[
-        app_commands.Choice(name="auto", value="auto"),
-        app_commands.Choice(name="channel", value="channel"),
-        app_commands.Choice(name="thread", value="thread"),
-    ])
+    @app_commands.choices(
+        scope=[
+            app_commands.Choice(name="auto", value="auto"),
+            app_commands.Choice(name="channel", value="channel"),
+            app_commands.Choice(name="thread", value="thread"),
+        ]
+    )
     async def recommendations(
         self,
         interaction: discord.Interaction,
@@ -131,14 +135,18 @@ class ChannelProfileCog(commands.GroupCog, group_name="channel-profile"):
             ephemeral=True,
         )
 
-    @app_commands.command(name="recommendation-action", description="Approve/reject/apply/revert a recommendation by ID")
+    @app_commands.command(
+        name="recommendation-action", description="Approve/reject/apply/revert a recommendation by ID"
+    )
     @app_commands.describe(recommendation_id="Recommendation ID", action="Action to perform")
-    @app_commands.choices(action=[
-        app_commands.Choice(name="approve", value="approve"),
-        app_commands.Choice(name="reject", value="reject"),
-        app_commands.Choice(name="apply", value="apply"),
-        app_commands.Choice(name="revert", value="revert"),
-    ])
+    @app_commands.choices(
+        action=[
+            app_commands.Choice(name="approve", value="approve"),
+            app_commands.Choice(name="reject", value="reject"),
+            app_commands.Choice(name="apply", value="apply"),
+            app_commands.Choice(name="revert", value="revert"),
+        ]
+    )
     async def recommendation_action(
         self,
         interaction: discord.Interaction,
@@ -246,10 +254,12 @@ class ChannelProfileCog(commands.GroupCog, group_name="channel-profile"):
 
     @app_commands.command(name="clear", description="Clear profile override at this scope")
     @app_commands.describe(scope="channel or thread scope to clear")
-    @app_commands.choices(scope=[
-        app_commands.Choice(name="channel", value="channel"),
-        app_commands.Choice(name="thread", value="thread"),
-    ])
+    @app_commands.choices(
+        scope=[
+            app_commands.Choice(name="channel", value="channel"),
+            app_commands.Choice(name="thread", value="thread"),
+        ]
+    )
     async def clear(self, interaction: discord.Interaction, scope: app_commands.Choice[str]) -> None:
         resolved = _resolve_scope(interaction, scope.value)
         if resolved is None:

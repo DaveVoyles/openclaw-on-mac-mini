@@ -154,11 +154,7 @@ async def test_add_to_watchlist_types():
     item_types = ["movie", "show", "season", "episode"]
 
     for item_type in item_types:
-        result = await add_to_watchlist(
-            item_id="12345",
-            item_type=item_type,
-            id_type="trakt"
-        )
+        result = await add_to_watchlist(item_id="12345", item_type=item_type, id_type="trakt")
         assert isinstance(result, dict)
         # Should error without token
         assert result["status"] == "error"

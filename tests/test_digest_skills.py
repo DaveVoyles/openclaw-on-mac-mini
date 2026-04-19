@@ -97,6 +97,7 @@ class TestGetMyDigest:
     @pytest.mark.asyncio
     async def test_get_my_digest_success(self, mock_digest_manager, mock_user_id):
         """Test successful digest generation."""
+
         # Make the mock coroutine awaitable
         async def mock_generate():
             return "📰 YOUR DIGEST\nTest content"
@@ -130,9 +131,7 @@ class TestUpdateDigestPreferences:
         assert "✅" in result
         assert "schedule" in result
         assert "weekly" in result
-        mock_digest_manager.update_preference.assert_called_once_with(
-            "test_user_123", "schedule", "weekly"
-        )
+        mock_digest_manager.update_preference.assert_called_once_with("test_user_123", "schedule", "weekly")
 
     @pytest.mark.asyncio
     async def test_update_preference_no_user_id(self):
@@ -170,9 +169,7 @@ class TestAddDigestTopic:
         assert "✅" in result
         assert "robotics" in result
         assert "2 topic(s)" in result
-        mock_digest_manager.add_to_list.assert_called_once_with(
-            "test_user_123", "topics", "robotics"
-        )
+        mock_digest_manager.add_to_list.assert_called_once_with("test_user_123", "topics", "robotics")
 
     @pytest.mark.asyncio
     async def test_add_topic_no_user_id(self):
@@ -196,9 +193,7 @@ class TestAddDigestStock:
         assert "✅" in result
         assert "TSLA" in result  # Should be uppercase
         assert "2 stock(s)" in result
-        mock_digest_manager.add_to_list.assert_called_once_with(
-            "test_user_123", "stocks", "TSLA"
-        )
+        mock_digest_manager.add_to_list.assert_called_once_with("test_user_123", "stocks", "TSLA")
 
     @pytest.mark.asyncio
     async def test_add_stock_uppercase_conversion(self, mock_digest_manager, mock_user_id):
@@ -207,9 +202,7 @@ class TestAddDigestStock:
 
         await add_digest_stock("aapl")
 
-        mock_digest_manager.add_to_list.assert_called_with(
-            "test_user_123", "stocks", "AAPL"
-        )
+        mock_digest_manager.add_to_list.assert_called_with("test_user_123", "stocks", "AAPL")
 
 
 class TestAddDigestTeam:
@@ -225,9 +218,7 @@ class TestAddDigestTeam:
         assert "✅" in result
         assert "Lakers" in result
         assert "1 team(s)" in result
-        mock_digest_manager.add_to_list.assert_called_once_with(
-            "test_user_123", "teams", "Lakers"
-        )
+        mock_digest_manager.add_to_list.assert_called_once_with("test_user_123", "teams", "Lakers")
 
 
 class TestRemoveDigestTopic:
@@ -241,9 +232,7 @@ class TestRemoveDigestTopic:
         assert "✅" in result
         assert "Removed" in result
         assert "AI" in result
-        mock_digest_manager.remove_from_list.assert_called_once_with(
-            "test_user_123", "topics", "AI"
-        )
+        mock_digest_manager.remove_from_list.assert_called_once_with("test_user_123", "topics", "AI")
 
 
 class TestRemoveDigestStock:
@@ -256,9 +245,7 @@ class TestRemoveDigestStock:
 
         assert "✅" in result
         assert "TSLA" in result  # Should be uppercase
-        mock_digest_manager.remove_from_list.assert_called_once_with(
-            "test_user_123", "stocks", "TSLA"
-        )
+        mock_digest_manager.remove_from_list.assert_called_once_with("test_user_123", "stocks", "TSLA")
 
 
 class TestRemoveDigestTeam:
@@ -271,9 +258,7 @@ class TestRemoveDigestTeam:
 
         assert "✅" in result
         assert "Lakers" in result
-        mock_digest_manager.remove_from_list.assert_called_once_with(
-            "test_user_123", "teams", "Lakers"
-        )
+        mock_digest_manager.remove_from_list.assert_called_once_with("test_user_123", "teams", "Lakers")
 
 
 class TestGetDigestConfig:
