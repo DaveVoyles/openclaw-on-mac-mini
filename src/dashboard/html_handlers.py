@@ -1,5 +1,6 @@
 """HTML page handlers for the dashboard."""
 
+import html
 from pathlib import Path
 
 from aiohttp import web
@@ -19,10 +20,25 @@ from .helpers import (
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _WINDOWS_INSTALLER_SCRIPT = _REPO_ROOT / "scripts" / "install_openclaw_cli_windows.ps1"
 
+_TOKEN_INJECTION_MARKER = "</head>"
+_TOKEN_SCRIPT_TEMPLATE = '\n  <script>window.OPENCLAW_API_ACTION_TOKEN = "{token}";</script>\n</head>'
+
+
+def _inject_api_token(html_text: str, token: str) -> str:
+    """Inject the API action token into the page so the JS auth helper can pick it up."""
+    if not token:
+        return html_text
+    escaped = html.escape(token, quote=True)
+    snippet = _TOKEN_SCRIPT_TEMPLATE.format(token=escaped)
+    return html_text.replace(_TOKEN_INJECTION_MARKER, snippet, 1)
+
 
 async def dashboard_handler(request: web.Request) -> web.Response:
-    """Serve the dashboard HTML page."""
-    return web.Response(text=DASHBOARD_HTML, content_type="text/html")
+    """Serve the dashboard HTML page, injecting the API action token when configured."""
+    from config import cfg  # local import to avoid circular dep at module load
+
+    body = _inject_api_token(DASHBOARD_HTML, cfg.dashboard_api_token)
+    return web.Response(text=body, content_type="text/html")
 
 
 async def guide_handler(request: web.Request) -> web.Response:

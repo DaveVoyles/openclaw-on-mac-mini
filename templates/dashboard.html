@@ -4403,7 +4403,7 @@
         try {
           const res = await fetch('/api/agent/ask', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: _actionAuthHeaders('dashboard-ui'),
             body: JSON.stringify({ prompt, model, history: _agentHistory }),
           });
           const data = await res.json();
@@ -4445,7 +4445,7 @@
         try {
           const res = await fetch('/api/recap/generate', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: _actionAuthHeaders('dashboard-ui'),
             body: JSON.stringify({ days: 7, style: 'highlights' }),
           });
           const data = await res.json();
