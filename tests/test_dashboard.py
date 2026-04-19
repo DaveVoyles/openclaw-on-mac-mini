@@ -1844,8 +1844,6 @@ class TestChannelProfileAssistantApi:
         assert payload["recommendation"]["status"] == "approved"
 
 # --- Merged from test_command_docs_sync.py ---
-from __future__ import annotations
-
 import importlib.util
 from pathlib import Path
 

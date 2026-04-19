@@ -476,7 +476,7 @@ class TestAdvancedSchedulerIntegration:
             call_count += 1
             return f"Executed with {param}"
 
-        scheduler.register_skills({"test_skill": test_skill})
+        scheduler.register_skills({"test_skill": test_scheduler_advanced_skill})
 
         # Create task
         task = scheduler.create_task(
