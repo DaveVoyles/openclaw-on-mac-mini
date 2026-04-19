@@ -7,6 +7,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🔧 Code Quality & Refactoring — Tech Debt Waves P0–W8 (April 2026)
+- Extracted 8 module-level helper functions from `bot.py` into `src/bot_helpers.py` (−143L from `bot.py`) ([9f7fe33](../../commit/9f7fe33))
+- Added `managed_task()` wrapper in `src/bg_tasks.py` for all fire-and-forget asyncio tasks with timeout + error logging ([7d94d48](../../commit/7d94d48))
+- Modernized typing imports across 5 files: `Dict→dict`, `List→list`, `Optional[X]→X|None` ([8bd3865](../../commit/8bd3865))
+- Fixed duplicate `[tool.mypy]` section in `pyproject.toml` ([94d6e95](../../commit/94d6e95))
+- Fixed duplicate `webhook_secret` field in `src/config.py` ([94d6e95](../../commit/94d6e95))
+- Return type annotations added to `slack_bot.py` and key LLM/storage modules ([7c22e4a](../../commit/7c22e4a), [25bda4b](../../commit/25bda4b))
+- Exception chaining enforced (`raise ... from e`) across `src/cogs/journal_cog.py` ([76633fb](../../commit/76633fb))
+- Replaced silent `pass` in `docker_cog` `on_timeout` handlers with `log.debug` ([78b2c6c](../../commit/78b2c6c))
+- Removed unused imports across `src/` via ruff F401 ([22cf705](../../commit/22cf705))
+
+### 🧪 Testing — Tech Debt Waves P0–W8
+- Deleted 51 zero-test stub files; clean collection ([04d8b1b](../../commit/04d8b1b))
+- Renamed 151 test files to eliminate 196 duplicate function names across test suite ([77069cd](../../commit/77069cd))
+- Consolidated thin test files into larger test modules ([77069cd](../../commit/77069cd))
+- Added `@pytest.mark.smoke`, `@pytest.mark.expensive`, `@pytest.mark.slow` markers ([684d54b](../../commit/684d54b))
+- Added 39 unit tests for `bg_monitoring.py` + `bg_briefing.py` ([39a9a76](../../commit/39a9a76))
+- Added 10 unit tests for `bg_tasks.py` `managed_task()` helper ([23d06bb](../../commit/23d06bb))
+- Added smoke test tier (108 tests, fast CI gate) ([eefb6b1](../../commit/eefb6b1))
+- `make test-fast` target excludes `@pytest.mark.slow` tests
+
+### 📦 Dependencies — Tech Debt Waves P0–W8
+- Converted 27 production deps from `>=` (unpinned) to `~=` (compatible release) ([8bd3865](../../commit/8bd3865))
+- Removed unused packages: `reportlab`, `polygon-api-client`, duplicate `pandas` ([04d8b1b](../../commit/04d8b1b))
+- Added `mypy>=1.20.0` to `requirements-test.txt`
+- Added `.github/dependabot.yml`: weekly pip + GitHub Actions updates; major version protection for `discord.py` and `google-genai` ([bbb839d](../../commit/bbb839d))
+
+### 🔒 Security & Auth — Tech Debt Waves P0–W8
+- `src/discord_web.py`: `_require_internal()` guard restricts `/metrics` and `/smoke` to localhost only ([7d95115](../../commit/7d95115))
+- `/health` remains public (load balancer probe)
+- `pip-audit` added to `.github/workflows/security.yml` ([929387b](../../commit/929387b))
+
+### 🏗️ CI / DevX — Tech Debt Waves P0–W8
+- CI lint step runs before `pip install` (lint failures surface in ~5s vs ~65s) ([bbb839d](../../commit/bbb839d))
+- Added pytest cache, ruff cache, mypy cache to CI (faster reruns) ([929387b](../../commit/929387b))
+- `ruff format --check` enforced in CI ([929387b](../../commit/929387b))
+- Added `@pytest.mark.expensive` on 3 external-service test files (replaces `--ignore` flags) ([929387b](../../commit/929387b))
+- Pages/release workflows migrated to `ubuntu-latest` (saves self-hosted runner capacity) ([7d95115](../../commit/7d95115))
+- CI failure step writes `GITHUB_STEP_SUMMARY` for instant root-cause scanning
+- Added `.editorconfig` for cross-IDE consistency ([9eff450](../../commit/9eff450))
+- Added `.pre-commit-config.yaml`: ruff lint+format, file hygiene, mypy strict, env schema validation ([07960fc](../../commit/07960fc))
+- Eliminated duplicate test run, path-filter security scan, reduced flaky retries ([d24ccf6](../../commit/d24ccf6))
+- Skip test suite for docs/template-only pushes ([96c4a61](../../commit/96c4a61))
+
+### 🛠️ Makefile / Scripts — Tech Debt Waves P0–W8
+- Added `make help` as default goal (self-documenting via `##` comments) ([18e62d0](../../commit/18e62d0))
+- New targets: `lint-fix`, `smoke`, `smoke-verbose`, `ci`, `validate-env`, `test-fast`, `format` ([9eff450](../../commit/9eff450))
+- `scripts/validate_env.py`: validates `.env` against `.env.example` ([9eff450](../../commit/9eff450))
+- `scripts/validate_schema.py`: cross-checks `config/env_schema.yaml` vs `.env.example` ([cf1a5c6](../../commit/cf1a5c6))
+- `scripts/mypy_enforce.py`: strict mypy on whitelisted files ([76633fb](../../commit/76633fb))
+- Restored orphaned `clean:` target label in `Makefile`
+
+### 📝 Documentation — Tech Debt Waves P0–W8
+- `docs/API.md`: HTTP API reference for all endpoints (auth tier, request/response) ([1d03071](../../commit/1d03071))
+- `docs/TESTING.md`: test suite structure, markers, naming conventions, fixture inventory ([684d54b](../../commit/684d54b))
+- `docs/CI-TROUBLESHOOTING.md`: common CI failure patterns + fix commands
+- `docs/CONTENT-OWNERSHIP.md`: authoritative topic registry for docs overlap ([25bda4b](../../commit/25bda4b))
+- `config/env_schema.yaml`: structured metadata for 116 env vars (13 categories) ([1803031](../../commit/1803031))
+- 45 docs files stamped with `<!-- Updated: 2026-04-18 -->` ([32cd74e](../../commit/32cd74e))
+- Archived 11 orphaned wave-plan files to `.github/docs/archive/` ([04d8b1b](../../commit/04d8b1b))
+- Rewrote `README.md` ([16400ba](../../commit/16400ba))
+
+### 🔬 Observability — Tech Debt Waves P0–W8
+- `src/trace_context.py`: `TraceLoggingFilter` + `set_trace/clear_trace` via Python `contextvars` ([3d285e0](../../commit/3d285e0))
+- `trace_id` injected into all log records for structured logging
+- 5-minute TTL collection cache in `src/vector_store_client.py` ([7d95115](../../commit/7d95115))
+- `/health` endpoint enhanced with DB + vector store subsystem checks ([1123d39](../../commit/1123d39))
+- `timeout=10` added to all `sqlite3.connect()` calls across 18 files ([1123d39](../../commit/1123d39))
+
+---
+
 ### Added — Wave 10 External Integrations (April 2026)
 - **`/email [today|week|<keyword>]`** — Check Gmail inbox or search emails directly from Slack; powered by existing `email_skills.py` (IMAP, no OAuth needed — just App Password)
 - **`/calendar [today|week]`** — View Google Calendar events from Slack; powered by existing `calendar_skills.py` (OAuth via `scripts/google_oauth_setup.py`)
