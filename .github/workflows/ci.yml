@@ -146,6 +146,20 @@ jobs:
           path: coverage.xml
           retention-days: 30
 
+      - name: CI failure — troubleshooting guide
+        if: failure()
+        run: |
+          echo "## ❌ CI Failed — Quick Troubleshooting" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Issue | Fix |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint/format | \`make lint-fix && git commit\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Smoke test | \`make smoke-verbose\` to reproduce |" >> $GITHUB_STEP_SUMMARY
+          echo "| Missing env | \`make validate-env\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Cache issue | Re-run job from GitHub UI |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Full guide: [docs/CI-TROUBLESHOOTING.md](docs/CI-TROUBLESHOOTING.md)" >> $GITHUB_STEP_SUMMARY
+
   deploy-cli:
     name: Deploy CLI to macbook
     needs: test

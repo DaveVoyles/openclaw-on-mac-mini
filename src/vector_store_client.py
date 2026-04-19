@@ -34,6 +34,34 @@ _client = None
 _collections: dict = {}
 _lock = asyncio.Lock()
 
+# ---------------------------------------------------------------------------
+# TTL cache for collection objects (avoids repeated ChromaDB round-trips)
+# ---------------------------------------------------------------------------
+
+_collection_cache: dict[str, tuple[object, float]] = {}
+_CACHE_TTL = 300  # seconds (5 minutes)
+
+
+def _get_cached_collection(name: str) -> object | None:
+    """Return a cached collection object if still within TTL, else None."""
+    entry = _collection_cache.get(name)
+    if entry is not None:
+        obj, ts = entry
+        if time.time() - ts < _CACHE_TTL:
+            return obj
+        del _collection_cache[name]
+    return None
+
+
+def _set_cached_collection(name: str, obj: object) -> None:
+    """Store a collection object in the TTL cache."""
+    _collection_cache[name] = (obj, time.time())
+
+
+def clear_collection_cache() -> None:
+    """Invalidate the collection TTL cache (useful for tests and forced refresh)."""
+    _collection_cache.clear()
+
 
 def _get_client() -> Any:
     """Return the ChromaDB PersistentClient, creating it on first call."""
@@ -48,7 +76,15 @@ def _get_client() -> Any:
 
 
 def _get_collection(name: str) -> Any:
-    """Get or create a ChromaDB collection by name."""
+    """Get or create a ChromaDB collection by name.
+
+    Results are cached with a 5-minute TTL to avoid redundant ChromaDB
+    round-trips when the same collection is accessed frequently.
+    """
+    cached = _get_cached_collection(name)
+    if cached is not None:
+        return cached
+
     if name not in _collections:
         client = _get_client()
         kwargs = {
@@ -60,6 +96,8 @@ def _get_collection(name: str) -> Any:
         _collections[name] = client.get_or_create_collection(**kwargs)
         count = _collections[name].count()
         log.info("Collection '%s' ready (%d documents)", name, count)
+
+    _set_cached_collection(name, _collections[name])
     return _collections[name]
 
 

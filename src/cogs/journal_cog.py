@@ -44,8 +44,8 @@ def _parse_date(date_str: str) -> date:
     try:
         from dateutil import parser as dateutil_parser
         return dateutil_parser.parse(date_str).date()
-    except (ImportError, ValueError):
-        raise ValueError(f"Cannot parse date: {date_str!r}")
+    except (ImportError, ValueError) as e:
+        raise ValueError(f"Cannot parse date: {date_str!r}") from e
 
 
 def _journal_title(d: date) -> str:
