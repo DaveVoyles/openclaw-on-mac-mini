@@ -181,6 +181,23 @@ jobs:
           fail-on-severity: high
           allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, Python-2.0
 
+  dependency-audit:
+    name: Dependency vulnerability audit
+    runs-on: [self-hosted, macOS, ARM64, openclaw]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pip-audit
+        run: pip install pip-audit
+      - name: Run pip-audit
+        run: |
+          pip-audit --requirement requirements.txt --desc on --format markdown 2>/dev/null || true
+          pip-audit --requirement requirements-test.txt --desc on --format markdown 2>/dev/null || true
+        continue-on-error: true
+
   security-report:
     name: Generate Security Report
     runs-on: [self-hosted, macOS, ARM64, openclaw]

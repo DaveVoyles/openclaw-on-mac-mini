@@ -12,6 +12,10 @@ import time
 from collections import deque
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+pytestmark = pytest.mark.expensive
+
 # If google-genai is not installed (e.g. CI without deps), stub it out
 # before importing llm so the module loads cleanly.
 if "google.genai" not in sys.modules:

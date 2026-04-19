@@ -58,6 +58,7 @@ markers = [
     "integration: marks tests as integration tests",
     "requires_secrets: marks tests that need API keys",
     "requires_docker: marks tests that need Docker",
+    "expensive: marks tests that require external services or are very slow (deselect with '-m not expensive')",
 ]
 
 [tool.ruff]

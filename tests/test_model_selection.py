@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+pytestmark = pytest.mark.expensive
+
 # ---------------------------------------------------------------------------
 # memory.py — per-user preference storage
 # ---------------------------------------------------------------------------

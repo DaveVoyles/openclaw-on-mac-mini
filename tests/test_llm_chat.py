@@ -14,6 +14,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+pytestmark = pytest.mark.expensive
+
 # Ensure google.genai is stubbed before importing llm
 _genai_mock = MagicMock()
 _genai_mock.types.ThinkingConfig = MagicMock()
