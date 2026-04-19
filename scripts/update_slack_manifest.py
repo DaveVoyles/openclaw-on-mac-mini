@@ -127,13 +127,13 @@ MANIFEST: dict = {
                 "should_escape": False,
             },
             {
-                "command": "/bookmarks",
+                "command": "/mypins",
                 "description": "View your bookmarked bot responses",
                 "usage_hint": "(no arguments needed)",
                 "should_escape": False,
             },
             {
-                "command": "/search",
+                "command": "/filesearch",
                 "description": "Search your uploaded file history by keyword",
                 "usage_hint": "<keyword>",
                 "should_escape": False,
