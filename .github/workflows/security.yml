@@ -3,10 +3,21 @@ name: Security Scanning
 on:
   push:
     branches: [main]
+    paths:
+      # Only rebuild + scan when something that affects the Docker image or deps changes
+      - 'src/**'
+      - 'requirements*.txt'
+      - 'Dockerfile'
+      - 'docker-compose*.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'requirements*.txt'
+      - 'Dockerfile'
+      - 'docker-compose*.yml'
   schedule:
-    # Weekly security scan on Mondays at 3 AM UTC
+    # Weekly security scan on Mondays at 3 AM UTC (always runs full scan)
     - cron: '0 3 * * 1'
   workflow_dispatch:  # Manual trigger
 

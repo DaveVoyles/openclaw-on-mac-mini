@@ -46,7 +46,7 @@ addopts = [
     "--timeout=30",
     "-n", "auto",  # Parallel execution (auto-detect cores)
     "--dist", "loadfile",  # Distribute by file for better parallelization
-    "--reruns", "2",  # Retry flaky tests 2 times
+    "--reruns", "1",  # Retry genuinely flaky tests once; remove to surface flakiness
     "--reruns-delay", "1",  # 1 second delay between retries
 ]
 
