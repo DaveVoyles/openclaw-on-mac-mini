@@ -210,6 +210,13 @@ _STALE_SIGNAL_RE = re.compile(
 )
 _YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
 
+# Matches a "Sources" section header near the end of a Perplexity LLM answer.
+# Used to strip the LLM-generated Sources block before we append the JSON citations.
+_LLM_SOURCES_HEADER_RE = re.compile(
+    r"\n{1,3}(?:#{1,3}\s+)?\*{0,2}sources?\*{0,2}\s*:?\*{0,2}\s*\n",
+    re.IGNORECASE,
+)
+
 # ---------------------------------------------------------------------------
 # Search functions
 # ---------------------------------------------------------------------------
@@ -1021,6 +1028,23 @@ async def _search_web_reliable(
     return "❌ All web search methods exhausted. Check logs for details."
 
 
+def _strip_llm_sources_section(answer: str) -> str:
+    """Remove a trailing Sources section that Perplexity's LLM may generate.
+
+    The JSON citations array is the canonical source list appended afterwards.
+    Stripping the LLM-generated block here prevents duplicate Sources sections.
+    Only strips when the header appears in the latter half of the text so we
+    don't accidentally drop real answer content.
+    """
+    matches = list(_LLM_SOURCES_HEADER_RE.finditer(answer))
+    if not matches:
+        return answer
+    last_match = matches[-1]
+    if last_match.start() >= len(answer) * 0.4:
+        return answer[: last_match.start()].rstrip()
+    return answer
+
+
 async def _perplexity_search(query: str, num_results: int = 5, *, return_hits: bool = False) -> str | tuple[str, list[dict[str, str]]]:
     """Search via Perplexity API — returns AI-synthesized answer with citations."""
     from spending import tracker as spending_tracker
@@ -1057,9 +1081,14 @@ async def _perplexity_search(query: str, num_results: int = 5, *, return_hits: b
     answer = data["choices"][0]["message"]["content"]
     citations = data.get("citations", [])
 
+    # Strip any LLM-generated Sources section before appending the JSON citations.
+    # Perplexity may include its own Sources block when the prompt asks for one,
+    # which would duplicate the block we append below.
+    answer = _strip_llm_sources_section(answer)
+
     lines = [f"**Perplexity AI Answer:**\n{answer}"]
     if citations:
-        lines.append("\n**Sources:**")
+        lines.append("\nSources:")
         for i, cite in enumerate(citations[:num_results], 1):
             lines.append(f"{i}. {cite}")
 

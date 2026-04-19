@@ -272,11 +272,11 @@ def _dedupe_sources_section(text: str) -> str:
     (e.g. '[1] https://...') AND a plain 'Sources:\\n...' block.
     Keep only whichever appears first; strip the second one.
 
-    Handles both plain 'Sources:' and bold '**Sources:**' variants.
+    Handles plain 'Sources:', bold '**Sources:**', and markdown '## Sources' variants.
     """
-    # Match "Sources:" with optional surrounding markdown bold markers (**).
+    # Match "Sources:" with optional markdown header prefix (##/###) or bold markers (**).
     sources_re = re.compile(
-        r"^\*{0,2}sources?\*{0,2}\s*:?\*{0,2}\s*$",
+        r"^(?:#{1,3}\s+)?\*{0,2}sources?\*{0,2}\s*:?\*{0,2}\s*$",
         re.IGNORECASE | re.MULTILINE,
     )
     matches = list(sources_re.finditer(text))
@@ -321,8 +321,7 @@ async def generate_web_search_report(query: str, *, provider: str = "perplexity"
         f"User request: {query}. "
         "Provide a direct, helpful, up-to-date answer with sourced bullet points. "
         "Include specific facts, figures, and links where relevant. "
-        "Do not speculate. "
-        "End with a Sources section listing URLs."
+        "Do not speculate."
     )
     try:
         result = await asyncio.wait_for(
