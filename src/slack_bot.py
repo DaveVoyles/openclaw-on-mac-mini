@@ -3544,118 +3544,6 @@ def _register_file_handlers(app: Any) -> None:
 
         app.action(_action_id)(_make_handler(_action_id))
 
-    # ------------------------------------------------------------------
-    # Handler: 🔀 Compare — first step, store Document A and prompt for B
-    # ------------------------------------------------------------------
-
-    @app.action("file_compare_start")
-    async def handle_compare_start(ack: Any, body: dict[str, Any], say: Any) -> None:
-        await ack()
-        user_id = (body.get("user") or {}).get("id", "unknown")
-        actions = body.get("actions", [{}])
-        file_id = (actions[0] if actions else {}).get("value", "")
-        if not file_id:
-            await say(text="⚠️ Couldn't identify the file. Please try again.")
-            return
-        _compare_pending[user_id] = file_id
-        file_obj_entry = _file_registry.get(file_id) or {}
-        if isinstance(file_obj_entry, dict) and "file_obj" in file_obj_entry:
-            file_obj_entry = file_obj_entry["file_obj"]
-        filename = (file_obj_entry.get("name") or "the file") if file_obj_entry else "the file"
-        await say(
-            text=f"📄 Got *{filename}* as Document A. Now upload or share Document B and I'll compare them."
-        )
-
-    # ------------------------------------------------------------------
-    # Handler: 🌍 Translate — language picker + translation dispatch
-    # ------------------------------------------------------------------
-
-    @app.action("file_translate")
-    async def handle_translate_pick(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
-        await ack()
-        user_id = (body.get("user") or {}).get("id", "unknown")
-        actions = body.get("actions", [{}])
-        file_id = (actions[0] if actions else {}).get("value", "")
-        channel = (body.get("channel") or {}).get("id", "") or (body.get("container") or {}).get("channel_id", "")
-
-        if user_id not in _user_prefs:
-            _user_prefs[user_id] = {}
-        _user_prefs[user_id]["translate_file_id"] = file_id
-        _save_prefs()
-
-        lang_options = [
-            {"text": {"type": "plain_text", "text": lang}, "value": lang}
-            for lang in [
-                "Spanish", "French", "German", "Italian", "Portuguese",
-                "Japanese", "Chinese (Simplified)", "Korean", "Arabic", "Russian",
-            ]
-        ]
-        await client.chat_postEphemeral(
-            channel=channel,
-            user=user_id,
-            text="Pick a language to translate to:",
-            blocks=[
-                {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": "🌍 *Pick a language to translate to:*"},
-                    "accessory": {
-                        "type": "static_select",
-                        "placeholder": {"type": "plain_text", "text": "Select language"},
-                        "options": lang_options,
-                        "action_id": "translate_lang_selected",
-                    },
-                }
-            ],
-        )
-
-    @app.action("translate_lang_selected")
-    async def handle_translate_lang_selected(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
-        await ack()
-        user_id = (body.get("user") or {}).get("id", "unknown")
-        actions = body.get("actions", [{}])
-        selected_lang = (actions[0] if actions else {}).get("selected_option", {}).get("value", "Spanish")
-        channel = (body.get("channel") or {}).get("id", "") or (body.get("container") or {}).get("channel_id", "")
-
-        file_id = (_user_prefs.get(user_id) or {}).get("translate_file_id", "")
-        if not file_id:
-            await say(text="⚠️ Couldn't find the file to translate. Please tap 🌍 Translate again.")
-            return
-
-        file_obj_entry = _file_registry.get(file_id) or {}
-        if isinstance(file_obj_entry, dict) and "file_obj" in file_obj_entry:
-            file_obj = file_obj_entry["file_obj"]
-        else:
-            file_obj = file_obj_entry or {}
-
-        if user_id not in _user_prefs:
-            _user_prefs[user_id] = {}
-        _user_prefs[user_id]["translate_lang"] = selected_lang
-        _save_prefs()
-
-        thinking_resp = await say(text=f"⏳ Translating to {selected_lang}…")
-        thinking_ts = (thinking_resp or {}).get("ts")
-        use_simple = _get_user_simple(user_id)
-
-        translate_prompt = (
-            f"Please translate this document into {selected_lang}. "
-            "Preserve the original formatting and structure as much as possible. "
-            "Return only the translated text."
-        )
-        prompt = await _process_slack_files([file_obj], SLACK_BOT_TOKEN, translate_prompt)
-
-        await _send_answer(
-            client=client,
-            say=say,
-            channel=channel,
-            thread_ts=None,
-            thinking_ts=thinking_ts,
-            prompt=prompt,
-            user_id=user_id,
-            simple=use_simple,
-            model_pref="gemini",
-        )
-
-
 
 def _register_slash_commands(app: Any) -> None:
     """Register slash command handlers: /metrics, /brief, /mystats, /template, /mypins, /filesearch, /schedule, /clear, /nickname."""
@@ -4062,71 +3950,6 @@ def _register_slash_commands(app: Any) -> None:
             text="✅ *Session cleared!* Thread history and active file selections have been reset. Start fresh with your next message."
         )
 
-    @app.action("retry_last_prompt")
-    async def handle_retry_last_prompt(ack: Any, body: dict[str, Any], say: Any, client: Any) -> None:
-        await ack()
-        prompt_hash: str = (body.get("actions") or [{}])[0].get("value", "")
-        user_id: str = (body.get("user") or {}).get("id", "")
-        channel: str = (body.get("channel") or {}).get("id", "")
-
-        prompt = _retry_cache.get(prompt_hash)
-        if not prompt:
-            await client.chat_postEphemeral(
-                channel=channel,
-                user=user_id,
-                text="⚠️ Retry context expired — please send your message again.",
-            )
-            return
-
-        use_simple = _get_user_simple(user_id)
-        thinking_resp = await say(text="⏳ Retrying…")
-        thinking_ts = (thinking_resp or {}).get("ts")
-
-        await _send_answer(
-            client=client,
-            say=say,
-            channel=channel,
-            thread_ts=None,
-            thinking_ts=thinking_ts,
-            prompt=prompt,
-            user_id=user_id,
-            model_pref="auto",
-            simple=use_simple,
-        )
-
-    @app.action("clarify_file")
-    async def handle_clarify_file(ack: Any, body: dict[str, Any], client: Any) -> None:
-        await ack()
-        user_id = body.get("user", {}).get("id", "")
-        channel = (body.get("channel") or {}).get("id", user_id)
-        await client.chat_postEphemeral(
-            channel=channel,
-            user=user_id,
-            text="📄 Go ahead and upload your file, then type your question about it!",
-        )
-
-    @app.action("clarify_question")
-    async def handle_clarify_question(ack: Any, body: dict[str, Any], client: Any) -> None:
-        await ack()
-        user_id = body.get("user", {}).get("id", "")
-        channel = (body.get("channel") or {}).get("id", user_id)
-        await client.chat_postEphemeral(
-            channel=channel,
-            user=user_id,
-            text="💬 Of course! What would you like to know? Just type your question.",
-        )
-
-    @app.action("clarify_write")
-    async def handle_clarify_write(ack: Any, body: dict[str, Any], client: Any) -> None:
-        await ack()
-        user_id = body.get("user", {}).get("id", "")
-        channel = (body.get("channel") or {}).get("id", user_id)
-        await client.chat_postEphemeral(
-            channel=channel,
-            user=user_id,
-            text="📝 Happy to help! What are you working on — a letter, email, list, or something else?",
-        )
-
     @app.command("/nickname")
     async def handle_slash_nickname(ack: Any, body: dict[str, Any], client: Any) -> None:
         await ack()
@@ -4349,30 +4172,6 @@ def _register_integration_handlers(app: Any) -> None:
             return
         msg_id = emails[idx]["id"]
         body_text = await _get_gmail_body(msg_id)
-        summary = await _ask(
-            f"Summarize this email in 3 bullet points:\n\n{body_text}",
-            model_name=None,
-        )
-        await client.chat_postEphemeral(
-            channel=channel_id,
-            user=user_id,
-            text=f"📧 *Email summary:*\n{summary}",
-        )
-
-    # ------------------------------------------------------------------
-    # Wave 10 Leia: gmail_summarize button action
-    # ------------------------------------------------------------------
-
-    @app.action("gmail_summarize")
-    async def handle_gmail_summarize(ack: Any, body: dict[str, Any], client: Any) -> None:
-        await ack()
-        action = body.get("actions", [{}])[0]
-        message_id = action.get("value", "")
-        user_id = body.get("user", {}).get("id", "")
-        channel_id = body.get("channel", {}).get("id", user_id)
-        if not message_id:
-            return
-        body_text = await _get_gmail_body(message_id)
         summary = await _ask(
             f"Summarize this email in 3 bullet points:\n\n{body_text}",
             model_name=None,
@@ -4882,6 +4681,214 @@ def _register_integration_handlers(app: Any) -> None:
 
 
 
+def _register_action_handlers(app: Any) -> None:
+    """Register all @app.action handlers: file actions, retry/clarify, and Gmail summarize."""
+
+    # ------------------------------------------------------------------
+    # Handler: 🔀 Compare — first step, store Document A and prompt for B
+    # ------------------------------------------------------------------
+
+    @app.action("file_compare_start")
+    async def handle_compare_start(ack: Any, body: dict[str, Any], say: Any) -> None:
+        await ack()
+        user_id = (body.get("user") or {}).get("id", "unknown")
+        actions = body.get("actions", [{}])
+        file_id = (actions[0] if actions else {}).get("value", "")
+        if not file_id:
+            await say(text="⚠️ Couldn't identify the file. Please try again.")
+            return
+        _compare_pending[user_id] = file_id
+        file_obj_entry = _file_registry.get(file_id) or {}
+        if isinstance(file_obj_entry, dict) and "file_obj" in file_obj_entry:
+            file_obj_entry = file_obj_entry["file_obj"]
+        filename = (file_obj_entry.get("name") or "the file") if file_obj_entry else "the file"
+        await say(
+            text=f"📄 Got *{filename}* as Document A. Now upload or share Document B and I'll compare them."
+        )
+
+    # ------------------------------------------------------------------
+    # Handler: 🌍 Translate — language picker + translation dispatch
+    # ------------------------------------------------------------------
+
+    @app.action("file_translate")
+    async def handle_translate_pick(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
+        await ack()
+        user_id = (body.get("user") or {}).get("id", "unknown")
+        actions = body.get("actions", [{}])
+        file_id = (actions[0] if actions else {}).get("value", "")
+        channel = (body.get("channel") or {}).get("id", "") or (body.get("container") or {}).get("channel_id", "")
+
+        if user_id not in _user_prefs:
+            _user_prefs[user_id] = {}
+        _user_prefs[user_id]["translate_file_id"] = file_id
+        _save_prefs()
+
+        lang_options = [
+            {"text": {"type": "plain_text", "text": lang}, "value": lang}
+            for lang in [
+                "Spanish", "French", "German", "Italian", "Portuguese",
+                "Japanese", "Chinese (Simplified)", "Korean", "Arabic", "Russian",
+            ]
+        ]
+        await client.chat_postEphemeral(
+            channel=channel,
+            user=user_id,
+            text="Pick a language to translate to:",
+            blocks=[
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": "🌍 *Pick a language to translate to:*"},
+                    "accessory": {
+                        "type": "static_select",
+                        "placeholder": {"type": "plain_text", "text": "Select language"},
+                        "options": lang_options,
+                        "action_id": "translate_lang_selected",
+                    },
+                }
+            ],
+        )
+
+    @app.action("translate_lang_selected")
+    async def handle_translate_lang_selected(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
+        await ack()
+        user_id = (body.get("user") or {}).get("id", "unknown")
+        actions = body.get("actions", [{}])
+        selected_lang = (actions[0] if actions else {}).get("selected_option", {}).get("value", "Spanish")
+        channel = (body.get("channel") or {}).get("id", "") or (body.get("container") or {}).get("channel_id", "")
+
+        file_id = (_user_prefs.get(user_id) or {}).get("translate_file_id", "")
+        if not file_id:
+            await say(text="⚠️ Couldn't find the file to translate. Please tap 🌍 Translate again.")
+            return
+
+        file_obj_entry = _file_registry.get(file_id) or {}
+        if isinstance(file_obj_entry, dict) and "file_obj" in file_obj_entry:
+            file_obj = file_obj_entry["file_obj"]
+        else:
+            file_obj = file_obj_entry or {}
+
+        if user_id not in _user_prefs:
+            _user_prefs[user_id] = {}
+        _user_prefs[user_id]["translate_lang"] = selected_lang
+        _save_prefs()
+
+        thinking_resp = await say(text=f"⏳ Translating to {selected_lang}…")
+        thinking_ts = (thinking_resp or {}).get("ts")
+        use_simple = _get_user_simple(user_id)
+
+        translate_prompt = (
+            f"Please translate this document into {selected_lang}. "
+            "Preserve the original formatting and structure as much as possible. "
+            "Return only the translated text."
+        )
+        prompt = await _process_slack_files([file_obj], SLACK_BOT_TOKEN, translate_prompt)
+
+        await _send_answer(
+            client=client,
+            say=say,
+            channel=channel,
+            thread_ts=None,
+            thinking_ts=thinking_ts,
+            prompt=prompt,
+            user_id=user_id,
+            simple=use_simple,
+            model_pref="gemini",
+        )
+
+    # ------------------------------------------------------------------
+    # Handler: retry / clarify button actions
+    # ------------------------------------------------------------------
+
+    @app.action("retry_last_prompt")
+    async def handle_retry_last_prompt(ack: Any, body: dict[str, Any], say: Any, client: Any) -> None:
+        await ack()
+        prompt_hash: str = (body.get("actions") or [{}])[0].get("value", "")
+        user_id: str = (body.get("user") or {}).get("id", "")
+        channel: str = (body.get("channel") or {}).get("id", "")
+
+        prompt = _retry_cache.get(prompt_hash)
+        if not prompt:
+            await client.chat_postEphemeral(
+                channel=channel,
+                user=user_id,
+                text="⚠️ Retry context expired — please send your message again.",
+            )
+            return
+
+        use_simple = _get_user_simple(user_id)
+        thinking_resp = await say(text="⏳ Retrying…")
+        thinking_ts = (thinking_resp or {}).get("ts")
+
+        await _send_answer(
+            client=client,
+            say=say,
+            channel=channel,
+            thread_ts=None,
+            thinking_ts=thinking_ts,
+            prompt=prompt,
+            user_id=user_id,
+            model_pref="auto",
+            simple=use_simple,
+        )
+
+    @app.action("clarify_file")
+    async def handle_clarify_file(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user", {}).get("id", "")
+        channel = (body.get("channel") or {}).get("id", user_id)
+        await client.chat_postEphemeral(
+            channel=channel,
+            user=user_id,
+            text="📄 Go ahead and upload your file, then type your question about it!",
+        )
+
+    @app.action("clarify_question")
+    async def handle_clarify_question(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user", {}).get("id", "")
+        channel = (body.get("channel") or {}).get("id", user_id)
+        await client.chat_postEphemeral(
+            channel=channel,
+            user=user_id,
+            text="💬 Of course! What would you like to know? Just type your question.",
+        )
+
+    @app.action("clarify_write")
+    async def handle_clarify_write(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user", {}).get("id", "")
+        channel = (body.get("channel") or {}).get("id", user_id)
+        await client.chat_postEphemeral(
+            channel=channel,
+            user=user_id,
+            text="📝 Happy to help! What are you working on — a letter, email, list, or something else?",
+        )
+
+    # ------------------------------------------------------------------
+    # Handler: Gmail summarize button action
+    # ------------------------------------------------------------------
+
+    @app.action("gmail_summarize")
+    async def handle_gmail_summarize(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        action = body.get("actions", [{}])[0]
+        message_id = action.get("value", "")
+        user_id = body.get("user", {}).get("id", "")
+        channel_id = body.get("channel", {}).get("id", user_id)
+        if not message_id:
+            return
+        body_text = await _get_gmail_body(message_id)
+        summary = await _ask(
+            f"Summarize this email in 3 bullet points:\n\n{body_text}",
+            model_name=None,
+        )
+        await client.chat_postEphemeral(
+            channel=channel_id,
+            user=user_id,
+            text=f"📧 *Email summary:*\n{summary}",
+        )
+
+
 def create_slack_app() -> Any | None:  # type: ignore[return]
     """Build and return a configured AsyncApp, or None if Slack is disabled."""
     if not _slack_is_configured():
@@ -4899,6 +4906,7 @@ def create_slack_app() -> Any | None:  # type: ignore[return]
     _register_file_handlers(app)
     _register_slash_commands(app)
     _register_integration_handlers(app)
+    _register_action_handlers(app)
 
     return app
 
