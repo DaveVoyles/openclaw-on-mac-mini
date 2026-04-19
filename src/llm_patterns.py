@@ -203,10 +203,10 @@ async def _reflect_on_response(
     )
 
     try:
-        from llm.providers import COPILOT_PROXY_ENABLED, chat_openai
+        from llm.providers import COPILOT_AVAILABLE, chat_openai
         from model_routing_policy import select_reflection_route
 
-        route = select_reflection_route(copilot_available=COPILOT_PROXY_ENABLED)
+        route = select_reflection_route(copilot_available=COPILOT_AVAILABLE)
         log.debug("Reflection route: %s (%s)", route.provider, route.reason)
 
         reflection: str | None = None

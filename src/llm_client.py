@@ -324,11 +324,11 @@ async def quick_generate(
     # -- Copilot / OpenAI-compatible path --------------------------------
     try:
         from llm.providers import (
-            COPILOT_PROXY_ENABLED,
+            COPILOT_AVAILABLE,
             chat_openai,  # local import
         )
 
-        if COPILOT_PROXY_ENABLED:
+        if COPILOT_AVAILABLE:
             reply = await chat_openai(
                 prompt,
                 [],
