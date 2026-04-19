@@ -3,9 +3,21 @@ name: CI
 on:
   push:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'requirements*.txt'
+      - 'pyproject.toml'
+      - '.github/workflows/ci.yml'
   pull_request:
     branches: [main]
-  workflow_dispatch:  # Manual trigger
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'requirements*.txt'
+      - 'pyproject.toml'
+      - '.github/workflows/ci.yml'
+  workflow_dispatch:  # Manual trigger — always runs full suite
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
