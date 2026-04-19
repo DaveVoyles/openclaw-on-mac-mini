@@ -29,7 +29,8 @@ from metrics_collector import get_collector
 log = logging.getLogger(__name__)
 
 from config import cfg as _web_cfg
-from trace_context import set_trace as _set_trace, trace_context as _trace_context
+from trace_context import set_trace as _set_trace
+from trace_context import trace_context as _trace_context
 
 HEALTH_PORT = _web_cfg.health_port
 ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
