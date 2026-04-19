@@ -38,6 +38,7 @@ import bot_helpers as bot_helpers_mod
 # Helpers / fixtures
 # ---------------------------------------------------------------------------
 
+
 def _make_mock_user(user_id: int = 999) -> MagicMock:
     u = MagicMock()
     u.id = user_id
@@ -131,9 +132,7 @@ async def test_run_quality_auto_repair_no_improvement_with_think_hook(monkeypatc
         "apply_repair_budget",
         MagicMock(return_value={"max_attempts": 1, "timeout_seconds": 30}),
     )
-    monkeypatch.setattr(
-        mod, "_with_requested_item_target", MagicMock(return_value={})
-    )
+    monkeypatch.setattr(mod, "_with_requested_item_target", MagicMock(return_value={}))
     monkeypatch.setattr(mod, "_record_quality_metric", MagicMock())
     monkeypatch.setattr(mod, "_record_budget_policy_metric", MagicMock())
     monkeypatch.setattr(
@@ -321,9 +320,7 @@ class TestGetOrCreateDefaultAskThread:
     async def test_thread_auto_create_false_returns_none(self, monkeypatch):
         monkeypatch.setattr(mod.cfg, "thread_auto_create", False)
         ch = self._make_channel()
-        result, created = await mod._get_or_create_default_ask_thread(
-            ch, user_id=1, user_question="hello"
-        )
+        result, created = await mod._get_or_create_default_ask_thread(ch, user_id=1, user_question="hello")
         assert result is None
         assert created is False
 
@@ -348,9 +345,7 @@ class TestGetOrCreateDefaultAskThread:
         key = mod._default_ask_thread_cache_key(ch, 42)
         mod._DEFAULT_ASK_THREAD_CACHE[key] = (5001, time.time())
 
-        result, created = await mod._get_or_create_default_ask_thread(
-            ch, user_id=42, user_question="hello"
-        )
+        result, created = await mod._get_or_create_default_ask_thread(ch, user_id=42, user_question="hello")
         assert result is cached_thread
         assert created is False
 
@@ -369,18 +364,14 @@ class TestGetOrCreateDefaultAskThread:
         key = mod._default_ask_thread_cache_key(ch, 43)
         mod._DEFAULT_ASK_THREAD_CACHE[key] = (5002, time.time() - 999999)
 
-        result, created = await mod._get_or_create_default_ask_thread(
-            ch, user_id=43, user_question="question"
-        )
+        result, created = await mod._get_or_create_default_ask_thread(ch, user_id=43, user_question="question")
         # Cache entry should have been popped
         assert key not in mod._DEFAULT_ASK_THREAD_CACHE or created
         assert result is new_thread
         assert created is True
 
     @pytest.mark.asyncio
-    async def test_cache_hit_bot_get_channel_none_falls_back_to_guild_get_thread(
-        self, monkeypatch
-    ):
+    async def test_cache_hit_bot_get_channel_none_falls_back_to_guild_get_thread(self, monkeypatch):
         """Lines 1145-1149: bot.get_channel returns None, guild.get_thread used."""
         monkeypatch.setattr(mod.cfg, "thread_auto_create", True)
 
@@ -409,9 +400,7 @@ class TestGetOrCreateDefaultAskThread:
         key = mod._default_ask_thread_cache_key(ch, 44)
         mod._DEFAULT_ASK_THREAD_CACHE[key] = (8888, time.time())
 
-        result, created = await mod._get_or_create_default_ask_thread(
-            ch, user_id=44, user_question="hello"
-        )
+        result, created = await mod._get_or_create_default_ask_thread(ch, user_id=44, user_question="hello")
         assert result is guild_thread
         assert created is False
         guild.get_thread.assert_called_once_with(8888)
@@ -451,6 +440,7 @@ async def test_on_ready_basic(monkeypatch):
 
     # Local import: skills.list_containers
     import skills as _skills_mod
+
     monkeypatch.setattr(
         _skills_mod,
         "list_containers",
@@ -495,14 +485,16 @@ async def test_on_ready_scheduler_cron_jobs_registered(monkeypatch):
     monkeypatch.setitem(sys.modules, "discord_background", mock_bg)
 
     import skills as _skills_mod
+
     monkeypatch.setattr(_skills_mod, "list_containers", AsyncMock(return_value="NAMES\n"))
     monkeypatch.setattr(mod.bot, "change_presence", AsyncMock())
     monkeypatch.setattr(mod.bot, "get_channel", MagicMock(return_value=None))
 
     await mod.bot.on_ready()
 
-    actions_created = [call.kwargs.get("action", call.args[0] if call.args else None)
-                       for call in mock_create.call_args_list]
+    actions_created = [
+        call.kwargs.get("action", call.args[0] if call.args else None) for call in mock_create.call_args_list
+    ]
     assert "run_maintenance" in actions_created
     assert "index_vault_to_qmd" in actions_created
 
@@ -532,6 +524,7 @@ async def test_on_ready_background_loops_zero_logs_warning(monkeypatch):
     monkeypatch.setitem(sys.modules, "discord_background", mock_bg)
 
     import skills as _skills_mod
+
     monkeypatch.setattr(_skills_mod, "list_containers", AsyncMock(return_value="NAMES\n"))
     monkeypatch.setattr(mod.bot, "change_presence", AsyncMock())
     monkeypatch.setattr(mod.bot, "get_channel", MagicMock(return_value=None))
@@ -566,9 +559,8 @@ async def test_on_ready_list_containers_import_error(monkeypatch):
 
     # list_containers raises RuntimeError → fallback to guild count
     import skills as _skills_mod
-    monkeypatch.setattr(
-        _skills_mod, "list_containers", AsyncMock(side_effect=RuntimeError("docker unavailable"))
-    )
+
+    monkeypatch.setattr(_skills_mod, "list_containers", AsyncMock(side_effect=RuntimeError("docker unavailable")))
     monkeypatch.setattr(mod.bot, "change_presence", AsyncMock())
     monkeypatch.setattr(mod.bot, "get_channel", MagicMock(return_value=None))
 
@@ -605,6 +597,7 @@ async def test_on_ready_with_interrupted_plans(monkeypatch):
     monkeypatch.setitem(sys.modules, "discord_background", mock_bg)
 
     import skills as _skills_mod
+
     monkeypatch.setattr(_skills_mod, "list_containers", AsyncMock(return_value="NAMES\n"))
     monkeypatch.setattr(mod.bot, "change_presence", AsyncMock())
 
@@ -718,6 +711,7 @@ async def test_close_flushes_audit_buffer(monkeypatch, tmp_path):
     # (note: close() does list(_audit_buffer) then clear(), so buffer is empty after)
     # The audit file should exist if writing succeeded
     import datetime
+
     today = datetime.date.today().isoformat()
     audit_file = tmp_path / f"{today}.jsonl"
     if audit_file.exists():

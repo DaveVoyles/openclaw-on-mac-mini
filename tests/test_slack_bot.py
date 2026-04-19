@@ -23,6 +23,7 @@ for mod_name in ["slack_bolt", "slack_bolt.async_app", "aiohttp"]:
     if mod_name not in sys.modules:
         stub = types.ModuleType(mod_name)
         if mod_name == "slack_bolt.async_app":
+
             class AsyncApp:
                 def __init__(self, *a, **kw):
                     pass
@@ -70,8 +71,8 @@ from slack_bot import (  # noqa: E402
 # Tests
 # ---------------------------------------------------------------------------
 
-class TestSlackBot(unittest.TestCase):
 
+class TestSlackBot(unittest.TestCase):
     # -- _suggest_actions_for_file -------------------------------------------
 
     def test_suggest_actions_word_docx(self):
@@ -208,7 +209,13 @@ class TestSlackBot(unittest.TestCase):
 
     def test_build_file_blocks_document_has_buttons(self):
         from slack_bot import _build_file_blocks
-        blocks = _build_file_blocks("report.docx", "A quarterly report", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "F123")
+
+        blocks = _build_file_blocks(
+            "report.docx",
+            "A quarterly report",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "F123",
+        )
         # Should have a section + actions block
         types = [b["type"] for b in blocks]
         self.assertIn("section", types)
@@ -216,6 +223,7 @@ class TestSlackBot(unittest.TestCase):
 
     def test_build_file_blocks_image_has_describe_button(self):
         from slack_bot import _build_file_blocks
+
         blocks = _build_file_blocks("photo.jpg", None, "image/jpeg", "F456")
         actions_block = next(b for b in blocks if b["type"] == "actions")
         action_ids = [e["action_id"] for e in actions_block["elements"]]
@@ -223,20 +231,31 @@ class TestSlackBot(unittest.TestCase):
 
     def test_build_file_blocks_document_has_proofread_button(self):
         from slack_bot import _build_file_blocks
-        blocks = _build_file_blocks("letter.docx", None, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "F789")
+
+        blocks = _build_file_blocks(
+            "letter.docx", None, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "F789"
+        )
         actions_block = next(b for b in blocks if b["type"] == "actions")
         action_ids = [e["action_id"] for e in actions_block["elements"]]
         self.assertIn("file_proofread", action_ids)
 
     def test_build_file_blocks_description_in_section(self):
         from slack_bot import _build_file_blocks
+
         blocks = _build_file_blocks("budget.xlsx", "A monthly budget with 3 sheets", "application/vnd.ms-excel", "F999")
         section_text = next(b for b in blocks if b["type"] == "section")["text"]["text"]
         self.assertIn("A monthly budget with 3 sheets", section_text)
 
     def test_register_file_stored_and_retrievable(self):
         from slack_bot import _file_registry, _register_file
-        _register_file("FTEST1", {"name": "test.docx", "mimetype": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"})
+
+        _register_file(
+            "FTEST1",
+            {
+                "name": "test.docx",
+                "mimetype": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            },
+        )
         self.assertIn("FTEST1", _file_registry)
         self.assertEqual(_file_registry["FTEST1"]["file_obj"]["name"], "test.docx")
 
@@ -244,6 +263,7 @@ class TestSlackBot(unittest.TestCase):
 
     def test_file_registry_stores_bytes(self):
         from slack_bot import _file_registry, _register_file
+
         raw = b"PK\x03\x04fake-docx-bytes"
         _register_file("FTEST_BYTES", {"name": "letter.docx"}, raw)
         self.assertIn("FTEST_BYTES", _file_registry)
@@ -252,6 +272,7 @@ class TestSlackBot(unittest.TestCase):
 
     def test_file_registry_stores_none_bytes_when_omitted(self):
         from slack_bot import _file_registry, _register_file
+
         _register_file("FTEST_NOBYTES", {"name": "budget.xlsx"})
         self.assertIn("FTEST_NOBYTES", _file_registry)
         self.assertIsNone(_file_registry["FTEST_NOBYTES"]["file_bytes"])
@@ -328,9 +349,7 @@ class TestSlackBot(unittest.TestCase):
                 app = slack_bot.create_slack_app()
                 # Exercise the handler logic directly
                 say = AsyncMock()
-                await slack_bot._files_handler_for_test(
-                    body=body, say=say, client=FakeClient()
-                )
+                await slack_bot._files_handler_for_test(body=body, say=say, client=FakeClient())
 
         # Build a slim test-shim since handle_slash_files is a closure
         # We test the logic by reconstructing the equivalent coroutine.
@@ -344,14 +363,15 @@ class TestSlackBot(unittest.TestCase):
                 channel = "C100"
                 listing = await slack_bot.file_skills.list_local_files("/ai-files")
                 if "empty" in listing.lower() or "not found" in listing.lower():
-                    ephemeral_calls.append({
-                        "channel": channel,
-                        "user": user_id,
-                        "text": (
-                            "📂 No files yet! Drop a Word doc into your OpenClaw folder "
-                            "and it'll appear here."
-                        ),
-                    })
+                    ephemeral_calls.append(
+                        {
+                            "channel": channel,
+                            "user": user_id,
+                            "text": (
+                                "📂 No files yet! Drop a Word doc into your OpenClaw folder and it'll appear here."
+                            ),
+                        }
+                    )
 
         asyncio.run(test_slack_bot_logic())
         self.assertTrue(len(ephemeral_calls) > 0)
@@ -364,9 +384,7 @@ class TestSlackBot(unittest.TestCase):
         from unittest.mock import AsyncMock, patch
 
         listing_str = (
-            "Contents of /ai-files (2 items):\n"
-            " report.docx  docx  45,678 bytes\n"
-            " budget.xlsx  xlsx  12,345 bytes"
+            "Contents of /ai-files (2 items):\n report.docx  docx  45,678 bytes\n budget.xlsx  xlsx  12,345 bytes"
         )
 
         collected = []
@@ -400,7 +418,6 @@ class TestSlackBot(unittest.TestCase):
     def test_route_model_default(self):
         self.assertEqual(_route_model_for_file("notes.txt", "file_summarize"), "auto")
 
-
     # -- _is_research_request -------------------------------------------------
 
     def test_is_research_request_true(self):
@@ -429,9 +446,8 @@ class TestSlackBot(unittest.TestCase):
         async def run():
             with patch("slack_bot._ask", side_effect=mock_ask):
                 from slack_bot import _run_research_pipeline
-                await _run_research_pipeline(
-                    FakeClient(), "C123", "U456", "research climate change"
-                )
+
+                await _run_research_pipeline(FakeClient(), "C123", "U456", "research climate change")
 
         asyncio.run(run())
         # Perplexity must be the first model called
@@ -476,7 +492,11 @@ class TestSlackBot(unittest.TestCase):
         async def run():
             with unittest.mock.patch("slack_bot.asyncio.sleep", AsyncMock()):
                 await _process_batch(
-                    FakeClient(), "C123", "12345.000", files, "summarize",
+                    FakeClient(),
+                    "C123",
+                    "12345.000",
+                    files,
+                    "summarize",
                     dispatch_fn=mock_dispatch,
                 )
 
@@ -493,8 +513,8 @@ class TestSlackBot(unittest.TestCase):
 # TestMetrics
 # ---------------------------------------------------------------------------
 
-class TestMetrics(unittest.TestCase):
 
+class TestMetrics(unittest.TestCase):
     def _write_metrics_file(self, path: Path, records: list[dict]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8") as fh:
@@ -547,10 +567,12 @@ if __name__ == "__main__":
 # TestStatusAndAlerts — wave 4 observability
 # ---------------------------------------------------------------------------
 
+
 class TestStatusAndAlerts(unittest.TestCase):
     def test_status_fields_exist(self):
         """Module-level tracking vars must exist and have correct types."""
         import slack_bot
+
         self.assertIsInstance(slack_bot._BOT_START_TIME, float)
         self.assertIsInstance(slack_bot._model_last_success, dict)
         self.assertIsInstance(slack_bot._daily_query_count, int)
@@ -627,21 +649,25 @@ class TestWave4Upload(unittest.TestCase):
 
     def setUp(self):
         import slack_bot
+
         self._orig_upload_key = slack_bot.OPENCLAW_UPLOAD_KEY
 
     def tearDown(self):
         import slack_bot
+
         slack_bot.OPENCLAW_UPLOAD_KEY = self._orig_upload_key
 
     def test_allowed_upload_extensions(self):
         """_ALLOWED_UPLOAD_EXTENSIONS must include the expected document types."""
         import slack_bot
+
         for ext in (".docx", ".xlsx", ".pdf", ".txt", ".csv"):
             self.assertIn(ext, slack_bot._ALLOWED_UPLOAD_EXTENSIONS)
 
     def test_load_known_files_empty_when_missing(self):
         """_load_known_files returns empty set if file does not exist."""
         import slack_bot
+
         with tempfile.TemporaryDirectory() as tmpdir:
             orig = slack_bot._KNOWN_FILES_PATH
             slack_bot._KNOWN_FILES_PATH = Path(tmpdir) / "nonexistent.json"
@@ -654,6 +680,7 @@ class TestWave4Upload(unittest.TestCase):
     def test_save_and_load_known_files_roundtrip(self):
         """Saved known files can be loaded back correctly."""
         import slack_bot
+
         with tempfile.TemporaryDirectory() as tmpdir:
             orig = slack_bot._KNOWN_FILES_PATH
             slack_bot._KNOWN_FILES_PATH = Path(tmpdir) / "known_files.json"
@@ -732,6 +759,7 @@ class TestWave4Upload(unittest.TestCase):
     def test_upload_extension_set_excludes_executables(self):
         """Upload endpoint must not allow .exe, .sh, .py, or .zip."""
         import slack_bot
+
         for bad_ext in (".exe", ".sh", ".py", ".zip", ".bat"):
             self.assertNotIn(bad_ext, slack_bot._ALLOWED_UPLOAD_EXTENSIONS)
 
@@ -763,6 +791,7 @@ class TestExcelChart(unittest.TestCase):
             return real_import(name, *args, **kwargs)
 
         import unittest.mock as mock
+
         with mock.patch("builtins.__import__", side_effect=mock_import):
             result = asyncio.run(slack_bot._generate_chart({}, "", "user1"))
         self.assertIsNone(result)
@@ -777,11 +806,7 @@ class TestExcelChart(unittest.TestCase):
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "FXLSX1",
         )
-        action_ids = [
-            el.get("action_id")
-            for block in blocks
-            for el in block.get("elements", [])
-        ]
+        action_ids = [el.get("action_id") for block in blocks for el in block.get("elements", [])]
         self.assertIn("file_chart", action_ids)
 
     def test_build_file_blocks_no_chart_for_docx(self):
@@ -794,11 +819,7 @@ class TestExcelChart(unittest.TestCase):
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "FDOCX1",
         )
-        action_ids = [
-            el.get("action_id")
-            for block in blocks
-            for el in block.get("elements", [])
-        ]
+        action_ids = [el.get("action_id") for block in blocks for el in block.get("elements", [])]
         self.assertNotIn("file_chart", action_ids)
 
 
@@ -806,8 +827,8 @@ class TestExcelChart(unittest.TestCase):
 # TestTranslationAndProgress
 # ---------------------------------------------------------------------------
 
-class TestTranslationAndProgress(unittest.TestCase):
 
+class TestTranslationAndProgress(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
         self._tmp.close()
@@ -850,6 +871,7 @@ class TestTranslationAndProgress(unittest.TestCase):
     def test_progress_steps_not_empty(self):
         """_PROGRESS_STEPS must have at least 3 items."""
         from slack_bot import _PROGRESS_STEPS
+
         self.assertIsInstance(_PROGRESS_STEPS, list)
         self.assertGreaterEqual(len(_PROGRESS_STEPS), 3)
         for step in _PROGRESS_STEPS:
@@ -959,7 +981,12 @@ class TestDocumentComparison(unittest.TestCase):
 
         class FakeClient:
             async def files_info(self, **kwargs):
-                return {"file": {"name": "doc_b.docx", "mimetype": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}}
+                return {
+                    "file": {
+                        "name": "doc_b.docx",
+                        "mimetype": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    }
+                }
 
             async def chat_update(self, **kwargs):
                 posted.append(kwargs)
@@ -995,7 +1022,6 @@ class TestDocumentComparison(unittest.TestCase):
 
 
 class TestSmartSuggestionsAndOnboarding(unittest.TestCase):
-
     def setUp(self):
         # Clean history before each test
         _file_history.clear()
@@ -1053,12 +1079,14 @@ class TestWave5Digest:
     def test_load_digest_prefs_missing_file(self, tmp_path, monkeypatch):
         """_load_digest_prefs returns empty dict when file missing."""
         import slack_bot
+
         monkeypatch.setattr(slack_bot, "_DIGEST_PREFS_PATH", tmp_path / "digest_prefs.json")
         assert slack_bot._load_digest_prefs() == {}
 
     def test_save_and_load_digest_prefs_roundtrip(self, tmp_path, monkeypatch):
         """Prefs saved then loaded return identical data."""
         import slack_bot
+
         monkeypatch.setattr(slack_bot, "_DIGEST_PREFS_PATH", tmp_path / "digest_prefs.json")
         prefs = {"U123": {"enabled": True, "last_sent": 0}}
         slack_bot._save_digest_prefs(prefs)
@@ -1069,6 +1097,7 @@ class TestWave5Digest:
         import time
 
         import slack_bot
+
         ts = time.time() - 300  # 5 minutes ago
         result = slack_bot._human_time(ts)
         assert "m ago" in result
@@ -1078,6 +1107,7 @@ class TestWave5Digest:
         import time
 
         import slack_bot
+
         ts = time.time() - 7200  # 2 hours ago
         result = slack_bot._human_time(ts)
         assert "h ago" in result
@@ -1089,12 +1119,14 @@ class TestWave5Template:
         from pathlib import Path
 
         import slack_bot
+
         assert isinstance(slack_bot._TEMPLATES_DIR, Path)
         assert "templates" in str(slack_bot._TEMPLATES_DIR)
 
     def test_starter_templates_exist(self):
         """The three starter templates exist in data/templates/."""
         import slack_bot
+
         expected = ["budget.xlsx", "letter.docx", "meeting-notes.docx"]
         for name in expected:
             assert (slack_bot._TEMPLATES_DIR / name).exists(), f"Missing template: {name}"
@@ -1104,6 +1136,7 @@ class TestWave5Template:
         """handle_slash_template with 'list' arg posts ephemeral with available templates."""
 
         import slack_bot
+
         templates = list(slack_bot._TEMPLATES_DIR.glob("*"))
         assert len(templates) >= 3, "Expected at least 3 starter templates"
 
@@ -1113,12 +1146,11 @@ class TestWave5Template:
         from openpyxl import load_workbook
 
         import slack_bot
+
         wb = load_workbook(slack_bot._TEMPLATES_DIR / "budget.xlsx")
         assert wb.active is not None
         doc = Document(str(slack_bot._TEMPLATES_DIR / "letter.docx"))
         assert len(doc.paragraphs) > 0
-
-
 
 
 class TestPDFTextExtraction:
@@ -1127,6 +1159,7 @@ class TestPDFTextExtraction:
     def test_build_file_blocks_pdf_has_summarize_button(self):
         """PDF files should show PDF-appropriate buttons, not proofread/find-errors."""
         from slack_bot import _build_file_blocks
+
         blocks = _build_file_blocks("report.pdf", "Annual report", "application/pdf", "F999")
         actions = next((b for b in blocks if b.get("type") == "actions"), None)
         assert actions is not None
@@ -1137,6 +1170,7 @@ class TestPDFTextExtraction:
     def test_build_file_blocks_pdf_has_translate_button(self):
         """PDF Block Kit should include translate button."""
         from slack_bot import _build_file_blocks
+
         blocks = _build_file_blocks("doc.pdf", None, "application/pdf", "F001")
         actions = next((b for b in blocks if b.get("type") == "actions"), None)
         assert actions is not None
@@ -1146,6 +1180,7 @@ class TestPDFTextExtraction:
     def test_build_file_blocks_pdf_has_compare_button(self):
         """PDF Block Kit should include compare button."""
         from slack_bot import _build_file_blocks
+
         blocks = _build_file_blocks("contract.pdf", None, "application/pdf", "F002")
         actions = next((b for b in blocks if b.get("type") == "actions"), None)
         assert actions is not None
@@ -1160,6 +1195,7 @@ class TestPDFTextExtraction:
 
         try:
             from pypdf import PdfWriter
+
             writer = PdfWriter()
             writer.add_blank_page(width=200, height=200)
             buf = io.BytesIO()
@@ -1188,6 +1224,7 @@ class TestPDFTextExtraction:
 
         with patch("slack_bot._slack_dl_sessions", mock_pool):
             from slack_bot import _process_slack_files
+
             result = await _process_slack_files([file_obj], "xoxb-fake", "Summarize this")
 
         assert "PDF" in result or "test.pdf" in result
@@ -1200,6 +1237,7 @@ class TestPDFTextExtraction:
 
         try:
             from pypdf import PdfWriter
+
             writer = PdfWriter()
             writer.add_blank_page(width=200, height=200)
             buf = io.BytesIO()
@@ -1230,6 +1268,7 @@ class TestPDFTextExtraction:
             with patch("slack_bot._ask", new_callable=AsyncMock) as mock_ask:
                 mock_ask.return_value = "Annual financial report for fiscal year 2025"
                 from slack_bot import _auto_brief_file
+
                 result = await _auto_brief_file(file_obj, "xoxb-fake")
 
         assert result is None or isinstance(result, str)
@@ -1300,9 +1339,30 @@ class TestBriefAndStats:
 
         log_path = tmp_path / "metrics.jsonl"
         records = [
-            {"timestamp": "2026-04-18T09:00:00", "user_id": "abc123", "action": "mention", "model_used": "gemini", "duration_ms": 1200, "status": "ok"},
-            {"timestamp": "2026-04-18T09:05:00", "user_id": "abc123", "action": "file_summarize", "model_used": "gemini", "duration_ms": 2000, "status": "ok"},
-            {"timestamp": "2026-04-18T09:10:00", "user_id": "xyz999", "action": "mention", "model_used": "openai", "duration_ms": 800, "status": "error"},
+            {
+                "timestamp": "2026-04-18T09:00:00",
+                "user_id": "abc123",
+                "action": "mention",
+                "model_used": "gemini",
+                "duration_ms": 1200,
+                "status": "ok",
+            },
+            {
+                "timestamp": "2026-04-18T09:05:00",
+                "user_id": "abc123",
+                "action": "file_summarize",
+                "model_used": "gemini",
+                "duration_ms": 2000,
+                "status": "ok",
+            },
+            {
+                "timestamp": "2026-04-18T09:10:00",
+                "user_id": "xyz999",
+                "action": "mention",
+                "model_used": "openai",
+                "duration_ms": 800,
+                "status": "error",
+            },
         ]
         log_path.write_text("\n".join(json.dumps(r) for r in records))
 
@@ -1316,6 +1376,7 @@ class TestWave5Formula:
         import inspect
 
         import slack_bot
+
         src = inspect.getsource(slack_bot)
         assert "file_formula" in src
 
@@ -1324,6 +1385,7 @@ class TestWave5Formula:
         import inspect
 
         import slack_bot
+
         src = inspect.getsource(slack_bot)
         assert "file_formula" in src
         assert "Formulas" in src or "📐" in src
@@ -1333,6 +1395,7 @@ class TestWave5Formula:
         import inspect
 
         import slack_bot
+
         src = inspect.getsource(slack_bot)
         assert "formula" in src.lower()
         assert "plain English" in src or "plain english" in src.lower()
@@ -1344,12 +1407,14 @@ class TestRichHelpAndBookmark:
     def test_help_text_still_defined(self):
         """_HELP_TEXT constant should still be defined for fallback."""
         import src.slack_bot as sb
+
         assert hasattr(sb, "_HELP_TEXT")
         assert len(sb._HELP_TEXT) > 50
 
     def test_build_file_blocks_returns_list(self):
         """_build_file_blocks returns a non-empty list of blocks."""
         from src.slack_bot import _build_file_blocks
+
         blocks = _build_file_blocks(
             "test.docx",
             "A test doc",
@@ -1386,6 +1451,7 @@ class TestRichHelpAndBookmark:
     def test_bot_message_registry_accessible(self):
         """_bot_message_registry should be accessible from the module."""
         import src.slack_bot as sb
+
         assert isinstance(sb._bot_message_registry, dict)
 
 
@@ -1415,6 +1481,7 @@ class TestDMThreadMemoryAndSaved:
     def test_saved_notes_path_resolvable(self):
         """_DATA_DIR / slack_saved_notes.json path is correctly formed."""
         import src.slack_bot as sb
+
         notes_path = sb._DATA_DIR / "slack_saved_notes.json"
         assert "slack_saved_notes" in str(notes_path)
         assert str(notes_path).endswith(".json")
@@ -1422,6 +1489,7 @@ class TestDMThreadMemoryAndSaved:
     def test_saved_filters_by_user(self, tmp_path):
         """Only notes belonging to the requesting user should be shown."""
         import json
+
         notes = [
             {"user_id": "U_ALICE", "text": "Alice note", "saved_at": "2026-04-18T10:00:00"},
             {"user_id": "U_BOB", "text": "Bob note", "saved_at": "2026-04-18T11:00:00"},
@@ -1441,6 +1509,7 @@ class TestSearchAndSchedule:
     def test_search_finds_by_filename(self):
         """_file_history search by filename keyword works."""
         import src.slack_bot as sb
+
         user_id = "U_SEARCHER"
         sb._file_history[user_id] = [
             {"name": "budget-2025.xlsx", "uploaded_at": "2026-04-10T10:00:00", "auto_brief": "Monthly budget"},
@@ -1455,6 +1524,7 @@ class TestSearchAndSchedule:
     def test_search_no_match_returns_empty(self):
         """Keyword not in any file returns empty list."""
         import src.slack_bot as sb
+
         user_id = "U_NOSEARCH"
         sb._file_history[user_id] = [
             {"name": "report.docx", "uploaded_at": "2026-04-10T10:00:00", "auto_brief": "Annual report"},
@@ -1467,11 +1537,13 @@ class TestSearchAndSchedule:
     def test_parse_schedule_time_am(self):
         """_parse_schedule_time correctly parses '9am' → 9."""
         from src.slack_bot import _parse_schedule_time
+
         assert _parse_schedule_time("9am") == 9
 
     def test_parse_schedule_time_off(self):
         """_parse_schedule_time returns None for 'off'."""
         from src.slack_bot import _parse_schedule_time
+
         assert _parse_schedule_time("off") is None
 
 
@@ -1526,6 +1598,7 @@ class TestErrorRecoveryAndAudio:
     def test_build_file_blocks_audio(self):
         """_build_file_blocks for audio type returns audio-specific block."""
         from slack_bot import _build_file_blocks
+
         blocks = _build_file_blocks("memo.mp3", None, "audio/mpeg", "F_AUDIO")
         actions = next((b for b in blocks if b.get("type") == "actions"), None)
         assert actions is not None
@@ -1540,21 +1613,25 @@ class TestClarificationPrompts:
     def test_vague_single_word_help(self):
         """Single word 'help' is detected as vague."""
         from src.slack_bot import _is_vague_question
+
         assert _is_vague_question("help", has_files=False) is True
 
     def test_not_vague_with_context(self):
         """A specific question with 6+ words is not vague."""
         from src.slack_bot import _is_vague_question
+
         assert _is_vague_question("can you summarize my budget spreadsheet please", has_files=False) is False
 
     def test_not_vague_when_files_present(self):
         """Even a short message is not vague when files are attached."""
         from src.slack_bot import _is_vague_question
+
         assert _is_vague_question("this", has_files=True) is False
 
     def test_vague_empty_string(self):
         """Empty message is vague."""
         from src.slack_bot import _is_vague_question
+
         assert _is_vague_question("", has_files=False) is True
 
 
@@ -1564,6 +1641,7 @@ class TestUserPersonalization:
     def test_persona_fallback_returns_there(self):
         """With no stored persona and no API, _get_user_name should fall back to 'there'."""
         import src.slack_bot as sb
+
         user_id = "U_UNKNOWN_TEST"
         sb._personas.pop(user_id, None)
         stored = (sb._personas.get(user_id) or {}).get("name")
@@ -1572,6 +1650,7 @@ class TestUserPersonalization:
     def test_persona_stored_name_returned(self):
         """Stored name in _personas is returned without API call."""
         import src.slack_bot as sb
+
         user_id = "U_CHUCK_TEST"
         sb._personas[user_id] = {"name": "Chuck"}
         stored = (sb._personas.get(user_id) or {}).get("name")
@@ -1581,6 +1660,7 @@ class TestUserPersonalization:
     def test_nickname_stores_name(self, tmp_path, monkeypatch):
         """_personas dict is updated when /nickname is invoked."""
         import src.slack_bot as sb
+
         user_id = "U_NICK_TEST"
         sb._personas.pop(user_id, None)
         monkeypatch.setattr(sb, "_PERSONAS_PATH", tmp_path / "personas.json")
@@ -1589,18 +1669,21 @@ class TestUserPersonalization:
         assert sb._personas[user_id]["name"] == "Lisa"
         del sb._personas[user_id]
 
+
 class TestAppHome:
     """Wave 9: App Home wiki tab view builder tests."""
 
     def test_build_home_view_type_is_home(self):
         """_build_home_view returns a dict with type 'home'."""
         from src.slack_bot import _build_home_view
+
         view = _build_home_view("U_TEST", "Chuck")
         assert view["type"] == "home"
 
     def test_build_home_view_personalized_greeting(self):
         """Personalized name appears in the header block."""
         from src.slack_bot import _build_home_view
+
         view = _build_home_view("U_TEST", "Lisa")
         header_block = next((b for b in view["blocks"] if b.get("type") == "header"), None)
         assert header_block is not None
@@ -1609,10 +1692,9 @@ class TestAppHome:
     def test_build_home_view_has_commands(self):
         """At least the /chat and /help commands appear in the view blocks."""
         from src.slack_bot import _build_home_view
+
         view = _build_home_view("U_TEST", "Chuck")
-        all_text = " ".join(
-            b.get("text", {}).get("text", "") for b in view["blocks"] if "text" in b
-        )
+        all_text = " ".join(b.get("text", {}).get("text", "") for b in view["blocks"] if "text" in b)
         assert "/chat" in all_text
         assert "/help" in all_text
 
@@ -1620,12 +1702,11 @@ class TestAppHome:
         """When user has no file history, no 'recent files' block is shown."""
         import src.slack_bot as sb
         from src.slack_bot import _build_home_view
+
         user_id = "U_NOHIST_TEST"
         sb._file_history.pop(user_id, None)
         view = _build_home_view(user_id, "Chuck")
-        all_text = " ".join(
-            b.get("text", {}).get("text", "") for b in view["blocks"] if "text" in b
-        )
+        all_text = " ".join(b.get("text", {}).get("text", "") for b in view["blocks"] if "text" in b)
         assert "recent files" not in all_text.lower()
 
 
@@ -1654,12 +1735,12 @@ class TestEmailCommand:
             # Re-import to pick up env changes
             import importlib
             import sys
+
             sys.path.insert(0, "src")
             import email_skills
+
             importlib.reload(email_skills)
-            result = asyncio.run(
-                email_skills.read_inbox()
-            )
+            result = asyncio.run(email_skills.read_inbox())
             assert "GMAIL_USER" in result or "configured" in result.lower() or "❌" in result
         except ImportError:
             pytest.skip("email_skills not available")
@@ -1679,12 +1760,12 @@ class TestEmailCommand:
         old_pass = os.environ.pop("GMAIL_APP_PASSWORD", None)
         try:
             import importlib
+
             sys.path.insert(0, "src")
             import email_skills
+
             importlib.reload(email_skills)
-            result = asyncio.run(
-                email_skills.search_emails("doctor")
-            )
+            result = asyncio.run(email_skills.search_emails("doctor"))
             assert "GMAIL_USER" in result or "configured" in result.lower() or "❌" in result
         except ImportError:
             pytest.skip("email_skills not available")
@@ -1697,7 +1778,9 @@ class TestEmailCommand:
     def test_slack_bot_has_email_handler(self):
         """Verify slack_bot module exposes handle_slash_email after create_slack_app."""
         import asyncio
+
         import slack_bot
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
@@ -1723,12 +1806,12 @@ class TestCalendarCommand:
         saved = {k: os.environ.pop(k, None) for k in keys}
         try:
             import importlib
+
             sys.path.insert(0, "src")
             import calendar_skills
+
             importlib.reload(calendar_skills)
-            result = asyncio.run(
-                calendar_skills.get_todays_events()
-            )
+            result = asyncio.run(calendar_skills.get_todays_events())
             assert "GOOGLE_OAUTH" in result or "configured" in result.lower() or "❌" in result
         except ImportError:
             pytest.skip("calendar_skills not available")
@@ -1747,12 +1830,12 @@ class TestCalendarCommand:
         saved = {k: os.environ.pop(k, None) for k in keys}
         try:
             import importlib
+
             sys.path.insert(0, "src")
             import calendar_skills
+
             importlib.reload(calendar_skills)
-            result = asyncio.run(
-                calendar_skills.get_upcoming_events(days=7)
-            )
+            result = asyncio.run(calendar_skills.get_upcoming_events(days=7))
             assert "GOOGLE_OAUTH" in result or "configured" in result.lower() or "❌" in result
         except ImportError:
             pytest.skip("calendar_skills not available")
@@ -1764,6 +1847,7 @@ class TestCalendarCommand:
     def test_slack_bot_has_calendar_handler(self):
         """Smoke test: creating the Slack app doesn't raise even with calendar command."""
         import slack_bot
+
         # No exception = pass
         app = slack_bot.create_slack_app()
         assert app is None or app is not None
@@ -1782,6 +1866,7 @@ class TestDropboxSync:
         try:
             sys.path.insert(0, "src")
             import dropbox_sync
+
             importlib.reload(dropbox_sync)
             assert dropbox_sync.DROPBOX_CONFIGURED is False
         except ImportError:
@@ -1801,10 +1886,9 @@ class TestDropboxSync:
         try:
             sys.path.insert(0, "src")
             import dropbox_sync
+
             importlib.reload(dropbox_sync)
-            result = asyncio.run(
-                dropbox_sync.list_recent_files()
-            )
+            result = asyncio.run(dropbox_sync.list_recent_files())
             assert result == []
         except ImportError:
             pytest.skip("dropbox_sync not available")
@@ -1823,6 +1907,7 @@ class TestDropboxSync:
         try:
             sys.path.insert(0, "src")
             import dropbox_sync
+
             importlib.reload(dropbox_sync)
             assert dropbox_sync.DROPBOX_CONFIGURED is True
         except ImportError:
@@ -1841,9 +1926,11 @@ class TestDropboxSync:
         try:
             sys.path.insert(0, "src")
             import dropbox_sync
+
             importlib.reload(dropbox_sync)
-            assert dropbox_sync.DROPBOX_WATCH_PATH == "/OpenClaw" or \
-                   dropbox_sync.DROPBOX_WATCH_PATH  # custom path also acceptable
+            assert (
+                dropbox_sync.DROPBOX_WATCH_PATH == "/OpenClaw" or dropbox_sync.DROPBOX_WATCH_PATH
+            )  # custom path also acceptable
         except ImportError:
             pytest.skip("dropbox_sync not available")
 
@@ -1854,6 +1941,7 @@ class TestDropboxSyncCore:
     def test_dropbox_list_no_token_returns_empty(self, monkeypatch):
         """_dropbox_list_folder returns [] when token is absent."""
         import src.slack_bot as sb
+
         monkeypatch.setattr(sb, "_DROPBOX_TOKEN", None)
         result = sb._dropbox_list_folder("/Family AI")
         assert result == []
@@ -1861,6 +1949,7 @@ class TestDropboxSyncCore:
     def test_dropbox_get_client_no_token_returns_none(self, monkeypatch):
         """_get_dropbox_client returns None when token is absent."""
         import src.slack_bot as sb
+
         monkeypatch.setattr(sb, "_DROPBOX_TOKEN", None)
         assert sb._get_dropbox_client() is None
 
@@ -1868,6 +1957,7 @@ class TestDropboxSyncCore:
     async def test_dropbox_sync_no_token_returns_zero(self, monkeypatch):
         """_dropbox_sync_new_files returns 0 when token is absent."""
         import src.slack_bot as sb
+
         monkeypatch.setattr(sb, "_DROPBOX_TOKEN", None)
         result = await sb._dropbox_sync_new_files(None)
         assert result == 0
@@ -1875,6 +1965,7 @@ class TestDropboxSyncCore:
     def test_dropbox_list_returns_list_type(self, monkeypatch):
         """_dropbox_list_folder always returns a list (even on error)."""
         import src.slack_bot as sb
+
         monkeypatch.setattr(sb, "_DROPBOX_TOKEN", None)
         result = sb._dropbox_list_folder("/nonexistent")
         assert isinstance(result, list)
@@ -1887,6 +1978,7 @@ class TestGoogleCalendar:
     async def test_get_calendar_no_token_returns_empty(self, monkeypatch):
         """_get_calendar_events returns [] when no Google token configured."""
         import src.slack_bot as sb
+
         monkeypatch.setattr(sb, "_GOOGLE_REFRESH_TOKEN", None)
         result = await sb._get_calendar_events()
         assert result == []
@@ -1894,12 +1986,14 @@ class TestGoogleCalendar:
     def test_format_calendar_events_empty(self):
         """_format_calendar_events returns 'Nothing on the calendar' for empty list."""
         import src.slack_bot as sb
+
         result = sb._format_calendar_events([], label="today")
         assert "Nothing on the calendar" in result
 
     def test_format_calendar_events_one_event(self):
         """_format_calendar_events formats a single event correctly."""
         import src.slack_bot as sb
+
         events = [{"summary": "Dentist", "start": "2026-04-20T09:00:00", "end": "2026-04-20T10:00:00", "location": ""}]
         result = sb._format_calendar_events(events, label="today")
         assert "Dentist" in result
@@ -1909,6 +2003,7 @@ class TestGoogleCalendar:
     async def test_get_google_access_token_no_creds_returns_none(self, monkeypatch):
         """_get_google_access_token returns None when credentials are absent."""
         import src.slack_bot as sb
+
         monkeypatch.setattr(sb, "_GOOGLE_CLIENT_ID", None)
         monkeypatch.setattr(sb, "_GOOGLE_CLIENT_SECRET", None)
         monkeypatch.setattr(sb, "_GOOGLE_REFRESH_TOKEN", None)
@@ -1923,6 +2018,7 @@ class TestGmailRead:
     async def test_get_gmail_unread_no_token_returns_empty(self, monkeypatch):
         """_get_gmail_unread returns [] when no Google token configured."""
         import src.slack_bot as sb
+
         monkeypatch.setattr(sb, "_GOOGLE_REFRESH_TOKEN", None)
         monkeypatch.setattr(sb, "_google_token_cache", {})
         monkeypatch.setattr(sb, "_GOOGLE_CLIENT_ID", None)
@@ -1933,6 +2029,7 @@ class TestGmailRead:
     async def test_get_gmail_body_no_token_returns_message(self, monkeypatch):
         """_get_gmail_body returns error string when token absent."""
         import src.slack_bot as sb
+
         monkeypatch.setattr(sb, "_GOOGLE_REFRESH_TOKEN", None)
         monkeypatch.setattr(sb, "_google_token_cache", {})
         monkeypatch.setattr(sb, "_GOOGLE_CLIENT_ID", None)
@@ -1974,6 +2071,7 @@ class TestGmailRead:
     def test_gmail_message_cache_is_list(self):
         """_gmail_message_cache is initialized as a list."""
         import src.slack_bot as sb
+
         assert isinstance(sb._gmail_message_cache, list)
 
 
@@ -2048,6 +2146,7 @@ class TestPerUserEmailCreds:
         try:
             sys.path.insert(0, "src")
             import dropbox_sync
+
             importlib.reload(dropbox_sync)
             assert dropbox_sync.DROPBOX_CONFIGURED is True
         except ImportError:

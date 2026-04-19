@@ -163,12 +163,7 @@ class TestLoadChannelConfig:
     @pytest.mark.asyncio
     async def test_yaml_config_loads_prompt_override(self, monkeypatch, tmp_path):
         """When config.yaml exists, prompt_override values are loaded into _CHANNEL_PROMPTS."""
-        config_content = (
-            "channels:\n"
-            "  roles:\n"
-            "    research:\n"
-            "      prompt_override: 'custom research prompt'\n"
-        )
+        config_content = "channels:\n  roles:\n    research:\n      prompt_override: 'custom research prompt'\n"
         config_file = tmp_path / "config.yaml"
         config_file.write_text(config_content)
 
@@ -244,9 +239,7 @@ class TestRecordQualityMetric:
         mock_get = MagicMock(return_value=mock_collector)
         with patch.dict("sys.modules", {"metrics_collector": MagicMock(get_collector=mock_get)}):
             mod._record_quality_metric("test_event", context="test_ctx")
-        mock_collector.record_quality_event.assert_called_once_with(
-            event="test_event", context="test_ctx"
-        )
+        mock_collector.record_quality_event.assert_called_once_with(event="test_event", context="test_ctx")
 
     def test_bot_coverage_a_exception_is_swallowed(self):
         """If get_collector raises, _record_quality_metric does not propagate it."""
@@ -286,9 +279,7 @@ class TestRecordBudgetPolicyMetric:
         bad_module = MagicMock()
         bad_module.get_collector.side_effect = RuntimeError("no collector")
         with patch.dict("sys.modules", {"metrics_collector": bad_module}):
-            mod._record_budget_policy_metric(
-                path="p", profile="general", load_tier="low", decision="skip"
-            )
+            mod._record_budget_policy_metric(path="p", profile="general", load_tier="low", decision="skip")
 
 
 # ---------------------------------------------------------------------------
@@ -324,30 +315,22 @@ class TestScoreAnswerQualityFreshnessCues:
 class TestEvidenceCompletenessScoring:
     def test_evidence_completeness_high_adds_score(self):
         """evidence_completeness >= 0.8 triggers 'Strong claim-to-evidence' reason."""
-        result = mod._score_answer_quality(
-            "Good answer.", final_meta={"evidence_completeness": 0.85}
-        )
+        result = mod._score_answer_quality("Good answer.", final_meta={"evidence_completeness": 0.85})
         assert any("Strong claim-to-evidence" in r for r in result["reasons"])
 
     def test_evidence_completeness_moderate_branch(self):
         """evidence_completeness in [0.6, 0.8) triggers moderate reason."""
-        result = mod._score_answer_quality(
-            "Moderate.", final_meta={"evidence_completeness": 0.65}
-        )
+        result = mod._score_answer_quality("Moderate.", final_meta={"evidence_completeness": 0.65})
         assert any("Moderate claim-to-evidence" in r for r in result["reasons"])
 
     def test_evidence_completeness_low_branch(self):
         """evidence_completeness in [0.4, 0.6) triggers low reason."""
-        result = mod._score_answer_quality(
-            "Low evidence.", final_meta={"evidence_completeness": 0.45}
-        )
+        result = mod._score_answer_quality("Low evidence.", final_meta={"evidence_completeness": 0.45})
         assert any("Low claim-to-evidence" in r for r in result["reasons"])
 
     def test_evidence_completeness_very_low_branch(self):
         """evidence_completeness < 0.4 triggers very low reason."""
-        result = mod._score_answer_quality(
-            "Very low.", final_meta={"evidence_completeness": 0.2}
-        )
+        result = mod._score_answer_quality("Very low.", final_meta={"evidence_completeness": 0.2})
         assert any("Very low claim-to-evidence" in r for r in result["reasons"])
 
 
@@ -370,9 +353,7 @@ class TestUncertaintyMarkersPath:
 
     def test_three_or_more_uncertainty_markers_hits_multiple_reason(self):
         """Three or more markers hit the 'Multiple uncertainty' branch."""
-        result = mod._score_answer_quality(
-            "It might be true. It may happen. Possibly unclear. Unknown outcome."
-        )
+        result = mod._score_answer_quality("It might be true. It may happen. Possibly unclear. Unknown outcome.")
         assert result["uncertainty_marker_count"] >= 3
         assert any("Multiple uncertainty" in r for r in result["reasons"])
 
@@ -431,6 +412,7 @@ class TestSafeScoreAnswerQualityException:
 
     def test_exception_preserves_requested_item_count_from_meta(self, monkeypatch):
         """Fallback dict picks up requested_item_count from final_meta when scoring fails."""
+
         def raise_err(t, **kw):
             raise RuntimeError("scoring exploded")
 
@@ -445,6 +427,7 @@ class TestSafeScoreAnswerQualityException:
 
     def test_exception_without_meta_has_none_requested_item_count(self, monkeypatch):
         """Without final_meta, requested_item_count in fallback is None."""
+
         def raise_err(t, **kw):
             raise RuntimeError("fail")
 
@@ -525,57 +508,69 @@ class TestBuildCoverageSummaryForEmbed:
 
     def test_returns_degrade_context_with_constrained_mode_no_quality(self):
         """Constrained mode + no answer_quality → degrade_context string returned."""
-        result = mod._build_coverage_summary_for_embed({
-            "answer_quality_retry": {"degrade_mode": "constrained"},
-        })
+        result = mod._build_coverage_summary_for_embed(
+            {
+                "answer_quality_retry": {"degrade_mode": "constrained"},
+            }
+        )
         assert result is not None
         assert "Runtime constrained" in result
 
     def test_returns_degrade_context_when_invalid_status(self):
         """Invalid status → returns degrade_context (line 750)."""
-        result = mod._build_coverage_summary_for_embed({
-            "answer_quality": {"status": "bogus"},
-        })
+        result = mod._build_coverage_summary_for_embed(
+            {
+                "answer_quality": {"status": "bogus"},
+            }
+        )
         assert result is None  # no degrade_context and invalid status
 
     def test_evidence_completeness_path_without_items(self):
         """status valid + evidence_completeness float, no item/requested → evidence% path (762-766)."""
-        result = mod._build_coverage_summary_for_embed({
-            "answer_quality": {
-                "status": "medium",
-                "evidence_completeness": 0.75,
+        result = mod._build_coverage_summary_for_embed(
+            {
+                "answer_quality": {
+                    "status": "medium",
+                    "evidence_completeness": 0.75,
+                }
             }
-        })
+        )
         assert result is not None
         assert "Coverage medium" in result
         assert "75%" in result
 
     def test_evidence_path_with_degrade_context(self):
         """evidence path + constrained mode → degrade_context appended (line 766)."""
-        result = mod._build_coverage_summary_for_embed({
-            "answer_quality_retry": {"degrade_mode": "constrained"},
-            "answer_quality": {
-                "status": "low",
-                "evidence_completeness": 0.5,
-            },
-        })
+        result = mod._build_coverage_summary_for_embed(
+            {
+                "answer_quality_retry": {"degrade_mode": "constrained"},
+                "answer_quality": {
+                    "status": "low",
+                    "evidence_completeness": 0.5,
+                },
+            }
+        )
         assert result is not None
         assert "Runtime constrained" in result
         assert "Coverage low" in result
 
     def test_status_only_summary_no_evidence_no_items(self):
         """Valid status, no evidence, no item counts → plain 'Coverage {status}' (line 768)."""
-        result = mod._build_coverage_summary_for_embed({
-            "answer_quality": {"status": "high"},
-        })
+        result = mod._build_coverage_summary_for_embed(
+            {
+                "answer_quality": {"status": "high"},
+            }
+        )
         assert result == "Coverage high"
 
     def test_status_only_summary_with_degrade_context(self):
         """Plain summary with degrade_context appended (line 769)."""
-        result = mod._build_coverage_summary_for_embed({
-            "answer_quality_retry": {"degrade_mode": "constrained"},
-            "answer_quality": {"status": "medium"},
-        })
+        result = mod._build_coverage_summary_for_embed(
+            {
+                "answer_quality_retry": {"degrade_mode": "constrained"},
+                "answer_quality": {"status": "medium"},
+            }
+        )
         assert result is not None
         assert "Coverage medium" in result
         assert "Runtime constrained" in result
@@ -599,36 +594,42 @@ class TestBuildAskRecoveryBlock:
 
     def test_returns_none_when_status_high_and_no_shortfall(self):
         """High status, no shortfall, evidence OK, not constrained → None (line 799)."""
-        result = mod._build_ask_recovery_block({
-            "answer_quality": {
-                "status": "high",
-                "score": 85,
-                "item_count": 8,
-                "requested_item_count": 6,
-                "evidence_completeness": 0.9,
+        result = mod._build_ask_recovery_block(
+            {
+                "answer_quality": {
+                    "status": "high",
+                    "score": 85,
+                    "item_count": 8,
+                    "requested_item_count": 6,
+                    "evidence_completeness": 0.9,
+                }
             }
-        })
+        )
         # status != "low", shortfall=0 (8 >= 6), evidence_low=False, not constrained → None
         assert result is None
 
     def test_returns_block_when_status_low(self):
         """Low status with numeric shortfall returns a recovery block string."""
-        result = mod._build_ask_recovery_block({
-            "answer_quality": {
-                "status": "low",
-                "score": 25,
-                "item_count": 2,
-                "requested_item_count": 10,
-                "evidence_completeness": 0.3,
+        result = mod._build_ask_recovery_block(
+            {
+                "answer_quality": {
+                    "status": "low",
+                    "score": 25,
+                    "item_count": 2,
+                    "requested_item_count": 10,
+                    "evidence_completeness": 0.3,
+                }
             }
-        })
+        )
         assert result is not None
         assert "Recovery note" in result
 
     def test_returns_block_when_runtime_constrained(self):
         """runtime_constrained=True forces a recovery block even without answer_quality."""
-        result = mod._build_ask_recovery_block({
-            "answer_quality_retry": {"degrade_mode": "constrained"},
-        })
+        result = mod._build_ask_recovery_block(
+            {
+                "answer_quality_retry": {"degrade_mode": "constrained"},
+            }
+        )
         assert result is not None
         assert "constrained" in result.lower() or "Runtime" in result

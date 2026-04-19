@@ -4625,7 +4625,7 @@ def _register_integration_handlers(app: Any) -> None:
             return
 
         try:
-            from calendar_skills import list_drive_files, read_drive_file, upload_drive_file
+            from calendar_skills import list_drive_files, read_drive_file
         except ImportError:
             await client.chat_postEphemeral(
                 channel=channel_id,

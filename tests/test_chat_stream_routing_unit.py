@@ -4,11 +4,12 @@ test_chat_stream_routing_unit.py — Characterization tests for chat_stream() ro
 Tests pin the routing branch decisions as a safety net for the planned decomposition
 refactor of the 515-line function.  All network / LLM provider calls are patched away.
 """
+
 from __future__ import annotations
 
 import sys
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -51,35 +52,43 @@ async def _collect(gen) -> list[tuple]:
 
 def _make_trim_history_mock(reply_history=None):
     """_trim_history(history, model_hint, context_quality) → trimmed history."""
+
     async def _impl(history, *, model_hint="gemini", context_quality=None):
         return reply_history if reply_history is not None else history
+
     return _impl
 
 
 def _make_recall_mock(recalled=None):
     """_auto_recall_context(...) → recalled_context string or None."""
+
     async def _impl(*args, **kwargs):
         return recalled
+
     return _impl
 
 
 def _make_gemini_chat_mock(reply=_REPLY):
     """_gemini_chat(msg, history, model, ...) → (reply, updated_history, model_name)."""
+
     async def _impl(model_message, history, model, **kwargs):
         updated = list(history) + [
             {"role": "user", "parts": [model_message]},
             {"role": "model", "parts": [reply]},
         ]
         return reply, updated, "gemini-2.0-flash"
+
     return _impl
 
 
 def _make_select_model_mock():
     """_select_model_for_message(...) → (mock_model, route_info)."""
+
     async def _impl(message, *, tool_declarations=None, label="LLM"):
         model = MagicMock()
         model.model_name = "gemini-2.0-flash"
         return model, {}
+
     return _impl
 
 
@@ -110,6 +119,7 @@ def _base_patches():
 # ---------------------------------------------------------------------------
 # Class 1: Basic chunk-yielding behaviour
 # ---------------------------------------------------------------------------
+
 
 class TestChatStreamBasicYielding:
     """chat_stream() yields correct chunk structure on the Gemini fallback path."""
@@ -188,6 +198,7 @@ class TestChatStreamBasicYielding:
 # Class 2: Routing-path selection
 # ---------------------------------------------------------------------------
 
+
 class TestChatStreamRoutingPaths:
     """Each branch in chat_stream() is exercised independently."""
 
@@ -212,10 +223,13 @@ class TestChatStreamRoutingPaths:
             patch(_RATE, patches[_RATE]),
             patch(_SEL, side_effect=patches[_SEL]),
             patch(_GEMINI, side_effect=gemini_mock),
-            patch.dict(sys.modules, {
-                "model_routing_policy": mrp_mock,
-                "skills.reporting_skills": skills_mock,
-            }),
+            patch.dict(
+                sys.modules,
+                {
+                    "model_routing_policy": mrp_mock,
+                    "skills.reporting_skills": skills_mock,
+                },
+            ),
         ):
             chunks = await _collect(chat_stream("Latest stock price?", history=[], model_preference="auto"))
 
@@ -251,11 +265,14 @@ class TestChatStreamRoutingPaths:
             patch(_RATE, patches[_RATE]),
             patch(_SEL, side_effect=patches[_SEL]),
             patch(_GEMINI, side_effect=patches[_GEMINI]),
-            patch.dict(sys.modules, {
-                "model_routing_policy": mrp_mock,
-                "llm.providers": providers_mock,
-                "model_router": model_router_mock,
-            }),
+            patch.dict(
+                sys.modules,
+                {
+                    "model_routing_policy": mrp_mock,
+                    "llm.providers": providers_mock,
+                    "model_router": model_router_mock,
+                },
+            ),
         ):
             chunks = await _collect(chat_stream("What is 2+2?", history=[], model_preference="auto"))
 
@@ -371,6 +388,7 @@ class TestChatStreamRoutingPaths:
 # ---------------------------------------------------------------------------
 # Class 3: History handling
 # ---------------------------------------------------------------------------
+
 
 class TestChatStreamHistoryHandling:
     """History is trimmed and forwarded; None is treated as empty."""

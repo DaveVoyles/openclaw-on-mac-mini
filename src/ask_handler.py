@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import functools
 import io
 import logging
-import functools
 import re
 import time
 from typing import Any

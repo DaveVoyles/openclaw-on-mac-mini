@@ -490,8 +490,6 @@ async def upload_drive_file(name: str, content: str, folder_id: str = "") -> str
         metadata["parents"] = [folder_id]
 
     boundary = "openclaw_drive_boundary"
-    meta_bytes = _json.dumps(metadata).encode()
-    content_bytes = content.encode("utf-8")
 
     body = (
         f"--{boundary}\r\n"

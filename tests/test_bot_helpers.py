@@ -73,27 +73,47 @@ class TestApplyFeedbackGuardrails:
 
     def test_first_vote_is_accepted(self):
         accepted, reason = mod._apply_feedback_guardrails(
-            user_id=1, channel_id=10, message_id=100, rating="up", now=1000.0,
+            user_id=1,
+            channel_id=10,
+            message_id=100,
+            rating="up",
+            now=1000.0,
         )
         assert accepted is True
         assert reason == "accepted"
 
     def test_duplicate_vote_within_window_is_rejected(self):
         mod._apply_feedback_guardrails(
-            user_id=1, channel_id=10, message_id=100, rating="up", now=1000.0,
+            user_id=1,
+            channel_id=10,
+            message_id=100,
+            rating="up",
+            now=1000.0,
         )
         accepted, reason = mod._apply_feedback_guardrails(
-            user_id=1, channel_id=10, message_id=100, rating="up", now=1001.0,
+            user_id=1,
+            channel_id=10,
+            message_id=100,
+            rating="up",
+            now=1001.0,
         )
         assert accepted is False
         assert reason == "dedupe"
 
     def test_different_rating_is_not_deduped(self):
         mod._apply_feedback_guardrails(
-            user_id=1, channel_id=10, message_id=100, rating="up", now=1000.0,
+            user_id=1,
+            channel_id=10,
+            message_id=100,
+            rating="up",
+            now=1000.0,
         )
         accepted, reason = mod._apply_feedback_guardrails(
-            user_id=1, channel_id=10, message_id=100, rating="down", now=1001.0,
+            user_id=1,
+            channel_id=10,
+            message_id=100,
+            rating="down",
+            now=1001.0,
         )
         assert accepted is True
         assert reason == "accepted"
@@ -104,13 +124,19 @@ class TestApplyFeedbackGuardrails:
         base_now = 1000.0
         for i in range(max_events):
             accepted, _ = mod._apply_feedback_guardrails(
-                user_id=42, channel_id=10, message_id=i, rating="up",
+                user_id=42,
+                channel_id=10,
+                message_id=i,
+                rating="up",
                 now=base_now + i * 0.1,  # 100ms apart — all within 60s window
             )
             assert accepted is True
         # The next vote is still within the window — should be rate-limited
         accepted, reason = mod._apply_feedback_guardrails(
-            user_id=42, channel_id=10, message_id=999, rating="up",
+            user_id=42,
+            channel_id=10,
+            message_id=999,
+            rating="up",
             now=base_now + 1.0,  # still within 60s window
         )
         assert accepted is False
@@ -118,18 +144,30 @@ class TestApplyFeedbackGuardrails:
 
     def test_none_ids_are_handled_safely(self):
         accepted, reason = mod._apply_feedback_guardrails(
-            user_id=None, channel_id=None, message_id=None, rating="up", now=1000.0,
+            user_id=None,
+            channel_id=None,
+            message_id=None,
+            rating="up",
+            now=1000.0,
         )
         assert isinstance(accepted, bool)
         assert isinstance(reason, str)
 
     def test_bot_helpers_reset_clears_state(self):
         mod._apply_feedback_guardrails(
-            user_id=1, channel_id=10, message_id=100, rating="up", now=1000.0,
+            user_id=1,
+            channel_id=10,
+            message_id=100,
+            rating="up",
+            now=1000.0,
         )
         mod._reset_feedback_guardrails_for_tests()
         accepted, reason = mod._apply_feedback_guardrails(
-            user_id=1, channel_id=10, message_id=100, rating="up", now=1001.0,
+            user_id=1,
+            channel_id=10,
+            message_id=100,
+            rating="up",
+            now=1001.0,
         )
         assert accepted is True  # after reset, no dedupe should trigger
 
@@ -190,19 +228,28 @@ class TestBuildAskFailureMessage:
 
     def test_rate_limit_message(self):
         msg = mod._build_ask_failure_message(
-            question="q", model_pref="gemini", trace_id="t1", category="rate_limit",
+            question="q",
+            model_pref="gemini",
+            trace_id="t1",
+            category="rate_limit",
         )
         assert "Rate limit" in msg
 
     def test_tool_message(self):
         msg = mod._build_ask_failure_message(
-            question="q", model_pref="gemini", trace_id="t1", category="tool",
+            question="q",
+            model_pref="gemini",
+            trace_id="t1",
+            category="tool",
         )
         assert "Tool" in msg
 
     def test_unknown_category_defaults_to_general(self):
         msg = mod._build_ask_failure_message(
-            question="q", model_pref="auto", trace_id="t1", category="unknown_xyz",
+            question="q",
+            model_pref="auto",
+            trace_id="t1",
+            category="unknown_xyz",
         )
         assert "Request failure" in msg
 
@@ -262,7 +309,8 @@ class TestScoreAnswerQualityEdgeCases:
     def test_requested_item_count_exact_match_bonus(self):
         lines = "\n".join(f"- item {i}" for i in range(8))
         result = mod._score_answer_quality(
-            lines, final_meta={"requested_item_count": 8},
+            lines,
+            final_meta={"requested_item_count": 8},
         )
         assert result["requested_item_count"] == 8
         assert any("Requested item target met" in r for r in result["reasons"])
@@ -270,24 +318,19 @@ class TestScoreAnswerQualityEdgeCases:
 
     def test_score_is_clamped_to_0_100(self):
         # worst possible: multiple uncertainty markers, no items, no sources
-        text = " ".join([
-            "not sure unclear unknown might may could possibly likely partial coverage"
-            " insufficient incomplete tbd"
-        ])
+        text = " ".join(
+            ["not sure unclear unknown might may could possibly likely partial coverage insufficient incomplete tbd"]
+        )
         result = mod._score_answer_quality(text, final_meta={"evidence_completeness": 0.0})
         assert 0 <= result["score"] <= 100
 
     def test_extract_reported_evidence_completeness_from_meta(self):
-        val, missing = mod._extract_reported_evidence_completeness(
-            "", final_meta={"evidence_completeness": 0.82}
-        )
+        val, missing = mod._extract_reported_evidence_completeness("", final_meta={"evidence_completeness": 0.82})
         assert val == pytest.approx(0.82)
         assert missing is False
 
     def test_extract_reported_evidence_completeness_clamped(self):
-        val, _ = mod._extract_reported_evidence_completeness(
-            "", final_meta={"evidence_completeness": 1.5}
-        )
+        val, _ = mod._extract_reported_evidence_completeness("", final_meta={"evidence_completeness": 1.5})
         assert val == pytest.approx(1.0)
 
     def test_extract_reported_evidence_completeness_no_data(self):
@@ -296,12 +339,7 @@ class TestScoreAnswerQualityEdgeCases:
         assert missing is False
 
     def test_count_markdown_table_items_with_header_and_separator(self):
-        text = (
-            "| Name | Score |\n"
-            "| ---- | ----- |\n"
-            "| Alice | 10 |\n"
-            "| Bob | 20 |\n"
-        )
+        text = "| Name | Score |\n| ---- | ----- |\n| Alice | 10 |\n| Bob | 20 |\n"
         assert mod._count_markdown_table_items(text) == 2
 
     def test_count_markdown_table_items_empty(self):
@@ -326,34 +364,49 @@ class TestScoreAnswerQualityEdgeCases:
 
 class TestQualityRetryImproved:
     def test_true_when_status_upgraded_to_high(self):
-        assert mod._quality_retry_improved(
-            original={"score": 30, "status": "low"},
-            retried={"score": 80, "status": "high"},
-        ) is True
+        assert (
+            mod._quality_retry_improved(
+                original={"score": 30, "status": "low"},
+                retried={"score": 80, "status": "high"},
+            )
+            is True
+        )
 
     def test_true_when_score_improved_by_10_or_more(self):
-        assert mod._quality_retry_improved(
-            original={"score": 40, "status": "medium"},
-            retried={"score": 52, "status": "medium"},
-        ) is True
+        assert (
+            mod._quality_retry_improved(
+                original={"score": 40, "status": "medium"},
+                retried={"score": 52, "status": "medium"},
+            )
+            is True
+        )
 
     def test_false_when_improvement_less_than_10(self):
-        assert mod._quality_retry_improved(
-            original={"score": 40, "status": "medium"},
-            retried={"score": 45, "status": "medium"},
-        ) is False
+        assert (
+            mod._quality_retry_improved(
+                original={"score": 40, "status": "medium"},
+                retried={"score": 45, "status": "medium"},
+            )
+            is False
+        )
 
     def test_false_when_score_same(self):
-        assert mod._quality_retry_improved(
-            original={"score": 60, "status": "medium"},
-            retried={"score": 60, "status": "medium"},
-        ) is False
+        assert (
+            mod._quality_retry_improved(
+                original={"score": 60, "status": "medium"},
+                retried={"score": 60, "status": "medium"},
+            )
+            is False
+        )
 
     def test_already_high_not_improved(self):
-        assert mod._quality_retry_improved(
-            original={"score": 80, "status": "high"},
-            retried={"score": 80, "status": "high"},
-        ) is False
+        assert (
+            mod._quality_retry_improved(
+                original={"score": 80, "status": "high"},
+                retried={"score": 80, "status": "high"},
+            )
+            is False
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -471,6 +524,7 @@ class TestDefaultAskThreadHelpers:
 class TestIsReusableBotThread:
     def _make_thread(self, *, owner_id, parent_id, archived=False, locked=False):
         import discord as _discord
+
         t = MagicMock(spec=_discord.Thread)
         t.owner_id = owner_id
         t.parent_id = parent_id
@@ -544,7 +598,9 @@ class TestGetOrCreateDefaultAskThread:
         monkeypatch.setattr(mod.cfg, "thread_auto_create", False)
         chan = MagicMock()
         result, created = await mod._get_or_create_default_ask_thread(
-            chan, user_id=1, user_question="hello",
+            chan,
+            user_id=1,
+            user_question="hello",
         )
         assert result is None
         assert created is False
@@ -553,9 +609,12 @@ class TestGetOrCreateDefaultAskThread:
     async def test_returns_none_for_dm_channel(self, monkeypatch):
         monkeypatch.setattr(mod.cfg, "thread_auto_create", True)
         import discord as _discord
+
         dm = MagicMock(spec=_discord.DMChannel)
         result, created = await mod._get_or_create_default_ask_thread(
-            dm, user_id=1, user_question="hello",
+            dm,
+            user_id=1,
+            user_question="hello",
         )
         assert result is None
         assert created is False
@@ -567,7 +626,9 @@ class TestGetOrCreateDefaultAskThread:
         chan.create_thread = AsyncMock()
         mod.bot._connection.user = None
         result, created = await mod._get_or_create_default_ask_thread(
-            chan, user_id=1, user_question="hello",
+            chan,
+            user_id=1,
+            user_question="hello",
         )
         assert result is None
         assert created is False
@@ -588,7 +649,9 @@ class TestGetOrCreateDefaultAskThread:
         chan.create_thread = AsyncMock(return_value=new_thread)
 
         result, created = await mod._get_or_create_default_ask_thread(
-            chan, user_id=5, user_question="what is weather?",
+            chan,
+            user_id=5,
+            user_question="what is weather?",
         )
         assert result is new_thread
         assert created is True
@@ -616,7 +679,9 @@ class TestGetOrCreateDefaultAskThread:
         chan.guild = SimpleNamespace(id=1)
 
         result, created = await mod._get_or_create_default_ask_thread(
-            chan, user_id=5, user_question="hello",
+            chan,
+            user_id=5,
+            user_question="hello",
         )
         assert result is existing
         assert created is False
@@ -635,7 +700,9 @@ class TestGetOrCreateDefaultAskThread:
         chan.create_thread = AsyncMock(side_effect=Exception("discord error"))
 
         result, created = await mod._get_or_create_default_ask_thread(
-            chan, user_id=5, user_question="hello",
+            chan,
+            user_id=5,
+            user_question="hello",
         )
         assert result is None
         assert created is False
@@ -651,9 +718,7 @@ class TestGenerateFollowUps:
     async def test_returns_two_followup_questions(self):
         mock_response = "What else can I help?\nAny updates available?"
         with patch.dict("sys.modules", {"llm.chat": MagicMock(chat=AsyncMock(return_value=(mock_response, [], {})))}):
-            result = await mod._generate_follow_ups(
-                "What is Python?", "Python is a programming language."
-            )
+            result = await mod._generate_follow_ups("What is Python?", "Python is a programming language.")
         assert isinstance(result, list)
 
     @pytest.mark.asyncio
@@ -826,7 +891,10 @@ class TestResponseActionsContextLockButtons:
         await view.lock_channel_btn.callback.callback(view, interaction, MagicMock())
 
         mock_lock.assert_called_once_with(
-            user_id=42, mode="channel", channel_id=100, thread_id=None,
+            user_id=42,
+            mode="channel",
+            channel_id=100,
+            thread_id=None,
         )
         interaction.response.send_message.assert_awaited_once()
         call_text = str(interaction.response.send_message.call_args)
@@ -966,12 +1034,14 @@ class TestResponseActionsRegenButton:
 # ask_cmd guard paths
 # ---------------------------------------------------------------------------
 
+
 class TestAskCmdGuards:
     """Tests for the early-return guard clauses at the top of ask_cmd."""
 
     @pytest.mark.asyncio
     async def test_emergency_stop_blocks_ask(self, monkeypatch):
         import bot as mod
+
         monkeypatch.setattr(ask_handler_mod, "is_emergency_stopped", MagicMock(return_value=True))
         interaction = _make_interaction(user_id=1, channel_id=1)
         interaction.response.send_message = AsyncMock()
@@ -982,6 +1052,7 @@ class TestAskCmdGuards:
     @pytest.mark.asyncio
     async def test_llm_not_configured_blocks_ask(self, monkeypatch):
         import bot as mod
+
         monkeypatch.setattr(ask_handler_mod, "is_emergency_stopped", MagicMock(return_value=False))
         monkeypatch.setattr(ask_handler_mod, "llm_is_configured", MagicMock(return_value=False))
         interaction = _make_interaction(user_id=1, channel_id=1)
@@ -994,6 +1065,7 @@ class TestAskCmdGuards:
 # ---------------------------------------------------------------------------
 # on_message guard paths
 # ---------------------------------------------------------------------------
+
 
 class TestOnMessageGuards:
     """Tests for the early-return guard clauses at the top of on_message."""
@@ -1016,6 +1088,7 @@ class TestOnMessageGuards:
     @pytest.mark.asyncio
     async def test_bot_message_ignored(self, monkeypatch):
         import bot as mod
+
         msg = self._make_message(is_bot=True)
         # Should return immediately without touching anything
         await mod.on_message(msg)
@@ -1024,6 +1097,7 @@ class TestOnMessageGuards:
     @pytest.mark.asyncio
     async def test_slash_command_delegated(self, monkeypatch):
         import bot as mod
+
         msg = self._make_message(content="/help")
         mod.bot.process_commands = AsyncMock()
         monkeypatch.setattr(discord_events_mod, "get_bot", MagicMock(return_value=mod.bot))
@@ -1033,6 +1107,7 @@ class TestOnMessageGuards:
     @pytest.mark.asyncio
     async def test_disallowed_user_ignored(self, monkeypatch):
         import bot as mod
+
         msg = self._make_message(user_id=999)
         monkeypatch.setattr(mod, "_is_user_allowed", MagicMock(return_value=False))
         monkeypatch.setattr(mod, "_bot_can_read_channel", MagicMock(return_value=True))
@@ -1042,6 +1117,7 @@ class TestOnMessageGuards:
     @pytest.mark.asyncio
     async def test_emergency_stop_sends_notice(self, monkeypatch):
         import bot as mod
+
         msg = self._make_message(user_id=42)
         monkeypatch.setattr(discord_events_mod, "get_bot", MagicMock(return_value=mod.bot))
         monkeypatch.setattr(discord_events_mod, "_is_user_allowed", MagicMock(return_value=True))
@@ -1054,6 +1130,7 @@ class TestOnMessageGuards:
     @pytest.mark.asyncio
     async def test_llm_not_configured_sends_notice(self, monkeypatch):
         import bot as mod
+
         msg = self._make_message(user_id=42)
         monkeypatch.setattr(discord_events_mod, "get_bot", MagicMock(return_value=mod.bot))
         monkeypatch.setattr(discord_events_mod, "_is_user_allowed", MagicMock(return_value=True))
@@ -1068,6 +1145,7 @@ class TestOnMessageGuards:
 # ---------------------------------------------------------------------------
 # Remaining ResponseActions button callbacks
 # ---------------------------------------------------------------------------
+
 
 class TestResponseActionsThumbsButtons:
     @pytest.mark.asyncio
@@ -1167,6 +1245,7 @@ class TestResponseActionsLockButtons:
 # ask_cmd integration (happy path via full callback)
 # ---------------------------------------------------------------------------
 
+
 class TestAskCmdIntegration:
     """Integration tests for ask_cmd that exercise the main response-building path."""
 
@@ -1216,12 +1295,18 @@ class TestAskCmdIntegration:
         )
         monkeypatch.setattr(ask_handler_mod, "run_ask_stream", AsyncMock(return_value=stream_result))
         monkeypatch.setattr(ask_handler_mod, "_safe_score_answer_quality", MagicMock(return_value={}))
-        monkeypatch.setattr(ask_handler_mod, "_run_quality_auto_repair", AsyncMock(return_value={
-            "response_text": "Here is the answer.",
-            "model_used": "auto",
-            "final_meta": {},
-            "retry_result": None,
-        }))
+        monkeypatch.setattr(
+            ask_handler_mod,
+            "_run_quality_auto_repair",
+            AsyncMock(
+                return_value={
+                    "response_text": "Here is the answer.",
+                    "model_used": "auto",
+                    "final_meta": {},
+                    "retry_result": None,
+                }
+            ),
+        )
         monkeypatch.setattr(ask_handler_mod, "_generate_follow_ups", AsyncMock(return_value=[]))
 
         interaction = self._make_interaction()

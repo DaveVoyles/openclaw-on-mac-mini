@@ -5,6 +5,7 @@ Tests pin current behavior as a safety net for the planned decomposition refacto
 Uses AsyncMock for Discord interactions; patches LLM + external calls to avoid
 network access or API keys.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -13,10 +14,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_stream_result(
     response_text: str = "Hello, world!",
@@ -62,9 +63,13 @@ def _make_interaction(
     interaction.channel.id = channel_id
     interaction.channel_id = channel_id
     # create_thread must be awaitable so auto-thread logic doesn't crash
-    interaction.channel.create_thread = AsyncMock(return_value=MagicMock(
-        name="test-thread", mention="#test-thread", send=AsyncMock(),
-    ))
+    interaction.channel.create_thread = AsyncMock(
+        return_value=MagicMock(
+            name="test-thread",
+            mention="#test-thread",
+            send=AsyncMock(),
+        )
+    )
 
     return interaction
 
@@ -85,11 +90,13 @@ def _standard_patches(stream_result=None, conv_store=None, extra: dict | None = 
         conv_store = store
 
     loop_mock = MagicMock()
+
     # Consume the coroutine passed to create_task to suppress "never awaited" warning
     def _consume_coro(coro):
         if hasattr(coro, "close"):
             coro.close()
         return MagicMock()
+
     loop_mock.create_task = MagicMock(side_effect=_consume_coro)
 
     patches = {
@@ -107,9 +114,7 @@ def _standard_patches(stream_result=None, conv_store=None, extra: dict | None = 
         # Patch the runtime_state inline imports to avoid bot.py loading /logs
         "runtime_state.get_channel_roles": MagicMock(return_value={}),
         "runtime_state.get_channel_prompts": MagicMock(return_value={}),
-        "runtime_state.request_context": MagicMock(
-            return_value=contextlib.nullcontext()
-        ),
+        "runtime_state.request_context": MagicMock(return_value=contextlib.nullcontext()),
         # Stop asyncio.get_running_loop from spawning real tasks in post-response hook
         "asyncio.get_running_loop": MagicMock(return_value=loop_mock),
         # Formatting helpers that touch /memory at channel-profile lookup
@@ -128,12 +133,14 @@ def _standard_patches(stream_result=None, conv_store=None, extra: dict | None = 
 
 async def _run(interaction, question: str = "Test question", **kwargs):
     from ask_handler import handle_ask
+
     await handle_ask(interaction, question, **kwargs)
 
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def interaction():
@@ -160,6 +167,7 @@ def conv_store():
 # ---------------------------------------------------------------------------
 # Class 1: Basic behavior
 # ---------------------------------------------------------------------------
+
 
 class TestHandleAskBasic:
     """handle_ask() with a normal successful LLM response."""
@@ -216,6 +224,7 @@ class TestHandleAskBasic:
 # ---------------------------------------------------------------------------
 # Class 2: Attachment handling
 # ---------------------------------------------------------------------------
+
 
 class TestHandleAskAttachment:
     """Attachment routing — images vs. documents vs. oversized."""
@@ -291,6 +300,7 @@ class TestHandleAskAttachment:
 # Class 3: Error paths
 # ---------------------------------------------------------------------------
 
+
 class TestHandleAskErrorPaths:
     """handle_ask() resilience: LLM errors, timeouts."""
 
@@ -303,10 +313,9 @@ class TestHandleAskErrorPaths:
         ):
             await _run(interaction)  # must not raise
 
-        assert (
-            interaction.edit_original_response.await_count > 0
-            or interaction.followup.send.await_count > 0
-        ), "Expected at least one response after LLM error"
+        assert interaction.edit_original_response.await_count > 0 or interaction.followup.send.await_count > 0, (
+            "Expected at least one response after LLM error"
+        )
 
     @pytest.mark.asyncio
     async def test_llm_exception_sends_non_empty_response(self, interaction, conv_store):
@@ -338,10 +347,7 @@ class TestHandleAskErrorPaths:
         ):
             await _run(interaction)  # must not raise
 
-        assert (
-            interaction.edit_original_response.await_count > 0
-            or interaction.followup.send.await_count > 0
-        )
+        assert interaction.edit_original_response.await_count > 0 or interaction.followup.send.await_count > 0
 
     @pytest.mark.asyncio
     async def test_audit_log_always_called(self, interaction, stream_result, conv_store):

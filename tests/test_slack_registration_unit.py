@@ -19,9 +19,7 @@ Counts at time of authoring (src/slack_bot.py):
 import ast
 import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 SLACK_BOT_SRC = Path(__file__).parent.parent / "src" / "slack_bot.py"
 
@@ -35,6 +33,7 @@ EXPECTED_TOTAL_COUNT = EXPECTED_EVENT_COUNT + EXPECTED_COMMAND_COUNT + EXPECTED_
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
+
 
 def _count_app_decorators(source: str) -> dict[str, int]:
     """Parse *source* with the AST and count @app.<kind>(...) decorators."""
@@ -64,11 +63,11 @@ def _count_app_decorators(source: str) -> dict[str, int]:
 
 
 class TestSlackHandlerRegistration:
-
     def test_create_slack_app_returns_none_when_unconfigured(self):
         """Without Slack env vars, create_slack_app() returns None."""
         env_without_slack = {
-            k: v for k, v in os.environ.items()
+            k: v
+            for k, v in os.environ.items()
             if k not in ("SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_SIGNING_SECRET", "SLACK_ENABLED")
         }
         env_without_slack["SLACK_ENABLED"] = "false"
@@ -76,13 +75,13 @@ class TestSlackHandlerRegistration:
         with patch.dict(os.environ, env_without_slack, clear=True):
             # Import here to pick up the patched environment
             import importlib
+
             import src.slack_bot as slack_bot_mod
+
             importlib.reload(slack_bot_mod)
             result = slack_bot_mod.create_slack_app()
 
-        assert result is None, (
-            "create_slack_app() must return None when Slack is not configured."
-        )
+        assert result is None, "create_slack_app() must return None when Slack is not configured."
 
     def test_slack_registration_ast_event_count(self):
         """@app.event registrations in slack_bot.py must equal the expected baseline.
