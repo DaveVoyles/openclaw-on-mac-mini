@@ -48,6 +48,7 @@ import hashlib
 import json
 import logging
 import os
+import random
 import re
 import secrets
 import time
@@ -544,6 +545,33 @@ _DIGEST_PREFS_PATH = Path(__file__).parent.parent / "data" / "digest_prefs.json"
 _DIGEST_CHECK_INTERVAL: int = int(os.getenv("DIGEST_CHECK_INTERVAL", "3600"))  # check every hour
 _DIGEST_LOOKBACK_HOURS: int = int(os.getenv("DIGEST_LOOKBACK_HOURS", "24"))  # show files modified in last N hours
 
+_CASUAL_TIPS = [
+    "\n\n💡 _Tip: You can just talk to me naturally — no commands needed!_",
+    "\n\n💡 _Tip: Drop a photo or file into Slack anytime and ask me about it._",
+    "\n\n💡 _Tip: Not happy with my answer? Just say \"try again\" or \"make it shorter\"._",
+    "\n\n💡 _Tip: You can ask me anything — cooking, writing, explaining something — just like texting a friend._",
+    "\n\n💡 _Tip: Type `/help` to see example questions you can ask me._",
+]
+
+_MONTHLY_TIP_MESSAGE = (
+    "👋 *Monthly tip from OpenClaw!*\n\n"
+    "Here are 3 things you might not have tried yet:\n\n"
+    "1️⃣ *Drop in a photo of any document* — a letter, receipt, or handwritten note — and ask me to read it.\n"
+    "2️⃣ *Ask me to write something for you* — a thank-you note, a message to a teacher, anything at all.\n"
+    "3️⃣ *Reply in a thread* to keep our conversation going — I'll remember what we were talking about.\n\n"
+    "_You'll get one of these friendly reminders once a month. Just ignore it if you already knew all this! 😊_"
+)
+
+_MONTHLY_TIP_INTERVAL: int = 30 * 24 * 3600  # 30 days in seconds
+
+
+def _maybe_append_tip() -> str:
+    """Return a casual tip string 1-in-12 calls, otherwise empty string."""
+    if random.randint(1, 12) == 1:
+        return random.choice(_CASUAL_TIPS)
+    return ""
+
+
 # --- Wave 5: templates ---
 _DATA_DIR = Path(__file__).parent.parent / "data"
 _TEMPLATES_DIR = _DATA_DIR / "templates"
@@ -821,6 +849,17 @@ async def _digest_loop(client: Any) -> None:
             for user_id, pref in prefs.items():
                 if not pref.get("enabled"):
                     continue
+
+                # Monthly tips nudge
+                last_monthly_tip = pref.get("last_monthly_tip", 0)
+                if now - last_monthly_tip >= _MONTHLY_TIP_INTERVAL:
+                    try:
+                        await client.chat_postMessage(channel=user_id, text=_MONTHLY_TIP_MESSAGE)
+                        prefs[user_id]["last_monthly_tip"] = now
+                        log.info("Sent monthly tip to %s", user_id)
+                    except Exception as exc:
+                        log.warning("_digest_loop: failed to send monthly tip to %s: %s", user_id, exc)
+
                 last_sent = pref.get("last_sent", 0)
                 if now - last_sent < (_DIGEST_LOOKBACK_HOURS * 3600 * 0.9):
                     continue
@@ -1870,10 +1909,12 @@ async def _send_answer(
         try:
             answer = await _ask(prompt, user_id, model_pref=model_pref, history=history, simple=simple)
             text = _clean_for_slack(answer) if answer else "(no response)"
+            text += _maybe_append_tip()
             _log_query_metrics(user_id, action="message", model_used=model_pref or "auto",
                                duration_ms=int((time.monotonic() - t0) * 1000), status="ok")
         except Exception as exc:
-            text = f"❌ Sorry, something went wrong: {exc}"
+            log.warning("_send_answer: _ask failed: %s", exc)
+            text = "Hmm, something didn't work right — sorry about that! Try sending your message again. If it keeps happening, you can let Dave know."
             _log_query_metrics(user_id, action="message", model_used=model_pref or "auto",
                                duration_ms=int((time.monotonic() - t0) * 1000), status="error")
             # Post a Block Kit "Try again" button so the user has a recovery path
