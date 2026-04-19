@@ -183,7 +183,7 @@ Top 20 ranked by downloads as of Feb–Apr 2026.
 |------|-------|-----------|--------------|---------------|----------------|
 | #7 | **Agent Browser** | 11,836 | Browser automation: navigate sites, fill forms, extract data, automate web workflows | ❌ No browser automation | **HIGH VALUE** — Playwright in Docker would complement Perplexity/Tavily search with actual browser interaction. Useful for form submission, logged-in pages, JS-heavy sites. |
 | #6 | **Gog (Google Workspace)** | 14,313 | Full Google suite: Calendar + Gmail + Drive + Contacts + Sheets + Docs | ✅ Calendar, ✅ Gmail (IMAP only) | **MEDIUM VALUE** — We have Calendar (OAuth2) and Gmail (App Password/IMAP). Missing: Google Drive, Contacts, Sheets. Worth extending `calendar_skills.py` for Drive/Contacts using the same OAuth2 token. |
-| #10 | **Sonoscli** | 10,304 | Sonos audio system control via Slack | ❌ No audio control | **MEDIUM VALUE (conditional)** — Only relevant if Sonos speakers exist on the network. Implementation: `soco` Python library. Zero server-side infrastructure needed. |
+| #10 | **Sonoscli** | 10,304 | Sonos audio system control via Slack | ❌ No audio control | **Skipped** — not needed. |
 
 ---
 
@@ -250,20 +250,6 @@ Top 20 ranked by downloads as of Feb–Apr 2026.
 
 ---
 
-### Wave 7 — Sonos Audio Control (Sonoscli-inspired)
-**Size:** S | **Risk:** Low | **Blocked by:** Confirm Sonos speakers on network**
-**Note:** Solo lane — this is a single self-contained skill with no parallel split needed.
-
-- Install `soco` Python library
-- Implement `src/sonos_skills.py`: play, pause, volume, group, what's-playing
-- Wire into Slack: `/chat "play jazz on kitchen speaker"`
-
-**Done when:**
-- Sonos commands work via Slack on local network
-- No change to any existing skills
-
----
-
 ## Full Implementation Order (all waves)
 
 | Wave | Plugins/Skills | Size | Risk |
@@ -274,6 +260,5 @@ Top 20 ranked by downloads as of Feb–Apr 2026.
 | 4 | Episodic Memory (plugin) | L | Medium |
 | 5 | Browser Automation / Playwright (skill-inspired) | M+M | Medium |
 | 6 | Google Drive + Contacts (skill-inspired) | S+M | Low-Med |
-| 7 | Sonos Control (skill-inspired) | S | Low |
 
-**Total: 7 waves, 13 lanes, ~4-6 hours of agent time at full fleet pace**
+**Total: 6 waves, 11 lanes, ~3-5 hours of agent time at full fleet pace**
