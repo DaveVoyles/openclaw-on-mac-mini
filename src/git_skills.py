@@ -1,3 +1,10 @@
+"""
+git_skills.py — Git and web-fetch skill helpers for the OpenClaw bot.
+
+Provides async functions for common Git operations (status, log, diff, commit)
+and a webfetch-md integration that converts URLs to Markdown. Exported via
+the GIT_SKILLS registry for use by the bot's tool-calling layer.
+"""
 import asyncio
 import json
 import logging
