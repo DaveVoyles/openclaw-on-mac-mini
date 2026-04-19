@@ -2433,339 +2433,421 @@ async def api_skill_stats_handler(request):
     return web.json_response(get_skill_stats())
 
 
+def _parse_quality_query(request: web.Request) -> dict:
+    """Parse query parameters for the quality metrics endpoint.
+
+    The endpoint currently has no client-tunable knobs; this returns
+    the fixed defaults and exists to keep the pipeline shape consistent.
+    """
+    return {
+        "snapshot_limit": 25,
+        "runtime_hours": 24,
+        "runtime_run_limit": 120,
+    }
+
+
+def _load_quality_metrics(params: dict) -> dict:
+    """Load raw inputs (snapshot, recent runs, calibration payload)."""
+    from error_tracker import get_recent_outcomes
+    from metrics_collector import get_quality_event_snapshot
+
+    snapshot = get_quality_event_snapshot(limit=params["snapshot_limit"])
+    recent_runs = get_recent_outcomes(
+        hours=params["runtime_hours"], limit=params["runtime_run_limit"]
+    )
+    if not isinstance(recent_runs, list):
+        recent_runs = []
+    try:
+        calibration_payload = _build_offline_quality_calibration_payload()
+    except Exception as exc:  # broad: intentional
+        log.debug("Quality metrics drift status unavailable: %s", exc)
+        calibration_payload = None
+    return {
+        "snapshot": snapshot,
+        "recent_runs": recent_runs,
+        "calibration_payload": calibration_payload,
+    }
+
+
+def _compute_quality_feedback(event_counts: dict, snapshot: dict) -> dict:
+    feedback_snapshot = snapshot.get("feedback")
+    if not isinstance(feedback_snapshot, dict):
+        feedback_snapshot = {}
+    helpful = int(feedback_snapshot.get("helpful", event_counts.get("ask_feedback_helpful", 0)) or 0)
+    not_helpful = int(
+        feedback_snapshot.get("not_helpful", event_counts.get("ask_feedback_not_helpful", 0)) or 0
+    )
+    total = helpful + not_helpful
+    helpful_rate = round(helpful / total, 3) if total > 0 else None
+    accepted = int(
+        feedback_snapshot.get("accepted", event_counts.get("ask_feedback_accepted", total)) or 0
+    )
+    suppressed = int(
+        feedback_snapshot.get("suppressed", event_counts.get("ask_feedback_suppressed", 0)) or 0
+    )
+    suppressed_dedupe = int(
+        feedback_snapshot.get(
+            "suppressed_dedupe", event_counts.get("ask_feedback_suppressed_dedupe", 0)
+        )
+        or 0
+    )
+    suppressed_rate_limited = int(
+        feedback_snapshot.get(
+            "suppressed_rate_limited",
+            int(event_counts.get("ask_feedback_suppressed_rate_limited_user", 0) or 0)
+            + int(event_counts.get("ask_feedback_suppressed_rate_limited_channel", 0) or 0),
+        )
+        or 0
+    )
+    return {
+        "helpful": helpful,
+        "not_helpful": not_helpful,
+        "total": total,
+        "helpful_rate": helpful_rate,
+        "accepted": accepted,
+        "suppressed": suppressed,
+        "suppressed_dedupe": suppressed_dedupe,
+        "suppressed_rate_limited": suppressed_rate_limited,
+    }
+
+
+def _compute_quality_calibration_drift(calibration_payload) -> dict:
+    drift_default = {
+        "available": False,
+        "baseline_available": False,
+        "status": "unavailable",
+        "severity_level": "unknown",
+        "severe": False,
+        "score": 0,
+        "regressed_metrics": [],
+    }
+    if not isinstance(calibration_payload, dict):
+        return drift_default
+    drift = calibration_payload.get("drift")
+    if not isinstance(drift, dict):
+        drift = {}
+    severity = drift.get("severity")
+    if not isinstance(severity, dict):
+        severity = {}
+    regressed_metrics = drift.get("regressed_metrics")
+    if not isinstance(regressed_metrics, list):
+        regressed_metrics = []
+    return {
+        "available": bool(calibration_payload.get("available")),
+        "baseline_available": bool(drift.get("baseline_available")),
+        "status": str(drift.get("status") or "unavailable"),
+        "severity_level": str(severity.get("level") or "unknown"),
+        "severe": bool(severity.get("severe")),
+        "score": int(severity.get("score") or 0),
+        "regressed_metrics": [str(item) for item in regressed_metrics if str(item).strip()],
+    }
+
+
+def _compute_quality_runtime_stats(recent_runs: list, event_counts: dict) -> dict:
+    score_distribution = {"high": 0, "medium": 0, "low": 0}
+    retry_outcomes = {
+        "attempted": 0,
+        "improved": 0,
+        "no_improvement": 0,
+        "failed": 0,
+        "skipped": 0,
+    }
+    low_confidence_reason_counts: dict[str, int] = {}
+    low_confidence_prompt_count = 0
+    runs_with_quality = 0
+    runs_with_retry = 0
+
+    for run in recent_runs:
+        if not isinstance(run, dict):
+            continue
+        explainability = run.get("explainability")
+        if not isinstance(explainability, dict):
+            explainability = {}
+        final_meta = explainability.get("final_meta")
+        if not isinstance(final_meta, dict):
+            final_meta = {}
+
+        quality_meta = run.get("answer_quality")
+        if not isinstance(quality_meta, dict):
+            quality_meta = explainability.get("answer_quality")
+        if not isinstance(quality_meta, dict):
+            quality_meta = final_meta.get("answer_quality")
+        if not isinstance(quality_meta, dict):
+            quality_meta = {}
+
+        retry_meta = run.get("answer_quality_retry")
+        if not isinstance(retry_meta, dict):
+            retry_meta = explainability.get("answer_quality_retry")
+        if not isinstance(retry_meta, dict):
+            retry_meta = final_meta.get("answer_quality_retry")
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        quality_status = str(quality_meta.get("status", "")).strip().lower()
+        if quality_status not in {"high", "medium", "low"}:
+            score_value = quality_meta.get("score")
+            try:
+                parsed_score = int(score_value)
+            except (TypeError, ValueError):
+                parsed_score = None
+            if parsed_score is not None:
+                quality_status = "high" if parsed_score >= 75 else "medium" if parsed_score >= 45 else "low"
+
+        if quality_status in score_distribution:
+            score_distribution[quality_status] += 1
+            runs_with_quality += 1
+
+        low_confidence_from_run = quality_status == "low"
+        if low_confidence_from_run:
+            reasons = quality_meta.get("reasons")
+            if isinstance(reasons, list):
+                for reason in reasons:
+                    if not isinstance(reason, str):
+                        continue
+                    normalized = reason.strip()
+                    if not normalized:
+                        continue
+                    low_confidence_reason_counts[normalized] = (
+                        low_confidence_reason_counts.get(normalized, 0) + 1
+                    )
+            low_confidence_prompt_count += 1
+
+        routing_notes = run.get("routing_notes")
+        if not low_confidence_from_run and isinstance(routing_notes, list):
+            if any(
+                isinstance(note, str) and "low confidence" in note.lower()
+                for note in routing_notes
+            ):
+                low_confidence_prompt_count += 1
+
+        if retry_meta:
+            runs_with_retry += 1
+            if bool(retry_meta.get("attempted")):
+                retry_outcomes["attempted"] += 1
+            outcome = str(retry_meta.get("outcome", "")).strip().lower()
+            if outcome in {"improved", "no_improvement", "failed", "skipped"}:
+                retry_outcomes[outcome] += 1
+
+    retry_outcomes["improved"] = max(
+        retry_outcomes["improved"],
+        int(event_counts.get("ask_quality_retry_improved", 0) or 0),
+    )
+    retry_outcomes["no_improvement"] = max(
+        retry_outcomes["no_improvement"],
+        int(event_counts.get("ask_quality_retry_no_improvement", 0) or 0),
+    )
+    retry_outcomes["failed"] = max(
+        retry_outcomes["failed"],
+        int(event_counts.get("ask_quality_retry_failed", 0) or 0),
+    )
+    retry_outcomes["skipped"] = max(
+        retry_outcomes["skipped"],
+        int(event_counts.get("ask_quality_retry_skipped", 0) or 0),
+    )
+    retry_outcomes["attempted"] = max(
+        retry_outcomes["attempted"],
+        int(event_counts.get("ask_quality_retry_attempted", 0) or 0),
+        retry_outcomes["improved"] + retry_outcomes["no_improvement"] + retry_outcomes["failed"],
+    )
+    low_confidence_prompt_count = max(
+        low_confidence_prompt_count,
+        int(event_counts.get("ask_low_score_detected", 0) or 0),
+    )
+    top_low_confidence_reasons = sorted(
+        low_confidence_reason_counts.items(),
+        key=lambda item: item[1],
+        reverse=True,
+    )[:5]
+
+    return {
+        "score_distribution": score_distribution,
+        "retry_outcomes": retry_outcomes,
+        "low_confidence_prompt_count": low_confidence_prompt_count,
+        "top_low_confidence_reasons": top_low_confidence_reasons,
+        "runs_with_quality": runs_with_quality,
+        "runs_with_retry": runs_with_retry,
+    }
+
+
+def _compute_quality_aggregates(raw: dict, params: dict) -> dict:
+    """Compute derived aggregates from raw inputs."""
+    snapshot = raw["snapshot"]
+    recent_runs = raw["recent_runs"]
+    calibration_payload = raw["calibration_payload"]
+
+    event_counts = _normalize_event_counts(snapshot.get("event_counts", {}))
+    feedback = _compute_quality_feedback(event_counts, snapshot)
+
+    signals = {
+        "search_fallback_activation": _safe_non_negative_int(event_counts.get("search_fallback_activation", 0)),
+        "search_low_results_incident": _safe_non_negative_int(event_counts.get("search_low_results_incident", 0)),
+        "recap_fallback_activation": _safe_non_negative_int(event_counts.get("recap_fallback_activation", 0)),
+        "recap_partial_coverage_warning": _safe_non_negative_int(event_counts.get("recap_partial_coverage_warning", 0)),
+    }
+    domain_trends, top_recurring_failures, recent_signal_slices = _build_quality_domain_summary(
+        event_counts,
+        limit=max(_QUALITY_DOMAIN_LIMIT, _QUALITY_FAILURE_LIMIT, _QUALITY_SIGNAL_LIMIT),
+    )
+    quality_failure_categories = snapshot.get("quality_failure_categories")
+    if not isinstance(quality_failure_categories, dict):
+        quality_failure_categories = _build_quality_failure_category_summary(
+            event_counts,
+            limit=_QUALITY_FAILURE_LIMIT,
+        )
+    top_quality_failure_categories = snapshot.get("top_quality_failure_categories")
+    if not isinstance(top_quality_failure_categories, list):
+        top_quality_failure_categories = list(quality_failure_categories.get("top", []))
+    top_recurring_failures = top_recurring_failures[:_QUALITY_FAILURE_LIMIT]
+    top_quality_failure_categories = top_quality_failure_categories[:_QUALITY_FAILURE_LIMIT]
+    recent_signal_slices = {
+        "mitigation": list(recent_signal_slices.get("mitigation", []))[:_QUALITY_SIGNAL_LIMIT],
+        "degrade": list(recent_signal_slices.get("degrade", []))[:_QUALITY_SIGNAL_LIMIT],
+    }
+
+    total = int(snapshot.get("total_events", 0) or 0)
+    warning_pressure = signals["search_low_results_incident"] + signals["recap_partial_coverage_warning"]
+    if total <= 0:
+        status = "no_data"
+    elif warning_pressure <= max(2, total // 5):
+        status = "healthy"
+    elif warning_pressure <= max(5, total // 3):
+        status = "watch"
+    else:
+        status = "degraded"
+
+    calibration_drift = _compute_quality_calibration_drift(calibration_payload)
+    if calibration_drift["severe"]:
+        status = "degraded"
+
+    runtime_stats = _compute_quality_runtime_stats(recent_runs, event_counts)
+
+    return {
+        "snapshot": snapshot,
+        "signals": signals,
+        "domain_trends": domain_trends[:_QUALITY_DOMAIN_LIMIT],
+        "top_recurring_failures": top_recurring_failures,
+        "top_quality_failure_categories": top_quality_failure_categories,
+        "quality_failure_categories": quality_failure_categories,
+        "recent_signal_slices": recent_signal_slices,
+        "status": status,
+        "calibration_drift": calibration_drift,
+        "warning_pressure": warning_pressure,
+        "feedback": feedback,
+        "runtime_stats": runtime_stats,
+        "recent_runs_count": len(recent_runs),
+        "runtime_hours": params["runtime_hours"],
+    }
+
+
+def _build_quality_response(data: dict) -> web.Response:
+    """Build the JSON response from computed aggregates."""
+    runtime = data["runtime_stats"]
+    return web.json_response(
+        {
+            **data["snapshot"],
+            "signals": data["signals"],
+            "domain_trends": data["domain_trends"],
+            "top_recurring_failures": data["top_recurring_failures"],
+            "top_quality_failure_categories": data["top_quality_failure_categories"],
+            "quality_failure_categories": data["quality_failure_categories"],
+            "recent_signal_slices": data["recent_signal_slices"],
+            "status": data["status"],
+            "calibration_drift": data["calibration_drift"],
+            "warning_pressure": data["warning_pressure"],
+            "score_distribution": runtime["score_distribution"],
+            "low_confidence": {
+                "prompt_count": int(runtime["low_confidence_prompt_count"]),
+                "top_reasons": [
+                    {"reason": reason, "count": int(count)}
+                    for reason, count in runtime["top_low_confidence_reasons"]
+                ],
+            },
+            "retry_outcomes": runtime["retry_outcomes"],
+            "runtime_window": {
+                "hours": data["runtime_hours"],
+                "runs_considered": data["recent_runs_count"],
+                "runs_with_quality": int(runtime["runs_with_quality"]),
+                "runs_with_retry": int(runtime["runs_with_retry"]),
+            },
+            "feedback": data["feedback"],
+        }
+    )
+
+
+def _build_quality_error_response() -> web.Response:
+    return web.json_response(
+        {
+            "total_events": 0,
+            "event_counts": {},
+            "context_counts": {},
+            "top_events": [],
+            "top_contexts": [],
+            "signals": {
+                "search_fallback_activation": 0,
+                "search_low_results_incident": 0,
+                "recap_fallback_activation": 0,
+                "recap_partial_coverage_warning": 0,
+            },
+            "domain_trends": [],
+            "top_recurring_failures": [],
+            "top_quality_failure_categories": [],
+            "quality_failure_categories": {
+                "counts": {},
+                "top": [],
+                "total_classified_failures": 0,
+                "total_failure_events": 0,
+            },
+            "recent_signal_slices": {"mitigation": [], "degrade": []},
+            "status": "no_data",
+            "calibration_drift": {
+                "available": False,
+                "baseline_available": False,
+                "status": "unavailable",
+                "severity_level": "unknown",
+                "severe": False,
+                "score": 0,
+                "regressed_metrics": [],
+            },
+            "warning_pressure": 0,
+            "score_distribution": {"high": 0, "medium": 0, "low": 0},
+            "low_confidence": {"prompt_count": 0, "top_reasons": []},
+            "retry_outcomes": {
+                "attempted": 0,
+                "improved": 0,
+                "no_improvement": 0,
+                "failed": 0,
+                "skipped": 0,
+            },
+            "runtime_window": {
+                "hours": 24,
+                "runs_considered": 0,
+                "runs_with_quality": 0,
+                "runs_with_retry": 0,
+            },
+            "feedback": {
+                "helpful": 0,
+                "not_helpful": 0,
+                "total": 0,
+                "helpful_rate": None,
+                "accepted": 0,
+                "suppressed": 0,
+                "suppressed_dedupe": 0,
+                "suppressed_rate_limited": 0,
+            },
+        }
+    )
+
+
 async def api_quality_metrics_handler(request: web.Request) -> web.Response:
     """Return quality telemetry counters for dashboard quality operations."""
     try:
-        from error_tracker import get_recent_outcomes
-        from metrics_collector import get_quality_event_snapshot
-
-        snapshot = get_quality_event_snapshot(limit=25)
-        event_counts = _normalize_event_counts(snapshot.get("event_counts", {}))
-        feedback_snapshot = snapshot.get("feedback")
-        if not isinstance(feedback_snapshot, dict):
-            feedback_snapshot = {}
-        feedback_helpful = int(
-            feedback_snapshot.get("helpful", event_counts.get("ask_feedback_helpful", 0)) or 0
-        )
-        feedback_not_helpful = int(
-            feedback_snapshot.get("not_helpful", event_counts.get("ask_feedback_not_helpful", 0)) or 0
-        )
-        feedback_total = feedback_helpful + feedback_not_helpful
-        feedback_helpful_rate = (
-            round(feedback_helpful / feedback_total, 3)
-            if feedback_total > 0
-            else None
-        )
-        feedback_accepted = int(
-            feedback_snapshot.get("accepted", event_counts.get("ask_feedback_accepted", feedback_total)) or 0
-        )
-        feedback_suppressed = int(
-            feedback_snapshot.get("suppressed", event_counts.get("ask_feedback_suppressed", 0)) or 0
-        )
-        feedback_suppressed_dedupe = int(
-            feedback_snapshot.get(
-                "suppressed_dedupe", event_counts.get("ask_feedback_suppressed_dedupe", 0)
-            )
-            or 0
-        )
-        feedback_suppressed_rate_limited = int(
-            feedback_snapshot.get(
-                "suppressed_rate_limited",
-                int(event_counts.get("ask_feedback_suppressed_rate_limited_user", 0) or 0)
-                + int(event_counts.get("ask_feedback_suppressed_rate_limited_channel", 0) or 0),
-            )
-            or 0
-        )
-
-        signals = {
-            "search_fallback_activation": _safe_non_negative_int(event_counts.get("search_fallback_activation", 0)),
-            "search_low_results_incident": _safe_non_negative_int(event_counts.get("search_low_results_incident", 0)),
-            "recap_fallback_activation": _safe_non_negative_int(event_counts.get("recap_fallback_activation", 0)),
-            "recap_partial_coverage_warning": _safe_non_negative_int(event_counts.get("recap_partial_coverage_warning", 0)),
-        }
-        domain_trends, top_recurring_failures, recent_signal_slices = _build_quality_domain_summary(
-            event_counts,
-            limit=max(_QUALITY_DOMAIN_LIMIT, _QUALITY_FAILURE_LIMIT, _QUALITY_SIGNAL_LIMIT),
-        )
-        quality_failure_categories = snapshot.get("quality_failure_categories")
-        if not isinstance(quality_failure_categories, dict):
-            quality_failure_categories = _build_quality_failure_category_summary(
-                event_counts,
-                limit=_QUALITY_FAILURE_LIMIT,
-            )
-        top_quality_failure_categories = snapshot.get("top_quality_failure_categories")
-        if not isinstance(top_quality_failure_categories, list):
-            top_quality_failure_categories = list(quality_failure_categories.get("top", []))
-        top_recurring_failures = top_recurring_failures[:_QUALITY_FAILURE_LIMIT]
-        top_quality_failure_categories = top_quality_failure_categories[:_QUALITY_FAILURE_LIMIT]
-        recent_signal_slices = {
-            "mitigation": list(recent_signal_slices.get("mitigation", []))[:_QUALITY_SIGNAL_LIMIT],
-            "degrade": list(recent_signal_slices.get("degrade", []))[:_QUALITY_SIGNAL_LIMIT],
-        }
-        total = int(snapshot.get("total_events", 0) or 0)
-        warning_pressure = signals["search_low_results_incident"] + signals["recap_partial_coverage_warning"]
-        if total <= 0:
-            status = "no_data"
-        elif warning_pressure <= max(2, total // 5):
-            status = "healthy"
-        elif warning_pressure <= max(5, total // 3):
-            status = "watch"
-        else:
-            status = "degraded"
-        calibration_drift = {
-            "available": False,
-            "baseline_available": False,
-            "status": "unavailable",
-            "severity_level": "unknown",
-            "severe": False,
-            "score": 0,
-            "regressed_metrics": [],
-        }
-        try:
-            calibration_payload = _build_offline_quality_calibration_payload()
-            if isinstance(calibration_payload, dict):
-                drift = calibration_payload.get("drift")
-                if not isinstance(drift, dict):
-                    drift = {}
-                severity = drift.get("severity")
-                if not isinstance(severity, dict):
-                    severity = {}
-                regressed_metrics = drift.get("regressed_metrics")
-                if not isinstance(regressed_metrics, list):
-                    regressed_metrics = []
-                calibration_drift = {
-                    "available": bool(calibration_payload.get("available")),
-                    "baseline_available": bool(drift.get("baseline_available")),
-                    "status": str(drift.get("status") or "unavailable"),
-                    "severity_level": str(severity.get("level") or "unknown"),
-                    "severe": bool(severity.get("severe")),
-                    "score": int(severity.get("score") or 0),
-                    "regressed_metrics": [str(item) for item in regressed_metrics if str(item).strip()],
-                }
-                if calibration_drift["severe"]:
-                    status = "degraded"
-        except Exception as exc:  # broad: intentional
-            log.debug("Quality metrics drift status unavailable: %s", exc)
-
-        recent_runs = get_recent_outcomes(hours=24, limit=120)
-        if not isinstance(recent_runs, list):
-            recent_runs = []
-
-        score_distribution = {"high": 0, "medium": 0, "low": 0}
-        retry_outcomes = {
-            "attempted": 0,
-            "improved": 0,
-            "no_improvement": 0,
-            "failed": 0,
-            "skipped": 0,
-        }
-        low_confidence_reason_counts: dict[str, int] = {}
-        low_confidence_prompt_count = 0
-        runs_with_quality = 0
-        runs_with_retry = 0
-
-        for run in recent_runs:
-            if not isinstance(run, dict):
-                continue
-            explainability = run.get("explainability")
-            if not isinstance(explainability, dict):
-                explainability = {}
-            final_meta = explainability.get("final_meta")
-            if not isinstance(final_meta, dict):
-                final_meta = {}
-
-            quality_meta = run.get("answer_quality")
-            if not isinstance(quality_meta, dict):
-                quality_meta = explainability.get("answer_quality")
-            if not isinstance(quality_meta, dict):
-                quality_meta = final_meta.get("answer_quality")
-            if not isinstance(quality_meta, dict):
-                quality_meta = {}
-
-            retry_meta = run.get("answer_quality_retry")
-            if not isinstance(retry_meta, dict):
-                retry_meta = explainability.get("answer_quality_retry")
-            if not isinstance(retry_meta, dict):
-                retry_meta = final_meta.get("answer_quality_retry")
-            if not isinstance(retry_meta, dict):
-                retry_meta = {}
-
-            quality_status = str(quality_meta.get("status", "")).strip().lower()
-            if quality_status not in {"high", "medium", "low"}:
-                score_value = quality_meta.get("score")
-                try:
-                    parsed_score = int(score_value)
-                except (TypeError, ValueError):
-                    parsed_score = None
-                if parsed_score is not None:
-                    quality_status = "high" if parsed_score >= 75 else "medium" if parsed_score >= 45 else "low"
-
-            if quality_status in score_distribution:
-                score_distribution[quality_status] += 1
-                runs_with_quality += 1
-
-            low_confidence_from_run = quality_status == "low"
-            if low_confidence_from_run:
-                reasons = quality_meta.get("reasons")
-                if isinstance(reasons, list):
-                    for reason in reasons:
-                        if not isinstance(reason, str):
-                            continue
-                        normalized = reason.strip()
-                        if not normalized:
-                            continue
-                        low_confidence_reason_counts[normalized] = low_confidence_reason_counts.get(normalized, 0) + 1
-                low_confidence_prompt_count += 1
-
-            routing_notes = run.get("routing_notes")
-            if not low_confidence_from_run and isinstance(routing_notes, list):
-                if any(
-                    isinstance(note, str) and "low confidence" in note.lower()
-                    for note in routing_notes
-                ):
-                    low_confidence_prompt_count += 1
-
-            if retry_meta:
-                runs_with_retry += 1
-                if bool(retry_meta.get("attempted")):
-                    retry_outcomes["attempted"] += 1
-                outcome = str(retry_meta.get("outcome", "")).strip().lower()
-                if outcome in {"improved", "no_improvement", "failed", "skipped"}:
-                    retry_outcomes[outcome] += 1
-
-        retry_outcomes["improved"] = max(
-            retry_outcomes["improved"],
-            int(event_counts.get("ask_quality_retry_improved", 0) or 0),
-        )
-        retry_outcomes["no_improvement"] = max(
-            retry_outcomes["no_improvement"],
-            int(event_counts.get("ask_quality_retry_no_improvement", 0) or 0),
-        )
-        retry_outcomes["failed"] = max(
-            retry_outcomes["failed"],
-            int(event_counts.get("ask_quality_retry_failed", 0) or 0),
-        )
-        retry_outcomes["skipped"] = max(
-            retry_outcomes["skipped"],
-            int(event_counts.get("ask_quality_retry_skipped", 0) or 0),
-        )
-        retry_outcomes["attempted"] = max(
-            retry_outcomes["attempted"],
-            int(event_counts.get("ask_quality_retry_attempted", 0) or 0),
-            retry_outcomes["improved"] + retry_outcomes["no_improvement"] + retry_outcomes["failed"],
-        )
-        low_confidence_prompt_count = max(
-            low_confidence_prompt_count,
-            int(event_counts.get("ask_low_score_detected", 0) or 0),
-        )
-        top_low_confidence_reasons = sorted(
-            low_confidence_reason_counts.items(),
-            key=lambda item: item[1],
-            reverse=True,
-        )[:5]
-
-        return web.json_response(
-            {
-                **snapshot,
-                "signals": signals,
-                "domain_trends": domain_trends[:_QUALITY_DOMAIN_LIMIT],
-                "top_recurring_failures": top_recurring_failures,
-                "top_quality_failure_categories": top_quality_failure_categories,
-                "quality_failure_categories": quality_failure_categories,
-                "recent_signal_slices": recent_signal_slices,
-                "status": status,
-                "calibration_drift": calibration_drift,
-                "warning_pressure": warning_pressure,
-                "score_distribution": score_distribution,
-                "low_confidence": {
-                    "prompt_count": int(low_confidence_prompt_count),
-                    "top_reasons": [
-                        {"reason": reason, "count": int(count)}
-                        for reason, count in top_low_confidence_reasons
-                    ],
-                },
-                "retry_outcomes": retry_outcomes,
-                "runtime_window": {
-                    "hours": 24,
-                    "runs_considered": len(recent_runs),
-                    "runs_with_quality": int(runs_with_quality),
-                    "runs_with_retry": int(runs_with_retry),
-                },
-                "feedback": {
-                    "helpful": feedback_helpful,
-                    "not_helpful": feedback_not_helpful,
-                    "total": feedback_total,
-                    "helpful_rate": feedback_helpful_rate,
-                    "accepted": feedback_accepted,
-                    "suppressed": feedback_suppressed,
-                    "suppressed_dedupe": feedback_suppressed_dedupe,
-                    "suppressed_rate_limited": feedback_suppressed_rate_limited,
-                },
-            }
-        )
+        params = _parse_quality_query(request)
+        raw = _load_quality_metrics(params)
+        data = _compute_quality_aggregates(raw, params)
+        return _build_quality_response(data)
     except Exception as exc:  # broad: intentional
         log.debug("Quality metrics API failed: %s", exc)
-        return web.json_response(
-            {
-                "total_events": 0,
-                "event_counts": {},
-                "context_counts": {},
-                "top_events": [],
-                "top_contexts": [],
-                "signals": {
-                    "search_fallback_activation": 0,
-                    "search_low_results_incident": 0,
-                    "recap_fallback_activation": 0,
-                    "recap_partial_coverage_warning": 0,
-                },
-                "domain_trends": [],
-                "top_recurring_failures": [],
-                "top_quality_failure_categories": [],
-                "quality_failure_categories": {
-                    "counts": {},
-                    "top": [],
-                    "total_classified_failures": 0,
-                    "total_failure_events": 0,
-                },
-                "recent_signal_slices": {"mitigation": [], "degrade": []},
-                "status": "no_data",
-                "calibration_drift": {
-                    "available": False,
-                    "baseline_available": False,
-                    "status": "unavailable",
-                    "severity_level": "unknown",
-                    "severe": False,
-                    "score": 0,
-                    "regressed_metrics": [],
-                },
-                "warning_pressure": 0,
-                "score_distribution": {"high": 0, "medium": 0, "low": 0},
-                "low_confidence": {"prompt_count": 0, "top_reasons": []},
-                "retry_outcomes": {
-                    "attempted": 0,
-                    "improved": 0,
-                    "no_improvement": 0,
-                    "failed": 0,
-                    "skipped": 0,
-                },
-                "runtime_window": {
-                    "hours": 24,
-                    "runs_considered": 0,
-                    "runs_with_quality": 0,
-                    "runs_with_retry": 0,
-                },
-                "feedback": {
-                    "helpful": 0,
-                    "not_helpful": 0,
-                    "total": 0,
-                    "helpful_rate": None,
-                    "accepted": 0,
-                    "suppressed": 0,
-                    "suppressed_dedupe": 0,
-                    "suppressed_rate_limited": 0,
-                },
-            }
-        )
+        return _build_quality_error_response()
 
 
 async def api_knowledge_graph_handler(request):
