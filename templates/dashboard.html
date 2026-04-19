@@ -1951,12 +1951,15 @@
         document.getElementById("qs-total-cost").textContent = `$${totalCost.toFixed(2)}`;
         document.getElementById("qs-copilot-calls").textContent = (cop.calls || 0).toLocaleString();
 
-        // Value Unlocked + Phase Impact cards — replace hardcoded skill counts and spend
+        // Value Unlocked + Phase Impact cards — removed from DOM; guard against null
         const totalSpend = (sp.total_cost || 0) + (pplx.total_cost_usd || 0) + (fc.total_cost_usd || 0);
         const skillCount = d.skill_count || 0;
-        document.getElementById("vu-total-cost").textContent = `$${totalSpend.toFixed(2)}`;
-        document.getElementById("vu-skill-count").textContent = skillCount.toLocaleString();
-        document.getElementById("pi-skill-count").textContent = skillCount.toLocaleString();
+        const vuCost = document.getElementById("vu-total-cost");
+        const vuSkill = document.getElementById("vu-skill-count");
+        const piSkill = document.getElementById("pi-skill-count");
+        if (vuCost) vuCost.textContent = `$${totalSpend.toFixed(2)}`;
+        if (vuSkill) vuSkill.textContent = skillCount.toLocaleString();
+        if (piSkill) piSkill.textContent = skillCount.toLocaleString();
         document.getElementById("skills-desc-count").textContent = skillCount.toLocaleString();
 
         // Daily chart
