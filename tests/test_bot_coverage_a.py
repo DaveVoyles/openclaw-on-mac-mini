@@ -32,6 +32,7 @@ os.environ.setdefault("AUDIT_DIR", "/tmp/_test_bot_audit_a")
 os.environ.setdefault("THREAD_DB_PATH", "/tmp/test_cov_a.db")
 
 import bot as mod
+import bot_helpers as bot_helpers_mod
 import quality_helpers as qh_mod
 
 # ---------------------------------------------------------------------------
@@ -98,7 +99,7 @@ class TestResolveChannelThreadScopeWithLock:
     def test_thread_lock_sets_thread_id(self):
         """When resolve_context_lock returns a thread-mode lock, thread_id is applied."""
         lock_data = {"mode": "thread", "channel_id": 100, "thread_id": 200}
-        with patch.object(mod, "resolve_context_lock", return_value=(lock_data, None)):
+        with patch.object(bot_helpers_mod, "resolve_context_lock", return_value=(lock_data, None)):
             cid, tid = mod._resolve_channel_thread_scope(None, 50, user_id=1)
         assert cid == 100
         assert tid == 200
@@ -106,7 +107,7 @@ class TestResolveChannelThreadScopeWithLock:
     def test_channel_lock_clears_thread_id(self):
         """When resolve_context_lock returns a channel-mode lock, thread_id becomes None."""
         lock_data = {"mode": "channel", "channel_id": 300}
-        with patch.object(mod, "resolve_context_lock", return_value=(lock_data, None)):
+        with patch.object(bot_helpers_mod, "resolve_context_lock", return_value=(lock_data, None)):
             cid, tid = mod._resolve_channel_thread_scope(None, 50, user_id=1)
         assert cid == 300
         assert tid is None
@@ -114,14 +115,14 @@ class TestResolveChannelThreadScopeWithLock:
     def test_thread_lock_with_none_thread_id(self):
         """Thread lock with thread_id=None yields thread_id=None in result."""
         lock_data = {"mode": "thread", "channel_id": 400, "thread_id": None}
-        with patch.object(mod, "resolve_context_lock", return_value=(lock_data, None)):
+        with patch.object(bot_helpers_mod, "resolve_context_lock", return_value=(lock_data, None)):
             cid, tid = mod._resolve_channel_thread_scope(None, 50, user_id=1)
         assert cid == 400
         assert tid is None
 
     def test_no_lock_returns_original_ids(self):
         """When no lock is active, original channel/thread IDs are returned unchanged."""
-        with patch.object(mod, "resolve_context_lock", return_value=(None, None)):
+        with patch.object(bot_helpers_mod, "resolve_context_lock", return_value=(None, None)):
             cid, tid = mod._resolve_channel_thread_scope(None, 55, user_id=1)
         assert cid == 55
         assert tid is None

@@ -22,6 +22,7 @@ os.environ.setdefault("AUDIT_DIR", "/tmp/_test_bot_audit")
 
 import ask_handler as ask_handler_mod
 import bot as mod
+import bot_helpers as bot_helpers_mod
 import discord_events as discord_events_mod
 import response_actions as ra_mod
 
@@ -362,15 +363,15 @@ class TestQualityRetryImproved:
 
 class TestIsUserAllowed:
     def test_empty_allowlist_permits_everyone(self, monkeypatch):
-        monkeypatch.setattr(mod, "ALLOWED_USER_IDS", set())
+        monkeypatch.setattr(bot_helpers_mod, "ALLOWED_USER_IDS", set())
         assert mod._is_user_allowed(999) is True
 
     def test_user_in_allowlist_is_permitted(self, monkeypatch):
-        monkeypatch.setattr(mod, "ALLOWED_USER_IDS", {42, 99})
+        monkeypatch.setattr(bot_helpers_mod, "ALLOWED_USER_IDS", {42, 99})
         assert mod._is_user_allowed(42) is True
 
     def test_user_not_in_allowlist_is_blocked(self, monkeypatch):
-        monkeypatch.setattr(mod, "ALLOWED_USER_IDS", {42, 99})
+        monkeypatch.setattr(bot_helpers_mod, "ALLOWED_USER_IDS", {42, 99})
         assert mod._is_user_allowed(100) is False
 
 
@@ -412,12 +413,12 @@ class TestShouldSendMessageContentHint:
         assert mod._should_send_message_content_hint(chan) is False
 
     def test_returns_true_first_time(self, monkeypatch):
-        monkeypatch.setattr(mod, "_MESSAGE_CONTENT_HINT_CACHE", {})
+        monkeypatch.setattr(bot_helpers_mod, "_MESSAGE_CONTENT_HINT_CACHE", {})
         chan = SimpleNamespace(id=555)
         assert mod._should_send_message_content_hint(chan) is True
 
     def test_returns_false_within_cooldown(self, monkeypatch):
-        monkeypatch.setattr(mod, "_MESSAGE_CONTENT_HINT_CACHE", {555: time.time()})
+        monkeypatch.setattr(bot_helpers_mod, "_MESSAGE_CONTENT_HINT_CACHE", {555: time.time()})
         chan = SimpleNamespace(id=555)
         assert mod._should_send_message_content_hint(chan) is False
 

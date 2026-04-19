@@ -6,13 +6,14 @@ these tests will catch it before CI smoke tests do.
 
 Counts at time of authoring (src/slack_bot.py):
   @app.event:   5  (app_home_opened, app_mention, message, reaction_added, file_shared)
-  @app.command: 23 (/chat, /help, /health, /digest, /simple, /research, /batch, /files,
+  @app.command: 25 (/chat, /help, /health, /digest, /simple, /research, /batch, /files,
                      /metrics, /brief, /mystats, /template, /mypins, /filesearch, /schedule,
-                     /clear, /nickname, /inbox, /email, /today, /calendar, /clawbox, /clawchan)
+                     /clear, /nickname, /inbox, /email, /today, /calendar, /clawbox, /clawchan,
+                     /drive, /contacts)
   @app.action:  8  (file_compare_start, file_translate, translate_lang_selected,
                      retry_last_prompt, clarify_file, clarify_question, clarify_write,
                      gmail_summarize)
-  Total:        36
+  Total:        38
 """
 
 import ast
@@ -26,9 +27,9 @@ SLACK_BOT_SRC = Path(__file__).parent.parent / "src" / "slack_bot.py"
 
 # Exact counts at authoring time — update intentionally when adding new handlers.
 EXPECTED_EVENT_COUNT = 5
-EXPECTED_COMMAND_COUNT = 23
+EXPECTED_COMMAND_COUNT = 25
 EXPECTED_ACTION_COUNT = 8
-EXPECTED_TOTAL_COUNT = EXPECTED_EVENT_COUNT + EXPECTED_COMMAND_COUNT + EXPECTED_ACTION_COUNT  # 36
+EXPECTED_TOTAL_COUNT = EXPECTED_EVENT_COUNT + EXPECTED_COMMAND_COUNT + EXPECTED_ACTION_COUNT  # 38
 
 
 # ---------------------------------------------------------------------------

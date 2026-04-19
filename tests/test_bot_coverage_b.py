@@ -32,6 +32,7 @@ import pytest
 from discord.ext import commands
 
 import bot as mod
+import bot_helpers as bot_helpers_mod
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -225,7 +226,7 @@ class TestBotCanReadChannel:
 
 class TestShouldSendMessageContentHint:
     def setup_method(self):
-        mod._MESSAGE_CONTENT_HINT_CACHE.clear()
+        bot_helpers_mod._MESSAGE_CONTENT_HINT_CACHE.clear()
 
     def test_channel_id_none_returns_false(self):
         """Lines 1056-1057: channel with no id → False."""

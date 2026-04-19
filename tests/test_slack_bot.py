@@ -353,7 +353,7 @@ class TestSlackBot(unittest.TestCase):
                         ),
                     })
 
-        asyncio.run(test_logic())
+        asyncio.run(test_slack_bot_logic())
         self.assertTrue(len(ephemeral_calls) > 0)
         msg = ephemeral_calls[0].get("text", "")
         self.assertIn("No files yet", msg)
@@ -384,7 +384,7 @@ class TestSlackBot(unittest.TestCase):
                     if stripped:
                         collected.append(stripped)
 
-        asyncio.run(test_logic())
+        asyncio.run(test_slack_bot_logic_v2())
         combined = " ".join(collected)
         self.assertIn("report.docx", combined)
         self.assertIn("budget.xlsx", combined)
@@ -1696,11 +1696,18 @@ class TestEmailCommand:
 
     def test_slack_bot_has_email_handler(self):
         """Verify slack_bot module exposes handle_slash_email after create_slack_app."""
+        import asyncio
         import slack_bot
-        app = slack_bot.create_slack_app()
-        # create_slack_app returns None without real tokens; that's fine —
-        # we just need the function to be importable and callable without error.
-        assert app is None or app is not None  # no exception = pass
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            app = slack_bot.create_slack_app()
+            # create_slack_app returns None without real tokens; that's fine —
+            # we just need the function to be importable and callable without error.
+            assert app is None or app is not None  # no exception = pass
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
 
 
 class TestCalendarCommand:
