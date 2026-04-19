@@ -39,7 +39,7 @@ jobs:
       CONFIG_DIR: ${{ github.workspace }}/config
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Lint with ruff
         run: ruff check src/ tests/ --output-format=github
@@ -155,7 +155,7 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Deploy CLI files to macbook
         run: bash scripts/install_openclaw_cli_remote.sh macbook
