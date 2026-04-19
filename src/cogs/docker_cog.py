@@ -291,8 +291,8 @@ class ContainerActionView(discord.ui.View):
         if hasattr(self, "message") and self.message:
             try:
                 await self.message.edit(view=self)
-            except Exception:  # broad: intentional
-                pass
+            except Exception:  # broad: intentional — message may be deleted
+                log.debug("Failed to disable view on timeout (message likely deleted)")
 
 
 class ContainerSelect(discord.ui.Select):
@@ -362,8 +362,8 @@ class ContainerSelectView(discord.ui.View):
         if hasattr(self, "message") and self.message:
             try:
                 await self.message.edit(view=self)
-            except Exception:  # broad: intentional
-                pass
+            except Exception:  # broad: intentional — message may be deleted
+                log.debug("Failed to disable view on timeout (message likely deleted)")
 
 
 # ---------------------------------------------------------------------------
