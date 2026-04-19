@@ -54,7 +54,7 @@ def _owner_local_now() -> datetime.datetime:
 # Morning briefing
 # ---------------------------------------------------------------------------
 
-async def morning_briefing_loop(bot):
+async def morning_briefing_loop(bot) -> None:
     """Post a morning briefing to ALERT_CHANNEL_ID each day at ~8:00 AM."""
     last_briefing_date: str = ""
     while True:
@@ -90,7 +90,7 @@ async def morning_briefing_loop(bot):
         await asyncio.sleep(BRIEFING_CHECK_INTERVAL)
 
 
-async def send_morning_briefing(bot, channel_override=None):
+async def send_morning_briefing(bot, channel_override=None) -> None:
     """Compose and post the daily morning briefing.
 
     If channel_override is provided (e.g. a discord.TextChannel or Interaction channel),
@@ -204,7 +204,7 @@ async def send_morning_briefing(bot, channel_override=None):
 # Evening digest
 # ---------------------------------------------------------------------------
 
-async def evening_digest_loop(bot):
+async def evening_digest_loop(bot) -> None:
     """Post an end-of-day digest to ALERT_CHANNEL_ID each day at ~9:00 PM."""
     last_digest_date: str = ""
     while True:
@@ -220,7 +220,7 @@ async def evening_digest_loop(bot):
         await asyncio.sleep(BRIEFING_CHECK_INTERVAL)
 
 
-async def send_evening_digest(bot, channel_override=None):
+async def send_evening_digest(bot, channel_override=None) -> None:
     """Compose and post the daily evening digest.
 
     If channel_override is provided (e.g. a discord.TextChannel or Interaction

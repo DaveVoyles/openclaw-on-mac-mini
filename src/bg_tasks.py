@@ -86,7 +86,7 @@ class _BackoffTracker:
 
     DELAYS = [5, 15, 60, 300]  # 5 s, 15 s, 1 min, 5 min
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._attempt = 0
         self._clean_start: float | None = None
 
@@ -95,7 +95,7 @@ class _BackoffTracker:
         self._attempt += 1
         return delay
 
-    def mark_clean(self):
+    def mark_clean(self) -> None:
         """Call when the task runs cleanly; resets after 30 min of clean operation."""
         now = time.monotonic()
         if self._clean_start is None:
@@ -261,7 +261,7 @@ async def stop_background_tasks() -> None:
     log.info("Background task supervisor stopped")
 
 
-async def reminder_loop(bot):
+async def reminder_loop(bot) -> None:
     """Check for due reminders every 15 seconds and DM users."""
     import discord
 

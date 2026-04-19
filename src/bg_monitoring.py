@@ -59,7 +59,7 @@ _cookie_alert_sent = False  # only alert once per expiry cycle
 # Error monitor
 # ---------------------------------------------------------------------------
 
-async def error_monitor_loop(bot):
+async def error_monitor_loop(bot) -> None:
     """Fast error pattern check — runs every 5 minutes (optional scan)."""
     await asyncio.sleep(300)
     while True:
@@ -148,7 +148,7 @@ async def error_monitor_loop(bot):
         await asyncio.sleep(300)
 
 
-async def _post_error_alert(bot, patterns: list[dict]):
+async def _post_error_alert(bot, patterns: list[dict]) -> None:
     """Post an error pattern alert to the alert channel."""
     if not ALERT_CHANNEL_ID:
         return
@@ -180,7 +180,7 @@ async def _post_error_alert(bot, patterns: list[dict]):
 # Container health auto-alerts
 # ---------------------------------------------------------------------------
 
-async def container_health_loop(bot):
+async def container_health_loop(bot) -> None:
     """Check Docker container health every 5 minutes and alert on unhealthy/exited."""
     await asyncio.sleep(60)  # initial delay to let containers settle on startup
     while True:
@@ -192,7 +192,7 @@ async def container_health_loop(bot):
         await asyncio.sleep(CONTAINER_HEALTH_INTERVAL)
 
 
-async def _check_monstervision_cookies(bot):
+async def _check_monstervision_cookies(bot) -> None:
     """Check MonsterVision API + logs for cookie expiry warnings and alert."""
     global _cookie_alert_sent
     if not ALERT_CHANNEL_ID:
@@ -250,7 +250,7 @@ async def _check_monstervision_cookies(bot):
         _cookie_alert_sent = False  # reset when cookies are fresh
 
 
-async def _check_container_health(bot):
+async def _check_container_health(bot) -> None:
     """Run ``docker ps -a`` and alert on unhealthy or exited containers."""
     if not ALERT_CHANNEL_ID:
         return
@@ -349,7 +349,7 @@ async def _check_container_health(bot):
 # Resource-threshold monitor (every 60 s)
 # ---------------------------------------------------------------------------
 
-async def resource_monitor_loop(bot):
+async def resource_monitor_loop(bot) -> None:
     """Check per-container CPU/memory thresholds and post alerts."""
     await bot.wait_until_ready()
     from resource_monitor import resource_monitor

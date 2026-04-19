@@ -80,3 +80,4 @@ src/_git_sha.txt
 # External dashboard repo (cloned, not part of this repo)
 data/dashboard-v2/
 data/dashboard-auth/
+coverage.json

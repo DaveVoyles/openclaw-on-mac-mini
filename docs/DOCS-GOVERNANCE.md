@@ -36,7 +36,7 @@ When you add or update a doc:
 | **Reference / technical** | Architecture, API, module, or implementation detail docs | `docs/ARCHITECTURE.md`, `docs/API_REFERENCE.md`, `docs/CLI_ARCHITECTURE.md` | Update when behavior or structure changes |
 | **Operational** | Troubleshooting, maintenance, or runbook-style docs | `docs/MAINTENANCE.md`, `docs/TROUBLESHOOTING.md`, `docs/PATREON_MONITORING.md`, `scripts/README.md` | Keep task-focused; point to code or scripts for implementation detail |
 | **Generated** | Derived from code or runtime metadata | `docs/COMMANDS.md` | Regenerate from source of truth; avoid manual edits |
-| **Historical / archived** | Shipped or superseded plans kept for context | `docs/Discord_Improvements.md`, `docs/archive/IMPLEMENTATION-PLAN.md` | Label clearly as historical and keep the canonical entrypoint elsewhere |
+| **Historical / archived** | Shipped or superseded plans kept for context | `docs/archive/Discord_Improvements.md`, `docs/archive/IMPLEMENTATION-PLAN.md` | Label clearly as historical and keep the canonical entrypoint elsewhere |
 | **Non-canonical artifacts** | Local exports, notes, and scratch files | `openclaw_export_*.md`, `notes.txt` | Do not treat as repository docs; migrate useful content elsewhere |
 
 ---
@@ -76,7 +76,7 @@ Use these rules for planning docs:
 
 ### Historical planning docs
 
-- `docs/Discord_Improvements.md`
+- `docs/archive/Discord_Improvements.md`
 - `docs/archive/IMPLEMENTATION-PLAN.md`
 
 ### Generated docs

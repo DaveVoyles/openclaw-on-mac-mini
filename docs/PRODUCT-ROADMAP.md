@@ -33,7 +33,7 @@ For documentation ownership, lifecycle rules, and artifact handling, see
 | `docs/DOCS-GOVERNANCE.md` | Docs taxonomy and lifecycle rules | Active support doc | Use when deciding where documentation belongs |
 | `docs/UX_IMPROVEMENTS.md` | Detailed CLI UX wave history and deferred UX follow-ups | Active, scoped | Use for CLI-specific wave detail after checking this roadmap |
 | `docs/tech_debt.md` | Detailed CLI tech-debt audit history | Active, scoped | Use for tech-debt detail and shipped evidence |
-| `docs/Discord_Improvements.md` | Discord improvement history | Historical/scoped | Reference only; all listed waves are shipped |
+| `docs/archive/Discord_Improvements.md` | Discord improvement history | Historical/scoped | Reference only; all listed waves are shipped |
 | `docs/DASHBOARD_SURFACES.md` | Docs/dashboard synchronization checklist | Active support doc | Use when CLI/dashboard surfaces change |
 | `docs/archive/IMPLEMENTATION-PLAN.md` | Historical implementation plan | Archived | Context only; do not treat as a live roadmap |
 
@@ -50,7 +50,7 @@ For documentation ownership, lifecycle rules, and artifact handling, see
 | CLI UX follow-up wave: context-pressure shipped; restrained narrative follow-through next | Active follow-up | `docs/UX_IMPROVEMENTS.md` | Treat the context-pressure tranche as shipped: `/tokeninfo` now carries actor breakdown + bookmark-before-clear guidance, while `/context`, `/session`, and `/watch status` already surface lighter next-send or next-retry pressure cues. The next active docs/implementation wave is the restrained narrative follow-through: let `/session` and `/sessions` express momentum or milestones without obscuring core status, keep `/collab` and `session share/export` neutral and pasteable, and continue deferring richer recap/export/dashboard storytelling until it actually lands. |
 | Dashboard/docs consistency for future CLI waves | Ongoing | `docs/DASHBOARD_SURFACES.md`, `docs/CLI_ARCHITECTURE.md`, `docs/CLI_QUICKSTART.md` | Keep docs/dashboard sync as a required lane for future CLI wave work |
 | CLI tech-debt follow-up planning | Audit-driven | `docs/tech_debt.md` | Use the shipped April 2026 audit as current context; start a new TD wave here only when new debt is confirmed or a new audit is warranted |
-| Discord follow-up work | Dormant | `docs/Discord_Improvements.md` | Add any future Discord improvements here first instead of reviving the old roadmap as the primary entrypoint |
+| Discord follow-up work | Dormant | `docs/archive/Discord_Improvements.md` | Add any future Discord improvements here first instead of reviving the old roadmap as the primary entrypoint |
 | New interfaces: Open WebUI, Dashboard v2, Slack | In progress | `.github/docs/2026-04-18-new-interfaces-plan.md` | Implementation wave active; see plan file for port map, file list, and wave status |
 
 ---
@@ -168,7 +168,7 @@ audit section if one is created later.
 
 ### 4. Discord future work
 
-`docs/Discord_Improvements.md` is useful historical evidence, but all listed waves are shipped.
+`docs/archive/Discord_Improvements.md` is useful historical evidence, but all listed waves are shipped.
 Future Discord improvements should be proposed here first and only get a dedicated scoped roadmap if
 the work grows large enough to justify it.
 
@@ -206,7 +206,7 @@ Use this shape when adding a new initiative:
 
 - **Status:** shipped
 - **Owner area:** Slack bot, docs
-- **Supporting doc:** `docs/PARENTS-GUIDE.md`
+- **Supporting doc:** `templates/parents-guide.html`
 - **Why now:** Target users (non-technical, primarily reviewing/editing Word docs and spreadsheets) needed a zero-friction path to OpenClaw via both Slack and the browser.
 - **What shipped:**
   - `/help` slash command and `_WELCOME_MESSAGE` for on-boarding
@@ -217,7 +217,7 @@ Use this shape when adding a new initiative:
   - Block Kit interactive buttons on file upload (✏️ Proofread / 📋 Summarize / ❓ Explain / 🔍 Find errors / 🖼️ Describe / 📄 Read text)
   - Graceful plain-text fallback if Block Kit interactivity is not yet enabled
   - Programmatic manifest script (`make slack-manifest`) replacing manual JSON copy-paste
-  - `docs/PARENTS-GUIDE.md` — plain English user guide linked from `docs/index.md` + `docs/START-HERE.md`
+  - `templates/parents-guide.html` — plain English user guide linked from `docs/index.md` + `docs/START-HERE.md`
 - **Next step:** Run `make ship-server` on Mac Mini + `make slack-manifest` + reinstall Slack app to activate interactivity.
 
 ---
@@ -242,6 +242,6 @@ Use this shape when adding a new initiative:
 These remain useful for context, but they are not the active roadmap:
 
 - `docs/archive/IMPLEMENTATION-PLAN.md`
-- `docs/Discord_Improvements.md`
+- `docs/archive/Discord_Improvements.md`
 - shipped sections inside `docs/UX_IMPROVEMENTS.md`
 - shipped sections inside `docs/tech_debt.md`
