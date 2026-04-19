@@ -82,7 +82,8 @@ def setup_dashboard(
 
     app.router.add_get("/", dashboard_handler)
     app.router.add_get("/dashboard", dashboard_handler)
-    app.router.add_get("/guide", guide_handler)
+    app.router.add_get("/tech-guide", guide_handler)
+    app.router.add_get("/guide", lambda r: web.HTTPMovedPermanently("/tech-guide"))
     app.router.add_get("/terminal", terminal_handler)
     app.router.add_get("/onboarding", onboarding_handler)
     app.router.add_get("/parents-guide", parents_guide_handler)

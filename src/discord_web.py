@@ -802,7 +802,7 @@ async def start_health_server(bot) -> web.AppRunner:
     site = web.TCPSite(runner, "0.0.0.0", HEALTH_PORT)
     await site.start()
     log.info(
-        "Health endpoint listening on :%d/health (and /metrics, /smoke, /dashboard, /guide, /webhook/<source>, /cli-update/<filename>, /cli-update/meta, /upload, /dropbox/callback)",
+        "Health endpoint listening on :%d/health (and /metrics, /smoke, /dashboard, /tech-guide, /webhook/<source>, /cli-update/<filename>, /cli-update/meta, /upload, /dropbox/callback)",
         HEALTH_PORT,
     )
     return runner

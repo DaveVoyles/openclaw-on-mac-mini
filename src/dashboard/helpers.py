@@ -359,7 +359,7 @@ _OPENCLAW_CLI_SUPPORT_SOURCES = {
     "subprocess_utils.py": _REPO_ROOT / "src" / "subprocess_utils.py",
 }
 DASHBOARD_HTML = (_TEMPLATES_DIR / "dashboard.html").read_text()
-GUIDE_HTML = (_TEMPLATES_DIR / "guide.html").read_text()
+GUIDE_HTML = (_TEMPLATES_DIR / "tech-guide.html").read_text()
 TERMINAL_HTML = (_TEMPLATES_DIR / "terminal.html").read_text()
 ONBOARDING_HTML = (_TEMPLATES_DIR / "onboarding.html").read_text()
 WEBUI_GUIDE_HTML = (_TEMPLATES_DIR / "webui-guide.html").read_text()
