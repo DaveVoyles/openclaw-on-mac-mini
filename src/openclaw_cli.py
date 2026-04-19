@@ -4789,6 +4789,357 @@ def _read_input_with_paste(input_func: Any, prompt_str: str) -> str:
     return result
 
 
+def _run_chat_build_effective_input(
+    prompt: str,
+    config: "CliConfig",
+) -> "tuple[str, list[str], CliConfig, str]":
+    """Resolve @file:/@url:/@git:/@gh:/@cmd: refs and build the effective LLM input.
+
+    Returns ``(effective_input, auto_injected_paths, config, prompt)`` where *config*
+    may have been switched to a context-reading model and *prompt* has ref markers
+    stripped.
+    """
+    global _next_inject
+    _BINARY_EXTS = frozenset({
+        ".pdf", ".docx", ".xlsx", ".pptx", ".zip", ".tar", ".gz",
+        ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg",
+        ".mp3", ".mp4", ".mov", ".avi", ".exe", ".bin", ".dmg",
+    })
+    _auto_file_chunks: list[str] = []
+    _auto_injected_paths: list[str] = []
+
+    # @file: and @url: explicit injection markers — always injected.
+    _explicit_refs = _detect_explicit_refs(prompt)
+    if _explicit_refs:
+        prompt = _strip_explicit_refs(prompt)
+    import urllib.request as _urllib_req
+    for _ref_kind, _ref_target in _explicit_refs:
+        if _ref_kind == "file":
+            _fp = Path(_ref_target).expanduser()
+            if not _fp.is_file():
+                print(f"  {_DM}↳ @file: {_ref_target} not found{_R}")
+            elif _fp.suffix.lower() in _BINARY_EXTS:
+                print(f"  {_DM}↳ skipping @file: {_ref_target} (binary){_R}")
+            elif _fp.stat().st_size >= 500_000:
+                print(f"  {_DM}↳ skipping @file: {_ref_target} (too large){_R}")
+            else:
+                try:
+                    _content = _fp.read_text(encoding="utf-8", errors="replace")
+                    _auto_file_chunks.append(f"[File: {_ref_target}]\n{_content}")
+                    _auto_injected_paths.append(_ref_target)
+                    print(f"  {_DM}↳ reading @file: {_ref_target}{_R}")
+                except OSError:
+                    pass
+        elif _ref_kind == "url":
+            print(f"  {_DM}↳ fetching @url: {_ref_target}{_R}", end="", flush=True)
+            try:
+                _req = _urllib_req.Request(
+                    _ref_target,
+                    headers={"User-Agent": "Mozilla/5.0 (OpenClaw CLI)"},
+                )
+                with _urllib_req.urlopen(_req, timeout=10) as _resp:
+                    _raw = _resp.read(200_000)
+                _url_text = _raw.decode("utf-8", errors="replace")
+                if "<html" in _url_text[:1000].lower():
+                    _url_text = _re.sub(r"<[^>]+>", " ", _url_text)
+                    _url_text = _re.sub(r"\s{2,}", " ", _url_text)
+                _auto_file_chunks.append(f"[URL: {_ref_target}]\n{_url_text[:100_000]}")
+                print(" ✓")
+            except Exception as _ref_err:
+                print(f" ✗ ({_ref_err})")
+        elif _ref_kind == "clip":
+            import subprocess as _subp
+            try:
+                _clip_text = _subp.run(
+                    ["pbpaste"], capture_output=True, text=True, check=True
+                ).stdout.strip()
+                if _clip_text:
+                    _auto_file_chunks.append(f"[Clipboard]\n{_clip_text[:100_000]}")
+                    print(f"  {_DM}↳ reading @clip: {len(_clip_text):,} chars from clipboard{_R}")
+                else:
+                    print(f"  {_DM}↳ @clip: clipboard is empty{_R}")
+            except (FileNotFoundError, Exception) as _clip_err:
+                print(f"  {_DM}↳ @clip: could not read clipboard ({_clip_err}){_R}")
+        elif _ref_kind == "dir":
+            _dp = Path(_ref_target).expanduser()
+            if not _dp.is_dir():
+                print(f"  {_DM}↳ @dir: {_ref_target} not found or not a directory{_R}")
+            else:
+                _dir_files = sorted(
+                    p for p in _dp.iterdir()
+                    if p.is_file()
+                    and p.suffix.lower() not in _BINARY_EXTS
+                    and p.stat().st_size < 200_000
+                )[:20]
+                if not _dir_files:
+                    print(f"  {_DM}↳ @dir: {_ref_target} — no readable text files found{_R}")
+                else:
+                    print(f"  {_DM}↳ reading @dir: {_ref_target} ({len(_dir_files)} files){_R}")
+                    for _df in _dir_files:
+                        try:
+                            _dc = _df.read_text(encoding="utf-8", errors="replace")
+                            _auto_file_chunks.append(f"[File: {_df}]\n{_dc}")
+                        except OSError:
+                            pass
+
+    _explicit_paths_set = {
+        str(Path(p).expanduser().resolve()) for p in _auto_injected_paths
+    }
+    for _fpath in _detect_file_paths(prompt):
+        _fp = Path(_fpath).expanduser()
+        _resolved = str(_fp.resolve())
+        if _resolved in _explicit_paths_set:
+            continue  # already injected via @file:
+        if not _fp.is_file():
+            continue
+        if _fp.suffix.lower() in _BINARY_EXTS:
+            print(f"  {_DM}↳ skipping {_fpath} (binary/unsupported format){_R}")
+            continue
+        if _fp.stat().st_size >= 500_000:
+            print(f"  {_DM}↳ skipping {_fpath} (file too large — paste key sections instead){_R}")
+            continue
+        try:
+            _content = _fp.read_text(encoding="utf-8", errors="replace")
+            _auto_file_chunks.append(f"[File: {_fpath}]\n{_content}")
+            _auto_injected_paths.append(_fpath)
+            print(f"  {_DM}↳ reading {_fpath}{_R}")
+        except OSError:
+            pass
+
+    # Auto-fetch URLs mentioned near action verbs (summarize, read, explain, etc.)
+    for _url in _detect_url_mentions(prompt):
+        print(f"  {_DM}↳ fetching {_url}{_R}", end="", flush=True)
+        try:
+            _req = _urllib_req.Request(
+                _url,
+                headers={"User-Agent": "Mozilla/5.0 (OpenClaw CLI)"},
+            )
+            with _urllib_req.urlopen(_req, timeout=10) as _resp:
+                _raw = _resp.read(200_000)
+            _url_text = _raw.decode("utf-8", errors="replace")
+            if "<html" in _url_text[:1000].lower():
+                _url_text = _re.sub(r"<[^>]+>", " ", _url_text)
+                _url_text = _re.sub(r"\s{2,}", " ", _url_text)
+            _auto_file_chunks.append(f"[URL: {_url}]\n{_url_text[:100_000]}")
+            print(" ✓")
+        except Exception as _url_err:
+            print(f" ✗ ({_url_err})")
+
+    # @git: injection
+    import subprocess as _w53_subp
+    _git_refs = _detect_git_refs(prompt)
+    if _git_refs:
+        prompt = _strip_git_refs(prompt)
+    for _ref_kind, _git_variant in _git_refs:
+        print(f"  {_DM}↳ injecting @git:{_git_variant}…{_R}", flush=True)
+        try:
+            _git_out = _resolve_git_ref(_git_variant, cwd=os.getcwd())
+            if _git_out:
+                _auto_file_chunks.append(f"[Git {_git_variant}]\n{_git_out}")
+                _auto_injected_paths.append(f"git:{_git_variant}")
+            else:
+                print(f"  {_DM}↳ @git:{_git_variant} — no output (not a repo or git error){_R}")
+        except Exception as _git_err:
+            print(f"  {_DM}↳ @git:{_git_variant} — error: {_git_err}{_R}")
+
+    # @gh: injection
+    _gh_refs = _detect_gh_refs(prompt)
+    if _gh_refs:
+        prompt = _strip_gh_refs(prompt)
+    for _ref_kind, _gh_ref in _gh_refs:
+        print(f"  {_DM}↳ injecting @gh:{_gh_ref}…{_R}", flush=True)
+        try:
+            _gh_out = _resolve_gh_ref(_gh_ref)
+            if _gh_out:
+                _auto_file_chunks.append(f"[GitHub {_gh_ref}]\n{_gh_out}")
+                _auto_injected_paths.append(f"gh:{_gh_ref}")
+            else:
+                print(f"  {_DM}↳ @gh:{_gh_ref} — not found or gh not available{_R}")
+        except Exception as _gh_err:
+            print(f"  {_DM}↳ @gh:{_gh_ref} — error: {_gh_err}{_R}")
+
+    # @cmd: injection
+    _cmd_refs = _detect_cmd_refs(prompt)
+    if _cmd_refs:
+        prompt = _strip_cmd_refs(prompt)
+    for _ref_kind, _cmd_str in _cmd_refs:
+        if _is_cmd_allowlisted(_cmd_str):
+            print(f"  {_DM}↳ running @cmd:{_cmd_str}…{_R}", flush=True)
+            try:
+                _cmd_result = _w53_subp.run(
+                    _cmd_str, shell=True, capture_output=True, text=True, timeout=10
+                )
+                _cmd_out = (_cmd_result.stdout + _cmd_result.stderr)[:50_000]
+                if _cmd_out.strip():
+                    _auto_file_chunks.append(f"[Command: {_cmd_str}]\n{_cmd_out}")
+                else:
+                    print(f"  {_DM}↳ @cmd:{_cmd_str} — no output{_R}")
+            except Exception as _cmd_err:
+                print(f"  {_DM}↳ @cmd:{_cmd_str} — error: {_cmd_err}{_R}")
+        else:
+            print(
+                f"  {_DM}↳ @cmd:{_cmd_str} — not in allowlist, skipping "
+                f"(use an allowed command: git, ls, cat, grep, find, …){_R}"
+            )
+
+    _had_next_inject = bool(_next_inject)
+    if _had_next_inject or _auto_file_chunks:
+        _injected_parts = ([_next_inject] if _next_inject else []) + _auto_file_chunks
+        effective_input = f"[Injected context]\n{'---'.join(_injected_parts)}\n\n[User message]\n{prompt}"
+        _next_inject = ""
+        config = _maybe_switch_to_context_model(config)
+    else:
+        effective_input = prompt
+    _sys_prompt = _PREFS.get("system_prompt", "").strip()
+    if _sys_prompt:
+        effective_input = f"[System context]\n{_sys_prompt}\n\n{effective_input}"
+    return effective_input, _auto_injected_paths, config, prompt
+
+
+def _run_chat_call_llm(
+    effective_input: str,
+    config: "CliConfig",
+    history: "list[dict[str, str]]",
+    ask_func: "Any",
+) -> "Any":
+    """Call the LLM (streaming or blocking) and return the response object.
+
+    Raises ``KeyboardInterrupt`` if the user cancels a streaming request.
+    """
+    if ask_func is invoke_openclaw and should_use_streaming(config):
+        _spin_stop, _spin_thread, _spin_cancel = _ui_utils_mod._start_stream_spinner(
+            f"{_e('💬', '>>')} Thinking…",
+            is_tty=_IS_TTY,
+            output_json=config.output_json,
+        )
+        response = invoke_openclaw_stream(
+            effective_input,
+            config=config,
+            history=list(history),
+            _stop_spinner=_spin_stop,
+            _cancel_event=_spin_cancel,
+        )
+        if _spin_stop is not None and not _spin_stop.is_set():
+            _spin_stop.set()
+        if _spin_thread is not None:
+            _spin_thread.join(timeout=0.5)
+        if _spin_cancel is not None and _spin_cancel.is_set():
+            raise KeyboardInterrupt
+    else:
+        response = _with_spinner(
+            f"{_e('💬', '>>')} Thinking…",
+            ask_func,
+            effective_input,
+            config=config,
+            history=list(history),
+            output_json=config.output_json,
+        )
+    return response
+
+
+def _run_chat_display_response(
+    response: "Any",
+    config: "CliConfig",
+    session_id: str,
+    autoroute_on: bool,
+    history: "list[dict[str, str]]",
+    elapsed: float,
+    compact: bool,
+) -> None:
+    """Print the LLM response with separator, status bar, and optional desktop notification."""
+    global _last_response_text
+    _is_tty = _get_is_tty()
+    if _is_tty and not config.output_json and not compact and not response.raw.get("_streamed_cli"):
+        _print_response_separator(label="Response", detail="answer reveal", status="active")
+    print_response(response, output_json=config.output_json, elapsed=elapsed)
+    _print_animated_separator()
+    _last_response_text = response.response or ""
+    if not config.output_json and not compact:
+        _ctx_pct = 0
+        try:
+            _sys_p = str(_PREFS.get("system_prompt", "") or "")
+            _inj_p = str(_next_inject or "")
+            _mh = _PREFS.get("last_model", "")
+            _rh = _PREFS.get("route_mode", "")
+            _pressure = _session_display_mod._context_pressure_snapshot(
+                history, system_prompt=_sys_p, pending_inject=_inj_p,
+                model_hint=_mh, route_hint=_rh
+            )
+            _ctx_pct = int(_pressure.get("pct_history_raw", 0))
+        except Exception:
+            pass
+        _print_status_bar(
+            session_id=session_id,
+            autoroute_on=autoroute_on,
+            history_len=len(history),
+            context_pct=_ctx_pct,
+        )
+    if _PREFS.get("desktop_notify") and elapsed >= 10.0 and _IS_TTY:
+        import subprocess as _notif_subp
+        _notif_summary = (_last_response_text[:80].replace('"', "'") + "…") if _last_response_text else "Done"
+        try:
+            _notif_subp.run(
+                [
+                    "osascript", "-e",
+                    f'display notification "{_notif_summary}" with title "OpenClaw" subtitle "Response ready ({elapsed:.0f}s)"',
+                ],
+                check=False,
+                timeout=3,
+                capture_output=True,
+            )
+        except Exception:
+            pass
+
+
+def _run_chat_write_back(
+    prompt: str,
+    response: "Any",
+    auto_injected_paths: "list[str]",
+    config: "CliConfig",
+) -> None:
+    """Show diff preview and offer to save AI response back to auto-injected source files."""
+    import difflib as _difflib
+    _response_text = response.response or ""
+    for _wb_path in auto_injected_paths:
+        _code_match = _re.search(r"```(?:\w+)?\n(.*?)```", _response_text, _re.DOTALL)
+        _content_to_save = _code_match.group(1).rstrip("\n") if _code_match else _response_text
+        _wb_fp = Path(_wb_path).expanduser()
+        _wb_before = _wb_fp.read_text(encoding="utf-8", errors="replace") if _wb_fp.is_file() else ""
+        if _wb_before:
+            _diff_lines = list(_difflib.unified_diff(
+                _wb_before.splitlines(keepends=True),
+                _content_to_save.splitlines(keepends=True),
+                fromfile=f"current: {_wb_path}",
+                tofile=f"proposed: {_wb_path}",
+                n=2,
+            ))
+            if _diff_lines:
+                _shown = _diff_lines[:30]
+                for _dl in _shown:
+                    _pfx = _DM
+                    if _dl.startswith("+") and not _dl.startswith("+++"):
+                        _pfx = "\033[32m"  # green
+                    elif _dl.startswith("-") and not _dl.startswith("---"):
+                        _pfx = "\033[31m"  # red
+                    print(f"  {_pfx}{_dl.rstrip()}{_R}")
+                if len(_diff_lines) > 30:
+                    print(f"  {_DM}... ({len(_diff_lines) - 30} more lines){_R}")
+            else:
+                print(f"  {_DM}(no changes){_R}")
+        else:
+            print(f"  {_DM}(new file){_R}")
+        try:
+            _wb_choice = input(f"  {_DM}💾 Save to {_wb_path}? [y/N]{_R} ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            break
+        if _wb_choice == "y":
+            try:
+                write_text_file(_wb_path, content=_content_to_save)
+                print(f"  {_DM}✅ Saved to {_wb_path}{_R}")
+            except OSError as _wb_err:
+                print(f"  {_BRE}error:{_R} could not write {_wb_path}: {_wb_err}")
+
+
 def run_chat(
     config: CliConfig,
     *,
@@ -4999,236 +5350,10 @@ def run_chat(
 
         try:
             _t0 = time.monotonic()
-            global _next_inject
             # Store prompt for /followup and auto-suggestion footer (in-memory only, not saved to disk)
             _PREFS["_last_prompt"] = prompt.strip()
-
-            # Auto-inject local files mentioned in the prompt.
-            _auto_file_chunks: list[str] = []
-            _auto_injected_paths: list[str] = []
-            _BINARY_EXTS = frozenset({
-                ".pdf", ".docx", ".xlsx", ".pptx", ".zip", ".tar", ".gz",
-                ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg",
-                ".mp3", ".mp4", ".mov", ".avi", ".exe", ".bin", ".dmg",
-            })
-
-            # @file: and @url: explicit injection markers — always injected.
-            _explicit_refs = _detect_explicit_refs(prompt)
-            if _explicit_refs:
-                prompt = _strip_explicit_refs(prompt)
-            import urllib.request as _urllib_req
-            for _ref_kind, _ref_target in _explicit_refs:
-                if _ref_kind == "file":
-                    _fp = Path(_ref_target).expanduser()
-                    if not _fp.is_file():
-                        print(f"  {_DM}↳ @file: {_ref_target} not found{_R}")
-                    elif _fp.suffix.lower() in _BINARY_EXTS:
-                        print(f"  {_DM}↳ skipping @file: {_ref_target} (binary){_R}")
-                    elif _fp.stat().st_size >= 500_000:
-                        print(f"  {_DM}↳ skipping @file: {_ref_target} (too large){_R}")
-                    else:
-                        try:
-                            _content = _fp.read_text(encoding="utf-8", errors="replace")
-                            _auto_file_chunks.append(f"[File: {_ref_target}]\n{_content}")
-                            _auto_injected_paths.append(_ref_target)
-                            print(f"  {_DM}↳ reading @file: {_ref_target}{_R}")
-                        except OSError:
-                            pass
-                elif _ref_kind == "url":
-                    print(f"  {_DM}↳ fetching @url: {_ref_target}{_R}", end="", flush=True)
-                    try:
-                        _req = _urllib_req.Request(
-                            _ref_target,
-                            headers={"User-Agent": "Mozilla/5.0 (OpenClaw CLI)"},
-                        )
-                        with _urllib_req.urlopen(_req, timeout=10) as _resp:
-                            _raw = _resp.read(200_000)
-                        _url_text = _raw.decode("utf-8", errors="replace")
-                        if "<html" in _url_text[:1000].lower():
-                            _url_text = _re.sub(r"<[^>]+>", " ", _url_text)
-                            _url_text = _re.sub(r"\s{2,}", " ", _url_text)
-                        _auto_file_chunks.append(f"[URL: {_ref_target}]\n{_url_text[:100_000]}")
-                        print(" ✓")
-                    except Exception as _ref_err:
-                        print(f" ✗ ({_ref_err})")
-                elif _ref_kind == "clip":
-                    import subprocess as _subp
-                    try:
-                        _clip_text = _subp.run(
-                            ["pbpaste"], capture_output=True, text=True, check=True
-                        ).stdout.strip()
-                        if _clip_text:
-                            _auto_file_chunks.append(f"[Clipboard]\n{_clip_text[:100_000]}")
-                            print(f"  {_DM}↳ reading @clip: {len(_clip_text):,} chars from clipboard{_R}")
-                        else:
-                            print(f"  {_DM}↳ @clip: clipboard is empty{_R}")
-                    except (FileNotFoundError, Exception) as _clip_err:
-                        print(f"  {_DM}↳ @clip: could not read clipboard ({_clip_err}){_R}")
-                elif _ref_kind == "dir":
-                    _dp = Path(_ref_target).expanduser()
-                    if not _dp.is_dir():
-                        print(f"  {_DM}↳ @dir: {_ref_target} not found or not a directory{_R}")
-                    else:
-                        _dir_files = sorted(
-                            p for p in _dp.iterdir()
-                            if p.is_file()
-                            and p.suffix.lower() not in _BINARY_EXTS
-                            and p.stat().st_size < 200_000
-                        )[:20]
-                        if not _dir_files:
-                            print(f"  {_DM}↳ @dir: {_ref_target} — no readable text files found{_R}")
-                        else:
-                            print(f"  {_DM}↳ reading @dir: {_ref_target} ({len(_dir_files)} files){_R}")
-                            for _df in _dir_files:
-                                try:
-                                    _dc = _df.read_text(encoding="utf-8", errors="replace")
-                                    _auto_file_chunks.append(f"[File: {_df}]\n{_dc}")
-                                except OSError:
-                                    pass
-
-            _explicit_paths_set = {
-                str(Path(p).expanduser().resolve()) for p in _auto_injected_paths
-            }
-            for _fpath in _detect_file_paths(prompt):
-                _fp = Path(_fpath).expanduser()
-                _resolved = str(_fp.resolve())
-                if _resolved in _explicit_paths_set:
-                    continue  # already injected via @file:
-                if not _fp.is_file():
-                    continue
-                if _fp.suffix.lower() in _BINARY_EXTS:
-                    print(f"  {_DM}↳ skipping {_fpath} (binary/unsupported format){_R}")
-                    continue
-                if _fp.stat().st_size >= 500_000:
-                    print(f"  {_DM}↳ skipping {_fpath} (file too large — paste key sections instead){_R}")
-                    continue
-                try:
-                    _content = _fp.read_text(encoding="utf-8", errors="replace")
-                    _auto_file_chunks.append(f"[File: {_fpath}]\n{_content}")
-                    _auto_injected_paths.append(_fpath)
-                    print(f"  {_DM}↳ reading {_fpath}{_R}")
-                except OSError:
-                    pass
-
-            # Auto-fetch URLs mentioned near action verbs (summarize, read, explain, etc.)
-            for _url in _detect_url_mentions(prompt):
-                print(f"  {_DM}↳ fetching {_url}{_R}", end="", flush=True)
-                try:
-                    _req = _urllib_req.Request(
-                        _url,
-                        headers={"User-Agent": "Mozilla/5.0 (OpenClaw CLI)"},
-                    )
-                    with _urllib_req.urlopen(_req, timeout=10) as _resp:
-                        _raw = _resp.read(200_000)
-                    _url_text = _raw.decode("utf-8", errors="replace")
-                    # Strip HTML tags if the response looks like HTML
-                    if "<html" in _url_text[:1000].lower():
-                        _url_text = _re.sub(r"<[^>]+>", " ", _url_text)
-                        _url_text = _re.sub(r"\s{2,}", " ", _url_text)
-                    _auto_file_chunks.append(f"[URL: {_url}]\n{_url_text[:100_000]}")
-                    print(" ✓")
-                except Exception as _url_err:
-                    print(f" ✗ ({_url_err})")
-
-            # @git: injection
-            import subprocess as _w53_subp
-            _git_refs = _detect_git_refs(prompt)
-            if _git_refs:
-                prompt = _strip_git_refs(prompt)
-            for _ref_kind, _git_variant in _git_refs:
-                print(f"  {_DM}↳ injecting @git:{_git_variant}…{_R}", flush=True)
-                try:
-                    _git_out = _resolve_git_ref(_git_variant, cwd=os.getcwd())
-                    if _git_out:
-                        _auto_file_chunks.append(f"[Git {_git_variant}]\n{_git_out}")
-                        _auto_injected_paths.append(f"git:{_git_variant}")
-                    else:
-                        print(f"  {_DM}↳ @git:{_git_variant} — no output (not a repo or git error){_R}")
-                except Exception as _git_err:
-                    print(f"  {_DM}↳ @git:{_git_variant} — error: {_git_err}{_R}")
-
-            # @gh: injection
-            _gh_refs = _detect_gh_refs(prompt)
-            if _gh_refs:
-                prompt = _strip_gh_refs(prompt)
-            for _ref_kind, _gh_ref in _gh_refs:
-                print(f"  {_DM}↳ injecting @gh:{_gh_ref}…{_R}", flush=True)
-                try:
-                    _gh_out = _resolve_gh_ref(_gh_ref)
-                    if _gh_out:
-                        _auto_file_chunks.append(f"[GitHub {_gh_ref}]\n{_gh_out}")
-                        _auto_injected_paths.append(f"gh:{_gh_ref}")
-                    else:
-                        print(f"  {_DM}↳ @gh:{_gh_ref} — not found or gh not available{_R}")
-                except Exception as _gh_err:
-                    print(f"  {_DM}↳ @gh:{_gh_ref} — error: {_gh_err}{_R}")
-
-            # @cmd: injection
-            _cmd_refs = _detect_cmd_refs(prompt)
-            if _cmd_refs:
-                prompt = _strip_cmd_refs(prompt)
-            for _ref_kind, _cmd_str in _cmd_refs:
-                if _is_cmd_allowlisted(_cmd_str):
-                    print(f"  {_DM}↳ running @cmd:{_cmd_str}…{_R}", flush=True)
-                    try:
-                        _cmd_result = _w53_subp.run(
-                            _cmd_str, shell=True, capture_output=True, text=True, timeout=10
-                        )
-                        _cmd_out = (_cmd_result.stdout + _cmd_result.stderr)[:50_000]
-                        if _cmd_out.strip():
-                            _auto_file_chunks.append(f"[Command: {_cmd_str}]\n{_cmd_out}")
-                        else:
-                            print(f"  {_DM}↳ @cmd:{_cmd_str} — no output{_R}")
-                    except Exception as _cmd_err:
-                        print(f"  {_DM}↳ @cmd:{_cmd_str} — error: {_cmd_err}{_R}")
-                else:
-                    _first_tok = _cmd_str.strip().split()[0] if _cmd_str.strip() else _cmd_str
-                    print(
-                        f"  {_DM}↳ @cmd:{_cmd_str} — not in allowlist, skipping "
-                        f"(use an allowed command: git, ls, cat, grep, find, …){_R}"
-                    )
-
-            _had_next_inject = bool(_next_inject)
-            if _had_next_inject or _auto_file_chunks:
-                _injected_parts = ([_next_inject] if _next_inject else []) + _auto_file_chunks
-                effective_input = f"[Injected context]\n{'---'.join(_injected_parts)}\n\n[User message]\n{prompt}"
-                _next_inject = ""
-                # Switch to a context-reading model whenever any content is injected —
-                # search models (perplexity) ignore injected text and only cite URLs.
-                config = _maybe_switch_to_context_model(config)
-            else:
-                effective_input = prompt
-            _sys_prompt = _PREFS.get("system_prompt", "").strip()
-            if _sys_prompt:
-                effective_input = f"[System context]\n{_sys_prompt}\n\n{effective_input}"
-            if ask_func is invoke_openclaw and should_use_streaming(config):
-                _spin_stop, _spin_thread, _spin_cancel = _ui_utils_mod._start_stream_spinner(
-                    f"{_e('💬', '>>')} Thinking…",
-                    is_tty=_IS_TTY,
-                    output_json=config.output_json,
-                )
-                response = invoke_openclaw_stream(
-                    effective_input,
-                    config=config,
-                    history=list(history),
-                    _stop_spinner=_spin_stop,
-                    _cancel_event=_spin_cancel,
-                )
-                if _spin_stop is not None and not _spin_stop.is_set():
-                    _spin_stop.set()
-                if _spin_thread is not None:
-                    _spin_thread.join(timeout=0.5)
-                if _spin_cancel is not None and _spin_cancel.is_set():
-                    raise KeyboardInterrupt
-            else:
-                response = _with_spinner(
-                    f"{_e('💬', '>>')} Thinking…",
-                    ask_func,
-                    effective_input,
-                    config=config,
-                    history=list(history),
-                    output_json=config.output_json,
-                )
+            effective_input, _auto_injected_paths, config, prompt = _run_chat_build_effective_input(prompt, config)
+            response = _run_chat_call_llm(effective_input, config, history, ask_func)
             _elapsed = time.monotonic() - _t0
         except KeyboardInterrupt:
             print(f"\n{_DM}{_e('⌨', '[ctrl-c]')} [interrupted]{_R}")
@@ -5237,100 +5362,13 @@ def run_chat(
             print(f"{_BRE}error:{_R} {exc}", file=sys.stderr)
             continue
 
-        # Visual separator + status bar (skipped in compact layout)
-        _is_tty = _get_is_tty()
         _compact = _PREFS.get("layout") == "compact"
-        if _is_tty and not config.output_json and not _compact and not response.raw.get("_streamed_cli"):
-            _print_response_separator(label="Response", detail="answer reveal", status="active")
-
-        print_response(response, output_json=config.output_json, elapsed=_elapsed)
-        _print_animated_separator()
-        global _last_response_text
-        _last_response_text = response.response or ""
-
-        # Compact status line: session · turns · autoroute · context%
-        if not config.output_json and not _compact:
-            _ctx_pct = 0
-            try:
-                _sys_p = str(_PREFS.get("system_prompt", "") or "")
-                _inj_p = str(_next_inject or "")
-                _mh = _PREFS.get("last_model", "")
-                _rh = _PREFS.get("route_mode", "")
-                _pressure = _session_display_mod._context_pressure_snapshot(
-                    history, system_prompt=_sys_p, pending_inject=_inj_p,
-                    model_hint=_mh, route_hint=_rh
-                )
-                _ctx_pct = int(_pressure.get("pct_history_raw", 0))
-            except Exception:
-                pass
-            _print_status_bar(
-                session_id=session_id,
-                autoroute_on=autoroute_on,
-                history_len=len(history),
-                context_pct=_ctx_pct,
-            )
-
-        # Desktop notification for long requests (macOS only, best-effort).
-        if _PREFS.get("desktop_notify") and _elapsed >= 10.0 and _IS_TTY:
-            import subprocess as _notif_subp
-            _notif_summary = (_last_response_text[:80].replace('"', "'") + "…") if _last_response_text else "Done"
-            try:
-                _notif_subp.run(
-                    [
-                        "osascript", "-e",
-                        f'display notification "{_notif_summary}" with title "OpenClaw" subtitle "Response ready ({_elapsed:.0f}s)"',
-                    ],
-                    check=False,
-                    timeout=3,
-                    capture_output=True,
-                )
-            except Exception:
-                pass
+        _run_chat_display_response(response, config, session_id, autoroute_on, history, _elapsed, _compact)
 
         # Write-back: if the prompt had edit intent and files were auto-injected,
         # show a diff preview then offer to save the AI response back to each source file.
         if _auto_injected_paths and _EDIT_INTENT_RE.search(prompt) and _IS_TTY and not config.output_json:
-            import difflib as _difflib
-            _response_text = response.response or ""
-            for _wb_path in _auto_injected_paths:
-                _code_match = _re.search(r"```(?:\w+)?\n(.*?)```", _response_text, _re.DOTALL)
-                _content_to_save = _code_match.group(1).rstrip("\n") if _code_match else _response_text
-                # Show a compact diff preview before prompting.
-                _wb_fp = Path(_wb_path).expanduser()
-                _wb_before = _wb_fp.read_text(encoding="utf-8", errors="replace") if _wb_fp.is_file() else ""
-                if _wb_before:
-                    _diff_lines = list(_difflib.unified_diff(
-                        _wb_before.splitlines(keepends=True),
-                        _content_to_save.splitlines(keepends=True),
-                        fromfile=f"current: {_wb_path}",
-                        tofile=f"proposed: {_wb_path}",
-                        n=2,
-                    ))
-                    if _diff_lines:
-                        _shown = _diff_lines[:30]
-                        for _dl in _shown:
-                            _pfx = _DM
-                            if _dl.startswith("+") and not _dl.startswith("+++"):
-                                _pfx = "\033[32m"  # green
-                            elif _dl.startswith("-") and not _dl.startswith("---"):
-                                _pfx = "\033[31m"  # red
-                            print(f"  {_pfx}{_dl.rstrip()}{_R}")
-                        if len(_diff_lines) > 30:
-                            print(f"  {_DM}... ({len(_diff_lines) - 30} more lines){_R}")
-                    else:
-                        print(f"  {_DM}(no changes){_R}")
-                else:
-                    print(f"  {_DM}(new file){_R}")
-                try:
-                    _wb_choice = input(f"  {_DM}💾 Save to {_wb_path}? [y/N]{_R} ").strip().lower()
-                except (EOFError, KeyboardInterrupt):
-                    break
-                if _wb_choice == "y":
-                    try:
-                        write_text_file(_wb_path, content=_content_to_save)
-                        print(f"  {_DM}✅ Saved to {_wb_path}{_R}")
-                    except OSError as _wb_err:
-                        print(f"  {_BRE}error:{_R} could not write {_wb_path}: {_wb_err}")
+            _run_chat_write_back(prompt, response, _auto_injected_paths, config)
 
         # Clarifying question detection: if the AI responded with a short question
         # instead of a real answer, surface an inline follow-up prompt.
