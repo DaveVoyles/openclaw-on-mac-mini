@@ -19,14 +19,6 @@ from scheduler import ScheduledTask, TaskScheduler
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def sched(tmp_path):
-    """Fresh TaskScheduler backed by a temp file (no global state)."""
-    temp_file = tmp_path / "schedules.json"
-    with patch.object(scheduler_module, "SCHEDULE_FILE", temp_file):
-        yield TaskScheduler()
-
-
 # ---------------------------------------------------------------------------
 # ScheduledTask — derived properties
 # ---------------------------------------------------------------------------

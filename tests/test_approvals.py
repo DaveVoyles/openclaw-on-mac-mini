@@ -29,14 +29,6 @@ def store():
     return ApprovalStore()
 
 
-@pytest.fixture(autouse=True)
-def reset_emergency_stop():
-    """Guarantee the global emergency stop flag is clean for every test."""
-    set_emergency_stop(False)
-    yield
-    set_emergency_stop(False)
-
-
 # ---------------------------------------------------------------------------
 # ApprovalRequest
 # ---------------------------------------------------------------------------

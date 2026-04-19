@@ -6,7 +6,7 @@ Adds the project root to sys.path so all source modules are importable.
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 try:
     import discord
@@ -147,3 +147,31 @@ def _trigger_lazy_llm_loads():
         _ = llm.chat_stream
     except Exception:
         pass  # If skills import fails, that's OK; tests will handle their own imports
+
+
+@pytest.fixture(autouse=True)
+def reset_emergency_stop():
+    """Reset the global emergency-stop flag before and after each test.
+
+    Consolidated from test_approval_store_unit.py, test_approvals.py, and
+    test_approvals_extended.py. The flag is module-level state in approval_store;
+    resetting it here prevents cross-test bleed for the entire suite.
+    """
+    from approval_store import set_emergency_stop
+    set_emergency_stop(False)
+    yield
+    set_emergency_stop(False)
+
+
+@pytest.fixture
+def sched(tmp_path):
+    """Fresh TaskScheduler backed by a temp file (no global state).
+
+    Consolidated from test_scheduler.py and test_scheduler_coverage.py.
+    Patches SCHEDULE_FILE so tests never write to /memory.
+    """
+    import scheduler as scheduler_module
+    from scheduler import TaskScheduler
+    temp_file = tmp_path / "schedules.json"
+    with patch.object(scheduler_module, "SCHEDULE_FILE", temp_file):
+        yield TaskScheduler()

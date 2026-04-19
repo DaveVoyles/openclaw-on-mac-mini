@@ -26,13 +26,6 @@ def store():
     return ApprovalStore()
 
 
-@pytest.fixture(autouse=True)
-def reset_emergency_stop():
-    set_emergency_stop(False)
-    yield
-    set_emergency_stop(False)
-
-
 # ---------------------------------------------------------------------------
 # Emergency stop — extended
 # ---------------------------------------------------------------------------

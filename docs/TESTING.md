@@ -124,7 +124,7 @@ To explicitly exclude them:
 
 ## conftest.py Fixtures
 
-Five fixtures in `tests/conftest.py` provide shared test infrastructure:
+Seven fixtures in `tests/conftest.py` provide shared test infrastructure:
 
 ### 1. `_patch_memory_dirs` (autouse)
 Redirects all memory module paths (`MEMORY_DIR`, `THREADS_DIR`, `SUMMARIES_DIR`, `HANDOVER_DIR`, `_PREFS_DIR`) to a `tmp_path`-scoped temp directory. This ensures tests never touch the real filesystem or each other's memory state.
@@ -138,7 +138,13 @@ Returns an `AsyncMock` that resolves to `("Test response", [], "test-model")` â€
 ### 4. `mock_discord_interaction`
 Returns a fully-mocked `discord.Interaction` with `response`, `followup`, `user`, `channel_id`, and `edit_original_response` attributes stubbed as `MagicMock`/`AsyncMock`.
 
-### 5. `_config(**overrides)` (helper function, not a fixture)
+### 5. `reset_emergency_stop` (autouse)
+Resets the global emergency-stop flag in `approval_store` to `False` before and after every test. Prevents cross-test bleed when approval/emergency-stop tests toggle this module-level flag. Consolidated from `test_approval_store_unit.py`, `test_approvals.py`, and `test_approvals_extended.py`.
+
+### 6. `sched`
+Yields a fresh `TaskScheduler` instance backed by a `tmp_path` temp file. Patches `scheduler.SCHEDULE_FILE` so no test ever writes to `/memory`. Consolidated from `test_scheduler.py` and `test_scheduler_coverage.py`.
+
+### 7. `_config(**overrides)` (helper function, not a fixture)
 Creates a `CliConfig` with sensible defaults (`base_url="http://localhost:8765"`, `token="secret-token"`, etc.). Call with keyword overrides for specific tests:
 
 ```python

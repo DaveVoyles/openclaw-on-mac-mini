@@ -40,13 +40,6 @@ def _make_collector():
 
 
 @pytest.fixture
-def sched(tmp_path):
-    temp_file = tmp_path / "schedules.json"
-    with patch.object(scheduler_module, "SCHEDULE_FILE", temp_file):
-        yield TaskScheduler()
-
-
-@pytest.fixture
 def global_sched(tmp_path):
     """Patch the module-level 'scheduler' global used by LLM-callable functions.
 

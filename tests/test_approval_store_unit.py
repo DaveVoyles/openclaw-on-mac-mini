@@ -24,13 +24,6 @@ def store():
     return ApprovalStore()
 
 
-@pytest.fixture(autouse=True)
-def reset_emergency_stop():
-    set_emergency_stop(False)
-    yield
-    set_emergency_stop(False)
-
-
 def _create_req(store: ApprovalStore, **overrides):
     defaults = dict(
         action="restart_container",
