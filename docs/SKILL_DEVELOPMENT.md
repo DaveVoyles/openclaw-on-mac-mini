@@ -1,4 +1,6 @@
 # OpenClaw — Skills System Guide
+<!-- Updated: 2026-04-18 -->
+
 
 OpenClaw has **two distinct skill systems** that serve different purposes. Read this carefully before creating anything new.
 

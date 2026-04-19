@@ -1,4 +1,6 @@
 # OpenClaw for Everyone — Getting Started
+<!-- Updated: 2026-04-18 -->
+
 
 > **This guide is for you** — no technical knowledge needed.
 

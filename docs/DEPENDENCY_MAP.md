@@ -1,4 +1,6 @@
 # OpenClaw CLI — Module Dependency Map
+<!-- Updated: 2026-04-18 -->
+
 
 Reference for understanding which modules depend on which, to prevent circular imports and guide where new code should live.
 

@@ -1,4 +1,6 @@
 # OpenClaw Deployment & Environment Guide
+<!-- Updated: 2026-04-18 -->
+
 
 Use this guide when you need to go from a fresh clone and `.env` file to a healthy local or production deployment.
 

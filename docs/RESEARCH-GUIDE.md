@@ -1,4 +1,6 @@
 # 🔬 Research & Autonomous Features
+<!-- Updated: 2026-04-18 -->
+
 
 OpenClaw operates autonomously — conducting multi-step research, monitoring infrastructure, tracking goals, and delivering daily briefings without manual prompting.
 

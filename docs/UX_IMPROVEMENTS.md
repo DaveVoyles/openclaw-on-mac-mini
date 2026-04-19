@@ -1,4 +1,6 @@
 # OpenClaw CLI — UX Improvements Roadmap
+<!-- Updated: 2026-04-18 -->
+
 
 > **Audience:** AI coding agents (Copilot, etc.) implementing CLI improvements autonomously.
 > **How to use this doc:** Pick the next unshipped wave. Launch an agent fleet as described below. Verify done-when criteria. Mark the wave complete and move to the next.

@@ -1,4 +1,6 @@
 # OpenClaw Network Topology & Port Inventory
+<!-- Updated: 2026-04-18 -->
+
 
 Operator-facing reference for how traffic moves between the Mac Mini host, Dockerized OpenClaw, the Synology NAS, and remote access layers.
 

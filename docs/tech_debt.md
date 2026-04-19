@@ -1,4 +1,6 @@
 # OpenClaw CLI — Tech Debt Audit & Remediation Plan
+<!-- Updated: 2026-04-18 -->
+
 
 > Generated after a 4-agent structural audit of `src/openclaw_cli.py` (14,954 lines, Wave 31).
 > Waves are ordered from lowest-risk/highest-impact to highest-risk/largest structural change.

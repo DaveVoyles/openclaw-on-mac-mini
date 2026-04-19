@@ -1,4 +1,6 @@
 # OpenClaw Command Reference
+<!-- Updated: 2026-04-18 -->
+
 
 > Source of truth: `src/dashboard/helpers.py::_raw_command_groups()`
 >

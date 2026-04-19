@@ -1,4 +1,6 @@
 # API Setup Guide
+<!-- Updated: 2026-04-18 -->
+
 
 Step-by-step instructions for configuring all external APIs used in OpenClaw.
 

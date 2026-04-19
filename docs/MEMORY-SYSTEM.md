@@ -1,4 +1,6 @@
 # 🧠 Memory System
+<!-- Updated: 2026-04-18 -->
+
 
 OpenClaw has a multi-layer memory system that stores, recalls, and manages knowledge across conversations. Every layer works together to give the bot persistent, contextual awareness — it "remembers" without being asked.
 

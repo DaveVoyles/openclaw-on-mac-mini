@@ -1,4 +1,6 @@
 # Contributing to OpenClaw
+<!-- Updated: 2026-04-18 -->
+
 
 Guidelines for adding features, skills, and commands to OpenClaw.
 

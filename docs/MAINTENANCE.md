@@ -1,4 +1,6 @@
 # OpenClaw — Maintenance & Operations Guide
+<!-- Updated: 2026-04-18 -->
+
 
 This document outlines common maintenance tasks, troubleshooting steps, and operational procedures for the OpenClaw system on the Mac Mini. For operator-first incident handling, also see [OPERATIONS-RUNBOOK.md](OPERATIONS-RUNBOOK.md) and [NETWORK-TOPOLOGY.md](NETWORK-TOPOLOGY.md).
 

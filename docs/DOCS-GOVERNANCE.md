@@ -1,4 +1,6 @@
 # OpenClaw Documentation Governance
+<!-- Updated: 2026-04-18 -->
+
 
 > **Use this guide to decide where documentation belongs, how it should be labeled, and how it
 > should be maintained.**

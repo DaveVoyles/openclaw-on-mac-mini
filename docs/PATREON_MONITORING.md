@@ -1,4 +1,6 @@
 # Patreon/MonsterVision Monitoring Guide
+<!-- Updated: 2026-04-18 -->
+
 
 **User-facing guide for automated Patreon cookie monitoring and management.** Operators should also use [OPERATIONS-RUNBOOK.md](OPERATIONS-RUNBOOK.md) for incident flow and [NETWORK-TOPOLOGY.md](NETWORK-TOPOLOGY.md) for service reachability.
 

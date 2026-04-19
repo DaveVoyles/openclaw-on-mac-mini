@@ -1,4 +1,6 @@
 # OpenClaw — Background Tasks and Scheduler Architecture
+<!-- Updated: 2026-04-18 -->
+
 
 This document explains how OpenClaw runs long-lived background work, how loops are supervised, and where scheduled behavior lives.
 

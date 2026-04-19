@@ -1,4 +1,6 @@
 # Recap Templates
+<!-- Updated: 2026-04-18 -->
+
 
 Topic-specific templates for OpenClaw's weekly recap system.
 

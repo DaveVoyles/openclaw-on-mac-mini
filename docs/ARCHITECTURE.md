@@ -1,4 +1,6 @@
 # OpenClaw — Architecture Diagram
+<!-- Updated: 2026-04-18 -->
+
 
 This diagram shows how all services, APIs, and components interconnect. Use it to understand data flow before adding new integrations.
 

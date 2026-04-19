@@ -1,4 +1,6 @@
 # Plugin Development Guide
+<!-- Updated: 2026-04-18 -->
+
 
 A comprehensive guide to developing plugins for OpenClaw.
 

@@ -1,4 +1,6 @@
 # Dashboard Surfaces & Docs Sync
+<!-- Updated: 2026-04-18 -->
+
 
 > **Audience:** agents shipping CLI UX waves, especially Waves 21–35.
 > **Goal:** keep terminal dashboard surfaces, browser dashboard surfaces, and CLI docs aligned as each wave lands.

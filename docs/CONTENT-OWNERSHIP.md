@@ -1,4 +1,6 @@
 # Content Ownership Map
+<!-- Updated: 2026-04-18 -->
+
 
 This document defines the authoritative source for each major topic area
 and points to supporting references. Use this to avoid duplication across docs.

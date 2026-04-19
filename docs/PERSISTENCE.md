@@ -1,4 +1,6 @@
 # OpenClaw — Persistence and Versioning Boundaries
+<!-- Updated: 2026-04-18 -->
+
 
 This document describes what state OpenClaw persists, where that state lives, and which modules own each storage boundary.
 

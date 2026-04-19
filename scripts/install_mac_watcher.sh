@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # install_mac_watcher.sh — installs the OpenClaw Mac folder watcher.
 # Run once on parent's Mac. Requires SSH access to macmini.
+#
+# NOTE: The canonical installer is scripts/install_watcher.sh (referenced in
+# Makefile and docs/PARENTS-GUIDE.md). This script targets mac_folder_watcher.py
+# instead of watch_folder.sh and uses a different log-path layout. Prefer
+# install_watcher.sh unless you specifically need the python-watcher variant.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"

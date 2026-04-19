@@ -1,4 +1,6 @@
 # OpenClaw CLI — Developer Onboarding Guide
+<!-- Updated: 2026-04-18 -->
+
 
 Quick start for developers contributing to the OpenClaw CLI. Start with [`docs/START-HERE.md`](START-HERE.md) for contributor wayfinding, then read [`docs/AGENT-GUIDE.md`](AGENT-GUIDE.md) for a system-wide orientation.
 

@@ -1,4 +1,6 @@
 # OpenClaw — Agent Quick Reference
+<!-- Updated: 2026-04-18 -->
+
 
 **Read this first.** 30-second orientation before touching anything.
 

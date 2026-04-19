@@ -1,4 +1,6 @@
 # Plugin API Reference
+<!-- Updated: 2026-04-18 -->
+
 
 The OpenClaw Plugin API provides a stable interface for plugins to interact with the bot core.
 

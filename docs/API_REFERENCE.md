@@ -1,4 +1,6 @@
 # API Reference
+<!-- Updated: 2026-04-18 -->
+
 
 Complete reference for all external APIs used in OpenClaw.
 

@@ -1,4 +1,6 @@
 # OpenClaw Contributor Start Here
+<!-- Updated: 2026-04-18 -->
+
 
 Use this page as the contributor entrypoint. It tells you **what to read first**, **where to make your first change**, and **which workflow doc to follow next**.
 

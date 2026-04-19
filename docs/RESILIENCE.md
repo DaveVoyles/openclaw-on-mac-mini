@@ -1,4 +1,6 @@
 # OpenClaw — Resilience, Error Handling, and Fallbacks
+<!-- Updated: 2026-04-18 -->
+
 
 This document maps the runtime paths that keep OpenClaw usable when providers, background loops, or local surfaces fail.
 

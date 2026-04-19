@@ -1,4 +1,6 @@
 # OpenClaw CLI Quick Start
+<!-- Updated: 2026-04-18 -->
+
 
 Use this guide when you want the OpenClaw launcher to behave like a real terminal app instead of calling `oc-ask` manually every time.
 

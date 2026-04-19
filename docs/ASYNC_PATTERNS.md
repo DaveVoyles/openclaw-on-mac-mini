@@ -1,4 +1,6 @@
 # OpenClaw CLI — Async Execution Patterns
+<!-- Updated: 2026-04-18 -->
+
 
 Reference for understanding how the synchronous CLI bridges to async server communication, and how to write new async command handlers correctly.
 

@@ -1,4 +1,6 @@
 # API Cost Breakdown and Budgeting
+<!-- Updated: 2026-04-18 -->
+
 
 Financial planning guide for OpenClaw's external API usage.
 

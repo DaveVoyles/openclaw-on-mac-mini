@@ -1,4 +1,6 @@
 # OpenClaw CLI — Testing Guide
+<!-- Updated: 2026-04-18 -->
+
 
 Reference for writing, running, and maintaining the CLI test suite.
 

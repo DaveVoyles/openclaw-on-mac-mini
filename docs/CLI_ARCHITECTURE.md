@@ -1,4 +1,6 @@
 # OpenClaw CLI Architecture
+<!-- Updated: 2026-04-18 -->
+
 
 Reference for agents building on or modifying the CLI. Covers the UX system,
 update mechanism, standalone install, and key code locations.

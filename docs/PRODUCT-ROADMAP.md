@@ -1,4 +1,6 @@
 # OpenClaw Product Roadmap
+<!-- Updated: 2026-04-18 -->
+
 
 > **Canonical source for future improvements.**
 > Start here for any new roadmap, wave, follow-up, or future-state planning work.

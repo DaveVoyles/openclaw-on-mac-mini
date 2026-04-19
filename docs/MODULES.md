@@ -1,4 +1,6 @@
 # OpenClaw — Source Modules Reference
+<!-- Updated: 2026-04-18 -->
+
 
 Quick reference for all source files. Consult this before exploring the codebase.
 

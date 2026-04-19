@@ -1,4 +1,6 @@
 # OpenClaw — LLM Routing & Provider Architecture
+<!-- Updated: 2026-04-18 -->
+
 
 This document describes the simplified model-routing and provider-calling layer introduced in April 2026. Read it before touching anything in `src/llm/`, `src/model_router.py`, or `src/model_routing_policy.py`.
 
