@@ -266,7 +266,7 @@ class PatreonAlertManager:
             self._alert_states.clear()
             log.info("Reset all alert states")
 
-    def get_alert_status(self) -> dict[str, Dict]:
+    def get_alert_status(self) -> dict[str, dict]:
         """Get current alert state (for debugging)."""
         return {
             key: {

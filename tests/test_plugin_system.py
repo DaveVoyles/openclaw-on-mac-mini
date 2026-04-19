@@ -145,7 +145,7 @@ class TestPluginAPI:
         # Register skill
         plugin_api.register_skill(
             name="test_skill",
-            function=test_skill,
+            function=test_plugin_system_skill,
             description="Test skill",
         )
 
@@ -160,11 +160,11 @@ class TestPluginAPI:
             pass
 
         # Register once
-        plugin_api.register_skill("test_skill", test_skill)
+        plugin_api.register_skill("test_skill", test_plugin_system_skill_v2)
 
         # Try to register again
         with pytest.raises(ValueError, match="already registered"):
-            plugin_api.register_skill("test_skill", test_skill)
+            plugin_api.register_skill("test_skill", test_plugin_system_skill_v2)
 
     def test_skill_unregistration(self, plugin_api):
         """Test skill unregistration."""
@@ -173,7 +173,7 @@ class TestPluginAPI:
             pass
 
         # Register and unregister
-        plugin_api.register_skill("test_skill", test_skill)
+        plugin_api.register_skill("test_skill", test_plugin_system_skill_v3)
         assert len(plugin_api.get_registered_skills()) == 1
 
         plugin_api.unregister_skill("test_skill")

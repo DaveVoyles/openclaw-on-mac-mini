@@ -146,7 +146,7 @@ async def test_monitor_performance_decorator_async():
         await asyncio.sleep(0.1)
         return "done"
 
-    result = await test_func()
+    result = await test_performance_monitor_func()
     assert result == "done"
     assert "test_async_op" in monitor._operation_times
 
@@ -161,7 +161,7 @@ def test_monitor_performance_decorator_sync():
         time.sleep(0.1)
         return "done"
 
-    result = test_func()
+    result = test_performance_monitor_func_v2()
     assert result == "done"
     assert "test_sync_op" in monitor._operation_times
 
