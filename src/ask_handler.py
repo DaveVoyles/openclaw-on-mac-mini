@@ -780,40 +780,28 @@ async def _ask_inject_conv_context(
 
 # ---------------------------------------------------------------------------
 
-async def handle_ask(
+async def _build_ask_context(
     interaction: discord.Interaction,
     question: str,
-    attachment: discord.Attachment | None = None,
-    model: app_commands.Choice[str] | None = None,
-    scope: app_commands.Choice[str] | None = None,
-    reset_context: bool | None = None,
-    anchor: str | None = None,
-) -> None:
-    """Main /ask handler — extracted from bot.py for modularity."""
+    attachment: discord.Attachment | None,
+    model: app_commands.Choice[str] | None,
+    scope: app_commands.Choice[str] | None,
+    reset_context: bool | None,
+    anchor: str | None,
+    ask_start: float,
+) -> dict[str, Any]:
+    """Build per-request context: trace, scope, conv, model prefs, guardrail.
 
-    if is_emergency_stopped():
-        await interaction.response.send_message(
-            "🛑 **Emergency stop is active.** `/ask` is disabled. Use `/estop resume` to resume.",
-            ephemeral=True,
-        )
-        return
-
-    if not llm_is_configured():
-        await interaction.response.send_message(
-            "⚠️ LLM not configured. Set `GOOGLE_API_KEY` (Gemini), `COPILOT_PROXY_URL` (Copilot), or `LOCAL_LLM_ENABLED=true` in your `.env` file.",
-            ephemeral=True,
-        )
-        return
-
-    await interaction.response.defer()
-    _ask_start = time.monotonic()
-
-    # Set up request tracing
+    Returns a dict with all derived state needed by the pipeline steps.
+    The returned ``question`` key may differ from the input if an attachment
+    rewrote the prompt.
+    """
     from trace_context import TraceContext, _current_trace
     _trace = TraceContext(command="ask", user_id=interaction.user.id,
                           channel_id=interaction.channel_id)
     _trace_token = _current_trace.set(_trace)
     log.info("ask_cmd start question=%.80s", question)
+
     context_channel_id, context_thread_id = _resolve_channel_thread_scope(
         interaction.channel,
         interaction.channel_id,
@@ -832,7 +820,6 @@ async def handle_ask(
         progress_lines=_progress_lines, progress_start=_progress_start,
     )
 
-    # If an attachment was provided, route through the appropriate analyzer
     if attachment:
         mime = (attachment.content_type or "").split(";")[0].strip()
         if mime in SUPPORTED_IMAGE_MIMES and attachment.size <= MAX_FILE_SIZE:
@@ -845,7 +832,6 @@ async def handle_ask(
     from llm.context import _extract_cross_channel_opt_in
     retrieval_question, cross_channel_retrieval = _extract_cross_channel_opt_in(question)
 
-    # Get or create conversation context
     conv = conversation_store.get(
         user_id=interaction.user.id,
         channel_id=interaction.channel_id,
@@ -861,12 +847,6 @@ async def handle_ask(
         cross_channel_retrieval=cross_channel_retrieval,
     )
 
-    response_text = ""
-    model_used = "unknown"
-    result = None
-    _routing_notes: list[str] = []
-    _context_explainability_note = ""
-    _final_meta: dict[str, Any] = {}
     model_pref = model.value if model else get_model_preference(interaction.user.id)
     user_routing_profile = get_routing_profile(interaction.user.id)
     context_controls = _build_ask_context_controls(
@@ -875,22 +855,71 @@ async def handle_ask(
         anchor=anchor,
     )
 
-    # Thread channel name for context-aware LLM hints
     channel = interaction.channel
-    if channel and hasattr(channel, 'name'):
+    if channel and hasattr(channel, "name"):
         context_controls["channel_name"] = channel.name
-    elif channel and hasattr(channel, 'parent') and channel.parent:
+    elif channel and hasattr(channel, "parent") and channel.parent:
         context_controls["channel_name"] = channel.parent.name
 
-    # Guardrail: if user picks "local" but query clearly needs tools, auto-upgrade
     from llm import _needs_tools as llm_needs_tools
     model_pref, upgraded_to_gemini = normalize_model_preference(
         question, model_pref, llm_needs_tools,
     )
-    if upgraded_to_gemini:
-        guardrail_note = "\n\n> ⚡ *Auto-upgraded to Gemini (your query requires tool access)*"
-    else:
-        guardrail_note = ""
+    guardrail_note = (
+        "\n\n> ⚡ *Auto-upgraded to Gemini (your query requires tool access)*"
+        if upgraded_to_gemini else ""
+    )
+
+    return {
+        "trace": _trace,
+        "trace_token": _trace_token,
+        "context_channel_id": context_channel_id,
+        "context_thread_id": context_thread_id,
+        "progress_lines": _progress_lines,
+        "progress_start": _progress_start,
+        "think": _think,
+        "on_tool_call": _on_tool_call,
+        "question": question,
+        "retrieval_question": retrieval_question,
+        "cross_channel_retrieval": cross_channel_retrieval,
+        "conv": conv,
+        "thread_hint": thread_hint,
+        "model_pref": model_pref,
+        "user_routing_profile": user_routing_profile,
+        "context_controls": context_controls,
+        "guardrail_note": guardrail_note,
+    }
+
+
+async def _route_and_stream(
+    *,
+    question: str,
+    retrieval_question: str,
+    cross_channel_retrieval: bool,
+    conv: Any,
+    interaction: discord.Interaction,
+    context_channel_id: int | None,
+    context_thread_id: int | None,
+    model_pref: str,
+    user_routing_profile: Any,
+    context_controls: dict[str, Any],
+    think_hook: Any,
+    on_tool_call: Any,
+    progress_lines: list[str],
+    progress_start: float,
+    trace: Any,
+) -> dict[str, Any]:
+    """Inject recall/rules, call LLM, apply quality repair.
+
+    Returns a dict with: response_text, model_used, final_meta,
+    routing_notes, context_explainability_note, stream_result.
+    """
+    response_text = ""
+    model_used = "unknown"
+    result = None
+    _routing_notes: list[str] = []
+    _context_explainability_note = ""
+    _final_meta: dict[str, Any] = {}
 
     try:
         await _ask_inject_recall_and_rules(
@@ -900,12 +929,14 @@ async def handle_ask(
             context_channel_id=context_channel_id,
             context_thread_id=context_thread_id,
             cross_channel_retrieval=cross_channel_retrieval,
-            think_hook=_think,
+            think_hook=think_hook,
         )
 
-        # Streaming response with progressive Discord edits
-        _model_labels = {"auto": "smart routing", "local": "Gemma (local)", "gemini": "Gemini", "openai": "GPT-4o", "anthropic": "Claude", "copilot": "Copilot"}
-        await _think(f"Routing to {_model_labels.get(model_pref, model_pref)}…")
+        _model_labels = {
+            "auto": "smart routing", "local": "Gemma (local)", "gemini": "Gemini",
+            "openai": "GPT-4o", "anthropic": "Claude", "copilot": "Copilot",
+        }
+        await think_hook(f"Routing to {_model_labels.get(model_pref, model_pref)}…")
         _last_edit_ref: list[float] = [0.0]
         display_question = question if len(question) < 200 else question[:197] + "..."
 
@@ -927,7 +958,7 @@ async def handle_ask(
                 channel_id=context_channel_id,
                 thread_id=context_thread_id,
                 user_id=str(interaction.user.id),
-                on_tool_call=_on_tool_call,
+                on_tool_call=on_tool_call,
                 on_partial_chunk=_handle_partial_chunk,
                 update_history=_update_history,
                 context_controls=context_controls,
@@ -944,16 +975,14 @@ async def handle_ask(
 
             _is_memory_store = bool(_MEMORY_STORE_RE.search(question))
             quality_meta = _safe_score_answer_quality(
-                response_text,
-                final_meta=_final_meta,
-                context="ask",
+                response_text, final_meta=_final_meta, context="ask",
             )
             _run_retry_stream = functools.partial(
                 _ask_run_retry_stream,
                 model_used=model_used, model_pref=model_pref,
                 conv=conv, interaction=interaction,
                 context_channel_id=context_channel_id, context_thread_id=context_thread_id,
-                on_tool_call=_on_tool_call, on_partial_chunk=_handle_partial_chunk,
+                on_tool_call=on_tool_call, on_partial_chunk=_handle_partial_chunk,
                 update_history=_update_history, context_controls=context_controls,
                 routing_profile=user_routing_profile,
             )
@@ -966,7 +995,7 @@ async def handle_ask(
                 quality_meta=quality_meta,
                 context="ask",
                 run_retry_stream=_run_retry_stream,
-                think_hook=_think,
+                think_hook=think_hook,
             )
             response_text = str(repair_result["response_text"])
             model_used = str(repair_result["model_used"])
@@ -999,13 +1028,13 @@ async def handle_ask(
             log.info("ask_cmd LLM done model=%s chars=%d", model_used, len(response_text))
 
         except asyncio.TimeoutError:
-            elapsed = time.monotonic() - _progress_start
+            elapsed = time.monotonic() - progress_start
             log.warning("LLM response timed out after %.0fs for: %.80s", elapsed, question)
             response_text = _build_ask_timeout_message(
                 elapsed_seconds=elapsed,
-                progress_lines=_progress_lines,
+                progress_lines=progress_lines,
                 model_pref=model_pref,
-                trace_id=_trace.trace_id,
+                trace_id=trace.trace_id,
             )
             model_used = "timeout"
 
@@ -1014,36 +1043,105 @@ async def handle_ask(
         response_text = _build_ask_failure_message(
             question=question,
             model_pref=model_pref,
-            trace_id=_trace.trace_id,
+            trace_id=trace.trace_id,
             category=_classify_ask_failure(str(e)),
         )
         model_used = "error"
 
-    _payload = await _ask_prepare_response_payload(
-        response_text=response_text,
-        model_used=model_used,
-        question=question,
-        trace_id=_trace.trace_id,
-        routing_notes=_routing_notes,
-        guardrail_note=guardrail_note,
-        thread_hint=thread_hint,
-        ask_start=_ask_start,
-        context_channel_id=context_channel_id,
-        context_thread_id=context_thread_id,
-        final_meta=_final_meta,
+    return {
+        "response_text": response_text,
+        "model_used": model_used,
+        "final_meta": _final_meta,
+        "routing_notes": _routing_notes,
+        "context_explainability_note": _context_explainability_note,
+        "stream_result": result,
+    }
+
+
+# ---------------------------------------------------------------------------
+
+async def handle_ask(
+    interaction: discord.Interaction,
+    question: str,
+    attachment: discord.Attachment | None = None,
+    model: app_commands.Choice[str] | None = None,
+    scope: app_commands.Choice[str] | None = None,
+    reset_context: bool | None = None,
+    anchor: str | None = None,
+) -> None:
+    """Main /ask handler — extracted from bot.py for modularity."""
+
+    if is_emergency_stopped():
+        await interaction.response.send_message(
+            "🛑 **Emergency stop is active.** `/ask` is disabled. Use `/estop resume` to resume.",
+            ephemeral=True,
+        )
+        return
+
+    if not llm_is_configured():
+        await interaction.response.send_message(
+            "⚠️ LLM not configured. Set `GOOGLE_API_KEY` (Gemini), `COPILOT_PROXY_URL` (Copilot), or `LOCAL_LLM_ENABLED=true` in your `.env` file.",
+            ephemeral=True,
+        )
+        return
+
+    await interaction.response.defer()
+    _ask_start = time.monotonic()
+
+    ctx = await _build_ask_context(
         interaction=interaction,
-        stream_result=result,
-        conv=conv,
+        question=question,
+        attachment=attachment,
+        model=model,
+        scope=scope,
+        reset_context=reset_context,
+        anchor=anchor,
+        ask_start=_ask_start,
     )
-    response_text = _payload["response_text"]
-    model_used = _payload["model_used"]
-    _routing_notes = _payload["routing_notes"]
+    question = ctx["question"]
+
+    stream = await _route_and_stream(
+        question=question,
+        retrieval_question=ctx["retrieval_question"],
+        cross_channel_retrieval=ctx["cross_channel_retrieval"],
+        conv=ctx["conv"],
+        interaction=interaction,
+        context_channel_id=ctx["context_channel_id"],
+        context_thread_id=ctx["context_thread_id"],
+        model_pref=ctx["model_pref"],
+        user_routing_profile=ctx["user_routing_profile"],
+        context_controls=ctx["context_controls"],
+        think_hook=ctx["think"],
+        on_tool_call=ctx["on_tool_call"],
+        progress_lines=ctx["progress_lines"],
+        progress_start=ctx["progress_start"],
+        trace=ctx["trace"],
+    )
+
+    _payload = await _ask_prepare_response_payload(
+        response_text=stream["response_text"],
+        model_used=stream["model_used"],
+        question=question,
+        trace_id=ctx["trace"].trace_id,
+        routing_notes=stream["routing_notes"],
+        guardrail_note=ctx["guardrail_note"],
+        thread_hint=ctx["thread_hint"],
+        ask_start=_ask_start,
+        context_channel_id=ctx["context_channel_id"],
+        context_thread_id=ctx["context_thread_id"],
+        final_meta=stream["final_meta"],
+        interaction=interaction,
+        stream_result=stream["stream_result"],
+        conv=ctx["conv"],
+    )
 
     _build_footer = functools.partial(
-        _ask_build_footer, ask_start=_ask_start,
-        model_used=model_used, conv=conv,
-        context_explainability_note=_context_explainability_note,
-        routing_notes=_routing_notes,
+        _ask_build_footer,
+        ask_start=_ask_start,
+        model_used=_payload["model_used"],
+        conv=ctx["conv"],
+        context_explainability_note=stream["context_explainability_note"],
+        routing_notes=_payload["routing_notes"],
     )
 
     await _ask_deliver_response(
@@ -1057,21 +1155,21 @@ async def handle_ask(
         table_image_file=_payload["table_image_file"],
         build_footer=_build_footer,
         force_file_response=_payload["force_file_response"],
-        final_meta=_final_meta,
+        final_meta=stream["final_meta"],
     )
 
     await _ask_finalize(
         interaction=interaction,
         question=question,
-        response_text=response_text,
-        model_used=model_used,
-        routing_notes=_routing_notes,
-        trace=_trace,
+        response_text=_payload["response_text"],
+        model_used=_payload["model_used"],
+        routing_notes=_payload["routing_notes"],
+        trace=ctx["trace"],
         ask_start=_ask_start,
-        conv=conv,
-        context_channel_id=context_channel_id,
-        context_thread_id=context_thread_id,
-        final_meta=_final_meta,
+        conv=ctx["conv"],
+        context_channel_id=ctx["context_channel_id"],
+        context_thread_id=ctx["context_thread_id"],
+        final_meta=stream["final_meta"],
     )
 
 
