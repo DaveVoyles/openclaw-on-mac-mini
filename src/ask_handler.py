@@ -83,6 +83,235 @@ _FILE_THRESHOLD = 8000
 _STREAM_EDIT_INTERVAL = 3.0
 
 
+# ---------------------------------------------------------------------------
+# Module-level pipeline helpers (extracted from handle_ask nested functions)
+# ---------------------------------------------------------------------------
+
+async def _ask_think(
+    status: str,
+    *,
+    interaction: discord.Interaction,
+    question: str,
+    progress_lines: list[str],
+    progress_start: float,
+) -> None:
+    elapsed = time.monotonic() - progress_start
+    progress_lines.append(f"💭 {status} ({elapsed:.0f}s)")
+    progress = "\n".join(progress_lines) + "\n\n⏳ *thinking…*"
+    try:
+        embed = discord.Embed(description=progress, color=discord.Color.dark_grey())
+        embed.set_author(
+            name=f"Replying to: {question[:100]}",
+            icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+        )
+        await interaction.edit_original_response(content=None, embed=embed)
+    except Exception as exc:  # broad: intentional — discord may be mocked in tests
+        log.debug("Progress edit failed: %s", exc)
+
+
+async def _ask_on_tool_call(
+    tool_name: str,
+    round_num: int,
+    *,
+    args: dict | None = None,
+    result_preview: str | None = None,
+    interaction: discord.Interaction,
+    question: str,
+    progress_lines: list[str],
+    progress_start: float,
+) -> None:
+    elapsed = time.monotonic() - progress_start
+    if result_preview is not None:
+        progress_lines.append(f"✅ `{tool_name}` → {result_preview[:80]}")
+    elif args is not None:
+        args_str = ", ".join(f"{k}={v!r}" for k, v in args.items()) if args else ""
+        progress_lines.append(f"🔄 Using `{tool_name}({args_str})`… ({elapsed:.0f}s)")
+    else:
+        progress_lines.append(f"🔄 Using `{tool_name}`… ({elapsed:.0f}s)")
+    progress = "\n".join(progress_lines) + "\n\n⏳ *working…*"
+    try:
+        embed = discord.Embed(
+            description=progress,
+            color=discord.Color.dark_grey(),
+        )
+        embed.set_author(
+            name=f"Replying to: {question[:100]}",
+            icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+        )
+        await interaction.edit_original_response(content=None, embed=embed)
+    except Exception as exc:  # broad: intentional — discord may be mocked in tests
+        log.debug("Failed to update tool progress: %s", exc)
+
+
+def _ask_update_history(
+    updated_history: list[dict[str, Any]],
+    *,
+    conv: Any,
+    interaction: discord.Interaction,
+) -> None:
+    conv.update_from_llm(updated_history)
+    conversation_store.auto_save_thread(
+        interaction.user.id, interaction.channel_id, str(interaction.user.display_name),
+    )
+
+
+async def _ask_handle_partial_chunk(
+    chunk_text: str,
+    *,
+    interaction: discord.Interaction,
+    display_question: str,
+    last_edit_ref: list[float],
+) -> None:
+    now = time.monotonic()
+    if now - last_edit_ref[0] < _STREAM_EDIT_INTERVAL:
+        return
+    try:
+        preview = chunk_text[:_EMBED_LIMIT - 50] + "\n\n*⏳ streaming…*"
+        embed = discord.Embed(description=preview, color=discord.Color.purple())
+        embed.set_author(
+            name=f"Replying to: {display_question}",
+            icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+        )
+        await interaction.edit_original_response(content=None, embed=embed)
+        last_edit_ref[0] = now
+    except Exception as exc:  # broad: intentional — discord may be mocked in tests
+        log.debug("Stream edit failed: %s", exc)
+
+
+async def _ask_run_retry_stream(
+    retry_question: str,
+    *,
+    model_used: str,
+    model_pref: str,
+    conv: Any,
+    interaction: discord.Interaction,
+    context_channel_id: int | None,
+    context_thread_id: int | None,
+    on_tool_call: Any,
+    on_partial_chunk: Any,
+    update_history: Any,
+    context_controls: dict[str, Any],
+    routing_profile: Any,
+) -> Any:
+    # Phase 21: Cross-provider quality retry — if Gemini produced a low-quality
+    # answer, retry with Copilot for a genuinely different response.
+    _retry_pref = (
+        "copilot" if (model_used or "").startswith("gemini") else model_pref
+    )
+    return await run_ask_stream(
+        llm_stream=llm_chat_stream,
+        user_message=retry_question,
+        history=conv.history,
+        user_name=str(interaction.user.display_name),
+        model_preference=_retry_pref,
+        channel_id=context_channel_id,
+        thread_id=context_thread_id,
+        user_id=str(interaction.user.id),
+        on_tool_call=on_tool_call,
+        on_partial_chunk=on_partial_chunk,
+        update_history=update_history,
+        context_controls=context_controls,
+        routing_profile=routing_profile,
+    )
+
+
+def _ask_build_footer(
+    chunk_idx: int = 0,
+    total_chunks: int = 1,
+    *,
+    ask_start: float,
+    model_used: str,
+    conv: Any,
+    context_explainability_note: str,
+    routing_notes: list[str],
+) -> str:
+    elapsed = time.monotonic() - ask_start
+    display_model = model_used.replace("models/", "") if model_used else "unknown"
+    if "gemini" not in display_model.lower() and "gpt" not in display_model.lower() and "claude" not in display_model.lower():
+        rate_str = "local · unlimited"
+    else:
+        rate_str = get_rate_info()
+    if "gemma" in display_model.lower() or "ollama" in display_model.lower():
+        actual_icon = "🏠"
+    elif "gemini" in display_model.lower():
+        actual_icon = "☁️"
+    elif "gpt" in display_model.lower() or "openai" in display_model.lower():
+        actual_icon = "🟢"
+    elif "claude" in display_model.lower() or "anthropic" in display_model.lower():
+        actual_icon = "🟣"
+    else:
+        actual_icon = "🔄"
+    chunk_str = f"[{chunk_idx + 1}/{total_chunks}] • " if total_chunks > 1 else ""
+    ft = f"{chunk_str}💬 {conv.message_count} msgs | {rate_str} | {actual_icon} {display_model} | ⏱ {elapsed:.1f}s"
+    ft = _append_explainability_footer(ft, context_explainability_note)
+    if routing_notes:
+        ft += " | ⚠️ " + " → ".join(routing_notes)
+    return ft
+
+
+async def _ask_post_response_learning(
+    *,
+    context_channel_id: int | None,
+    context_thread_id: int | None,
+    conv: Any,
+    question: str,
+    interaction: discord.Interaction,
+    response_text: str,
+) -> None:
+    from runtime_state import request_context
+    with request_context(channel_id=context_channel_id, thread_id=context_thread_id):
+        try:
+            from rules_engine import add_rule, detect_correction, extract_rule
+            if detect_correction(question):
+                prev_bot_msg = ""
+                for msg in reversed(conv.history[:-1]):
+                    if msg.get("role") == "model":
+                        parts = msg.get("parts", [])
+                        prev_bot_msg = " ".join(p for p in parts if isinstance(p, str))[:500]
+                        break
+                if prev_bot_msg:
+                    rule = await extract_rule(question, prev_bot_msg)
+                    if rule:
+                        await add_rule(rule, question[:300])
+                        try:
+                            await interaction.followup.send(
+                                f"📝 Got it — I'll remember: *{rule}*", ephemeral=True
+                            )
+                        except discord.HTTPException as exc:
+                            log.debug("Correction followup send failed: %s", exc)
+        except (ImportError, AttributeError, ValueError) as e:
+            log.debug("Correction detection failed (non-critical): %s", e)
+
+        try:
+            from user_profile import learn_from_message
+            await learn_from_message(question, response_text)
+        except (ImportError, AttributeError, ValueError) as e:
+            log.debug("Profile learning failed (non-critical): %s", e)
+
+        try:
+            from fact_extractor import extract_and_store_facts, should_extract
+            if should_extract(interaction.user.id, question):
+                await extract_and_store_facts(question, response_text, interaction.user.id)
+        except (ImportError, AttributeError, ValueError) as e:
+            log.debug("Fact extraction failed (non-critical): %s", e)
+
+        try:
+            from goal_tracker import detect_goal, extract_and_store_goal
+            if detect_goal(question):
+                goal = await extract_and_store_goal(question, interaction.user.id)
+                if goal:
+                    try:
+                        await interaction.followup.send(
+                            f"🎯 Tracking goal: *{goal}*", ephemeral=True
+                        )
+                    except discord.HTTPException as exc:
+                        log.debug("Goal followup send failed: %s", exc)
+        except (ImportError, AttributeError, ValueError) as e:
+            log.debug("Goal tracking failed (non-critical): %s", e)
+
+
+# ---------------------------------------------------------------------------
+
 async def handle_ask(
     interaction: discord.Interaction,
     question: str,
@@ -127,41 +356,13 @@ async def handle_ask(
     _progress_start = time.monotonic()
 
     async def _think(status: str) -> None:
-        elapsed = time.monotonic() - _progress_start
-        _progress_lines.append(f"💭 {status} ({elapsed:.0f}s)")
-        progress = "\n".join(_progress_lines) + "\n\n⏳ *thinking…*"
-        try:
-            embed = discord.Embed(description=progress, color=discord.Color.dark_grey())
-            embed.set_author(
-                name=f"Replying to: {question[:100]}",
-                icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
-            )
-            await interaction.edit_original_response(content=None, embed=embed)
-        except Exception as exc:  # broad: intentional — discord may be mocked in tests
-            log.debug("Progress edit failed: %s", exc)
+        await _ask_think(status, interaction=interaction, question=question,
+                         progress_lines=_progress_lines, progress_start=_progress_start)
 
     async def _on_tool_call(tool_name: str, round_num: int, *, args: dict | None = None, result_preview: str | None = None) -> None:
-        elapsed = time.monotonic() - _progress_start
-        if result_preview is not None:
-            _progress_lines.append(f"✅ `{tool_name}` → {result_preview[:80]}")
-        elif args is not None:
-            args_str = ", ".join(f"{k}={v!r}" for k, v in args.items()) if args else ""
-            _progress_lines.append(f"🔄 Using `{tool_name}({args_str})`… ({elapsed:.0f}s)")
-        else:
-            _progress_lines.append(f"🔄 Using `{tool_name}`… ({elapsed:.0f}s)")
-        progress = "\n".join(_progress_lines) + "\n\n⏳ *working…*"
-        try:
-            embed = discord.Embed(
-                description=progress,
-                color=discord.Color.dark_grey(),
-            )
-            embed.set_author(
-                name=f"Replying to: {question[:100]}",
-                icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
-            )
-            await interaction.edit_original_response(content=None, embed=embed)
-        except Exception as exc:  # broad: intentional — discord may be mocked in tests
-            log.debug("Failed to update tool progress: %s", exc)
+        await _ask_on_tool_call(tool_name, round_num, args=args, result_preview=result_preview,
+                                interaction=interaction, question=question,
+                                progress_lines=_progress_lines, progress_start=_progress_start)
 
     # If an attachment was provided, route through the appropriate analyzer
     if attachment:
@@ -322,32 +523,17 @@ async def handle_ask(
         _final_meta: dict[str, Any] = {}
         _model_labels = {"auto": "smart routing", "local": "Gemma (local)", "gemini": "Gemini", "openai": "GPT-4o", "anthropic": "Claude", "copilot": "Copilot"}
         await _think(f"Routing to {_model_labels.get(model_pref, model_pref)}…")
-        last_edit = 0.0
+        _last_edit_ref: list[float] = [0.0]
         display_question = question if len(question) < 200 else question[:197] + "..."
 
         try:
             def _update_history(updated_history: list[dict[str, Any]]) -> None:
-                conv.update_from_llm(updated_history)
-                conversation_store.auto_save_thread(
-                    interaction.user.id, interaction.channel_id, str(interaction.user.display_name),
-                )
+                _ask_update_history(updated_history, conv=conv, interaction=interaction)
 
             async def _handle_partial_chunk(chunk_text: str) -> None:
-                nonlocal last_edit
-                now = time.monotonic()
-                if now - last_edit < _STREAM_EDIT_INTERVAL:
-                    return
-                try:
-                    preview = chunk_text[:_EMBED_LIMIT - 50] + "\n\n*⏳ streaming…*"
-                    embed = discord.Embed(description=preview, color=discord.Color.purple())
-                    embed.set_author(
-                        name=f"Replying to: {display_question}",
-                        icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
-                    )
-                    await interaction.edit_original_response(content=None, embed=embed)
-                    last_edit = now
-                except Exception as exc:  # broad: intentional — discord may be mocked in tests
-                    log.debug("Stream edit failed: %s", exc)
+                await _ask_handle_partial_chunk(chunk_text, interaction=interaction,
+                                                display_question=display_question,
+                                                last_edit_ref=_last_edit_ref)
 
             result = await run_ask_stream(
                 llm_stream=llm_chat_stream,
@@ -380,24 +566,12 @@ async def handle_ask(
                 context="ask",
             )
             async def _run_retry_stream(retry_question: str) -> Any:
-                # Phase 21: Cross-provider quality retry — if Gemini produced a low-quality
-                # answer, retry with Copilot for a genuinely different response.
-                _retry_pref = (
-                    "copilot" if (model_used or "").startswith("gemini") else model_pref
-                )
-                return await run_ask_stream(
-                    llm_stream=llm_chat_stream,
-                    user_message=retry_question,
-                    history=conv.history,
-                    user_name=str(interaction.user.display_name),
-                    model_preference=_retry_pref,
-                    channel_id=context_channel_id,
-                    thread_id=context_thread_id,
-                    user_id=str(interaction.user.id),
-                    on_tool_call=_on_tool_call,
-                    on_partial_chunk=_handle_partial_chunk,
-                    update_history=_update_history,
-                    context_controls=context_controls,
+                return await _ask_run_retry_stream(
+                    retry_question, model_used=model_used, model_pref=model_pref,
+                    conv=conv, interaction=interaction,
+                    context_channel_id=context_channel_id, context_thread_id=context_thread_id,
+                    on_tool_call=_on_tool_call, on_partial_chunk=_handle_partial_chunk,
+                    update_history=_update_history, context_controls=context_controls,
                     routing_profile=user_routing_profile,
                 )
 
@@ -582,28 +756,10 @@ async def handle_ask(
             log.debug("Auto-thread creation failed: %s", e)
 
     def _build_footer(chunk_idx: int = 0, total_chunks: int = 1) -> str:
-        elapsed = time.monotonic() - _ask_start
-        display_model = model_used.replace("models/", "") if model_used else "unknown"
-        if "gemini" not in display_model.lower() and "gpt" not in display_model.lower() and "claude" not in display_model.lower():
-            rate_str = "local · unlimited"
-        else:
-            rate_str = get_rate_info()
-        if "gemma" in display_model.lower() or "ollama" in display_model.lower():
-            actual_icon = "🏠"
-        elif "gemini" in display_model.lower():
-            actual_icon = "☁️"
-        elif "gpt" in display_model.lower() or "openai" in display_model.lower():
-            actual_icon = "🟢"
-        elif "claude" in display_model.lower() or "anthropic" in display_model.lower():
-            actual_icon = "🟣"
-        else:
-            actual_icon = "🔄"
-        chunk_str = f"[{chunk_idx + 1}/{total_chunks}] • " if total_chunks > 1 else ""
-        ft = f"{chunk_str}💬 {conv.message_count} msgs | {rate_str} | {actual_icon} {display_model} | ⏱ {elapsed:.1f}s"
-        ft = _append_explainability_footer(ft, _context_explainability_note)
-        if _routing_notes:
-            ft += " | ⚠️ " + " → ".join(_routing_notes)
-        return ft
+        return _ask_build_footer(chunk_idx, total_chunks, ask_start=_ask_start,
+                                 model_used=model_used, conv=conv,
+                                 context_explainability_note=_context_explainability_note,
+                                 routing_notes=_routing_notes)
 
     # Long-response path: send as downloadable .md file
     if len(response_text) > _FILE_THRESHOLD or force_file_response:
@@ -758,59 +914,14 @@ async def handle_ask(
     conversation_store.cleanup_expired()
 
     # Fire-and-forget: correction detection & profile learning (Phase 14)
-    async def _post_response_learning():
-        from runtime_state import request_context
-        with request_context(channel_id=context_channel_id, thread_id=context_thread_id):
-            try:
-                from rules_engine import add_rule, detect_correction, extract_rule
-                if detect_correction(question):
-                    prev_bot_msg = ""
-                    for msg in reversed(conv.history[:-1]):
-                        if msg.get("role") == "model":
-                            parts = msg.get("parts", [])
-                            prev_bot_msg = " ".join(p for p in parts if isinstance(p, str))[:500]
-                            break
-                    if prev_bot_msg:
-                        rule = await extract_rule(question, prev_bot_msg)
-                        if rule:
-                            await add_rule(rule, question[:300])
-                            try:
-                                await interaction.followup.send(
-                                    f"📝 Got it — I'll remember: *{rule}*", ephemeral=True
-                                )
-                            except discord.HTTPException as exc:
-                                log.debug("Correction followup send failed: %s", exc)
-            except (ImportError, AttributeError, ValueError) as e:
-                log.debug("Correction detection failed (non-critical): %s", e)
-
-            try:
-                from user_profile import learn_from_message
-                await learn_from_message(question, response_text)
-            except (ImportError, AttributeError, ValueError) as e:
-                log.debug("Profile learning failed (non-critical): %s", e)
-
-            try:
-                from fact_extractor import extract_and_store_facts, should_extract
-                if should_extract(interaction.user.id, question):
-                    await extract_and_store_facts(question, response_text, interaction.user.id)
-            except (ImportError, AttributeError, ValueError) as e:
-                log.debug("Fact extraction failed (non-critical): %s", e)
-
-            try:
-                from goal_tracker import detect_goal, extract_and_store_goal
-                if detect_goal(question):
-                    goal = await extract_and_store_goal(question, interaction.user.id)
-                    if goal:
-                        try:
-                            await interaction.followup.send(
-                                f"🎯 Tracking goal: *{goal}*", ephemeral=True
-                            )
-                        except discord.HTTPException as exc:
-                            log.debug("Goal followup send failed: %s", exc)
-            except (ImportError, AttributeError, ValueError) as e:
-                log.debug("Goal tracking failed (non-critical): %s", e)
-
-    asyncio.get_running_loop().create_task(_post_response_learning())
+    asyncio.get_running_loop().create_task(_ask_post_response_learning(
+        context_channel_id=context_channel_id,
+        context_thread_id=context_thread_id,
+        conv=conv,
+        question=question,
+        interaction=interaction,
+        response_text=response_text,
+    ))
 
 
 async def handle_metrics(interaction: discord.Interaction) -> None:
