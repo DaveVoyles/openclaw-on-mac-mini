@@ -317,6 +317,18 @@
         tr:last-child td { border-bottom: none; }
         tr:hover td { background: #f9f7fe; }
 
+        /* ── Back to top ───────────────────────────────────────── */
+        .back-to-top {
+            display: block;
+            text-align: right;
+            font-size: 0.8rem;
+            color: #9b8dc0;
+            text-decoration: none;
+            padding: 6px 0 2px;
+            margin-top: -8px;
+        }
+        .back-to-top:hover { color: #764ba2; }
+
         /* ── Horizontal rule ───────────────────────────────────── */
         hr {
             border: none;
@@ -498,7 +510,7 @@
         </aside>
 
         <!-- ── Main content ────────────────────────────── -->
-        <main class="main-content">
+        <main class="main-content" id="top">
 
             <!-- Intro blurb -->
             <div class="section-card">
@@ -629,6 +641,7 @@
                     <li><strong>Need step-by-step help?</strong> Visit the <a href="/onboarding">interactive setup guide</a> — it walks you through everything.</li>
                 </ul>
             </div>
+            <a href="#top" class="back-to-top">↑ Back to top</a>
 
             <!-- ── Section 8 ── -->
             <div class="section-card">
@@ -686,12 +699,12 @@
                 <pre>look up tips for saving money on groceries</pre>
                 <p>OpenClaw will:</p>
                 <ol>
-                    <li>Search the web using Perplexity AI and gather up-to-date facts</li>
-                    <li>If you have an active document (see the <code>/files</code> tip below), it will suggest new paragraphs you can paste straight in</li>
+                    <li>Search the web and gather up-to-date facts</li>
+                    <li>If you've already uploaded a document (e.g. told OpenClaw "I'm working on report.docx"), it will suggest new paragraphs you can paste straight in</li>
                     <li>Post everything in Slack so you can copy what you need</li>
                 </ol>
                 <blockquote class="tip-green">
-                    <p><strong>Tip:</strong> Use <code>/files report.docx</code> to set an active document first, then type your research request — OpenClaw will tailor the findings to your document automatically.</p>
+                    <p><strong>Tip:</strong> Upload your document first, then type your research request — OpenClaw will tailor the findings to fit your document automatically.</p>
                 </blockquote>
                 <p><strong>Keywords that trigger research:</strong></p>
                 <ul>
@@ -761,7 +774,7 @@
                     <p>📄 New file synced: <strong>budget-2025.xlsx</strong> — what would you like to do?</p>
                 </blockquote>
                 <p>Then just tap a button: <strong>Summarize it</strong>, <strong>Proofread it</strong>, or <strong>Explain it</strong>.</p>
-                <p>If you're not getting alerts but want them, ask Dave to set <code>SLACK_NOTIFY_USER_ID</code> to your Slack member ID.</p>
+                <p>Not getting alerts yet? Ask Dave to turn them on for you — it takes him about 30 seconds and you're all set.</p>
             </div>
 
             <!-- ── Section 13 ── -->
@@ -962,6 +975,7 @@
                 <h2 id="retry-after-an-error">🔁 Retry After an Error</h2>
                 <p>If OpenClaw ever replies with an error message, you'll see a <strong>🔁 Try again</strong> button right below it. Just click it — OpenClaw will re-run your original request without you having to retype anything.</p>
             </div>
+            <a href="#top" class="back-to-top">↑ Back to top</a>
 
             <!-- ── Section 31 ── -->
             <div class="section-card">
@@ -1051,6 +1065,7 @@
                 <p>If you're on Windows and can't use the SSH sync method, OpenClaw now supports uploading files directly over the network. The Windows installer (<code>Install-OpenClaw.ps1</code>) automatically tests this connection during setup.</p>
                 <p>If you see "✅ Upload server reachable" during install, the HTTP fallback is working and your files will sync even without additional tools installed.</p>
             </div>
+            <a href="#top" class="back-to-top">↑ Back to top</a>
 
             <!-- ── Section 36 ── -->
             <div class="section-card">

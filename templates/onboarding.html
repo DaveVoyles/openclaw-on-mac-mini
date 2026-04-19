@@ -569,12 +569,25 @@
                     a folder of contracts, or a collection of notes? You have two options:
                 </p>
 
-                <!-- Option A: CLI scan -->
-                <div style="background:#f0f4ff;border-left:4px solid #667eea;border-radius:10px;padding:20px;margin:20px 0;">
-                    <h3 style="margin-top:0;color:#667eea;">🖥️ Option A — The OpenClaw CLI (one-time install, most powerful)</h3>
+                <!-- Option A: Slack drag-and-drop (recommended) -->
+                <div style="background:#f0fff4;border-left:4px solid #48bb78;border-radius:10px;padding:20px;margin:20px 0;">
+                    <h3 style="margin-top:0;color:#276749;">📎 Option A — Drag &amp; drop in Slack <span style="font-size:0.8em;background:#c6f6d5;color:#276749;border-radius:4px;padding:2px 8px;margin-left:6px;">✅ Recommended</span></h3>
+                    <p style="margin-bottom:10px;">
+                        No install needed. Just drag files straight into the Slack chat and tell OpenClaw what to do with them.
+                        Works on any device, right now.
+                    </p>
+                    <div class="example-prompt">"Here's my report — can you tighten it up?" [drag file]</div>
+                    <div class="example-prompt">"Review all the docs in this zip and tell me which needs the most work." [drag zip]</div>
+                    <p style="margin-top:12px;font-size:0.9em;color:#555;">
+                        <strong>Tip:</strong> For many files at once, select them all, compress into a zip, then drag the zip in.
+                    </p>
+                </div>
+
+                <!-- Option B: CLI scan (advanced) -->
+                <div style="background:#f0f4ff;border-left:4px solid #a0aec0;border-radius:10px;padding:20px;margin:20px 0;">
+                    <h3 style="margin-top:0;color:#4a5568;">🖥️ Option B — The OpenClaw CLI <span style="font-size:0.8em;background:#e2e8f0;color:#4a5568;border-radius:4px;padding:2px 8px;margin-left:6px;">Advanced</span></h3>
                     <p style="margin-bottom:12px;">
-                        Install a small helper app on your computer. Then just point it at any folder and it sends
-                        everything to OpenClaw automatically. Works on Mac and Windows.
+                        Install a small helper app (one-time) and point it at any folder — OpenClaw reads the whole thing automatically. Great for large collections of files. Works on Mac and Windows.
                     </p>
 
                     <p><strong>Mac install</strong> — open Terminal and paste:</p>
@@ -592,24 +605,11 @@
                     <div class="example-prompt" style="font-family:monospace;">openclaw scan ~/Desktop/MyDocs "Suggest how to reorganize these files"</div>
 
                     <div class="tip-box" style="margin-top:14px;">
-                        <strong>💡 Tip:</strong> This works like GitHub Copilot — it reads your whole folder tree
-                        and sends it to the AI. You only need to install it once.
+                        <strong>💡 Tip:</strong> Once installed, it reads your entire folder at once and sends everything to OpenClaw — like uploading a whole stack of papers in one go.
                     </div>
-                </div>
-
-                <!-- Option B: Slack upload -->
-                <div style="background:#f9fafb;border-left:4px solid #a0aec0;border-radius:10px;padding:20px;margin:20px 0;">
-                    <h3 style="margin-top:0;color:#555;">📎 Option B — Slack drag-and-drop (no install)</h3>
-                    <p style="margin-bottom:10px;">
-                        No install needed — just drag files into the Slack chat and ask OpenClaw to work with them.
-                        Works for individual files. For many files, zip them first.
+                    <p style="margin-top:12px;font-size:0.9em;color:#718096;">
+                        Not comfortable with this? That's totally fine — Option A works great for most people. You can always come back to this later, or ask Dave to help.
                     </p>
-                    <div class="example-prompt">"Here's my report — can you tighten it up?" [drag file]</div>
-                    <div class="example-prompt">"Review all the docs in this zip and tell me which needs the most work." [drag zip]</div>
-                </div>
-
-                <div class="tip-box">
-                    <strong>📞 Need help installing?</strong> Just ask Dave — he can walk you through it in 5 minutes!
                 </div>
             </div>
 
