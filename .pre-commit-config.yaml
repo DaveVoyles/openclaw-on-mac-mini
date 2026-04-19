@@ -96,6 +96,16 @@ repos:
         always_run: false
         stages: [pre-push]
 
+  # env schema validation
+  - repo: local
+    hooks:
+      - id: validate-env-schema
+        name: validate env schema vs .env.example
+        entry: python3 scripts/validate_schema.py --warn-only
+        language: system
+        pass_filenames: false
+        files: ^(config/env_schema\.yaml|\.env\.example)$
+
   # Security scanning (optional - can be slow)
   # Uncomment to enable Trivy in pre-commit (primarily runs in CI)
   # - repo: local
@@ -109,5 +119,7 @@ repos:
 
 # CI mode: Fail fast and don't modify files
 ci:
+  autofix_commit_msg: "style: auto-fix pre-commit hooks"
   autofix_prs: false
   autoupdate_schedule: quarterly
+  skip: [mypy, validate-env-schema, pytest-check]

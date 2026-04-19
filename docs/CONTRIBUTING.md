@@ -41,7 +41,26 @@ pip install -r requirements.txt
 pip install -r requirements-test.txt
 ```
 
-### 3. Run tests
+### 3. Install pre-commit hooks
+
+```bash
+pip install pre-commit
+pre-commit install
+pre-commit install --hook-type commit-msg
+```
+
+Hooks run automatically on `git commit`. To run manually:
+
+```bash
+pre-commit run --all-files
+```
+
+Hooks included: ruff lint + format, trailing whitespace, YAML/TOML/JSON validation, mypy type
+checking, bandit security scan, markdown lint, conventional commit messages, and env schema
+validation. Local hooks (`mypy`, `validate-env-schema`, `pytest-check`) are skipped in
+[pre-commit.ci](https://pre-commit.ci) and only run locally.
+
+### 4. Run tests
 
 ```bash
 python -m pytest tests/ -x -q
