@@ -6,6 +6,16 @@ Reference for writing, running, and maintaining the CLI test suite.
 
 ---
 
+## Quick Start
+
+```bash
+make smoke          # Core correctness gate (~18s) — run before every push
+make test-fast      # All tests except slow/expensive — skips time-intensive tests
+make test           # Full suite (parallel via xdist)
+```
+
+---
+
 ## Test File Location
 
 | File | Lines | Tests |
@@ -212,13 +222,21 @@ open htmlcov/index.html
 
 Defined in `pyproject.toml`:
 
-| Marker | Purpose |
-|--------|---------|
-| `requires_python312` | Needs Python 3.12 — run via `./run_tests.sh` |
-| `slow` | Tests taking >2 seconds |
-| `integration` | Tests requiring a live server |
-| `requires_secrets` | Tests needing API keys |
-| `requires_docker` | Tests needing Docker |
+| Marker | Purpose | Run command |
+|--------|---------|-------------|
+| `smoke` | Core correctness gate (~108 tests, ~18s) | `pytest -m smoke` |
+| `slow` | Tests taking >0.1s due to sleeps or I/O | `pytest -m "not slow"` |
+| `integration` | Tests requiring a live server | `pytest -m integration` |
+| `expensive` | Tests requiring external services | `pytest -m "not expensive"` |
+| `requires_python312` | Needs Python 3.12 — run via `./run_tests.sh` | `pytest -m requires_python312` |
+| `requires_secrets` | Tests needing API keys | — |
+| `requires_docker` | Tests needing Docker | — |
+
+Skip slow and expensive tests:
+
+```bash
+python3 -m pytest -m "not slow and not expensive" -q   # same as: make test-fast
+```
 
 Filter by marker:
 

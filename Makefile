@@ -37,6 +37,9 @@ type-check:
 smoke: ## Run smoke test tier (fast gate, ~18s)
 	.venv/bin/python3 -m pytest -m smoke -q --timeout=30
 
+test-fast: ## Run all tests except slow and expensive ones
+	.venv/bin/python3 -m pytest tests/ -m "not slow and not expensive" -q --timeout=30
+
 smoke-verbose: ## Run smoke tests with verbose output
 	.venv/bin/python3 -m pytest -m smoke -v --timeout=30
 

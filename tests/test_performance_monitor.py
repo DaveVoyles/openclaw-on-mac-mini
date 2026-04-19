@@ -50,6 +50,7 @@ def test_add_span(monitor):
     assert span in monitor._active_traces[correlation_id].spans
 
 
+@pytest.mark.slow
 def test_finish_trace(monitor):
     """Test finishing a trace."""
     correlation_id = monitor.create_trace("test_operation")
@@ -60,6 +61,7 @@ def test_finish_trace(monitor):
     assert "test_operation" in monitor._operation_times
 
 
+@pytest.mark.slow
 def test_slow_query_detection(monitor):
     """Test slow query detection."""
     correlation_id = monitor.create_trace("slow_operation")
@@ -133,6 +135,7 @@ def test_cpu_profiling(monitor):
     assert "function calls" in stats.lower() or "cumulative" in stats.lower()
 
 
+@pytest.mark.slow
 @pytest.mark.asyncio
 async def test_monitor_performance_decorator_async():
     """Test monitor_performance decorator on async function."""
@@ -148,6 +151,7 @@ async def test_monitor_performance_decorator_async():
     assert "test_async_op" in monitor._operation_times
 
 
+@pytest.mark.slow
 def test_monitor_performance_decorator_sync():
     """Test monitor_performance decorator on sync function."""
     monitor = get_monitor()
@@ -162,6 +166,7 @@ def test_monitor_performance_decorator_sync():
     assert "test_sync_op" in monitor._operation_times
 
 
+@pytest.mark.slow
 @pytest.mark.asyncio
 async def test_alert_slow_queries_decorator():
     """Test alert_slow_queries decorator."""

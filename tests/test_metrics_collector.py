@@ -144,6 +144,7 @@ def test_get_top_errors(collector):
     assert top[0][1] == 5
 
 
+@pytest.mark.slow
 @pytest.mark.asyncio
 async def test_start_stop_collector():
     """Test starting and stopping the collector."""
@@ -159,6 +160,7 @@ async def test_start_stop_collector():
     assert collector._resource_update_task.done() or collector._resource_update_task.cancelled()
 
 
+@pytest.mark.slow
 @pytest.mark.asyncio
 async def test_resource_updates(running_collector):
     """Test that resource metrics are updated."""
