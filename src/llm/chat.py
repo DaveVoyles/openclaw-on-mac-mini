@@ -1251,33 +1251,17 @@ async def chat_stream(
     return
 
 
-async def chat(
+async def _chat_prepare_context(
     user_message: str,
-    history: list[dict] | None = None,
-    user_name: str = "User",
-    on_tool_call: Any | None = None,
-    model_preference: str = "auto",
-    tool_declarations: list[dict[str, Any]] | None = None,
-    routing_profile: str = "",
-    trace: RequestTrace | None = None,
-) -> tuple[str, list[dict], str]:
-    """
-    Send a message and return (response_text, updated_history, model_used).
+    history: list[dict] | None,
+    model_preference: str,
+) -> tuple[list[dict], str, str, str]:
+    """Trim history, extract context controls, recall context, build model_message.
 
-    ``on_tool_call(tool_name, round_num)`` is an optional async callback invoked
-    before each tool execution.
-
-    *model_preference* controls routing:
-      - ``"auto"``  — Copilot proxy first (free), then Gemini with tools
-      - ``"local"`` — force Ollama/Gemma; error if unavailable
-      - ``"gemini"`` — skip everything, go straight to Gemini
+    Returns ``(history, cleaned_user_message, model_message, recalled_context)``.
     """
-    log.info("LLM chat start model_pref=%s trace=%s msg=%.60s",
-             model_preference, get_trace_id(), user_message)
     if model_preference == "local":
         _model_hint = "ollama"
-    elif model_preference == "gemini":
-        _model_hint = "gemini"
     else:
         _model_hint = "gemini"
     context_quality: dict[str, Any] = {}
@@ -1306,163 +1290,259 @@ async def chat(
     channel_prefix = _channel_context_prefix(channel_name)
     if channel_prefix:
         model_message = channel_prefix + model_message
+    return history, cleaned_user_message, model_message, recalled_context
 
-    # Unified web-search fast-path — uses cleaned_user_message to avoid cross-topic
-    # contamination from recalled context (e.g., lacrosse memories polluting gaming queries).
-    if model_preference == "auto":
-        try:
-            from model_routing_policy import select_web_search_route
-            web_route = select_web_search_route(model_message)
-            if web_route.prefer_search:
-                log.info("chat web_search_route reason=%s", web_route.reason)
-                from skills.reporting_skills import generate_web_search_report
-                web_reply = await generate_web_search_report(cleaned_user_message)
-                if web_reply and not web_reply.startswith("❌"):
-                    if trace is not None:
-                        trace.skills_invoked.append("web_search_report")
-                    updated = history + [
-                        {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [web_reply]},
-                    ]
-                    return web_reply, updated, "perplexity-direct"
-        except (ImportError, OSError, ValueError, AttributeError) as _web_exc:
-            log.warning("chat web-search fast-path failed, falling through: %s", _web_exc)
 
-    # Copilot fast-path for coding/programming queries — separate from web-search path.
-    if model_preference == "auto" and not recalled_context:
-        try:
-            from llm.providers import COPILOT_PROXY_ENABLED
-            from model_routing_policy import select_coding_route
-            if COPILOT_PROXY_ENABLED:
-                coding_route = select_coding_route(cleaned_user_message)
-                if coding_route.matches:
-                    result = await _try_copilot_proxy_reply(
-                        model_message=model_message,
-                        cleaned_user_message=cleaned_user_message,
-                        history=history,
-                        context="coding-fast-path",
-                        trace=trace,
-                    )
-                    if result is not None:
-                        reply, updated, model_label = result
-                        log.debug("Coding fast-path → Copilot (%s)", coding_route.reason)
-                        return _apply_trace_footer(reply, trace), updated, model_label
-        except (ImportError, OSError, ValueError, AttributeError) as _rt_exc:
-            log.warning("Realtime fast-path failed, falling through to standard routing: %s", _rt_exc)
+async def _chat_try_web_search_route(
+    model_message: str,
+    cleaned_user_message: str,
+    history: list[dict],
+    model_preference: str,
+    trace: RequestTrace | None,
+) -> tuple[str, list[dict], str] | None:
+    """Web-search fast-path used in ``auto`` mode. Returns reply tuple or None."""
+    if model_preference != "auto":
+        return None
+    try:
+        from model_routing_policy import select_web_search_route
+        web_route = select_web_search_route(model_message)
+        if web_route.prefer_search:
+            log.info("chat web_search_route reason=%s", web_route.reason)
+            from skills.reporting_skills import generate_web_search_report
+            web_reply = await generate_web_search_report(cleaned_user_message)
+            if web_reply and not web_reply.startswith("❌"):
+                if trace is not None:
+                    trace.skills_invoked.append("web_search_report")
+                updated = history + [
+                    {"role": "user", "parts": [cleaned_user_message]},
+                    {"role": "model", "parts": [web_reply]},
+                ]
+                return web_reply, updated, "perplexity-direct"
+    except (ImportError, OSError, ValueError, AttributeError) as _web_exc:
+        log.warning("chat web-search fast-path failed, falling through: %s", _web_exc)
+    return None
 
-    # Multi-model routing (Phase 8)
-    if model_preference == "auto":
-        try:
-            import os
 
-            from llm.providers import COPILOT_PROXY_ENABLED, chat_anthropic, chat_openai
-            from model_router import classify_query, is_ollama_alive
-            _ollama_up = await is_ollama_alive()
-            route = classify_query(
-                cleaned_user_message,
-                has_openai_key=bool(os.getenv("OPENAI_API_KEY")),
-                has_anthropic_key=bool(os.getenv("ANTHROPIC_API_KEY")),
-                copilot_available=COPILOT_PROXY_ENABLED,
-                needs_tools=_needs_tools(cleaned_user_message),
-                ollama_alive=_ollama_up,
-                routing_profile=routing_profile,
-                recalled_context=bool(recalled_context),
+async def _chat_try_coding_fast_path(
+    model_message: str,
+    cleaned_user_message: str,
+    history: list[dict],
+    model_preference: str,
+    recalled_context: str,
+    trace: RequestTrace | None,
+) -> tuple[str, list[dict], str] | None:
+    """Copilot fast-path for coding queries. Returns trace-footered reply or None."""
+    if model_preference != "auto" or recalled_context:
+        return None
+    try:
+        from llm.providers import COPILOT_PROXY_ENABLED
+        from model_routing_policy import select_coding_route
+        if COPILOT_PROXY_ENABLED:
+            coding_route = select_coding_route(cleaned_user_message)
+            if coding_route.matches:
+                result = await _try_copilot_proxy_reply(
+                    model_message=model_message,
+                    cleaned_user_message=cleaned_user_message,
+                    history=history,
+                    context="coding-fast-path",
+                    trace=trace,
+                )
+                if result is not None:
+                    reply, updated, model_label = result
+                    log.debug("Coding fast-path → Copilot (%s)", coding_route.reason)
+                    return _apply_trace_footer(reply, trace), updated, model_label
+    except (ImportError, OSError, ValueError, AttributeError) as _rt_exc:
+        log.warning("Realtime fast-path failed, falling through to standard routing: %s", _rt_exc)
+    return None
+
+
+async def _chat_try_auto_routing(
+    model_message: str,
+    cleaned_user_message: str,
+    history: list[dict],
+    model_preference: str,
+    routing_profile: str,
+    recalled_context: str,
+    trace: RequestTrace | None,
+) -> tuple[str, list[dict], str] | None:
+    """Multi-model auto routing (Phase 8). Returns reply tuple or None to fall through."""
+    if model_preference != "auto":
+        return None
+    try:
+        import os
+
+        from llm.providers import COPILOT_PROXY_ENABLED, chat_anthropic, chat_openai
+        from model_router import classify_query, is_ollama_alive
+        _ollama_up = await is_ollama_alive()
+        route = classify_query(
+            cleaned_user_message,
+            has_openai_key=bool(os.getenv("OPENAI_API_KEY")),
+            has_anthropic_key=bool(os.getenv("ANTHROPIC_API_KEY")),
+            copilot_available=COPILOT_PROXY_ENABLED,
+            needs_tools=_needs_tools(cleaned_user_message),
+            ollama_alive=_ollama_up,
+            routing_profile=routing_profile,
+            recalled_context=bool(recalled_context),
+        )
+        log.debug("Model router: %s", route)
+
+        if route.model_type == "copilot":
+            result = await _try_copilot_proxy_reply(
+                model_message=model_message,
+                cleaned_user_message=cleaned_user_message,
+                history=history,
+                context="auto-route",
+                model_override=route.model or None,
+                trace=trace,
             )
-            log.debug("Model router: %s", route)
+            if result is not None:
+                reply, updated, model_label = result
+                return _apply_trace_footer(reply, trace), updated, model_label
+            log.warning("Copilot auto-route exhausted candidates, falling through to default routing")
 
-            if route.model_type == "copilot":
-                result = await _try_copilot_proxy_reply(
-                    model_message=model_message,
-                    cleaned_user_message=cleaned_user_message,
-                    history=history,
-                    context="auto-route",
-                    model_override=route.model or None,
-                    trace=trace,
-                )
-                if result is not None:
-                    reply, updated, model_label = result
-                    return _apply_trace_footer(reply, trace), updated, model_label
-                log.warning("Copilot auto-route exhausted candidates, falling through to default routing")
+        elif route.model_type == "ollama":
+            reply = await _try_local_model(model_message, history, force=True)
+            if reply is not None:
+                updated = history + [
+                    {"role": "user", "parts": [cleaned_user_message]},
+                    {"role": "model", "parts": [reply]},
+                ]
+                return reply, updated, OLLAMA_MODEL
+            log.warning("Ollama auto-route returned empty, falling through to default routing")
 
-            elif route.model_type == "ollama":
-                reply = await _try_local_model(model_message, history, force=True)
-                if reply is not None:
-                    updated = history + [
-                        {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [reply]},
-                    ]
-                    return reply, updated, OLLAMA_MODEL
-                log.warning("Ollama auto-route returned empty, falling through to default routing")
-
-            elif route.model_type == "openai":
-                system_prompt = _load_system_prompt()
-                reply = await chat_openai(model_message, history, system_prompt,
-                                          temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
-                finalized = _finalize_provider_reply(
-                    reply,
-                    provider="openai",
-                    cleaned_user_message=cleaned_user_message,
-                    history=history,
-                )
-                if finalized is not None:
-                    updated, model_label = finalized
-                    return reply, updated, model_label
-                log.info("OpenAI call failed, falling through to default routing")
-
-            elif route.model_type == "anthropic":
-                system_prompt = _load_system_prompt()
-                reply = await chat_anthropic(model_message, history, system_prompt,
-                                             temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
-                finalized = _finalize_provider_reply(
-                    reply,
-                    provider="anthropic",
-                    cleaned_user_message=cleaned_user_message,
-                    history=history,
-                )
-                if finalized is not None:
-                    updated, model_label = finalized
-                    return reply, updated, model_label
-                log.info("Anthropic call failed, falling through to default routing")
-        except (ImportError, OSError, ValueError, AttributeError) as e:
-            log.debug("Multi-model routing failed (non-fatal): %s", e)
-
-    # Forced OpenAI / Anthropic mode
-    if model_preference in ("openai", "anthropic", "copilot"):
-        try:
-            from llm.providers import chat_anthropic, chat_openai
-            provider_name = model_preference
-            if model_preference == "openai":
-                system_prompt = _load_system_prompt()
-                reply = await chat_openai(model_message, history, system_prompt,
-                                          temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
-            elif model_preference == "anthropic":
-                system_prompt = _load_system_prompt()
-                reply = await chat_anthropic(model_message, history, system_prompt,
-                                             temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
-            else:
-                result = await _try_copilot_proxy_reply(
-                    model_message=model_message,
-                    cleaned_user_message=cleaned_user_message,
-                    history=history,
-                    context="forced-copilot",
-                    trace=trace,
-                )
-                if result is not None:
-                    reply, updated, model_label = result
-                    return _apply_trace_footer(reply, trace), updated, model_label
-                reply = None
+        elif route.model_type == "openai":
+            system_prompt = _load_system_prompt()
+            reply = await chat_openai(model_message, history, system_prompt,
+                                      temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
             finalized = _finalize_provider_reply(
                 reply,
-                provider=provider_name,
+                provider="openai",
                 cleaned_user_message=cleaned_user_message,
                 history=history,
             )
             if finalized is not None:
                 updated, model_label = finalized
                 return reply, updated, model_label
-            log.info("%s call failed, falling back to Gemini", model_preference)
-        except (ImportError, OSError, ConnectionError, ValueError, RuntimeError) as e:
-            log.info("%s call failed, falling back to Gemini: %s", model_preference, e)
+            log.info("OpenAI call failed, falling through to default routing")
+
+        elif route.model_type == "anthropic":
+            system_prompt = _load_system_prompt()
+            reply = await chat_anthropic(model_message, history, system_prompt,
+                                         temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+            finalized = _finalize_provider_reply(
+                reply,
+                provider="anthropic",
+                cleaned_user_message=cleaned_user_message,
+                history=history,
+            )
+            if finalized is not None:
+                updated, model_label = finalized
+                return reply, updated, model_label
+            log.info("Anthropic call failed, falling through to default routing")
+    except (ImportError, OSError, ValueError, AttributeError) as e:
+        log.debug("Multi-model routing failed (non-fatal): %s", e)
+    return None
+
+
+async def _chat_try_forced_provider(
+    model_message: str,
+    cleaned_user_message: str,
+    history: list[dict],
+    model_preference: str,
+    trace: RequestTrace | None,
+) -> tuple[str, list[dict], str] | None:
+    """Forced openai/anthropic/copilot mode. Returns reply tuple or None to fall back to Gemini."""
+    if model_preference not in ("openai", "anthropic", "copilot"):
+        return None
+    try:
+        from llm.providers import chat_anthropic, chat_openai
+        provider_name = model_preference
+        if model_preference == "openai":
+            system_prompt = _load_system_prompt()
+            reply = await chat_openai(model_message, history, system_prompt,
+                                      temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+        elif model_preference == "anthropic":
+            system_prompt = _load_system_prompt()
+            reply = await chat_anthropic(model_message, history, system_prompt,
+                                         temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+        else:
+            result = await _try_copilot_proxy_reply(
+                model_message=model_message,
+                cleaned_user_message=cleaned_user_message,
+                history=history,
+                context="forced-copilot",
+                trace=trace,
+            )
+            if result is not None:
+                reply, updated, model_label = result
+                return _apply_trace_footer(reply, trace), updated, model_label
+            reply = None
+        finalized = _finalize_provider_reply(
+            reply,
+            provider=provider_name,
+            cleaned_user_message=cleaned_user_message,
+            history=history,
+        )
+        if finalized is not None:
+            updated, model_label = finalized
+            return reply, updated, model_label
+        log.info("%s call failed, falling back to Gemini", model_preference)
+    except (ImportError, OSError, ConnectionError, ValueError, RuntimeError) as e:
+        log.info("%s call failed, falling back to Gemini: %s", model_preference, e)
+    return None
+
+
+async def chat(
+    user_message: str,
+    history: list[dict] | None = None,
+    user_name: str = "User",
+    on_tool_call: Any | None = None,
+    model_preference: str = "auto",
+    tool_declarations: list[dict[str, Any]] | None = None,
+    routing_profile: str = "",
+    trace: RequestTrace | None = None,
+) -> tuple[str, list[dict], str]:
+    """
+    Send a message and return (response_text, updated_history, model_used).
+
+    ``on_tool_call(tool_name, round_num)`` is an optional async callback invoked
+    before each tool execution.
+
+    *model_preference* controls routing:
+      - ``"auto"``  — Copilot proxy first (free), then Gemini with tools
+      - ``"local"`` — force Ollama/Gemma; error if unavailable
+      - ``"gemini"`` — skip everything, go straight to Gemini
+    """
+    log.info("LLM chat start model_pref=%s trace=%s msg=%.60s",
+             model_preference, get_trace_id(), user_message)
+    history, cleaned_user_message, model_message, recalled_context = await _chat_prepare_context(
+        user_message, history, model_preference,
+    )
+
+    web_result = await _chat_try_web_search_route(
+        model_message, cleaned_user_message, history, model_preference, trace,
+    )
+    if web_result is not None:
+        return web_result
+
+    coding_result = await _chat_try_coding_fast_path(
+        model_message, cleaned_user_message, history, model_preference, recalled_context, trace,
+    )
+    if coding_result is not None:
+        return coding_result
+
+    auto_result = await _chat_try_auto_routing(
+        model_message, cleaned_user_message, history, model_preference,
+        routing_profile, recalled_context, trace,
+    )
+    if auto_result is not None:
+        return auto_result
+
+    forced_result = await _chat_try_forced_provider(
+        model_message, cleaned_user_message, history, model_preference, trace,
+    )
+    if forced_result is not None:
+        return forced_result
 
     # Forced local mode
     if model_preference == "local":
