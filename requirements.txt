@@ -74,7 +74,7 @@ jinja2~=3.1.0
 
 # Phase 3: Financial Data & Visualization
 
-plotly~=5.14.0               # Interactive charts
+plotly~=6.7.0               # Interactive charts
 kaleido~=0.2.1               # Chart export (PNG/SVG)
 # Note: weasyprint already included for PDF generation
 matplotlib~=3.8
