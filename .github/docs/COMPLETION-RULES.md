@@ -11,27 +11,35 @@ Two mandatory checks must pass before a task is complete:
 
 ## 1. CI / Remote Workflows
 
-**Rule:** A task is not complete until every GitHub Actions workflow that touches the affected area is green.
+**Rule:** After every push, run a quick check to confirm CI isn't broken. You do **not** need to block and wait for CI to complete — push, note the run ID, do a single status check after ~30 seconds, and move on.
 
-"Push succeeded" is not the same as "CI passed." Always verify.
+"Push succeeded" is not the same as "CI passed" — but long polling loops that block user interaction are also not required.
 
 ### Steps
 
 ```bash
-# 1. Check the most recent run for each workflow
-gh run list --limit 10 --json status,conclusion,name,headBranch
+# 1. Push your changes
+git push origin main
 
-# 2. For any run that is not "success", get details
-gh run view <RUN_ID> --log-failed
+# 2. Wait ~30s, then do a single status check
+sleep 30 && gh run list --limit 3 --json status,conclusion,name,databaseId
 
-# 3. Fix the root cause, push, and re-check until all runs show "success"
+# 3. If the run is still in_progress, note the run ID and move on.
+#    Only investigate immediately if conclusion is "failure".
 ```
 
 ### Required before done
 
-- [ ] `ci.yml` — lint (ruff) + tests — **must be green**
-- [ ] All other workflows triggered by the branch/push — **must be green or intentionally skipped**
-- [ ] No workflow stuck in "queued" or "in_progress" for longer than its expected runtime
+- [ ] `ci.yml` — verify it is not in `failure` state after your push
+- [ ] If CI shows `failure`: read the log, fix the root cause, push again, re-check
+- [ ] If CI is still `in_progress` or `queued`: note the run ID and proceed — do not wait
+
+### Acceptable states at task completion
+
+- `in_progress` or `queued` → ✅ acceptable — CI is running, not broken
+- `success` → ✅ ideal
+- `cancelled` (by a subsequent push) → ✅ acceptable — superseded run
+- `failure` → ❌ must fix before declaring done
 
 ### Acceptable non-failures
 
@@ -43,9 +51,9 @@ gh run view <RUN_ID> --log-failed
 1. Read the failure log with `gh run view <RUN_ID> --log-failed`.
 2. Fix the root cause (lint error, broken test, bad config).
 3. Push the fix.
-4. Re-run `gh run list` and confirm green before marking done.
+4. Do one more status check — confirm it is no longer `failure`.
 
-Do **not** declare the task complete while any workflow is red.
+Do **not** declare the task complete while any workflow shows `failure`.
 
 ---
 
@@ -112,7 +120,7 @@ Copy this at the bottom of any task summary when done:
 
 ```
 ## ✅ Completion checklist
-- [ ] CI / all workflows green (`gh run list --limit 5`)
+- [ ] Push succeeded; CI is not in `failure` state (in_progress/queued is fine)
 - [ ] `guide.html` updated if user-facing feature shipped
 - [ ] `dashboard.html` updated if admin/metric feature shipped
 - [ ] `make ship-server` run if templates changed
