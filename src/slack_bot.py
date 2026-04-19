@@ -2325,7 +2325,7 @@ async def _post_clarification_prompt(client: Any, channel: str, user_id: str) ->
 # Wave 10: Dropbox helpers
 # ---------------------------------------------------------------------------
 
-def _get_dropbox_client(token: str | None = None):
+def _get_dropbox_client(token: str | None = None) -> Any | None:
     """Return a Dropbox client using *token* or the server-level DROPBOX_APP_TOKEN."""
     active_token = token or _DROPBOX_TOKEN
     if not active_token:
@@ -2604,7 +2604,7 @@ async def _get_gmail_body(message_id: str) -> str:
         return "(Could not load email body)"
 
 
-def create_slack_app():  # type: ignore[return]
+def create_slack_app() -> Any | None:  # type: ignore[return]
     """Build and return a configured AsyncApp, or None if Slack is disabled."""
     if not _slack_is_configured():
         return None
@@ -3387,7 +3387,7 @@ def create_slack_app():  # type: ignore[return]
     # they have their own flows registered separately below.
     _excluded_from_generic = {"file_translate", "file_compare"}
     for _action_id in [k for k in _FILE_ACTION_PROMPTS.keys() if k not in _excluded_from_generic]:
-        def _make_handler(aid: str):
+        def _make_handler(aid: str) -> Any:
             async def handler(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
                 await _dispatch_file_action(aid, ack, body, client, say)
             handler.__name__ = f"handle_{aid}"
@@ -4582,7 +4582,7 @@ def create_slack_app():  # type: ignore[return]
 # Public entry points
 # ---------------------------------------------------------------------------
 
-async def create_slack_handler():  # type: ignore[return]
+async def create_slack_handler() -> Any | None:  # type: ignore[return]
     """Return an AsyncSocketModeHandler configured for this app, or None."""
     global _BOT_USER_ID, _BOT_START_TIME
 
