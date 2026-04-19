@@ -27,7 +27,7 @@ from sklearn.preprocessing import StandardScaler
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.seasonal import seasonal_decompose
 
-log = logging.getLogger("openclaw.ml_trends")
+log = logging.getLogger(__name__)
 
 # Database path
 DB_PATH = Path(os.getenv("THREAD_DB_PATH", "/memory/openclaw.db"))

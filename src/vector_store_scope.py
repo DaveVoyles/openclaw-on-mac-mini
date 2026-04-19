@@ -10,7 +10,7 @@ from vector_store_config import (
     _RECALL_DOMAIN_TERMS,
 )
 
-log = logging.getLogger("openclaw.vector_store")
+log = logging.getLogger(__name__)
 
 
 def _extract_explicit_recall_domains(query: str) -> set[str]:

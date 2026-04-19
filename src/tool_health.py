@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-log = logging.getLogger("openclaw.tool_health")
+log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------

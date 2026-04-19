@@ -4,6 +4,7 @@ Handles: /network, /tailscale, /speedtest
 """
 
 import discord
+import logging
 from discord import app_commands
 from discord.ext import commands
 
@@ -11,13 +12,16 @@ from cog_helpers import audit_log
 from network import get_network_status, get_tailscale_status, run_speed_test
 
 
+log = logging.getLogger(__name__)
+
+
 class NetworkCog(commands.Cog, name="Network"):
     """Network and remote-access status commands."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
         msg = f"❌ Command failed: {error}"
         if interaction.response.is_done():
             await interaction.followup.send(msg, ephemeral=True)
@@ -25,7 +29,7 @@ class NetworkCog(commands.Cog, name="Network"):
             await interaction.response.send_message(msg, ephemeral=True)
 
     @app_commands.command(name="network", description="Show network connectivity status (LAN, internet, Tailscale)")
-    async def network_cmd(self, interaction: discord.Interaction):
+    async def network_cmd(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         result = await get_network_status()
         embed = discord.Embed(
@@ -38,7 +42,7 @@ class NetworkCog(commands.Cog, name="Network"):
         audit_log(interaction.user, "network")
 
     @app_commands.command(name="tailscale", description="Show Tailscale VPN status and this device's Tailscale IP")
-    async def tailscale_cmd(self, interaction: discord.Interaction):
+    async def tailscale_cmd(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         result = await get_tailscale_status()
         embed = discord.Embed(
@@ -50,7 +54,7 @@ class NetworkCog(commands.Cog, name="Network"):
         audit_log(interaction.user, "tailscale")
 
     @app_commands.command(name="speedtest", description="Run a quick network speed test")
-    async def speedtest_cmd(self, interaction: discord.Interaction):
+    async def speedtest_cmd(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         result = await run_speed_test()
         embed = discord.Embed(
@@ -63,5 +67,5 @@ class NetworkCog(commands.Cog, name="Network"):
         audit_log(interaction.user, "speedtest")
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(NetworkCog(bot))

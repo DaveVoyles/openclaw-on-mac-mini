@@ -299,7 +299,7 @@ logging.basicConfig(
         logging.FileHandler(LOG_DIR / "openclaw.log"),
     ],
 )
-log = logging.getLogger("openclaw")
+log = logging.getLogger(__name__)
 setup_trace_logging()
 
 # ---------------------------------------------------------------------------

@@ -23,7 +23,7 @@ VAULT_DIR = Path(os.getenv("VAULT_DIR", "/vault"))
 
 
 class NoteCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
 
     note = app_commands.Group(name="note", description="Quick note-taking to Obsidian vault")
@@ -42,7 +42,7 @@ class NoteCog(commands.Cog):
         title: str,
         content: str,
         tags: str = "",
-    ):
+    ) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             from obsidian_writer import save_to_vault
@@ -75,7 +75,7 @@ class NoteCog(commands.Cog):
         self,
         interaction: discord.Interaction,
         content_type: str = "all",
-    ):
+    ) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             from obsidian_writer import list_vault
@@ -95,7 +95,7 @@ class NoteCog(commands.Cog):
 
     @note.command(name="view", description="View a vault note's content")
     @app_commands.describe(filename="Filename of the note to view")
-    async def note_view(self, interaction: discord.Interaction, filename: str):
+    async def note_view(self, interaction: discord.Interaction, filename: str) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             found = None
@@ -128,7 +128,7 @@ class NoteCog(commands.Cog):
 
     @note.command(name="search", description="Search vault notes by content")
     @app_commands.describe(query="Search term")
-    async def note_search(self, interaction: discord.Interaction, query: str):
+    async def note_search(self, interaction: discord.Interaction, query: str) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             matches: list[str] = []
@@ -166,5 +166,5 @@ class NoteCog(commands.Cog):
             await interaction.followup.send(f"❌ Search failed: {e}", ephemeral=True)
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     await bot.add_cog(NoteCog(bot))

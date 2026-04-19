@@ -23,7 +23,7 @@ from typing import Awaitable, Callable, Optional
 
 from utils import atomic_write
 
-log = logging.getLogger("openclaw.scheduler")
+log = logging.getLogger(__name__)
 
 SCHEDULE_FILE = Path(os.getenv("MEMORY_DIR", "/memory")) / "schedules.json"
 

@@ -10,7 +10,7 @@ from typing import Any, Literal
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-log = logging.getLogger("openclaw.exporters.parquet")
+log = logging.getLogger(__name__)
 
 ExportType = Literal["conversations", "trends", "tasks", "costs", "api_usage"]
 

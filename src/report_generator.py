@@ -18,7 +18,7 @@ try:
 except (ImportError, OSError):
     HTML = None
 
-log = logging.getLogger("openclaw.report_generator")
+log = logging.getLogger(__name__)
 
 ReportType = Literal["weekly_summary", "api_usage", "performance", "financial", "cost_analysis", "custom"]
 

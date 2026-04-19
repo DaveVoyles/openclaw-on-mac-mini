@@ -16,7 +16,7 @@ import os
 import secrets
 import tempfile
 
-log = logging.getLogger("openclaw.code_sandbox")
+log = logging.getLogger(__name__)
 
 SANDBOX_IMAGE = os.getenv("SANDBOX_IMAGE", "python:3.12-slim")
 SANDBOX_TIMEOUT = int(os.getenv("SANDBOX_TIMEOUT", "30"))

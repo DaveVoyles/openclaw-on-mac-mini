@@ -4,7 +4,7 @@ import hashlib
 import logging
 import time as _time
 
-_mem_log = logging.getLogger("openclaw.memory_manager")
+_mem_log = logging.getLogger(__name__)
 
 __all__ = [
     "_mem_content_id",

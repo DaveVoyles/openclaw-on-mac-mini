@@ -7,6 +7,7 @@ delivery.
 """
 
 import re
+import logging
 import time
 
 import discord
@@ -15,6 +16,8 @@ from discord.ext import commands
 
 from notification_prefs import notif_prefs
 from ui_components import EmbedColors
+
+log = logging.getLogger(__name__)
 
 DURATION_RE = re.compile(r"^(\d+)\s*(m|min|h|hr|hours?|minutes?)$", re.IGNORECASE)
 DURATION_MULTIPLIERS = {"m": 60, "min": 60, "minutes": 60, "h": 3600, "hr": 3600, "hour": 3600, "hours": 3600}
@@ -58,13 +61,13 @@ def _parse_duration(text: str) -> int | None:
 class NotifyCog(commands.GroupCog, group_name="notify"):
     """Per-user notification preferences."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
     # -- /notify show --------------------------------------------------------
 
     @app_commands.command(name="show", description="Show your notification preferences")
-    async def show(self, interaction: discord.Interaction):
+    async def show(self, interaction: discord.Interaction) -> None:
         prefs = notif_prefs.get(interaction.user.id)
         muted = prefs.muted_until > time.time()
         mute_info = (
@@ -88,7 +91,7 @@ class NotifyCog(commands.GroupCog, group_name="notify"):
 
     @app_commands.command(name="mute", description="Mute all alerts for a duration (e.g. 1h, 30m)")
     @app_commands.describe(duration="How long to mute, e.g. '30m', '2h'")
-    async def mute(self, interaction: discord.Interaction, duration: str):
+    async def mute(self, interaction: discord.Interaction, duration: str) -> None:
         seconds = _parse_duration(duration)
         if seconds is None:
             await interaction.response.send_message(
@@ -106,7 +109,7 @@ class NotifyCog(commands.GroupCog, group_name="notify"):
     # -- /notify unmute ------------------------------------------------------
 
     @app_commands.command(name="unmute", description="Unmute alerts")
-    async def unmute(self, interaction: discord.Interaction):
+    async def unmute(self, interaction: discord.Interaction) -> None:
         prefs = notif_prefs.get(interaction.user.id)
         prefs.muted_until = 0.0
         await notif_prefs.update(prefs)
@@ -121,7 +124,7 @@ class NotifyCog(commands.GroupCog, group_name="notify"):
         app_commands.Choice(name="warning", value="warning"),
         app_commands.Choice(name="critical", value="critical"),
     ])
-    async def filter_cmd(self, interaction: discord.Interaction, level: app_commands.Choice[str]):
+    async def filter_cmd(self, interaction: discord.Interaction, level: app_commands.Choice[str]) -> None:
         prefs = notif_prefs.get(interaction.user.id)
         prefs.severity_filter = level.value
         await notif_prefs.update(prefs)
@@ -134,7 +137,7 @@ class NotifyCog(commands.GroupCog, group_name="notify"):
     @app_commands.command(name="block", description="Block alerts from a service")
     @app_commands.describe(service="Service name to block, e.g. sonarr, sabnzbd")
     @app_commands.autocomplete(service=_service_autocomplete)
-    async def block(self, interaction: discord.Interaction, service: str):
+    async def block(self, interaction: discord.Interaction, service: str) -> None:
         prefs = notif_prefs.get(interaction.user.id)
         svc = service.strip().lower()
         if svc in [s.lower() for s in prefs.blocked_services]:
@@ -153,7 +156,7 @@ class NotifyCog(commands.GroupCog, group_name="notify"):
     @app_commands.command(name="unblock", description="Unblock alerts from a service")
     @app_commands.describe(service="Service name to unblock")
     @app_commands.autocomplete(service=_service_autocomplete)
-    async def unblock(self, interaction: discord.Interaction, service: str):
+    async def unblock(self, interaction: discord.Interaction, service: str) -> None:
         prefs = notif_prefs.get(interaction.user.id)
         svc = service.strip().lower()
         lower_list = [s.lower() for s in prefs.blocked_services]
@@ -177,7 +180,7 @@ class NotifyCog(commands.GroupCog, group_name="notify"):
         app_commands.Choice(name="on", value="on"),
         app_commands.Choice(name="off", value="off"),
     ])
-    async def dm_toggle(self, interaction: discord.Interaction, enabled: app_commands.Choice[str]):
+    async def dm_toggle(self, interaction: discord.Interaction, enabled: app_commands.Choice[str]) -> None:
         prefs = notif_prefs.get(interaction.user.id)
         prefs.dm_alerts = enabled.value == "on"
         await notif_prefs.update(prefs)
@@ -187,5 +190,5 @@ class NotifyCog(commands.GroupCog, group_name="notify"):
         )
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(NotifyCog(bot))

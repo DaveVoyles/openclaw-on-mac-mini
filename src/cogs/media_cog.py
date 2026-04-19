@@ -38,7 +38,7 @@ log = logging.getLogger("openclaw.media_cog")
 # ---------------------------------------------------------------------------
 
 class _ApproveButton(discord.ui.Button["PendingRequestView"]):
-    def __init__(self, request_id: int, title: str, *, row: int):
+    def __init__(self, request_id: int, title: str, *, row: int) -> None:
         super().__init__(
             style=discord.ButtonStyle.success,
             label=f"✅ #{request_id} {title}"[:80],
@@ -58,7 +58,7 @@ class _ApproveButton(discord.ui.Button["PendingRequestView"]):
 
 
 class _DenyButton(discord.ui.Button["PendingRequestView"]):
-    def __init__(self, request_id: int, title: str, *, row: int):
+    def __init__(self, request_id: int, title: str, *, row: int) -> None:
         super().__init__(
             style=discord.ButtonStyle.danger,
             label=f"❌ #{request_id} {title}"[:80],
@@ -80,7 +80,7 @@ class _DenyButton(discord.ui.Button["PendingRequestView"]):
 class PendingRequestView(discord.ui.View):
     """Approve / deny buttons for up to 5 pending Overseerr requests."""
 
-    def __init__(self, requests: list[dict]):
+    def __init__(self, requests: list[dict]) -> None:
         super().__init__(timeout=300)
         for i, req in enumerate(requests[:5]):
             req_id = req.get("id", 0)
@@ -112,10 +112,10 @@ _WATCH_SKILL_MAP = {
 class MediaCog(commands.Cog, name="Media"):
     """Media management commands — search, queue, health, playback."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
         msg = f"❌ Command failed: {error}"
         if interaction.response.is_done():
             await interaction.followup.send(msg, ephemeral=True)
@@ -132,7 +132,7 @@ class MediaCog(commands.Cog, name="Media"):
         app_commands.Choice(name="TV Shows", value="tv"),
         app_commands.Choice(name="Movies", value="movie"),
     ])
-    async def search_cmd(self, interaction: discord.Interaction, query: str, media_type: str = "all"):
+    async def search_cmd(self, interaction: discord.Interaction, query: str, media_type: str = "all") -> None:
         await interaction.response.defer()
         result = await search_media(query, media_type)
         embed = discord.Embed(
@@ -144,7 +144,7 @@ class MediaCog(commands.Cog, name="Media"):
         audit_log(interaction.user, "search", detail=f"{query} type={media_type}")
 
     @app_commands.command(name="queue", description="Show active downloads from SABnzbd and qBittorrent")
-    async def queue_cmd(self, interaction: discord.Interaction):
+    async def queue_cmd(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         result = await get_download_queue()
         embed = discord.Embed(
@@ -157,7 +157,7 @@ class MediaCog(commands.Cog, name="Media"):
 
     @app_commands.command(name="recent", description="Show recently added media from Plex")
     @app_commands.describe(count="Number of items to show (1-25, default 10)")
-    async def recent_cmd(self, interaction: discord.Interaction, count: int = 10):
+    async def recent_cmd(self, interaction: discord.Interaction, count: int = 10) -> None:
         await interaction.response.defer()
         result = await get_recent_additions(count)
         embed = discord.Embed(
@@ -169,7 +169,7 @@ class MediaCog(commands.Cog, name="Media"):
         audit_log(interaction.user, "recent", detail=f"count={count}")
 
     @app_commands.command(name="health", description="Check *arr services and download client health")
-    async def health_cmd(self, interaction: discord.Interaction):
+    async def health_cmd(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         arr_health = await check_arr_health()
         dl_health = await check_download_clients()
@@ -186,7 +186,7 @@ class MediaCog(commands.Cog, name="Media"):
         audit_log(interaction.user, "health")
 
     @app_commands.command(name="nowplaying", description="Show what's currently playing on Plex (active streams)")
-    async def nowplaying_cmd(self, interaction: discord.Interaction):
+    async def nowplaying_cmd(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         result = await get_plex_activity()
         embed = discord.Embed(
@@ -210,7 +210,7 @@ class MediaCog(commands.Cog, name="Media"):
         condition: str = "",
         action: str = "list",
         watch_id: str = "",
-    ):
+    ) -> None:
         """Manage media watch conditions - get notified when content becomes available.
 
         Supports three actions:
@@ -358,7 +358,7 @@ class MediaCog(commands.Cog, name="Media"):
 
     @overseerr_group.command(name="approve", description="Approve a pending request by ID")
     @app_commands.describe(request_id="Numeric request ID to approve")
-    async def overseerr_approve(self, interaction: discord.Interaction, request_id: int):
+    async def overseerr_approve(self, interaction: discord.Interaction, request_id: int) -> None:
         await interaction.response.defer()
         result = await approve_request(request_id)
         await interaction.followup.send(result)
@@ -366,7 +366,7 @@ class MediaCog(commands.Cog, name="Media"):
 
     @overseerr_group.command(name="deny", description="Deny a pending request by ID")
     @app_commands.describe(request_id="Numeric request ID to deny")
-    async def overseerr_deny(self, interaction: discord.Interaction, request_id: int):
+    async def overseerr_deny(self, interaction: discord.Interaction, request_id: int) -> None:
         await interaction.response.defer()
         result = await deny_request(request_id)
         await interaction.followup.send(result)
@@ -385,5 +385,5 @@ class MediaCog(commands.Cog, name="Media"):
         audit_log(interaction.user, "overseerr_stats")
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(MediaCog(bot))

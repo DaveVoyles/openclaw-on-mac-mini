@@ -4,6 +4,7 @@ Adds: "Analyze with AI", "Save to Memory", "Research This"
 """
 
 import asyncio
+import logging
 
 import discord
 from discord import app_commands
@@ -13,10 +14,13 @@ from cog_helpers import audit_log, require_auth
 from discord_error import build_error_embed
 
 
+log = logging.getLogger(__name__)
+
+
 class ContextMenuCog(commands.Cog, name="ContextMenus"):
     """Right-click message context menu actions."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         # Register context menus
         self.analyze_ctx = app_commands.ContextMenu(
@@ -35,7 +39,7 @@ class ContextMenuCog(commands.Cog, name="ContextMenus"):
         self.bot.tree.add_command(self.save_ctx)
         self.bot.tree.add_command(self.research_ctx)
 
-    async def cog_unload(self):
+    async def cog_unload(self) -> None:
         self.bot.tree.remove_command(self.analyze_ctx.name, type=self.analyze_ctx.type)
         self.bot.tree.remove_command(self.save_ctx.name, type=self.save_ctx.type)
         self.bot.tree.remove_command(self.research_ctx.name, type=self.research_ctx.type)
@@ -66,6 +70,7 @@ class ContextMenuCog(commands.Cog, name="ContextMenus"):
             await interaction.followup.send(embed=embed, ephemeral=True)
             audit_log(interaction.user, "context_analyze", detail=content[:100])
         except Exception as e:  # broad: intentional
+            log.exception("context_analyze failed")
             await interaction.followup.send(embed=build_error_embed(e, context="Analyze with AI"), ephemeral=True)
 
     async def _save_to_memory(self, interaction: discord.Interaction, message: discord.Message):
@@ -85,6 +90,7 @@ class ContextMenuCog(commands.Cog, name="ContextMenus"):
             )
             audit_log(interaction.user, "context_save", detail=content[:100])
         except Exception as e:  # broad: intentional
+            log.exception("context_save failed")
             await interaction.response.send_message(embed=build_error_embed(e, context="Save to Memory"), ephemeral=True)
 
     async def _research_message(self, interaction: discord.Interaction, message: discord.Message):
@@ -113,8 +119,9 @@ class ContextMenuCog(commands.Cog, name="ContextMenus"):
             await interaction.followup.send(embed=embed)
             audit_log(interaction.user, "context_research", detail=content[:100])
         except Exception as e:  # broad: intentional
+            log.exception("context_research failed")
             await interaction.followup.send(embed=build_error_embed(e, context="Research This"), ephemeral=True)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(ContextMenuCog(bot))

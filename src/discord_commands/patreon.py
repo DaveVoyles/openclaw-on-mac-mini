@@ -13,7 +13,7 @@ from patreon_recovery import get_recovery_manager
 
 from ._helpers import require_auth
 
-log = logging.getLogger("openclaw")
+log = logging.getLogger(__name__)
 
 
 def _register_patreon_commands(bot: commands.Bot) -> None:

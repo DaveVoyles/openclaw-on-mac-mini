@@ -39,7 +39,7 @@ from skills.advanced_skills import (
 )
 from trace_context import trace_context
 
-log = logging.getLogger("openclaw")
+log = logging.getLogger(__name__)
 
 AUDIT_DIR = Path(os.getenv("AUDIT_DIR", "/audit"))
 ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))

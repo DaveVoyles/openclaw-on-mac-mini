@@ -16,7 +16,7 @@ from pathlib import Path
 
 from utils import atomic_write
 
-log = logging.getLogger("openclaw.obsidian")
+log = logging.getLogger(__name__)
 
 VAULT_DIR = Path(os.getenv("VAULT_DIR", "/vault"))
 

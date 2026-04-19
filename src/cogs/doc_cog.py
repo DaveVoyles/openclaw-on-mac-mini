@@ -38,13 +38,13 @@ NAS_OPENCLAW_FOLDER = "/volume1/documents/OpenClaw"
 class _SaveToNASView(discord.ui.View):
     """Button to save a generated file to the Synology NAS."""
 
-    def __init__(self, file_bytes: bytes, filename: str, *, timeout: float = 120):
+    def __init__(self, file_bytes: bytes, filename: str, *, timeout: float = 120) -> None:
         super().__init__(timeout=timeout)
         self.file_bytes = file_bytes
         self.filename = filename
 
     @discord.ui.button(label="💾 Save to NAS", style=discord.ButtonStyle.green)
-    async def save_nas(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def save_nas(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         button.disabled = True
         await interaction.response.edit_message(view=self)
         try:
@@ -149,7 +149,7 @@ async def _generate_sheet_content(instructions: str) -> tuple[str, list[str], li
 class DocCog(commands.Cog, name="Documents"):
     """Read, edit, and create Word and Excel documents."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
     # -- command groups -----------------------------------------------------
@@ -163,7 +163,7 @@ class DocCog(commands.Cog, name="Documents"):
     @doc.command(name="read", description="Read a Word document and display its content")
     @app_commands.describe(file="The .docx file to read")
     @require_auth()
-    async def doc_read(self, interaction: discord.Interaction, file: discord.Attachment):
+    async def doc_read(self, interaction: discord.Interaction, file: discord.Attachment) -> None:
         if not file.filename.lower().endswith(".docx"):
             await interaction.response.send_message(
                 "❌ Please attach a `.docx` file.", ephemeral=True
@@ -210,7 +210,7 @@ class DocCog(commands.Cog, name="Documents"):
         interaction: discord.Interaction,
         file: discord.Attachment,
         instructions: str,
-    ):
+    ) -> None:
         if not file.filename.lower().endswith(".docx"):
             await interaction.response.send_message(
                 "❌ Please attach a `.docx` file.", ephemeral=True
@@ -256,7 +256,7 @@ class DocCog(commands.Cog, name="Documents"):
     @doc.command(name="create", description="Create a new Word document from a description")
     @app_commands.describe(instructions="Describe the document to create")
     @require_auth()
-    async def doc_create(self, interaction: discord.Interaction, instructions: str):
+    async def doc_create(self, interaction: discord.Interaction, instructions: str) -> None:
         await interaction.response.defer()
         try:
             title, body, headers = await _generate_doc_content(instructions)
@@ -290,7 +290,7 @@ class DocCog(commands.Cog, name="Documents"):
     @sheet.command(name="read", description="Read an Excel spreadsheet and display its content")
     @app_commands.describe(file="The .xlsx file to read")
     @require_auth()
-    async def sheet_read(self, interaction: discord.Interaction, file: discord.Attachment):
+    async def sheet_read(self, interaction: discord.Interaction, file: discord.Attachment) -> None:
         if not file.filename.lower().endswith(".xlsx"):
             await interaction.response.send_message(
                 "❌ Please attach an `.xlsx` file.", ephemeral=True
@@ -337,7 +337,7 @@ class DocCog(commands.Cog, name="Documents"):
         interaction: discord.Interaction,
         file: discord.Attachment,
         instructions: str,
-    ):
+    ) -> None:
         if not file.filename.lower().endswith(".xlsx"):
             await interaction.response.send_message(
                 "❌ Please attach an `.xlsx` file.", ephemeral=True
@@ -383,7 +383,7 @@ class DocCog(commands.Cog, name="Documents"):
     @sheet.command(name="create", description="Create a new Excel spreadsheet from a description")
     @app_commands.describe(instructions="Describe the spreadsheet to create")
     @require_auth()
-    async def sheet_create(self, interaction: discord.Interaction, instructions: str):
+    async def sheet_create(self, interaction: discord.Interaction, instructions: str) -> None:
         await interaction.response.defer()
         try:
             title, headers, rows = await _generate_sheet_content(instructions)
@@ -430,5 +430,5 @@ class DocCog(commands.Cog, name="Documents"):
                 await interaction.response.send_message(msg, ephemeral=True)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(DocCog(bot))

@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-log = logging.getLogger("openclaw")
+log = logging.getLogger(__name__)
 
 DB_PATH = Path("/app/data/health_history.db")
 

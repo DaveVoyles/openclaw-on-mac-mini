@@ -18,7 +18,7 @@ from config import cfg
 from llm_client import MODEL_NAME, _client
 from model_routing_policy import select_summarization_route
 
-log = logging.getLogger("openclaw.llm")
+log = logging.getLogger(__name__)
 
 _CROSS_CHANNEL_OPT_IN_RE = re.compile(
     r"(?i)(--cross-channel\b|#cross-channel\b|\[cross-channel\])"

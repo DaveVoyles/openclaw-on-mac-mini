@@ -12,7 +12,7 @@ from config import cfg
 from llm_client import MAX_TOKENS, MODEL_NAME, _client, _record_usage
 from llm_ratelimit import rate_limiter as _rate_limiter
 
-log = logging.getLogger("openclaw.llm.patterns")
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Routing heuristics — decide whether to use Gemma (local) or Gemini

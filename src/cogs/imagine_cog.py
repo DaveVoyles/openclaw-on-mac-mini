@@ -30,7 +30,7 @@ SIZE_MAP = {
 
 
 class ImagineCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
 
     imagine = app_commands.Group(name="imagine", description="AI image generation via Stable Diffusion")
@@ -57,7 +57,7 @@ class ImagineCog(commands.Cog):
         prompt: str,
         size: str = "medium",
         negative: str = "",
-    ):
+    ) -> None:
         from cooldowns import check_cooldown
         remaining = check_cooldown("imagine", interaction.user.id, cooldown_seconds=10.0)
         if remaining > 0:
@@ -152,5 +152,5 @@ class ImagineCog(commands.Cog):
             await interaction.followup.send("❌ Status check failed. Check the logs.", ephemeral=True)
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     await bot.add_cog(ImagineCog(bot))

@@ -18,7 +18,7 @@ from enum import Enum
 
 from patreon_monitor import PatreonHealthResult, PatreonHealthStatus
 
-log = logging.getLogger("openclaw.patreon_recovery")
+log = logging.getLogger(__name__)
 
 
 class RecoveryAction(Enum):

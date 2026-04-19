@@ -21,7 +21,7 @@ log = logging.getLogger("openclaw.calendar_cog")
 
 
 class CalendarCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
 
     calendar = app_commands.Group(name="calendar", description="Google Calendar commands")
@@ -53,7 +53,7 @@ class CalendarCog(commands.Cog):
         self,
         interaction: discord.Interaction,
         days: app_commands.Range[int, 1, 30] = 7,
-    ):
+    ) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             from calendar_skills import get_upcoming_events
@@ -86,7 +86,7 @@ class CalendarCog(commands.Cog):
         when: str,
         description: str = "",
         location: str = "",
-    ):
+    ) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             from dateutil import parser as dateutil_parser
@@ -146,7 +146,7 @@ class CalendarCog(commands.Cog):
     @calendar.command(name="delete", description="Delete a calendar event by ID")
     @app_commands.describe(event_id="The Google Calendar event ID to delete")
     @require_auth()
-    async def calendar_delete(self, interaction: discord.Interaction, event_id: str):
+    async def calendar_delete(self, interaction: discord.Interaction, event_id: str) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             from calendar_skills import delete_calendar_event
@@ -163,5 +163,5 @@ class CalendarCog(commands.Cog):
             await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     await bot.add_cog(CalendarCog(bot))

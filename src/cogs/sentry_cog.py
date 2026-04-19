@@ -54,7 +54,7 @@ def _fmt_dt(iso: str) -> str:
 
 
 class SentryCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
 
     sentry = app_commands.Group(name="sentry", description="Sentry error monitoring")
@@ -67,7 +67,7 @@ class SentryCog(commands.Cog):
         self,
         interaction: discord.Interaction,
         project: str = "",
-    ):
+    ) -> None:
         await interaction.response.defer(ephemeral=True)
         if not cfg.sentry_auth_token:
             await interaction.followup.send(_SETUP_MSG, ephemeral=True)
@@ -162,7 +162,7 @@ class SentryCog(commands.Cog):
     @sentry.command(name="resolve", description="Mark a Sentry issue as resolved")
     @app_commands.describe(issue_id="Numeric Sentry issue ID")
     @require_auth()
-    async def sentry_resolve(self, interaction: discord.Interaction, issue_id: str):
+    async def sentry_resolve(self, interaction: discord.Interaction, issue_id: str) -> None:
         await interaction.response.defer(ephemeral=True)
         if not cfg.sentry_auth_token:
             await interaction.followup.send(_SETUP_MSG, ephemeral=True)
@@ -194,7 +194,7 @@ class SentryCog(commands.Cog):
         self,
         interaction: discord.Interaction,
         project: str = "",
-    ):
+    ) -> None:
         await interaction.response.defer(ephemeral=True)
         if not cfg.sentry_auth_token:
             await interaction.followup.send(_SETUP_MSG, ephemeral=True)
@@ -253,5 +253,5 @@ class SentryCog(commands.Cog):
             )
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     await bot.add_cog(SentryCog(bot))

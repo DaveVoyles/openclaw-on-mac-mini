@@ -16,7 +16,7 @@ from google import genai
 from llm_ratelimit import rate_limiter as _rate_limiter
 from trace_context import get_trace_id
 
-log = logging.getLogger("openclaw.tool_orchestration")
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)

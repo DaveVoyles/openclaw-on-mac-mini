@@ -29,7 +29,7 @@ def _fmt_bytes(n: int) -> str:
 
 
 class PerfCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
 
     @app_commands.command(name="perf", description="Show system performance via Glances")
@@ -106,5 +106,5 @@ class PerfCog(commands.Cog):
             await interaction.followup.send(embed=build_error_embed(e, context="/perf"), ephemeral=True)
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     await bot.add_cog(PerfCog(bot))

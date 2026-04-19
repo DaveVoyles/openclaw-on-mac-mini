@@ -27,7 +27,7 @@ _router_sessions = _SessionManager(timeout=60, name="model-router")
 
 from config import cfg as _router_cfg
 
-log = logging.getLogger("openclaw.model_router")
+log = logging.getLogger(__name__)
 
 # Copilot proxy configuration — single source of truth is llm.providers
 # Re-exported here for backward compat with any remaining callers.

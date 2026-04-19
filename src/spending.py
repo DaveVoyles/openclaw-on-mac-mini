@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-log = logging.getLogger("openclaw.spending")
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Configuration

@@ -8,7 +8,7 @@ import logging
 import re
 import time
 
-log = logging.getLogger("openclaw.fact_extractor")
+log = logging.getLogger(__name__)
 
 # Rate limiting: only extract facts every N messages per user
 _extraction_counter: dict[int, int] = {}  # user_id → message count

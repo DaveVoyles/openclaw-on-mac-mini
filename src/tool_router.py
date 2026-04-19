@@ -6,7 +6,7 @@ import logging
 import re
 from typing import Any
 
-log = logging.getLogger("openclaw.tool_router")
+log = logging.getLogger(__name__)
 
 _TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9+._-]*")
 _DAY_WINDOW_RE = re.compile(r"\b(?:last|past|next)\s+(\d{1,2})\s+days?\b")

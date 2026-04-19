@@ -17,7 +17,7 @@ from typing import Any, Literal
 MAX_UPLOAD_ATTEMPTS = 3
 UPLOAD_RETRY_DELAY = 2.0  # seconds; doubles on each retry
 
-log = logging.getLogger("openclaw.backup_manager")
+log = logging.getLogger(__name__)
 
 BackupType = Literal["full", "incremental"]
 CompressionType = Literal["gzip", "none"]

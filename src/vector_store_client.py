@@ -24,7 +24,7 @@ from vector_store_scope import (
     _resolve_scope,
 )
 
-log = logging.getLogger("openclaw.vector_store")
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Lazy singleton — ChromaDB is heavy; only load when first accessed

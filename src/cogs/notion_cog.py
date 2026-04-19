@@ -48,7 +48,7 @@ def _page_title(result: dict) -> str:
 
 
 class NotionCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
 
     notion = app_commands.Group(name="notion", description="Notion integration via Maton")
@@ -57,7 +57,7 @@ class NotionCog(commands.Cog):
 
     @notion.command(name="search", description="Search Notion pages and databases")
     @app_commands.describe(query="Search query")
-    async def notion_search(self, interaction: discord.Interaction, query: str):
+    async def notion_search(self, interaction: discord.Interaction, query: str) -> None:
         await interaction.response.defer(ephemeral=True)
         if not cfg.maton_api_key:
             await interaction.followup.send(_NO_KEY_MSG, ephemeral=True)
@@ -103,7 +103,7 @@ class NotionCog(commands.Cog):
         interaction: discord.Interaction,
         title: str,
         content: str,
-    ):
+    ) -> None:
         await interaction.response.defer(ephemeral=True)
         if not cfg.maton_api_key:
             await interaction.followup.send(_NO_KEY_MSG, ephemeral=True)
@@ -140,7 +140,7 @@ class NotionCog(commands.Cog):
     @notion.command(name="todo", description="Add an item to a Notion todo database")
     @app_commands.describe(item="Todo item to add")
     @require_auth()
-    async def notion_todo(self, interaction: discord.Interaction, item: str):
+    async def notion_todo(self, interaction: discord.Interaction, item: str) -> None:
         await interaction.response.defer(ephemeral=True)
         if not cfg.maton_api_key:
             await interaction.followup.send(_NO_KEY_MSG, ephemeral=True)
@@ -180,5 +180,5 @@ class NotionCog(commands.Cog):
             await interaction.followup.send(embed=build_error_embed(e, context="/notion todo"), ephemeral=True)
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     await bot.add_cog(NotionCog(bot))

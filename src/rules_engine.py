@@ -20,7 +20,7 @@ import re
 import time
 from pathlib import Path
 
-log = logging.getLogger("openclaw.rules_engine")
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Configuration

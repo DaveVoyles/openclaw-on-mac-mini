@@ -6,6 +6,7 @@ Handles: /spending, /auditlog, /audit-summary
 import collections
 import datetime
 import json
+import logging
 import os
 from pathlib import Path
 
@@ -16,16 +17,18 @@ from discord.ext import commands
 from cog_helpers import audit_log
 from spending import tracker as spending_tracker
 
+log = logging.getLogger(__name__)
+
 AUDIT_DIR = Path(os.getenv("AUDIT_DIR", "/audit"))
 
 
 class AnalyticsCog(commands.Cog, name="Analytics"):
     """Spending and audit log commands."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
         msg = f"❌ Command failed: {error}"
         if interaction.response.is_done():
             await interaction.followup.send(msg, ephemeral=True)
@@ -34,7 +37,7 @@ class AnalyticsCog(commands.Cog, name="Analytics"):
 
     @app_commands.command(name="spending", description="View Gemini API spending and budget status")
     @app_commands.describe(breakdown="Show daily breakdown (default: summary)")
-    async def spending_cmd(self, interaction: discord.Interaction, breakdown: bool = False):
+    async def spending_cmd(self, interaction: discord.Interaction, breakdown: bool = False) -> None:
         if breakdown:
             text = spending_tracker.daily_breakdown()
         else:
@@ -50,7 +53,7 @@ class AnalyticsCog(commands.Cog, name="Analytics"):
 
     @app_commands.command(name="auditlog", description="View recent audit log entries")
     @app_commands.describe(lines="Number of entries to show (default 10, max 25)")
-    async def auditlog_cmd(self, interaction: discord.Interaction, lines: int = 10):
+    async def auditlog_cmd(self, interaction: discord.Interaction, lines: int = 10) -> None:
         lines = min(max(lines, 1), 25)
         today = datetime.date.today().isoformat()
         audit_file = AUDIT_DIR / f"{today}.jsonl"
@@ -84,7 +87,7 @@ class AnalyticsCog(commands.Cog, name="Analytics"):
         audit_log(interaction.user, "auditlog", detail=f"lines={lines}")
 
     @app_commands.command(name="audit-summary", description="Analytics summary of today's audit log")
-    async def audit_summary_cmd(self, interaction: discord.Interaction):
+    async def audit_summary_cmd(self, interaction: discord.Interaction) -> None:
         today = datetime.date.today().isoformat()
         audit_file = AUDIT_DIR / f"{today}.jsonl"
         if not audit_file.exists():
@@ -131,5 +134,5 @@ class AnalyticsCog(commands.Cog, name="Analytics"):
         audit_log(interaction.user, "audit-summary")
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(AnalyticsCog(bot))

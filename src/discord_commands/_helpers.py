@@ -11,7 +11,7 @@ import discord
 
 from constants import EMBED_DESC_LIMIT
 
-log = logging.getLogger("openclaw")
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Auth helpers

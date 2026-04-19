@@ -15,7 +15,7 @@ import discord
 
 from trend_tracker import TrendAnalysis, get_tracker
 
-log = logging.getLogger("openclaw.alert_manager")
+log = logging.getLogger(__name__)
 
 # Alert cooldown (1 hour default)
 DEFAULT_COOLDOWN = 3600

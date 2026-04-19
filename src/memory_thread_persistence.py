@@ -15,7 +15,7 @@ from memory_helpers import (
     _relative_age,
 )
 
-log = logging.getLogger("openclaw.memory")
+log = logging.getLogger(__name__)
 
 __all__ = ["ThreadPersistence"]
 

@@ -16,7 +16,7 @@ from google import genai
 from config import cfg
 from spending import tracker as spending_tracker
 
-log = logging.getLogger("openclaw.llm.client")
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Configuration (sourced from centralized config)

@@ -15,7 +15,7 @@ from typing import Any
 
 from utils import atomic_write
 
-log = logging.getLogger("openclaw.digest_manager")
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Schema & paths

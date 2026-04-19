@@ -30,7 +30,7 @@ def _parse_options(options: str) -> list[str]:
 class DecisionCog(commands.GroupCog, group_name="decision", group_description="Decision polls and logs"):
     """Decision-making workflow commands."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
     @app_commands.command(name="poll", description="Create a decision poll with optional role weighting")
@@ -227,5 +227,5 @@ class DecisionCog(commands.GroupCog, group_name="decision", group_description="D
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(DecisionCog(bot))

@@ -407,7 +407,7 @@ from openclaw_cli_watch import (
 )
 import logging as _logging
 
-_LOG = _logging.getLogger("openclaw_cli")
+_LOG = _logging.getLogger(__name__)
 
 # Draft buffer — ephemeral unsent prompt (cleared on submission or /draft clear)
 _draft_buffer: str = ""

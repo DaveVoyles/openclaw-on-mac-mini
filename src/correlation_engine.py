@@ -22,7 +22,7 @@ from typing import Any
 import pandas as pd
 from scipy.stats import pearsonr, spearmanr
 
-log = logging.getLogger("openclaw.correlation_engine")
+log = logging.getLogger(__name__)
 
 # Database path
 DB_PATH = Path(os.getenv("THREAD_DB_PATH", "/memory/openclaw.db"))

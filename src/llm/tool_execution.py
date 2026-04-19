@@ -22,7 +22,7 @@ from llm_client import (
 from llm_patterns import _gemma_response_seems_valid, _needs_tools
 from llm_tools import _execute_function_call
 
-log = logging.getLogger("openclaw.llm")
+log = logging.getLogger(__name__)
 
 
 _ollama_sessions = _SessionManager(

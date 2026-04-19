@@ -10,7 +10,7 @@ from aiohttp import web
 
 from workflow_engine import workflow_engine
 
-log = logging.getLogger("openclaw.workflow_api")
+log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------

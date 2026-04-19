@@ -17,7 +17,7 @@ from typing import Any, Awaitable, Callable, Optional
 import networkx as nx
 import yaml
 
-log = logging.getLogger("openclaw.workflow_engine")
+log = logging.getLogger(__name__)
 
 WORKFLOW_DIR = Path(os.getenv("MEMORY_DIR", "/memory")) / "workflows"
 

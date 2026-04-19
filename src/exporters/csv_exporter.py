@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 import pandas as pd
 
-log = logging.getLogger("openclaw.exporters.csv")
+log = logging.getLogger(__name__)
 
 ExportType = Literal["conversations", "trends", "tasks", "costs", "api_usage"]
 

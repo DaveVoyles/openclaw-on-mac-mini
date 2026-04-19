@@ -12,7 +12,7 @@ from memory_helpers import (
     _atomic_write,
 )
 
-log = logging.getLogger("openclaw.memory")
+log = logging.getLogger(__name__)
 
 __all__ = [
     "HANDOVER_DIR",

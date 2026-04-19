@@ -7,7 +7,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-log = logging.getLogger("openclaw")
+log = logging.getLogger(__name__)
 
 PREFS_FILE = Path(
     os.getenv("NOTIFICATION_PREFS_PATH", "/app/data/notification_prefs.json")

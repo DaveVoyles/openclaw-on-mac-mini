@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -16,6 +18,9 @@ from runtime_state import (
     set_channel_profile,
     update_channel_profile_recommendation,
 )
+
+
+log = logging.getLogger(__name__)
 
 
 def _resolve_scope(
@@ -41,7 +46,7 @@ def _resolve_scope(
 class ChannelProfileCog(commands.GroupCog, group_name="channel-profile"):
     """Manage per-channel/thread formatting/report defaults."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
     @app_commands.command(name="show", description="Show active profile defaults for this channel/thread")
@@ -55,7 +60,7 @@ class ChannelProfileCog(commands.GroupCog, group_name="channel-profile"):
         self,
         interaction: discord.Interaction,
         scope: app_commands.Choice[str] | None = None,
-    ):
+    ) -> None:
         selected_scope = (scope.value if scope else "auto").lower()
         resolved = _resolve_scope(interaction, selected_scope)
         if resolved is None:
@@ -88,7 +93,7 @@ class ChannelProfileCog(commands.GroupCog, group_name="channel-profile"):
         interaction: discord.Interaction,
         scope: app_commands.Choice[str] | None = None,
         include_history: bool = False,
-    ):
+    ) -> None:
         selected_scope = (scope.value if scope else "auto").lower()
         resolved = _resolve_scope(interaction, selected_scope)
         if resolved is None:
@@ -140,7 +145,7 @@ class ChannelProfileCog(commands.GroupCog, group_name="channel-profile"):
         interaction: discord.Interaction,
         recommendation_id: int,
         action: app_commands.Choice[str],
-    ):
+    ) -> None:
         try:
             updated = update_channel_profile_recommendation(
                 recommendation_id,
@@ -208,7 +213,7 @@ class ChannelProfileCog(commands.GroupCog, group_name="channel-profile"):
         emoji_level: app_commands.Choice[str] | None = None,
         report_depth: app_commands.Choice[str] | None = None,
         source_strictness: app_commands.Choice[str] | None = None,
-    ):
+    ) -> None:
         selected_scope = (scope.value if scope else "auto").lower()
         resolved = _resolve_scope(interaction, selected_scope)
         if resolved is None:
@@ -246,7 +251,7 @@ class ChannelProfileCog(commands.GroupCog, group_name="channel-profile"):
         app_commands.Choice(name="channel", value="channel"),
         app_commands.Choice(name="thread", value="thread"),
     ])
-    async def clear(self, interaction: discord.Interaction, scope: app_commands.Choice[str]):
+    async def clear(self, interaction: discord.Interaction, scope: app_commands.Choice[str]) -> None:
         resolved = _resolve_scope(interaction, scope.value)
         if resolved is None:
             await interaction.response.send_message(
@@ -262,5 +267,5 @@ class ChannelProfileCog(commands.GroupCog, group_name="channel-profile"):
         )
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(ChannelProfileCog(bot))

@@ -6,7 +6,7 @@ from typing import Any, Callable, Coroutine
 
 import aiohttp
 
-log = logging.getLogger("openclaw.search")
+log = logging.getLogger(__name__)
 
 
 @dataclass

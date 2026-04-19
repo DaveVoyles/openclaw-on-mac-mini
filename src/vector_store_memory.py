@@ -23,7 +23,7 @@ from vector_store_scope import (
     _resolve_scope,
 )
 
-log = logging.getLogger("openclaw.vector_store")
+log = logging.getLogger(__name__)
 
 # W6-2: feature flag for stricter domain guard (defaults to safe existing behavior)
 _RECALL_DOMAIN_GUARD_STRICT = os.getenv("RECALL_DOMAIN_GUARD_STRICT", "false").lower() in ("1", "true", "yes")

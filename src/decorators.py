@@ -9,7 +9,7 @@ import logging
 import time
 from typing import Any, Callable, TypeVar
 
-log = logging.getLogger("openclaw.decorators")
+log = logging.getLogger(__name__)
 
 # Type variable for decorated function return type
 T = TypeVar("T")

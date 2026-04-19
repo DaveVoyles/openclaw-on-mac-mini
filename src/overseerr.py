@@ -9,7 +9,7 @@ Requires: OVERSEERR_URL, OVERSEERR_API_KEY in .env
 import asyncio
 import logging
 
-log = logging.getLogger("openclaw.overseerr")
+log = logging.getLogger(__name__)
 
 import aiohttp
 

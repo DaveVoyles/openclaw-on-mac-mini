@@ -86,7 +86,7 @@ class ReportsCog(commands.Cog, name="Reports"):
     recap = app_commands.Group(name="recap", description="Weekly channel recaps and summaries")
     sports = app_commands.Group(name="sports", description="Sports schedules and watch guides")
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.recap_ctx = app_commands.ContextMenu(
             name="Create recap from thread",
@@ -94,14 +94,14 @@ class ReportsCog(commands.Cog, name="Reports"):
         )
         self.bot.tree.add_command(self.recap_ctx)
 
-    async def cog_unload(self):
+    async def cog_unload(self) -> None:
         self.bot.tree.remove_command(self.recap_ctx.name, type=self.recap_ctx.type)
 
     async def cog_command_error(
         self,
         interaction: discord.Interaction,
         error: app_commands.AppCommandError,
-    ):
+    ) -> None:
         msg = str(error) if isinstance(error, app_commands.CheckFailure) else f"❌ Command failed: {error}"
         if interaction.response.is_done():
             await interaction.followup.send(msg, ephemeral=True)
@@ -372,7 +372,7 @@ class ReportsCog(commands.Cog, name="Reports"):
         self,
         interaction: discord.Interaction,
         variant: str = "copy-safe",
-    ):
+    ) -> None:
         conv = conversation_store.get(
             user_id=interaction.user.id,
             channel_id=interaction.channel_id,
@@ -418,7 +418,7 @@ class ReportsCog(commands.Cog, name="Reports"):
         days: app_commands.Range[int, 1, 30] = 7,
         focus: str = "",
         style: str = "action-items",
-    ):
+    ) -> None:
         from skills.reporting_skills import generate_channel_recap_report
 
         await interaction.response.defer(ephemeral=True)
@@ -477,7 +477,7 @@ class ReportsCog(commands.Cog, name="Reports"):
         focus: str = "",
         style: str = "action-items",
         variant: str = "copy-safe",
-    ):
+    ) -> None:
         from cooldowns import check_cooldown
         from skills.reporting_skills import generate_channel_recap_report
 
@@ -530,7 +530,7 @@ class ReportsCog(commands.Cog, name="Reports"):
         style: str = "highlights",
         save_to_vault: bool = False,
         schedule_weekly: bool = False,
-    ):
+    ) -> None:
         from cooldowns import check_cooldown
         from obsidian_writer import save_to_vault as save_report_to_vault
         from skills.reporting_skills import generate_channel_recap_report
@@ -622,7 +622,7 @@ class ReportsCog(commands.Cog, name="Reports"):
         include_watch_info: bool = True,
         save_to_vault: bool = False,
         schedule_weekly: bool = False,
-    ):
+    ) -> None:
         from obsidian_writer import save_to_vault as save_report_to_vault
         from skills.reporting_skills import (
             build_sports_watch_query,
@@ -697,5 +697,5 @@ class ReportsCog(commands.Cog, name="Reports"):
         )
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(ReportsCog(bot))

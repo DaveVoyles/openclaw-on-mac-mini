@@ -23,7 +23,7 @@ from permissions import require_auth
 
 from ._helpers import _get_http_session, truncate_for_embed
 
-log = logging.getLogger("openclaw")
+log = logging.getLogger(__name__)
 
 
 def _register_media_commands(bot: commands.Bot, send_morning_briefing: Callable[..., Any]) -> None:

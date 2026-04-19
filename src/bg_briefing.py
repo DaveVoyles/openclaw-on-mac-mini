@@ -33,7 +33,7 @@ from skills.advanced_skills import (
 )
 from trace_context import trace_context
 
-log = logging.getLogger("openclaw")
+log = logging.getLogger(__name__)
 
 ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
 _OWNER_USER_ID = int(os.getenv("OWNER_USER_ID", os.getenv("BOT_OWNER_ID", "0")))

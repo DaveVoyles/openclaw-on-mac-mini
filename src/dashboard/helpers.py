@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-log = logging.getLogger("openclaw.dashboard")
+log = logging.getLogger(__name__)
 
 CONFIG_DIR = Path("/config")
 GITHUB_REPO = "https://github.com/DaveVoyles/openclaw-on-mac-mini"

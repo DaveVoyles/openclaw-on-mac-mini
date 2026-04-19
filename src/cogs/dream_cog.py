@@ -22,10 +22,10 @@ ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
 class DreamCog(commands.Cog, name="Dream"):
     """Auto-Dream memory consolidation and health commands."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
         if isinstance(error, app_commands.CheckFailure):
             msg = str(error)
         else:
@@ -38,7 +38,7 @@ class DreamCog(commands.Cog, name="Dream"):
     # ── /dream ────────────────────────────────────────────────────────
     @app_commands.command(name="dream", description="Run a memory dream cycle — consolidate, score, and organize knowledge")
     @require_auth()
-    async def dream_cmd(self, interaction: discord.Interaction):
+    async def dream_cmd(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
 
         from dream_cycle import dream_now
@@ -71,7 +71,7 @@ class DreamCog(commands.Cog, name="Dream"):
     # ── /memory-health ────────────────────────────────────────────────
     @app_commands.command(name="memory-health", description="Show memory health score and metrics")
     @require_auth()
-    async def memory_health_cmd(self, interaction: discord.Interaction):
+    async def memory_health_cmd(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
 
         from dream_cycle import get_memory_health
@@ -89,7 +89,7 @@ class DreamCog(commands.Cog, name="Dream"):
     # ── /memory-export ────────────────────────────────────────────────
     @app_commands.command(name="memory-export", description="Export memory as JSON bundle")
     @require_auth()
-    async def memory_export_cmd(self, interaction: discord.Interaction):
+    async def memory_export_cmd(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
 
         from pathlib import Path
@@ -123,6 +123,6 @@ class DreamCog(commands.Cog, name="Dream"):
         audit_log(interaction.user, "memory_export")
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     """Called automatically by bot.load_extension()."""
     await bot.add_cog(DreamCog(bot))

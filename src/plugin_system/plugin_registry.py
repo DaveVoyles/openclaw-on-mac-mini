@@ -18,7 +18,7 @@ from typing import Any
 from .plugin_base import Plugin, PluginMetadata
 from .plugin_loader import PluginLoader
 
-log = logging.getLogger("openclaw.plugin_system.registry")
+log = logging.getLogger(__name__)
 
 
 class PluginRegistry:

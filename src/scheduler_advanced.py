@@ -27,7 +27,7 @@ from typing import Any, Awaitable, Callable, Optional
 from metrics_collector import get_collector
 from trace_context import trace_context
 
-log = logging.getLogger("openclaw.scheduler_advanced")
+log = logging.getLogger(__name__)
 
 _ALLOWED_CONDITION_NODES: tuple[type[ast.AST], ...] = (
     ast.Expression,

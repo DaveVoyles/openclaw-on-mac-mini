@@ -12,7 +12,7 @@ from memory import store as conversation_store
 from permissions import require_auth
 from ui_components import EmbedColors
 
-log = logging.getLogger("openclaw")
+log = logging.getLogger(__name__)
 
 
 def _register_conversation_commands(bot: commands.Bot) -> None:

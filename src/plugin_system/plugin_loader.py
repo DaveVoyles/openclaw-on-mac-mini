@@ -24,7 +24,7 @@ from permissions import PermissionLevel, set_plugin_permission
 from .plugin_api import PluginAPI
 from .plugin_base import Plugin, PluginMetadata
 
-log = logging.getLogger("openclaw.plugin_system.loader")
+log = logging.getLogger(__name__)
 
 _VERSION_COMPONENTS = 3
 

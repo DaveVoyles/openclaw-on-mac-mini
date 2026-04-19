@@ -18,7 +18,7 @@ import os
 
 import aiohttp
 
-log = logging.getLogger("openclaw.uptime_kuma")
+log = logging.getLogger(__name__)
 
 from config import cfg as _cfg
 from http_session import SessionManager

@@ -15,7 +15,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
-log = logging.getLogger("openclaw.user_manager")
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants

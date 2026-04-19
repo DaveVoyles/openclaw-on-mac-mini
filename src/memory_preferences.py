@@ -6,7 +6,7 @@ import logging
 from memory_helpers import MEMORY_DIR, _atomic_write
 from model_aliases import model_input_suggestion, normalize_model_input
 
-log = logging.getLogger("openclaw.memory")
+log = logging.getLogger(__name__)
 
 __all__ = [
     "_PREFS_DIR",

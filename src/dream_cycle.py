@@ -20,7 +20,7 @@ import aiofiles
 
 from utils import atomic_write
 
-log = logging.getLogger("openclaw.dream")
+log = logging.getLogger(__name__)
 
 MAX_DREAM_SECONDS = 600
 

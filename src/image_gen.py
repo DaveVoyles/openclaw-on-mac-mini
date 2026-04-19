@@ -16,7 +16,7 @@ from config import TIMEOUT_FAST
 from config import cfg as _cfg
 from http_session import SessionManager
 
-log = logging.getLogger("openclaw.image_gen")
+log = logging.getLogger(__name__)
 
 SD_URL = _cfg.sd_url
 SD_TIMEOUT = _cfg.sd_timeout

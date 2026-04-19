@@ -10,7 +10,7 @@ from pathlib import Path
 
 from subprocess_utils import run as _run
 
-log = logging.getLogger("openclaw")
+log = logging.getLogger(__name__)
 
 MONITOR_FILE = Path(os.getenv("RESOURCE_MONITOR_PATH", "/app/data/resource_monitors.json"))
 

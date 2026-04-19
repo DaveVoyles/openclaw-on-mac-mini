@@ -10,7 +10,7 @@ from typing import Optional
 
 import aiohttp
 
-log = logging.getLogger("openclaw.network")
+log = logging.getLogger(__name__)
 
 from config import TIMEOUT_FAST
 from config import cfg as _cfg

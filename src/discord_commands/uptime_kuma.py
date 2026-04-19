@@ -10,7 +10,7 @@ from audit import audit_log
 
 from ._helpers import require_auth
 
-log = logging.getLogger("openclaw")
+log = logging.getLogger(__name__)
 
 
 def _register_uptime_kuma_commands(bot: commands.Bot) -> None:

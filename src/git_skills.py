@@ -11,7 +11,7 @@ import logging
 import os
 from pathlib import Path
 
-log = logging.getLogger("openclaw.git_skills")
+log = logging.getLogger(__name__)
 _SKILLS_DIR = Path(__file__).parent.parent
 _WEBFETCH_CLI = _SKILLS_DIR / "skills" / "webfetch-md" / "cli.js"
 

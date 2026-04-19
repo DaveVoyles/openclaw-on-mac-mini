@@ -48,13 +48,13 @@ async def _generate_questions(goal: str) -> list[str]:
 # ── Save-to-vault view ────────────────────────────────────────────────────────
 
 class _InterviewOutputView(discord.ui.View):
-    def __init__(self, *, output: str, goal: str):
+    def __init__(self, *, output: str, goal: str) -> None:
         super().__init__(timeout=300)
         self.output = output
         self.goal = goal
 
     @discord.ui.button(label="💾 Save to Vault", style=discord.ButtonStyle.success)
-    async def save_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def save_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             from obsidian_writer import save_to_vault
@@ -85,7 +85,7 @@ class InterviewModal(discord.ui.Modal):
         question: str,
         question_num: int,
         total: int,
-    ):
+    ) -> None:
         super().__init__(title=f"Question {question_num}/{total}", timeout=600)
         self.cog = cog
         self.user_id = user_id
@@ -99,7 +99,7 @@ class InterviewModal(discord.ui.Modal):
         )
         self.add_item(self.answer_input)
 
-    async def on_submit(self, interaction: discord.Interaction):
+    async def on_submit(self, interaction: discord.Interaction) -> None:
         session = _sessions.get(self.user_id)
         if not session:
             await interaction.response.send_message(
@@ -148,7 +148,7 @@ class InterviewModal(discord.ui.Modal):
 # ── Cog ───────────────────────────────────────────────────────────────────────
 
 class InterviewCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
 
     async def _synthesize(self, goal: str, qa_pairs: list[tuple[str, str]]) -> tuple[str, str]:
@@ -171,7 +171,7 @@ class InterviewCog(commands.Cog):
     @app_commands.describe(
         goal="What do you want to create or decide? E.g. 'write my bio', 'plan my week'"
     )
-    async def interview(self, interaction: discord.Interaction, goal: str):
+    async def interview(self, interaction: discord.Interaction, goal: str) -> None:
         # Clear any existing session for this user and start fresh
         if interaction.user.id in _sessions:
             _sessions.pop(interaction.user.id)
@@ -202,5 +202,5 @@ class InterviewCog(commands.Cog):
         )
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     await bot.add_cog(InterviewCog(bot))

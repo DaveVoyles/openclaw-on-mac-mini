@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import Any, Literal
 
-log = logging.getLogger("openclaw.exporters.json")
+log = logging.getLogger(__name__)
 
 ExportType = Literal["conversations", "trends", "tasks", "costs", "api_usage"]
 FormatType = Literal["nested", "flat"]

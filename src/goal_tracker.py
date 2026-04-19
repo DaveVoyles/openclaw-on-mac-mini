@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-log = logging.getLogger("openclaw.goal_tracker")
+log = logging.getLogger(__name__)
 
 GOALS_FILE = Path("/memory/goals.json")
 

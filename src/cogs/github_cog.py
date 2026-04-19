@@ -90,7 +90,7 @@ def _fmt_date(iso: str) -> str:
 # ---------------------------------------------------------------------------
 
 class GitHubCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
         self._monitor_task.start()
 
@@ -103,7 +103,7 @@ class GitHubCog(commands.Cog):
 
     @github.command(name="prs", description="List open pull requests for a GitHub repo")
     @app_commands.describe(repo="Repository in owner/repo format (optional if GITHUB_DEFAULT_REPOS is set)")
-    async def github_prs(self, interaction: discord.Interaction, repo: str = ""):
+    async def github_prs(self, interaction: discord.Interaction, repo: str = "") -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             from config import cfg
@@ -171,7 +171,7 @@ class GitHubCog(commands.Cog):
         repo="Repository in owner/repo format (optional if GITHUB_DEFAULT_REPOS is set)",
         label="Filter by label (optional)",
     )
-    async def github_issues(self, interaction: discord.Interaction, repo: str = "", label: str = ""):
+    async def github_issues(self, interaction: discord.Interaction, repo: str = "", label: str = "") -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             from config import cfg
@@ -242,7 +242,7 @@ class GitHubCog(commands.Cog):
     @github.command(name="watch", description="Get DM notifications when PRs or issues change")
     @app_commands.describe(repo="Repository to watch in owner/repo format")
     @require_auth()
-    async def github_watch(self, interaction: discord.Interaction, repo: str):
+    async def github_watch(self, interaction: discord.Interaction, repo: str) -> None:
         await interaction.response.defer(ephemeral=False)
         try:
             repo = repo.strip()
@@ -280,7 +280,7 @@ class GitHubCog(commands.Cog):
 
     @github.command(name="unwatch", description="Stop receiving notifications for a repo")
     @app_commands.describe(repo="Repository to stop watching in owner/repo format")
-    async def github_unwatch(self, interaction: discord.Interaction, repo: str):
+    async def github_unwatch(self, interaction: discord.Interaction, repo: str) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             repo = repo.strip()
@@ -451,5 +451,5 @@ class GitHubCog(commands.Cog):
         await self.bot.wait_until_ready()
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     await bot.add_cog(GitHubCog(bot))

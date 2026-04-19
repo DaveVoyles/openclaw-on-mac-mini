@@ -37,7 +37,7 @@ from .system import _register_system_commands
 from .uptime_kuma import _register_uptime_kuma_commands
 from .utility import _register_utility_commands
 
-log = logging.getLogger("openclaw")
+log = logging.getLogger(__name__)
 
 
 def register_commands(bot: commands.Bot) -> None:  # noqa: C901 — large but flat

@@ -11,7 +11,7 @@ import yaml
 
 from config import cfg
 
-log = logging.getLogger("openclaw.permissions")
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # User allow-list

@@ -44,5 +44,5 @@ class TranslateCog(commands.Cog, name="Translate"):
             await interaction.followup.send(embed=build_error_embed(e, context="/translate"), ephemeral=True)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(TranslateCog(bot))

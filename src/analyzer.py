@@ -7,7 +7,7 @@ import logging
 
 from subprocess_utils import run as _run
 
-log = logging.getLogger("openclaw.analyzer")
+log = logging.getLogger(__name__)
 
 COMMAND_TIMEOUT = 15
 

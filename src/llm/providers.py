@@ -20,7 +20,7 @@ import aiohttp
 
 from http_session import SessionManager as _SessionManager
 
-log = logging.getLogger("openclaw.llm.providers")
+log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------

@@ -92,7 +92,7 @@ class JournalEntryModal(discord.ui.Modal, title="📓 Journal Entry"):
         max_length=4000,
     )
 
-    async def on_submit(self, interaction: discord.Interaction):
+    async def on_submit(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             today = date.today()
@@ -112,7 +112,7 @@ class JournalEntryModal(discord.ui.Modal, title="📓 Journal Entry"):
 # ── Cog ───────────────────────────────────────────────────────────────────────
 
 class JournalCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
 
     journal = app_commands.Group(name="journal", description="Daily journaling to Obsidian vault")
@@ -121,7 +121,7 @@ class JournalCog(commands.Cog):
 
     @journal.command(name="write", description="Save a journal entry for today")
     @app_commands.describe(entry="Your journal entry (leave blank for a text input modal)")
-    async def journal_write(self, interaction: discord.Interaction, entry: str = ""):
+    async def journal_write(self, interaction: discord.Interaction, entry: str = "") -> None:
         if not entry:
             await interaction.response.send_modal(JournalEntryModal())
             return
@@ -145,7 +145,7 @@ class JournalCog(commands.Cog):
 
     @journal.command(name="read", description="Read a past journal entry")
     @app_commands.describe(date="Date to read: 'today', 'yesterday', or YYYY-MM-DD (default: today)")
-    async def journal_read(self, interaction: discord.Interaction, date: str = "today"):
+    async def journal_read(self, interaction: discord.Interaction, date: str = "today") -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             target = _parse_date(date)
@@ -242,5 +242,5 @@ class JournalCog(commands.Cog):
             await interaction.followup.send(embed=build_error_embed(e, context="/journal prompt"), ephemeral=True)
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     await bot.add_cog(JournalCog(bot))

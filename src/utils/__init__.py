@@ -6,7 +6,7 @@ import logging
 import os
 from pathlib import Path
 
-log = logging.getLogger("openclaw.utils")
+log = logging.getLogger(__name__)
 
 
 def atomic_write(path: Path, data: str) -> None:

@@ -20,7 +20,7 @@ future multi-provider tool support.
 import asyncio
 import logging
 
-log = logging.getLogger("openclaw.worker")
+log = logging.getLogger(__name__)
 
 _WORKER_SYSTEM_PROMPT = (
     "You are a focused worker sub-agent for OpenClaw. You have been assigned a specific task.\n"

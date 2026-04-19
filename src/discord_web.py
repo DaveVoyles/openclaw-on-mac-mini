@@ -26,7 +26,7 @@ from dashboard import setup_dashboard
 from llm import chat as llm_chat
 from metrics_collector import get_collector
 
-log = logging.getLogger("openclaw")
+log = logging.getLogger(__name__)
 
 from config import cfg as _web_cfg
 from trace_context import set_trace as _set_trace, trace_context as _trace_context

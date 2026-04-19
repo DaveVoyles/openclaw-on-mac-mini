@@ -3,7 +3,7 @@ import io
 import logging
 from pathlib import Path
 
-log = logging.getLogger("openclaw")
+log = logging.getLogger(__name__)
 
 
 # ── Word (.docx) ─────────────────────────────────────────────────────────

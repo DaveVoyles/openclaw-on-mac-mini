@@ -10,7 +10,7 @@ Supported formats:
 import logging
 from pathlib import Path
 
-log = logging.getLogger("openclaw.file_skills")
+log = logging.getLogger(__name__)
 
 AI_FILES_DIR = Path("/ai-files")
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB cap (rich docs can be larger)

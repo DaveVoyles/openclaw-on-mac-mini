@@ -25,7 +25,7 @@ from xml.etree import ElementTree as ET
 
 import aiohttp
 
-log = logging.getLogger("openclaw.rss")
+log = logging.getLogger(__name__)
 
 _SSRF_PRIVATE = re.compile(
     r"^(https?://)?(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.).*",

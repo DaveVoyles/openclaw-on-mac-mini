@@ -34,7 +34,7 @@ async def _omdb_get(params: dict) -> dict:
 
 
 class ImdbCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
 
     media = app_commands.Group(name="media", description="Movie and TV lookups via IMDb/OMDb")
@@ -43,7 +43,7 @@ class ImdbCog(commands.Cog):
 
     @media.command(name="movie", description="Look up a movie on IMDb via OMDb")
     @app_commands.describe(title="Movie title to search for")
-    async def movie(self, interaction: discord.Interaction, title: str):
+    async def movie(self, interaction: discord.Interaction, title: str) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             if not cfg.omdb_api_key:
@@ -68,7 +68,7 @@ class ImdbCog(commands.Cog):
 
     @media.command(name="tv", description="Look up a TV series on IMDb via OMDb")
     @app_commands.describe(title="TV series title to search for")
-    async def tv(self, interaction: discord.Interaction, title: str):
+    async def tv(self, interaction: discord.Interaction, title: str) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             if not cfg.omdb_api_key:
@@ -105,7 +105,7 @@ class ImdbCog(commands.Cog):
 
     @media.command(name="search", description="Search IMDb for movies and TV shows (top 5)")
     @app_commands.describe(query="Title or keyword to search")
-    async def search(self, interaction: discord.Interaction, query: str):
+    async def search(self, interaction: discord.Interaction, query: str) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             if not cfg.omdb_api_key:
@@ -216,5 +216,5 @@ def _build_media_embed(data: dict, color: discord.Color) -> discord.Embed:
     return embed
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     await bot.add_cog(ImdbCog(bot))

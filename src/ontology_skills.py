@@ -10,7 +10,7 @@ from pathlib import Path
 
 from subprocess_utils import run as _run
 
-log = logging.getLogger("openclaw.ontology")
+log = logging.getLogger(__name__)
 
 _ROOT = Path(__file__).parent.parent
 _ONTOLOGY_SCRIPT = _ROOT / "skills" / "ontology" / "scripts" / "ontology.py"

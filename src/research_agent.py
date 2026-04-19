@@ -14,7 +14,7 @@ import time
 from typing import Awaitable, Callable
 from urllib.parse import urlparse
 
-log = logging.getLogger("openclaw.research")
+log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------

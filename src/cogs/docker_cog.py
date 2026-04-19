@@ -119,6 +119,7 @@ async def _container_autocomplete(
                     names.append(name)
         return [app_commands.Choice(name=n, value=n) for n in sorted(names)[:25]]
     except Exception:  # broad: intentional
+        log.exception("container autocomplete failed")
         return []
 
 
@@ -130,7 +131,7 @@ async def _container_autocomplete(
 class ContainerActionView(discord.ui.View):
     """Action buttons shown after a container is selected."""
 
-    def __init__(self, container: dict, requester_id: int):
+    def __init__(self, container: dict, requester_id: int) -> None:
         super().__init__(timeout=120)
         self.container = container
         self.requester_id = requester_id
@@ -145,7 +146,7 @@ class ContainerActionView(discord.ui.View):
         return True
 
     @discord.ui.button(label="Logs", emoji="📋", style=discord.ButtonStyle.primary)
-    async def logs_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def logs_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.defer()
         button.disabled = True
         try:
@@ -174,7 +175,7 @@ class ContainerActionView(discord.ui.View):
             await interaction.message.edit(view=self)
 
     @discord.ui.button(label="Stats", emoji="📊", style=discord.ButtonStyle.primary)
-    async def stats_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def stats_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.defer()
         button.disabled = True
         try:
@@ -283,7 +284,7 @@ class ContainerActionView(discord.ui.View):
         view.message = await interaction.original_response()
         audit_log(interaction.user, "containers_stop_requested", detail=self.container_name)
 
-    async def on_timeout(self):
+    async def on_timeout(self) -> None:
         for child in self.children:
             if isinstance(child, (discord.ui.Button, discord.ui.Select)):
                 child.disabled = True
@@ -297,7 +298,7 @@ class ContainerActionView(discord.ui.View):
 class ContainerSelect(discord.ui.Select):
     """Dropdown listing all containers. Selecting one shows details + action buttons."""
 
-    def __init__(self, options: list[discord.SelectOption], containers: list[dict]):
+    def __init__(self, options: list[discord.SelectOption], containers: list[dict]) -> None:
         super().__init__(
             placeholder="Pick a container to manage…",
             min_values=1,
@@ -327,7 +328,7 @@ class ContainerSelect(discord.ui.Select):
 class ContainerSelectView(discord.ui.View):
     """Interactive container management with a select dropdown."""
 
-    def __init__(self, containers: list[dict], requester_id: int):
+    def __init__(self, containers: list[dict], requester_id: int) -> None:
         super().__init__(timeout=120)
         self.requester_id = requester_id
         options = []
@@ -354,7 +355,7 @@ class ContainerSelectView(discord.ui.View):
             return False
         return True
 
-    async def on_timeout(self):
+    async def on_timeout(self) -> None:
         for child in self.children:
             if isinstance(child, (discord.ui.Button, discord.ui.Select)):
                 child.disabled = True
@@ -373,10 +374,10 @@ class ContainerSelectView(discord.ui.View):
 class DockerCog(commands.Cog, name="Docker"):
     """Docker and infrastructure management commands."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
         embed = build_error_embed(error, context="docker command")
         if interaction.response.is_done():
             await interaction.followup.send(embed=embed, ephemeral=True)
@@ -384,7 +385,7 @@ class DockerCog(commands.Cog, name="Docker"):
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="containers", description="List all Docker containers with interactive management")
-    async def containers_cmd(self, interaction: discord.Interaction):
+    async def containers_cmd(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         containers = await _list_containers_structured()
 
@@ -421,7 +422,7 @@ class DockerCog(commands.Cog, name="Docker"):
     @app_commands.command(name="status", description="Get detailed status for a container")
     @app_commands.describe(service="Container name (e.g. sonarr, radarr, plex)")
     @app_commands.autocomplete(service=_container_autocomplete)
-    async def status_cmd(self, interaction: discord.Interaction, service: str):
+    async def status_cmd(self, interaction: discord.Interaction, service: str) -> None:
         progress = ProgressTracker(interaction, title="🐳 Container Status")
         await progress.start()
         await progress.update(f"🐳 Checking {service}…")
@@ -438,7 +439,7 @@ class DockerCog(commands.Cog, name="Docker"):
     @app_commands.command(name="logs", description="View recent logs from a container")
     @app_commands.describe(service="Container name", lines="Number of lines (5-100, default 30)")
     @app_commands.autocomplete(service=_container_autocomplete)
-    async def logs_cmd(self, interaction: discord.Interaction, service: str, lines: int = 30):
+    async def logs_cmd(self, interaction: discord.Interaction, service: str, lines: int = 30) -> None:
         await interaction.response.defer()
         result = await get_container_logs(service, lines)
         embed = discord.Embed(
@@ -450,7 +451,7 @@ class DockerCog(commands.Cog, name="Docker"):
         audit_log(interaction.user, "logs", detail=f"{service} lines={lines}")
 
     @app_commands.command(name="system", description="Show system resource usage")
-    async def system_cmd(self, interaction: discord.Interaction):
+    async def system_cmd(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         stats = await get_system_stats()
         uptime_str = await get_uptime()
@@ -464,7 +465,7 @@ class DockerCog(commands.Cog, name="Docker"):
         audit_log(interaction.user, "system")
 
     @app_commands.command(name="dockerstats", description="Show resource usage per container")
-    async def dockerstats_cmd(self, interaction: discord.Interaction):
+    async def dockerstats_cmd(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         result = await get_docker_stats()
         embed = discord.Embed(
@@ -548,7 +549,7 @@ class DockerCog(commands.Cog, name="Docker"):
         container: str,
         cpu: float = 80.0,
         memory: float = 90.0,
-    ):
+    ) -> None:
         t = resource_monitor.set_threshold(container, cpu=cpu, memory=memory)
         embed = discord.Embed(
             title=f"📐 Monitor Set: {container}",
@@ -564,7 +565,7 @@ class DockerCog(commands.Cog, name="Docker"):
     @monitor_group.command(name="remove", description="Stop monitoring a container")
     @app_commands.describe(container="Container name to stop monitoring")
     @app_commands.autocomplete(container=_container_autocomplete)
-    async def monitor_remove(self, interaction: discord.Interaction, container: str):
+    async def monitor_remove(self, interaction: discord.Interaction, container: str) -> None:
         if resource_monitor.remove(container):
             await interaction.response.send_message(
                 embed=discord.Embed(
@@ -636,5 +637,5 @@ class DockerCog(commands.Cog, name="Docker"):
         audit_log(interaction.user, "monitor_check", detail=f"{len(violations)} violations")
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(DockerCog(bot))

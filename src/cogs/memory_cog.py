@@ -19,10 +19,10 @@ log = logging.getLogger("openclaw")
 class MemoryCog(commands.Cog, name="Memory"):
     """Memory, profile, rules, and goal management commands."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
         if isinstance(error, app_commands.CheckFailure):
             msg = str(error)
         else:
@@ -36,7 +36,7 @@ class MemoryCog(commands.Cog, name="Memory"):
     @app_commands.command(name="remember", description="Store a fact in long-term memory (QMD)")
     @app_commands.describe(content="Fact to remember", tags="Comma-separated tags")
     @require_auth()
-    async def remember_cmd(self, interaction: discord.Interaction, content: str, tags: str = ""):
+    async def remember_cmd(self, interaction: discord.Interaction, content: str, tags: str = "") -> None:
         from qmd import remember_fact
 
         result = await remember_fact(content, tags)
@@ -47,7 +47,7 @@ class MemoryCog(commands.Cog, name="Memory"):
     @app_commands.command(name="recall", description="Search long-term memory (QMD)")
     @app_commands.describe(query="Keywords to search for")
     @require_auth()
-    async def recall_cmd(self, interaction: discord.Interaction, query: str):
+    async def recall_cmd(self, interaction: discord.Interaction, query: str) -> None:
         from qmd import recall_fact
 
         result = await recall_fact(query)
@@ -58,7 +58,7 @@ class MemoryCog(commands.Cog, name="Memory"):
     # ── /goals ────────────────────────────────────────────────────────
     @app_commands.command(name="goals", description="View your active goals and intentions")
     @require_auth()
-    async def goals_cmd(self, interaction: discord.Interaction):
+    async def goals_cmd(self, interaction: discord.Interaction) -> None:
         from goal_tracker import get_active_goals
 
         goals = get_active_goals(interaction.user.id)
@@ -87,7 +87,7 @@ class MemoryCog(commands.Cog, name="Memory"):
     # ── /memory-stats ─────────────────────────────────────────────────
     @app_commands.command(name="memory-stats", description="Show memory and vector store statistics")
     @require_auth()
-    async def memory_stats_cmd(self, interaction: discord.Interaction):
+    async def memory_stats_cmd(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
 
         lines = ["📊 **Memory Statistics**\n"]
@@ -125,7 +125,7 @@ class MemoryCog(commands.Cog, name="Memory"):
     @app_commands.command(name="memory-refresh", description="Reinforce a memory so it doesn't decay (bump its access score)")
     @app_commands.describe(query="Search query to find the memory to reinforce")
     @require_auth()
-    async def memory_refresh_cmd(self, interaction: discord.Interaction, query: str):
+    async def memory_refresh_cmd(self, interaction: discord.Interaction, query: str) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             import vector_store
@@ -155,7 +155,7 @@ class MemoryCog(commands.Cog, name="Memory"):
         app_commands.Choice(name="Delete", value="delete"),
     ])
     @require_auth()
-    async def rules_cmd(self, interaction: discord.Interaction, action: str = "list", query: str = ""):
+    async def rules_cmd(self, interaction: discord.Interaction, action: str = "list", query: str = "") -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             from rules_engine import delete_rule, get_all_rules, get_relevant_rules
@@ -202,7 +202,7 @@ class MemoryCog(commands.Cog, name="Memory"):
     # ── /profile ──────────────────────────────────────────────────────
     @app_commands.command(name="profile", description="View your user profile (preferences, interests, tools)")
     @require_auth()
-    async def profile_cmd(self, interaction: discord.Interaction):
+    async def profile_cmd(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             from user_profile import load_profile
@@ -240,7 +240,7 @@ class MemoryCog(commands.Cog, name="Memory"):
         value="Value to set (for preference, use 'key=value' format)",
     )
     @require_auth()
-    async def profile_edit_cmd(self, interaction: discord.Interaction, field: str, value: str):
+    async def profile_edit_cmd(self, interaction: discord.Interaction, field: str, value: str) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             from user_profile import (
@@ -280,7 +280,7 @@ class MemoryCog(commands.Cog, name="Memory"):
     # ── /export-conversations ─────────────────────────────────────────
     @app_commands.command(name="export-conversations", description="Export all saved conversations as a JSON file")
     @require_auth()
-    async def export_conversations_cmd(self, interaction: discord.Interaction):
+    async def export_conversations_cmd(self, interaction: discord.Interaction) -> None:
         import datetime
         import io
         import json
@@ -318,6 +318,6 @@ class MemoryCog(commands.Cog, name="Memory"):
         audit_log(interaction.user, "export_conversations")
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     """Called automatically by bot.load_extension()."""
     await bot.add_cog(MemoryCog(bot))

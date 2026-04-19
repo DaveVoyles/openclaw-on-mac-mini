@@ -28,7 +28,7 @@ import aiohttp
 from config import TIMEOUT_DEFAULT
 from config import cfg as _cfg
 
-log = logging.getLogger("openclaw.calendar")
+log = logging.getLogger(__name__)
 
 GOOGLE_CLIENT_ID = _cfg.google_oauth_client_id
 GOOGLE_CLIENT_SECRET = _cfg.google_oauth_client_secret

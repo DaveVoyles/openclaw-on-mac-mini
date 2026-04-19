@@ -16,7 +16,7 @@ from audit import audit_log
 from http_session import SessionManager as _SessionManager
 from skills import restart_container
 
-log = logging.getLogger("openclaw")
+log = logging.getLogger(__name__)
 
 ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
 

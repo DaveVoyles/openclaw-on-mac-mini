@@ -7,7 +7,7 @@ import os
 import re
 from pathlib import Path
 
-log = logging.getLogger("openclaw.vector_store")
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Configuration constants

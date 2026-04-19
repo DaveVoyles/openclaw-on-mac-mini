@@ -10,7 +10,7 @@ import logging
 import re
 from typing import Optional
 
-log = logging.getLogger("openclaw.table_renderer")
+log = logging.getLogger(__name__)
 
 
 def _parse_markdown_table(text: str) -> Optional[tuple[list[str], list[list[str]]]]:

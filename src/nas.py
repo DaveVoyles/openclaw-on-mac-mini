@@ -21,7 +21,7 @@ import aiohttp
 
 from config import TIMEOUT_DEFAULT, TIMEOUT_SLOW, cfg
 
-log = logging.getLogger("openclaw.nas")
+log = logging.getLogger(__name__)
 
 NAS_URL = cfg.nas_url
 NAS_USER = cfg.nas_user

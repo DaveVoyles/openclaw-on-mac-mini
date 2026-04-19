@@ -15,7 +15,7 @@ import os
 import threading
 from pathlib import Path
 
-log = logging.getLogger("openclaw.mission_control")
+log = logging.getLogger(__name__)
 
 TASKS_FILE = Path(os.getenv("MC_TASKS_FILE", "/app/data/tasks.json"))
 MC_SCRIPT = Path(__file__).parent.parent / "skills" / "mission-control" / "scripts" / "mc-update.sh"

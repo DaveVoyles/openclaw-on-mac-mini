@@ -47,7 +47,7 @@ incident_group = app_commands.Group(name="incident", description="Incident room 
 
 
 class _IncidentActionButton(discord.ui.Button):
-    def __init__(self, label: str, index: int):
+    def __init__(self, label: str, index: int) -> None:
         super().__init__(label=label[:80], style=discord.ButtonStyle.secondary, custom_id=f"incident_action_{index}")
         self.action_index = index
 
@@ -66,7 +66,7 @@ class IncidentActionView(discord.ui.View):
         incident_id: int,
         actions: list[dict[str, Any]],
         timeout: float = 900,
-    ):
+    ) -> None:
         super().__init__(timeout=timeout)
         self.incident_id = incident_id
         self.actions = actions[:3]
@@ -137,7 +137,7 @@ class IncidentActionView(discord.ui.View):
 class IncidentCog(commands.Cog, name="Incident"):
     """Create, update, and resolve incidents with persisted postmortem notes."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
     @staticmethod
@@ -691,7 +691,7 @@ class IncidentCog(commands.Cog, name="Incident"):
 IncidentCog.__cog_app_commands__.append(incident_group)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(IncidentCog(bot))
 
 

@@ -19,7 +19,7 @@ from bg_monitoring import container_health_loop, error_monitor_loop, resource_mo
 from metrics_collector import get_collector
 from trace_context import trace_context
 
-log = logging.getLogger("openclaw")
+log = logging.getLogger(__name__)
 
 ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
 

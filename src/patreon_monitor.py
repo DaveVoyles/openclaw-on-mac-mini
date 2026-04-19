@@ -22,7 +22,7 @@ import aiohttp
 
 from config import TIMEOUT_FAST, cfg
 
-log = logging.getLogger("openclaw.patreon_monitor")
+log = logging.getLogger(__name__)
 
 
 class PatreonHealthStatus(Enum):

@@ -9,7 +9,7 @@ from constants import ATTACHMENT_TEXT_MAX_CHARS
 from http_session import SessionManager
 from llm import analyze_image as llm_analyze_image
 
-log = logging.getLogger("openclaw.bot_attachments")
+log = logging.getLogger(__name__)
 
 # Shared HTTP session for downloads
 _attachment_sessions = SessionManager(timeout=30, name="attachments")

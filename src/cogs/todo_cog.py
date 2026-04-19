@@ -172,5 +172,5 @@ class TodoCog(commands.Cog, name="Todo"):
 TodoCog.__cog_app_commands__.append(todo_group)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(TodoCog(bot))

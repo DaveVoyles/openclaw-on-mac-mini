@@ -36,7 +36,7 @@ async def _ag_request(method: str, path: str, **kwargs) -> dict:
 
 
 class DnsCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
 
     dns = app_commands.Group(name="dns", description="AdGuard Home DNS management")
@@ -127,7 +127,7 @@ class DnsCog(commands.Cog):
     @dns.command(name="block", description="Block a domain by rewriting it to 0.0.0.0")
     @app_commands.describe(domain="Domain to block, e.g. ads.example.com")
     @require_auth()
-    async def dns_block(self, interaction: discord.Interaction, domain: str):
+    async def dns_block(self, interaction: discord.Interaction, domain: str) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             await _ag_request(
@@ -147,7 +147,7 @@ class DnsCog(commands.Cog):
     @dns.command(name="allow", description="Unblock a previously blocked domain")
     @app_commands.describe(domain="Domain to unblock, e.g. ads.example.com")
     @require_auth()
-    async def dns_allow(self, interaction: discord.Interaction, domain: str):
+    async def dns_allow(self, interaction: discord.Interaction, domain: str) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             await _ag_request(
@@ -203,5 +203,5 @@ class DnsCog(commands.Cog):
             )
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     await bot.add_cog(DnsCog(bot))

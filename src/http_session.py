@@ -23,7 +23,7 @@ from typing import Any
 
 import aiohttp
 
-log = logging.getLogger("openclaw.http")
+log = logging.getLogger(__name__)
 
 # Registry of all SessionManager instances for bulk shutdown
 _registry: weakref.WeakSet[SessionManager] = weakref.WeakSet()

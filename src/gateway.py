@@ -30,7 +30,7 @@ import aiohttp
 from config import TIMEOUT_SLOW
 from config import cfg as _cfg
 
-log = logging.getLogger("openclaw.gateway")
+log = logging.getLogger(__name__)
 
 MATON_API_KEY = _cfg.maton_api_key
 GATEWAY_BASE = "https://gateway.maton.ai"

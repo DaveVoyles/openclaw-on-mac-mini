@@ -16,7 +16,7 @@ from http_session import SessionManager as _SessionManager
 
 _ollama_sessions = _SessionManager(timeout=TIMEOUT_LONG, name="ollama-tools")
 
-log = logging.getLogger("openclaw.ollama_tools")
+log = logging.getLogger(__name__)
 
 # Subset of tools safe for local execution (read-only, no approvals needed)
 OLLAMA_TOOL_ALLOWLIST = frozenset({

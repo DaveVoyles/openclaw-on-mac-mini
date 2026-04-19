@@ -13,7 +13,7 @@ import uuid
 from approval_models import APPROVAL_TTL, ApprovalRequest, RiskLevel
 from config import cfg
 
-log = logging.getLogger("openclaw.approvals")
+log = logging.getLogger(__name__)
 
 ALLOWED_APPROVER_IDS = set(getattr(cfg, "allowed_user_ids", []))
 

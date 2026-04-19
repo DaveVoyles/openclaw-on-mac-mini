@@ -43,12 +43,12 @@ class NasCog(commands.Cog, name="NAS"):
 
     nas = app_commands.Group(name="nas", description="Synology NAS management")
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
     async def cog_command_error(
         self, interaction: discord.Interaction, error: app_commands.AppCommandError
-    ):
+    ) -> None:
         msg = f"❌ Command failed: {error}"
         if interaction.response.is_done():
             await interaction.followup.send(msg, ephemeral=True)
@@ -140,7 +140,7 @@ class NasCog(commands.Cog, name="NAS"):
 
     @nas.command(name="browse", description="List contents of a NAS folder")
     @app_commands.describe(path="Folder path on the NAS (default: /volume1)")
-    async def browse_cmd(self, interaction: discord.Interaction, path: str = "/volume1"):
+    async def browse_cmd(self, interaction: discord.Interaction, path: str = "/volume1") -> None:
         await interaction.response.defer()
         try:
             result = await nas_list_folder(path)
@@ -164,5 +164,5 @@ class NasCog(commands.Cog, name="NAS"):
         audit_log(interaction.user, "nas_browse", detail=path)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(NasCog(bot))

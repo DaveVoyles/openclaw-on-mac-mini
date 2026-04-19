@@ -16,7 +16,7 @@ from typing import Any
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-log = logging.getLogger("openclaw.visualization")
+log = logging.getLogger(__name__)
 
 # Cache directory for generated charts
 CHART_CACHE_DIR = Path("data/charts")

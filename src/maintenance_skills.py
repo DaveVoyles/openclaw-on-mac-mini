@@ -12,7 +12,7 @@ import logging
 import os
 from pathlib import Path
 
-log = logging.getLogger("openclaw.maintenance")
+log = logging.getLogger(__name__)
 
 CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/config"))
 NAS_BACKUP_PATH = os.getenv("NAS_BACKUP_PATH", "/volume1/docker/openclaw/backups")

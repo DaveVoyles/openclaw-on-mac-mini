@@ -18,10 +18,10 @@ log = logging.getLogger("openclaw")
 class RSSCog(commands.GroupCog, group_name="rss", group_description="RSS feed monitoring"):
     """RSS feed monitoring commands."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
         if isinstance(error, app_commands.CheckFailure):
             msg = str(error)
         else:
@@ -34,7 +34,7 @@ class RSSCog(commands.GroupCog, group_name="rss", group_description="RSS feed mo
     # ── /rss list ─────────────────────────────────────────────────────
     @app_commands.command(name="list", description="Show all configured/saved RSS feeds")
     @require_auth()
-    async def rss_list_cmd(self, interaction: discord.Interaction):
+    async def rss_list_cmd(self, interaction: discord.Interaction) -> None:
         from rss_skills import list_rss_feeds
 
         result = await list_rss_feeds()
@@ -53,7 +53,7 @@ class RSSCog(commands.GroupCog, group_name="rss", group_description="RSS feed mo
         limit="Number of items to return (1-20, default 10)",
     )
     @require_auth()
-    async def rss_fetch_cmd(self, interaction: discord.Interaction, url: str, limit: int = 10):
+    async def rss_fetch_cmd(self, interaction: discord.Interaction, url: str, limit: int = 10) -> None:
         from rss_skills import fetch_rss_feed
 
         await interaction.response.defer()
@@ -83,7 +83,7 @@ class RSSCog(commands.GroupCog, group_name="rss", group_description="RSS feed mo
         query="Keyword(s) to search for in titles and summaries",
     )
     @require_auth()
-    async def rss_search_cmd(self, interaction: discord.Interaction, url: str, query: str):
+    async def rss_search_cmd(self, interaction: discord.Interaction, url: str, query: str) -> None:
         from rss_skills import search_rss
 
         await interaction.response.defer()
@@ -111,7 +111,7 @@ class RSSCog(commands.GroupCog, group_name="rss", group_description="RSS feed mo
         topic="Optional focus topic — only include articles related to this",
     )
     @require_auth()
-    async def rss_digest_cmd(self, interaction: discord.Interaction, topic: str = ""):
+    async def rss_digest_cmd(self, interaction: discord.Interaction, topic: str = "") -> None:
         from rss_skills import _load_feeds, get_rss_digest
 
         await interaction.response.defer()
@@ -148,6 +148,6 @@ class RSSCog(commands.GroupCog, group_name="rss", group_description="RSS feed mo
         audit_log(interaction.user, "rss_digest", detail=topic or "(all feeds)")
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     """Called automatically by bot.load_extension()."""
     await bot.add_cog(RSSCog(bot))

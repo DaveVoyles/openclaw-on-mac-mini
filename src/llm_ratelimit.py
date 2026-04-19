@@ -11,7 +11,7 @@ from collections import deque
 
 from config import cfg
 
-log = logging.getLogger("openclaw.llm.ratelimit")
+log = logging.getLogger(__name__)
 
 MAX_CALLS_PER_MINUTE = cfg.llm_rpm_limit
 MAX_CALLS_PER_HOUR = cfg.llm_rph_limit

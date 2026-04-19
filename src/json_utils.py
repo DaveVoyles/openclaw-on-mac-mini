@@ -10,7 +10,7 @@ import logging
 import re
 from typing import Any, Optional
 
-log = logging.getLogger("openclaw.json_utils")
+log = logging.getLogger(__name__)
 
 
 def try_parse_json(text: str) -> Optional[dict | list]:

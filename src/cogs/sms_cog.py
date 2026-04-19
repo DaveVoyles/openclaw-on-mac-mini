@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -18,6 +20,9 @@ from sms_ux import (
     status_snapshot,
     validate_sms_body,
 )
+
+
+log = logging.getLogger(__name__)
 
 
 class SMSSendConfirmView(discord.ui.View):
@@ -48,6 +53,7 @@ class SMSSendConfirmView(discord.ui.View):
             )
             await interaction.response.edit_message(embed=embed, view=None)
         except Exception as exc:  # broad: intentional
+            log.exception("sms confirm_button failed")
             await interaction.response.edit_message(content=format_sms_error(exc), embed=None, view=None)
 
     @discord.ui.button(label="Cancel", emoji="✖️", style=discord.ButtonStyle.secondary)
@@ -58,7 +64,7 @@ class SMSSendConfirmView(discord.ui.View):
 class SMSCog(commands.GroupCog, group_name="sms"):
     """Discord-facing SMS flows: config, status, send, and verification."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
     async def cog_command_error(
@@ -108,6 +114,7 @@ class SMSCog(commands.GroupCog, group_name="sms"):
                     ephemeral=True,
                 )
         except Exception as exc:  # broad: intentional
+            log.exception("sms config failed")
             await interaction.response.send_message(format_sms_error(exc), ephemeral=True)
 
     @app_commands.command(name="status", description="Show your SMS configuration and verification state")
@@ -143,6 +150,7 @@ class SMSCog(commands.GroupCog, group_name="sms"):
                 ephemeral=True,
             )
         except Exception as exc:  # broad: intentional
+            log.exception("sms send failed")
             await interaction.response.send_message(format_sms_error(exc), ephemeral=True)
 
     @app_commands.command(name="test", description="Start or complete SMS verification, or send a test SMS")
@@ -183,8 +191,9 @@ class SMSCog(commands.GroupCog, group_name="sms"):
                     ephemeral=True,
                 )
         except Exception as exc:  # broad: intentional
+            log.exception("sms test failed")
             await interaction.response.send_message(format_sms_error(exc), ephemeral=True)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(SMSCog(bot))

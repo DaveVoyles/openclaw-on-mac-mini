@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
-log = logging.getLogger("openclaw.plugin_system")
+log = logging.getLogger(__name__)
 
 
 @dataclass

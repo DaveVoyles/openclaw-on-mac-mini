@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 
 import aiohttp
 
-log = logging.getLogger("openclaw.monitor")
+log = logging.getLogger(__name__)
 
 from config import TIMEOUT_DEFAULT
 from config import cfg as _cfg

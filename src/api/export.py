@@ -12,7 +12,7 @@ from pathlib import Path
 
 from aiohttp import web
 
-log = logging.getLogger("openclaw.api.export")
+log = logging.getLogger(__name__)
 
 
 def _error_response(

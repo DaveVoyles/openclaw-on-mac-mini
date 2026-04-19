@@ -18,7 +18,7 @@ import discord
 
 from patreon_monitor import PatreonHealthResult, PatreonHealthStatus
 
-log = logging.getLogger("openclaw.alert_patreon")
+log = logging.getLogger(__name__)
 
 # Rate limiting: Max 1 alert per issue type per 6 hours
 ALERT_COOLDOWN_SECONDS = 6 * 3600

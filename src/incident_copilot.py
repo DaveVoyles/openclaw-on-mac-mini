@@ -20,7 +20,7 @@ from skills import (
     restart_container,
 )
 
-log = logging.getLogger("openclaw.incident_copilot")
+log = logging.getLogger(__name__)
 
 AUDIT_DIR = Path(os.getenv("AUDIT_DIR", "/audit"))
 DEFAULT_SERVICE_CANDIDATES = (

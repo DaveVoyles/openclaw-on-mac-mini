@@ -11,7 +11,7 @@ from pathlib import Path
 
 from trace_context import get_trace_id
 
-log = logging.getLogger("openclaw.error_tracker")
+log = logging.getLogger(__name__)
 
 JOURNAL_FILE = Path(os.getenv("ERROR_JOURNAL", "/memory/error_journal.jsonl"))
 

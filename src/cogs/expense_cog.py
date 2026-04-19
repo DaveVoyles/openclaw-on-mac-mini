@@ -22,7 +22,7 @@ class ExpenseCog(commands.Cog):
         name="expense", description="Expense tracking commands"
     )
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.tracker = ExpenseTracker()
 
@@ -44,7 +44,7 @@ class ExpenseCog(commands.Cog):
         amount: float,
         category: app_commands.Choice[str],
         note: str = "",
-    ):
+    ) -> None:
         if amount <= 0:
             await interaction.response.send_message(
                 "❌ Amount must be positive", ephemeral=True
@@ -63,7 +63,7 @@ class ExpenseCog(commands.Cog):
     @app_commands.describe(days="Number of days to look back (default: 7)")
     async def expense_list(
         self, interaction: discord.Interaction, days: int = 7
-    ):
+    ) -> None:
         user_id = str(interaction.user.id)
         expenses = self.tracker.list_for_user(user_id, days)
 
@@ -111,7 +111,7 @@ class ExpenseCog(commands.Cog):
         self,
         interaction: discord.Interaction,
         period: app_commands.Choice[str] | None = None,
-    ):
+    ) -> None:
         period_val = period.value if period else "week"
         user_id = str(interaction.user.id)
         totals = self.tracker.summary_by_period(user_id, period_val)
@@ -144,7 +144,7 @@ class ExpenseCog(commands.Cog):
     @app_commands.describe(expense_id="Expense ID (shown in /expense list)")
     async def expense_delete(
         self, interaction: discord.Interaction, expense_id: str
-    ):
+    ) -> None:
         user_id = str(interaction.user.id)
         if self.tracker.delete(user_id, expense_id):
             await interaction.response.send_message(
@@ -156,5 +156,5 @@ class ExpenseCog(commands.Cog):
             )
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(ExpenseCog(bot))

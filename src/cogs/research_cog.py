@@ -46,13 +46,13 @@ def _format_persistence_receipts(receipts: dict) -> str:
 class _ResearchView(discord.ui.View):
     """Action buttons attached to a completed research report."""
 
-    def __init__(self, query: str, report: str):
+    def __init__(self, query: str, report: str) -> None:
         super().__init__(timeout=300)
         self._query = query
         self._report = report
 
     @discord.ui.button(label="📌 Save to Memory", style=discord.ButtonStyle.secondary)
-    async def save_to_memory(self, interaction: discord.Interaction, _button: discord.ui.Button):
+    async def save_to_memory(self, interaction: discord.Interaction, _button: discord.ui.Button) -> None:
         from qmd import remember_fact
 
         snippet = self._report[:MEMORY_SNIPPET_MAX_CHARS].strip()
@@ -64,7 +64,7 @@ class _ResearchView(discord.ui.View):
         audit_log(interaction.user, "research_save_memory", detail=self._query[:80])
 
     @discord.ui.button(label="💾 Save to Vault", style=discord.ButtonStyle.green)
-    async def save_to_vault_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def save_to_vault_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         from obsidian_writer import save_to_vault
 
         button.disabled = True
@@ -82,7 +82,7 @@ class _ResearchView(discord.ui.View):
         audit_log(interaction.user, "research_save_vault", detail=self._query[:80])
 
     @discord.ui.button(label="🔄 Re-run full research in 24h", style=discord.ButtonStyle.secondary)
-    async def schedule_rerun(self, interaction: discord.Interaction, _button: discord.ui.Button):
+    async def schedule_rerun(self, interaction: discord.Interaction, _button: discord.ui.Button) -> None:
         from scheduler import scheduler
 
         task = scheduler.create(
@@ -103,10 +103,10 @@ class _ResearchView(discord.ui.View):
 class ResearchCog(commands.Cog, name="Research"):
     """Research, web search, and browsing commands."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
         embed = build_error_embed(error, context="research command")
         if interaction.response.is_done():
             await interaction.followup.send(embed=embed, ephemeral=True)
@@ -117,7 +117,7 @@ class ResearchCog(commands.Cog, name="Research"):
     @app_commands.command(name="websearch", description="Search the live web for current information")
     @app_commands.describe(query="What to search for", results="Number of results (1-10, default 5)")
     @require_auth()
-    async def websearch_cmd(self, interaction: discord.Interaction, query: str, results: int = 5):
+    async def websearch_cmd(self, interaction: discord.Interaction, query: str, results: int = 5) -> None:
         from skills.advanced_skills import search_web
 
         await interaction.response.defer(thinking=True)  # Progress indicator
@@ -136,7 +136,7 @@ class ResearchCog(commands.Cog, name="Research"):
     @app_commands.command(name="browse", description="Fetch and read the content of a web page")
     @app_commands.describe(url="URL to fetch (must start with http:// or https://)", question="Optional: what to focus on")
     @require_auth()
-    async def browse_cmd(self, interaction: discord.Interaction, url: str, question: str = ""):
+    async def browse_cmd(self, interaction: discord.Interaction, url: str, question: str = "") -> None:
         from llm import analyze_document as llm_analyze_document
         from skills.advanced_skills import browse_url
 
@@ -173,7 +173,7 @@ class ResearchCog(commands.Cog, name="Research"):
         deep="Enable deep research: 2-3 iterative passes that refine based on gaps (slower but more thorough)",
     )
     @require_auth()
-    async def research_cmd(self, interaction: discord.Interaction, query: str, deep: bool = False):
+    async def research_cmd(self, interaction: discord.Interaction, query: str, deep: bool = False) -> None:
         from approvals import is_emergency_stopped
         from cooldowns import check_cooldown
         from llm import is_configured as llm_is_configured
@@ -296,7 +296,7 @@ class ResearchCog(commands.Cog, name="Research"):
     @app_commands.command(name="research-search", description="Search across all your past research reports by topic")
     @app_commands.describe(query="What to search for in past research")
     @require_auth()
-    async def research_search_cmd(self, interaction: discord.Interaction, query: str):
+    async def research_search_cmd(self, interaction: discord.Interaction, query: str) -> None:
         await interaction.response.defer(ephemeral=True)
 
         lines = [f"🔍 **Research search: *{query}***\n"]
@@ -326,7 +326,7 @@ class ResearchCog(commands.Cog, name="Research"):
     @app_commands.command(name="sources", description="Search your library of previously browsed web sources")
     @app_commands.describe(query="Topic or keyword to find in past browsed sources")
     @require_auth()
-    async def sources_cmd(self, interaction: discord.Interaction, query: str):
+    async def sources_cmd(self, interaction: discord.Interaction, query: str) -> None:
         await interaction.response.defer(ephemeral=True)
 
         lines = [f"📚 **Source library search: *{query}***\n"]
@@ -358,7 +358,7 @@ class ResearchCog(commands.Cog, name="Research"):
     @app_commands.command(name="compare", description="Compare answers from multiple search providers side-by-side")
     @app_commands.describe(query="The question to compare across providers")
     @require_auth()
-    async def compare_cmd(self, interaction: discord.Interaction, query: str):
+    async def compare_cmd(self, interaction: discord.Interaction, query: str) -> None:
         from skills.search_skills import _firecrawl_search, _perplexity_search, serper_search
 
         await interaction.response.defer()
@@ -396,6 +396,6 @@ class ResearchCog(commands.Cog, name="Research"):
         audit_log(interaction.user, "compare", detail=query)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     """Called automatically by bot.load_extension()."""
     await bot.add_cog(ResearchCog(bot))

@@ -12,7 +12,7 @@ from pathlib import Path
 
 from utils import atomic_write
 
-log = logging.getLogger("openclaw")
+log = logging.getLogger(__name__)
 REMINDERS_FILE = Path(os.getenv("MEMORY_DIR", "/memory")) / "reminders.json"
 
 

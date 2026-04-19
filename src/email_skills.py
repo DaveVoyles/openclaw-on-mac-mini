@@ -31,7 +31,7 @@ from email.mime.text import MIMEText
 
 from config import cfg as _cfg
 
-log = logging.getLogger("openclaw.email_skills")
+log = logging.getLogger(__name__)
 
 # --- Gmail ---
 GMAIL_USER = _cfg.gmail_user

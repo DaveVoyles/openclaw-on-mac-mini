@@ -18,7 +18,7 @@ NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣
 class PollCog(commands.Cog):
     """Create polls for voting with automatic result tallying."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
     @app_commands.command(name="poll", description="Create a poll for voting")
@@ -33,7 +33,7 @@ class PollCog(commands.Cog):
         question: str,
         options: str,
         duration: int = 60,
-    ):
+    ) -> None:
         choices = [o.strip() for o in options.split(",") if o.strip()]
         if len(choices) < 2 or len(choices) > 10:
             await interaction.response.send_message(
@@ -92,5 +92,5 @@ class PollCog(commands.Cog):
         asyncio.create_task(close_poll())
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(PollCog(bot))

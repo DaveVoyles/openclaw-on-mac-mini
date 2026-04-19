@@ -27,7 +27,7 @@ _PROVIDER_CHOICES = [
 
 
 class EmailCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
 
     email = app_commands.Group(name="email", description="Read and send email via Gmail or Outlook")
@@ -45,7 +45,7 @@ class EmailCog(commands.Cog):
         interaction: discord.Interaction,
         count: app_commands.Range[int, 1, 50] = 10,
         provider: str = "gmail",
-    ):
+    ) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             from email_skills import read_inbox
@@ -74,7 +74,7 @@ class EmailCog(commands.Cog):
         interaction: discord.Interaction,
         query: str,
         provider: str = "gmail",
-    ):
+    ) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             from email_skills import search_emails
@@ -103,7 +103,7 @@ class EmailCog(commands.Cog):
         interaction: discord.Interaction,
         id: str,
         provider: str = "gmail",
-    ):
+    ) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             from email_skills import read_email_by_id
@@ -144,7 +144,7 @@ class EmailCog(commands.Cog):
         subject: str,
         body: str,
         provider: str = "gmail",
-    ):
+    ) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             from email_skills import send_email
@@ -164,5 +164,5 @@ class EmailCog(commands.Cog):
             await interaction.followup.send(embed=build_error_embed(e, context="/email send"), ephemeral=True)
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     await bot.add_cog(EmailCog(bot))

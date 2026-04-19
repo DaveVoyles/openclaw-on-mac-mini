@@ -18,14 +18,14 @@ class DigestCog(commands.Cog, name="Digest"):
 
     digest = app_commands.Group(name="digest", description="Personalized digest configuration")
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
     async def cog_command_error(
         self,
         interaction: discord.Interaction,
         error: app_commands.AppCommandError,
-    ):
+    ) -> None:
         msg = str(error) if isinstance(error, app_commands.CheckFailure) else f"❌ Command failed: {error}"
         if interaction.response.is_done():
             await interaction.followup.send(msg, ephemeral=True)
@@ -204,7 +204,7 @@ class DigestCog(commands.Cog, name="Digest"):
         interaction: discord.Interaction,
         action: str,
         topic: str,
-    ):
+    ) -> None:
         """Manage digest topics."""
         from digest_manager import get_digest_manager
 
@@ -250,7 +250,7 @@ class DigestCog(commands.Cog, name="Digest"):
         interaction: discord.Interaction,
         action: str,
         ticker: str,
-    ):
+    ) -> None:
         """Manage digest stock watchlist."""
         from digest_manager import get_digest_manager
 
@@ -297,7 +297,7 @@ class DigestCog(commands.Cog, name="Digest"):
         interaction: discord.Interaction,
         action: str,
         team: str,
-    ):
+    ) -> None:
         """Manage digest sports teams."""
         from digest_manager import get_digest_manager
 
@@ -345,7 +345,7 @@ class DigestCog(commands.Cog, name="Digest"):
         frequency: str,
         time: str = "08:00",
         day: str = "Monday",
-    ):
+    ) -> None:
         """Configure digest schedule."""
         from digest_manager import get_digest_manager
 
@@ -432,6 +432,6 @@ class DigestCog(commands.Cog, name="Digest"):
             await interaction.followup.send(f"❌ Failed to disable digest: {exc}", ephemeral=True)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     """Register the Digest cog."""
     await bot.add_cog(DigestCog(bot))

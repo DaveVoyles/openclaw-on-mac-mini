@@ -18,7 +18,7 @@ import discord
 from user_manager import User, UserRole, get_user_manager
 from workspace_manager import WorkspaceRole, get_workspace_manager
 
-log = logging.getLogger("openclaw.rbac")
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants

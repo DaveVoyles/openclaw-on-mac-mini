@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-_LOG = logging.getLogger("openclaw_cli.prefs")
+_LOG = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Tips

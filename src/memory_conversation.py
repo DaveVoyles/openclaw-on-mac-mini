@@ -20,7 +20,7 @@ from memory_helpers import (
 )
 from memory_thread_persistence import ThreadPersistence
 
-log = logging.getLogger("openclaw.memory")
+log = logging.getLogger(__name__)
 
 __all__ = [
     "Conversation",

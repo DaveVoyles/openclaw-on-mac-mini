@@ -12,7 +12,7 @@ from llm_ratelimit import rate_limiter as _rate_limiter
 from skills import SKILLS
 from tool_orchestration import GeminiToolAdapter, ToolOrchestrator
 
-log = logging.getLogger("openclaw.llm.tools")
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Tool result TTL cache — avoid redundant calls for read-only snapshot tools

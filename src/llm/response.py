@@ -30,7 +30,7 @@ from model_routing_policy import select_multimodal_route
 
 from .context import _to_content, _trim_history
 
-log = logging.getLogger("openclaw.llm")
+log = logging.getLogger(__name__)
 
 
 SUPPORTED_IMAGE_MIMES = {

@@ -64,7 +64,7 @@ STREAM_INTERVAL_CHARS = int(os.getenv("PROVIDER_STREAM_INTERVAL_CHARS", "200"))
 # Minimum accumulated chars between partial-chunk yields when PROVIDER_STREAM=1.
 _PROVIDER_STREAM_PARTIAL_INTERVAL = STREAM_INTERVAL_CHARS
 
-log = logging.getLogger("openclaw.llm")
+log = logging.getLogger(__name__)
 
 
 def _build_trace_footer(trace: "RequestTrace | None", debug_level: int) -> str:

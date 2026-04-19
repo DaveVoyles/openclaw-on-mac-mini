@@ -11,7 +11,7 @@ from typing import Any
 from vector_store_config import _RETENTION_PROTECT_SECONDS
 from vector_store_scope import _combine_scope_where
 
-log = logging.getLogger("openclaw.vector_store")
+log = logging.getLogger(__name__)
 
 
 def _compaction_priority(doc_id: str, meta: dict[str, Any]) -> tuple[Any, ...]:

@@ -15,7 +15,7 @@ from typing import Any, Optional
 
 from user_manager import User, get_user_manager
 
-log = logging.getLogger("openclaw.workspace_manager")
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants

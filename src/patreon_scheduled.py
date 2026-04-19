@@ -14,7 +14,7 @@ from config import cfg
 from patreon_monitor import get_patreon_checker
 from patreon_recovery import get_recovery_manager
 
-log = logging.getLogger("openclaw.patreon_scheduled")
+log = logging.getLogger(__name__)
 
 # Module-level bot reference — set at startup so it doesn't need to be
 # serialized into scheduler task args (discord.Client is not JSON-serializable).

@@ -20,7 +20,7 @@ class HabitCog(commands.Cog):
 
     habit_group = app_commands.Group(name="habit", description="Habit tracking commands")
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.tracker = HabitTracker()
 
@@ -31,7 +31,7 @@ class HabitCog(commands.Cog):
         interaction: discord.Interaction,
         name: str,
         frequency: str = "daily",
-    ):
+    ) -> None:
         if frequency not in ("daily", "weekly"):
             await interaction.response.send_message(
                 "❌ Frequency must be `daily` or `weekly`", ephemeral=True
@@ -53,7 +53,7 @@ class HabitCog(commands.Cog):
 
     @habit_group.command(name="checkin", description="Check in for a habit today")
     @app_commands.describe(name="Habit name")
-    async def habit_checkin(self, interaction: discord.Interaction, name: str):
+    async def habit_checkin(self, interaction: discord.Interaction, name: str) -> None:
         user_id = str(interaction.user.id)
         habit = self.tracker.checkin(user_id, name)
         if not habit:
@@ -71,7 +71,7 @@ class HabitCog(commands.Cog):
     @app_commands.describe(name="Habit name (leave blank for all)")
     async def habit_streak(
         self, interaction: discord.Interaction, name: str | None = None
-    ):
+    ) -> None:
         user_id = str(interaction.user.id)
         habits = self.tracker.list_for_user(user_id)
 
@@ -126,7 +126,7 @@ class HabitCog(commands.Cog):
 
     @habit_group.command(name="delete", description="Remove a habit")
     @app_commands.describe(name="Habit name to delete")
-    async def habit_delete(self, interaction: discord.Interaction, name: str):
+    async def habit_delete(self, interaction: discord.Interaction, name: str) -> None:
         user_id = str(interaction.user.id)
         if self.tracker.delete_habit(user_id, name):
             await interaction.response.send_message(f"🗑️ Deleted habit **{name}**")
@@ -136,5 +136,5 @@ class HabitCog(commands.Cog):
             )
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(HabitCog(bot))

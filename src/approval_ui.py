@@ -13,7 +13,7 @@ import discord
 from approval_models import APPROVAL_TTL, ApprovalRequest, RiskLevel
 from approval_store import approval_store, is_authorized_approver
 
-log = logging.getLogger("openclaw.approvals")
+log = logging.getLogger(__name__)
 
 RISK_COLORS = {
     RiskLevel.LOW: discord.Color.green(),

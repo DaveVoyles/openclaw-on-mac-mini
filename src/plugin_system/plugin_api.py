@@ -14,7 +14,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
-log = logging.getLogger("openclaw.plugin_system.api")
+log = logging.getLogger(__name__)
 
 
 class PluginAPI:

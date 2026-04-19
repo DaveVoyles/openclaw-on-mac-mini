@@ -13,7 +13,7 @@ from pathlib import Path
 
 from utils import atomic_write
 
-log = logging.getLogger("openclaw.qmd")
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Configuration

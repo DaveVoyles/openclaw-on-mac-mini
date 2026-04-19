@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-log = logging.getLogger("openclaw")
+log = logging.getLogger(__name__)
 
 DATA_PATH = Path("/app/data/todos.json")
 

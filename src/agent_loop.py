@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-log = logging.getLogger("openclaw.agent_loop")
+log = logging.getLogger(__name__)
 
 from constants import OUTPUT_MAX_CHARS
 

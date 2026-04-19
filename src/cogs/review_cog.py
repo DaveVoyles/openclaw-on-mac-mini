@@ -93,13 +93,13 @@ _PROMPTS = {
 
 
 class _ReviewView(discord.ui.View):
-    def __init__(self, review_text: str, filename: str):
+    def __init__(self, review_text: str, filename: str) -> None:
         super().__init__(timeout=300)
         self.review_text = review_text
         self.filename = filename
 
     @discord.ui.button(label="💾 Save Review to Vault", style=discord.ButtonStyle.green)
-    async def save_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def save_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         button.disabled = True
         await interaction.response.edit_message(view=self)
         try:
@@ -155,11 +155,11 @@ class ReviewTextModal(discord.ui.Modal, title="Paste Text for Review"):
         required=True,
     )
 
-    def __init__(self, mode: str):
+    def __init__(self, mode: str) -> None:
         super().__init__()
         self.mode = mode
 
-    async def on_submit(self, interaction: discord.Interaction):
+    async def on_submit(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             await _do_review(
@@ -177,7 +177,7 @@ class ReviewTextModal(discord.ui.Modal, title="Paste Text for Review"):
 
 
 class ReviewCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
 
     review = app_commands.Group(name="review", description="Document review and critique")
@@ -187,7 +187,7 @@ class ReviewCog(commands.Cog):
     @review.command(name="text", description="Paste text for AI review")
     @app_commands.describe(mode="Review mode (default: writing)")
     @app_commands.choices(mode=MODE_CHOICES)
-    async def review_text(self, interaction: discord.Interaction, mode: str = "writing"):
+    async def review_text(self, interaction: discord.Interaction, mode: str = "writing") -> None:
         modal = ReviewTextModal(mode=mode)
         await interaction.response.send_modal(modal)
 
@@ -204,7 +204,7 @@ class ReviewCog(commands.Cog):
         interaction: discord.Interaction,
         file: discord.Attachment,
         mode: str = "writing",
-    ):
+    ) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             raw_bytes = await file.read()
@@ -247,5 +247,5 @@ class ReviewCog(commands.Cog):
             await interaction.followup.send(embed=build_error_embed(e, context="/review"), ephemeral=True)
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     await bot.add_cog(ReviewCog(bot))

@@ -390,7 +390,7 @@ cfg = _Config()
 try:
     import logging as _logging
 
-    _log = _logging.getLogger("openclaw.config")
+    _log = _logging.getLogger(__name__)
     for _w in cfg.validate():
         _log.warning("Config: %s", _w)
 except (ImportError, AttributeError):

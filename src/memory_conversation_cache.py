@@ -6,7 +6,7 @@ import logging
 from memory_helpers import CONTEXT_TTL, MIN_MESSAGES_TO_SUMMARIZE  # noqa: F401 – re-exported
 from memory_session import _load_last_summary, _summarize_and_store, create_session_handover, load_last_handover
 
-log = logging.getLogger("openclaw.memory")
+log = logging.getLogger(__name__)
 
 __all__ = ["ConversationCache"]
 

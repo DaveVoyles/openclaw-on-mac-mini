@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-log = logging.getLogger("openclaw.trend_tracker")
+log = logging.getLogger(__name__)
 
 # Database path (reuse existing openclaw.db)
 DB_PATH = Path(os.getenv("THREAD_DB_PATH", "/memory/openclaw.db"))

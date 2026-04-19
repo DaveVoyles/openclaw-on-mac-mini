@@ -11,7 +11,7 @@ from pathlib import Path
 
 from utils import atomic_write
 
-log = logging.getLogger("openclaw.user_profile")
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Schema & paths

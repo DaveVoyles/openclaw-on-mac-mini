@@ -20,7 +20,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-log = logging.getLogger("openclaw.thread_store")
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Configuration

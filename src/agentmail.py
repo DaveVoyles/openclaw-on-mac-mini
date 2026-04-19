@@ -11,7 +11,7 @@ from config import TIMEOUT_DEFAULT
 from config import cfg as _cfg
 from http_session import SessionManager
 
-log = logging.getLogger("openclaw.agentmail")
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Configuration

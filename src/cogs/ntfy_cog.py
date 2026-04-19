@@ -88,7 +88,7 @@ async def _push(title: str, message: str, priority: str = "default", tags: str =
 
 
 class NtfyCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
 
     ntfy = app_commands.Group(name="ntfy", description="Push notifications via ntfy")
@@ -116,7 +116,7 @@ class NtfyCog(commands.Cog):
         message: str,
         title: str = "OpenClaw",
         priority: str = "default",
-    ):
+    ) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             from config import cfg
@@ -180,5 +180,5 @@ class NtfyCog(commands.Cog):
             await interaction.followup.send("❌ Failed to send test notification.", ephemeral=True)
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     await bot.add_cog(NtfyCog(bot))
