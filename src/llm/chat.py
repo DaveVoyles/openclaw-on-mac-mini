@@ -661,35 +661,28 @@ def _channel_context_prefix(channel_name: str | None) -> str:
     return ""
 
 
-async def chat_stream(
-    user_message: str,
-    history: list[dict] | None = None,
-    user_name: str = "User",
-    on_tool_call: Any | None = None,
-    model_preference: str = "auto",
-    tool_declarations: list[dict[str, Any]] | None = None,
-    context_controls: dict[str, Any] | None = None,
-    routing_profile: str = "",
-    trace: RequestTrace | None = None,
-) -> AsyncGenerator[tuple[str, bool, dict[str, Any]], None]:
-    """Async generator yielding ``(chunk_text, is_final, metadata)`` tuples."""
-    log.info("LLM chat_stream start model_pref=%s trace=%s msg=%.60s",
-             model_preference, get_trace_id(), user_message)
-    if model_preference == "local":
-        _model_hint = "ollama"
-    elif model_preference == "gemini":
-        _model_hint = "gemini"
-    else:
-        _model_hint = "gemini"
+async def _prepare_history(
+    history: list[dict] | None,
+    model_preference: str,
+) -> tuple[list[dict], dict[str, Any]]:
+    """Trim and validate conversation history; returns (trimmed_history, context_quality)."""
+    _model_hint = "ollama" if model_preference == "local" else "gemini"
     context_quality: dict[str, Any] = {}
-    history = await _trim_history(
-        history or [],
-        model_hint=_model_hint,
-        context_quality=context_quality,
-    )
+    trimmed = await _trim_history(history or [], model_hint=_model_hint, context_quality=context_quality)
+    return trimmed, context_quality
 
-    _routing_notes: list[str] = []
 
+async def _assemble_model_message(
+    user_message: str,
+    context_controls: dict[str, Any] | None,
+    context_quality: dict[str, Any],
+    routing_notes: list[str],
+) -> tuple[str, dict[str, Any], str, bool, dict[str, Any], bool, str]:
+    """Extract context controls, detect followup, recall context, and build model_message + metadata.
+
+    Returns:
+        (model_message, metadata, cleaned_user_message, cross_channel, context_controls, followup, recalled_context)
+    """
     cleaned_user_message, cross_channel = _extract_cross_channel_opt_in(user_message)
     cleaned_user_message, legacy_context_controls = _extract_context_controls(cleaned_user_message)
     cross_channel, context_controls = _merge_structured_context_controls(
@@ -706,7 +699,7 @@ async def chat_stream(
     recalled_context = await _auto_recall_context(
         cleaned_user_message,
         cross_channel=cross_channel,
-        routing_notes=_routing_notes,
+        routing_notes=routing_notes,
         followup=followup,
         reset_context=bool(context_controls.get("reset_context")),
         use_prior_report=bool(context_controls.get("use_prior_report")),
@@ -721,7 +714,7 @@ async def chat_stream(
     channel_prefix = _channel_context_prefix(channel_name)
     if channel_prefix:
         model_message = channel_prefix + model_message
-    metadata = {}
+    metadata: dict[str, Any] = {}
     metadata["context_quality"] = dict(context_quality)
     explainability = _build_context_explainability(
         cross_channel=cross_channel,
@@ -733,14 +726,14 @@ async def chat_stream(
     metadata["explainability"] = explainability
     metadata["explainability_note"] = _format_context_explainability_note(explainability)
     if context_quality.get("compression_applied"):
-        _routing_notes.append(
+        routing_notes.append(
             "Context compressed "
             f"(ratio {context_quality.get('compression_ratio', 1.0):.2f}, "
             f"facts {context_quality.get('retained_key_facts_count', 0)})"
         )
         drift = str(context_quality.get("drift_risk") or "")
         if drift and drift != "low":
-            _routing_notes.append(f"Context drift risk: {drift}")
+            routing_notes.append(f"Context drift risk: {drift}")
     if cross_channel:
         metadata["context_mode"] = "cross-channel"
         metadata["context_badge"] = "🌐 Cross-channel"
@@ -750,70 +743,105 @@ async def chat_stream(
     elif followup:
         metadata["context_mode"] = "followup-anchor"
         metadata["context_badge"] = "🧷 Follow-up anchor"
+    return model_message, metadata, cleaned_user_message, cross_channel, context_controls, followup, recalled_context
 
-    # Unified web-search fast-path — uses cleaned_user_message to avoid cross-topic
-    # contamination from recalled context (e.g., lacrosse memories polluting gaming queries).
-    if model_preference == "auto":
-        try:
-            from model_routing_policy import select_web_search_route
-            web_route = select_web_search_route(model_message)
-            if web_route.prefer_search:
-                log.info("chat_stream web_search_route reason=%s", web_route.reason)
-                from skills.reporting_skills import generate_web_search_report
-                web_reply = await generate_web_search_report(cleaned_user_message)
-                if web_reply and not web_reply.startswith("❌"):
-                    if trace is not None:
-                        trace.skills_invoked.append("web_search_report")
-                    updated = history + [
-                        {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [web_reply]},
-                    ]
-                    yield web_reply, True, {"model_used": "perplexity-direct", "updated_history": updated, "needs_tools": False, **metadata}
-                    return
-        except (ImportError, OSError, ValueError, AttributeError) as _web_exc:
-            log.warning("Stream web-search fast-path failed, falling through: %s", _web_exc)
 
-    # Copilot fast-path for coding/programming queries — separate from web-search path.
-    if model_preference == "auto" and not recalled_context:
-        try:
-            from llm.providers import COPILOT_PROXY_ENABLED
-            from model_routing_policy import select_coding_route
-            if COPILOT_PROXY_ENABLED:
-                coding_route = select_coding_route(cleaned_user_message)
-                if coding_route.matches:
-                    if os.getenv("PROVIDER_STREAM", "").strip() == "1":
-                        _got_final = False
-                        async for _txt, _is_final, _smeta in _stream_copilot_chunks(
-                            model_message=model_message,
-                            cleaned_user_message=cleaned_user_message,
-                            history=history,
-                            context="coding-fast-path",
-                        ):
-                            if _is_final:
-                                _routing_notes.append(f"Coding fast-path → Copilot ({coding_route.reason})")
-                                yield _txt, True, {"model_used": _smeta["model_used"], "updated_history": _smeta["updated_history"], "needs_tools": False, "routing_notes": list(_routing_notes), **metadata}
-                                _got_final = True
-                                break
-                            yield _txt, False, {}
-                        if _got_final:
-                            return
-                    else:
-                        result = await _try_copilot_proxy_reply(
-                            model_message=model_message,
-                            cleaned_user_message=cleaned_user_message,
-                            history=history,
-                            context="coding-fast-path",
-                            trace=trace,
-                        )
-                        if result is not None:
-                            reply, updated, model_label = result
-                            _routing_notes.append(f"Coding fast-path → Copilot ({coding_route.reason})")
-                            reply = _apply_trace_footer(reply, trace)
-                            yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
-                            return
-        except (ImportError, OSError, ValueError, AttributeError) as _fp_exc:
-            log.warning("Stream coding fast-path failed, falling through to standard routing: %s", _fp_exc)
+async def _try_web_search_route(
+    model_message: str,
+    cleaned_user_message: str,
+    history: list[dict],
+    model_preference: str,
+    trace: Any,
+) -> tuple[str, dict[str, Any]] | None:
+    """Return (reply, route_meta) if the Perplexity web-search route matches; else None."""
+    if model_preference != "auto":
+        return None
+    try:
+        from model_routing_policy import select_web_search_route
+        web_route = select_web_search_route(model_message)
+        if web_route.prefer_search:
+            log.info("chat_stream web_search_route reason=%s", web_route.reason)
+            from skills.reporting_skills import generate_web_search_report
+            web_reply = await generate_web_search_report(cleaned_user_message)
+            if web_reply and not web_reply.startswith("❌"):
+                if trace is not None:
+                    trace.skills_invoked.append("web_search_report")
+                updated = history + [
+                    {"role": "user", "parts": [cleaned_user_message]},
+                    {"role": "model", "parts": [web_reply]},
+                ]
+                return web_reply, {"model_used": "perplexity-direct", "updated_history": updated, "needs_tools": False}
+    except (ImportError, OSError, ValueError, AttributeError) as _web_exc:
+        log.warning("Stream web-search fast-path failed, falling through: %s", _web_exc)
+    return None
 
+
+async def _try_coding_route(
+    model_message: str,
+    cleaned_user_message: str,
+    history: list[dict],
+    model_preference: str,
+    recalled_context: str,
+    routing_notes: list[str],
+    metadata: dict[str, Any],
+    trace: Any,
+) -> AsyncGenerator[tuple[str, bool, dict[str, Any]], None]:
+    """Yield chunks if the Copilot coding fast-path matches; yield nothing to fall through."""
+    if model_preference != "auto" or recalled_context:
+        return
+    try:
+        from llm.providers import COPILOT_PROXY_ENABLED
+        from model_routing_policy import select_coding_route
+        if not COPILOT_PROXY_ENABLED:
+            return
+        coding_route = select_coding_route(cleaned_user_message)
+        if not coding_route.matches:
+            return
+        if os.getenv("PROVIDER_STREAM", "").strip() == "1":
+            _got_final = False
+            async for _txt, _is_final, _smeta in _stream_copilot_chunks(
+                model_message=model_message,
+                cleaned_user_message=cleaned_user_message,
+                history=history,
+                context="coding-fast-path",
+            ):
+                if _is_final:
+                    routing_notes.append(f"Coding fast-path → Copilot ({coding_route.reason})")
+                    yield _txt, True, {"model_used": _smeta["model_used"], "updated_history": _smeta["updated_history"], "needs_tools": False, "routing_notes": list(routing_notes), **metadata}
+                    _got_final = True
+                    break
+                yield _txt, False, {}
+            if not _got_final:
+                return
+        else:
+            result = await _try_copilot_proxy_reply(
+                model_message=model_message,
+                cleaned_user_message=cleaned_user_message,
+                history=history,
+                context="coding-fast-path",
+                trace=trace,
+            )
+            if result is not None:
+                reply, updated, model_label = result
+                routing_notes.append(f"Coding fast-path → Copilot ({coding_route.reason})")
+                reply = _apply_trace_footer(reply, trace)
+                yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
+    except (ImportError, OSError, ValueError, AttributeError) as _fp_exc:
+        log.warning("Stream coding fast-path failed, falling through to standard routing: %s", _fp_exc)
+
+
+async def _route_by_preference(
+    model_message: str,
+    cleaned_user_message: str,
+    history: list[dict],
+    model_preference: str,
+    routing_profile: str,
+    recalled_context: str,
+    routing_notes: list[str],
+    metadata: dict[str, Any],
+    trace: Any,
+) -> AsyncGenerator[tuple[str, bool, dict[str, Any]], None]:
+    """Yield response chunks if a non-Gemini route handles the request; yield nothing to fall through."""
     # Multi-model routing (Phase 8)
     if model_preference == "auto":
         try:
@@ -830,11 +858,11 @@ async def chat_stream(
                 routing_profile=routing_profile,
                 recalled_context=bool(recalled_context),
             )
-            _routing_notes.append(f"Auto route: {route.reason}")
+            routing_notes.append(f"Auto route: {route.reason}")
 
             if route.model_type == "copilot":
                 if route.model:
-                    _routing_notes.append(f"mini-model: {route.model}")
+                    routing_notes.append(f"mini-model: {route.model}")
                 if os.getenv("PROVIDER_STREAM", "").strip() == "1":
                     _got_final = False
                     async for _txt, _is_final, _smeta in _stream_copilot_chunks(
@@ -845,7 +873,7 @@ async def chat_stream(
                         model_override=route.model or None,
                     ):
                         if _is_final:
-                            yield _txt, True, {"model_used": _smeta["model_used"], "updated_history": _smeta["updated_history"], "needs_tools": False, "routing_notes": list(_routing_notes), **metadata}
+                            yield _txt, True, {"model_used": _smeta["model_used"], "updated_history": _smeta["updated_history"], "needs_tools": False, "routing_notes": list(routing_notes), **metadata}
                             _got_final = True
                             break
                         yield _txt, False, {}
@@ -991,13 +1019,11 @@ async def chat_stream(
             return
         log.info("Local model returned empty, auto-falling back to Gemini")
 
-    # Forced Gemini mode
+    # Forced Gemini mode — validate API key before proceeding
     if model_preference in ("gemini", "local"):
         if not GOOGLE_API_KEY:
             yield "⚠️ Gemini API key not configured (`GOOGLE_API_KEY`).", True, {"model_used": "none", "updated_history": history, "needs_tools": False, **metadata}
             return
-    else:
-        pass
 
     # Rate-limit pre-check
     if not _rate_limiter.check():
@@ -1011,8 +1037,8 @@ async def chat_stream(
             )
             if result is not None:
                 reply, updated, model_label = result
-                _routing_notes.append("Gemini rate-limited → used Copilot proxy")
-                yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, "routing_notes": _routing_notes, **metadata}
+                routing_notes.append("Gemini rate-limited → used Copilot proxy")
+                yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, "routing_notes": routing_notes, **metadata}
                 return
         except (ImportError, KeyError) as exc:
             log.debug("Copilot proxy fallback unavailable: %s", exc)
@@ -1024,6 +1050,52 @@ async def chat_stream(
         )
         yield msg, True, {"model_used": MODEL_NAME, "updated_history": history, "needs_tools": False, **metadata}
         return
+
+
+async def chat_stream(
+    user_message: str,
+    history: list[dict] | None = None,
+    user_name: str = "User",
+    on_tool_call: Any | None = None,
+    model_preference: str = "auto",
+    tool_declarations: list[dict[str, Any]] | None = None,
+    context_controls: dict[str, Any] | None = None,
+    routing_profile: str = "",
+    trace: RequestTrace | None = None,
+) -> AsyncGenerator[tuple[str, bool, dict[str, Any]], None]:
+    """Async generator yielding ``(chunk_text, is_final, metadata)`` tuples."""
+    log.info("LLM chat_stream start model_pref=%s trace=%s msg=%.60s",
+             model_preference, get_trace_id(), user_message)
+    history, context_quality = await _prepare_history(history, model_preference)
+
+    _routing_notes: list[str] = []
+
+    (
+        model_message, metadata, cleaned_user_message,
+        cross_channel, context_controls, followup, recalled_context,
+    ) = await _assemble_model_message(user_message, context_controls, context_quality, _routing_notes)
+
+    _web_result = await _try_web_search_route(model_message, cleaned_user_message, history, model_preference, trace)
+    if _web_result is not None:
+        _web_reply, _web_meta = _web_result
+        yield _web_reply, True, {**_web_meta, **metadata}
+        return
+
+    async for _chunk in _try_coding_route(
+        model_message, cleaned_user_message, history, model_preference,
+        recalled_context, _routing_notes, metadata, trace,
+    ):
+        yield _chunk
+        if _chunk[1]:  # is_final
+            return
+
+    async for _chunk in _route_by_preference(
+        model_message, cleaned_user_message, history, model_preference,
+        routing_profile, recalled_context, _routing_notes, metadata, trace,
+    ):
+        yield _chunk
+        if _chunk[1]:  # is_final
+            return
 
     model, route_info = await _select_model_for_message(
         cleaned_user_message,
