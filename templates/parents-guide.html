@@ -1138,8 +1138,9 @@
             <!-- ── Section 35 ── -->
             <div class="section-card">
                 <h2 id="windows-sync-without-extra-software">💻 Windows: Sync Without Extra Software</h2>
-                <p>If you're on Windows and can't use the SSH sync method, OpenClaw now supports uploading files directly over the network. The Windows installer (<code>Install-OpenClaw.ps1</code>) automatically tests this connection during setup.</p>
-                <p>If you see "✅ Upload server reachable" during install, the HTTP fallback is working and your files will sync even without additional tools installed.</p>
+                <p>Windows users always upload files over the internet — no need to be on the home network. OpenClaw's upload endpoint is published through the reverse proxy, so it works from anywhere.</p>
+                <p>The Windows installer (<code>Install-OpenClaw.ps1</code>) uses this public URL automatically. If you see "✅ Upload server reachable" during setup, you're connected and ready to go.</p>
+                <p>📡 <strong>Upload URL:</strong> <code>https://openclaw.davevoyles.synology.me/upload</code> — this works from any internet connection, not just home Wi-Fi.</p>
             </div>
             <a href="#top" class="back-to-top">↑ Back to top</a>
 

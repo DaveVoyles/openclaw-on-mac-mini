@@ -5373,23 +5373,26 @@ git push --tags
         picks them up on the next poll cycle and sends the alert DM.
       </p>
 
-      <h3>Windows HTTP Upload (Dad&rsquo;s PC)</h3>
+      <h3>Windows HTTP Upload</h3>
       <p>
-        On Windows there is no folder-sync daemon, so files are posted directly to the
-        HTTP upload endpoint:
+        Windows users are always remote — there is no folder-sync daemon, so files are posted
+        directly to the upload endpoint over the internet via the reverse proxy.
+        The local IP (<code>192.168.1.93:8080</code>) is <strong>not reachable from outside the home network</strong>;
+        always use the public URL below.
       </p>
       <div class="card">
         <pre><code># PowerShell example
 $headers = @{ "X-OpenClaw-Key" = "c926fab5-c06e-453c-b8e6-3c9b0ddf3042" }
 Invoke-RestMethod `
-  -Uri "http://192.168.1.93:8080/upload" `
+  -Uri "https://openclaw.davevoyles.synology.me/upload" `
   -Method POST `
   -Headers $headers `
   -Form @{ file = Get-Item "C:\Users\Dad\Documents\report.pdf" }</code></pre>
         <p style="margin-top:0.6rem">
-          <strong>Endpoint:</strong> <code>POST http://192.168.1.93:8080/upload</code><br />
+          <strong>Endpoint:</strong> <code>POST https://openclaw.davevoyles.synology.me/upload</code><br />
           <strong>Auth header:</strong> <code>X-OpenClaw-Key</code><br />
-          <strong>Form field:</strong> <code>file</code> (multipart)
+          <strong>Form field:</strong> <code>file</code> (multipart)<br />
+          <strong>Works from:</strong> any internet connection — no VPN or home network required
         </p>
       </div>
 
