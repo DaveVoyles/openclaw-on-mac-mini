@@ -165,3 +165,115 @@ Reviewed all 50 plugins at https://clawhub.ai/plugins against OpenClaw's existin
 5. **Never remove existing memory** (`data/chromadb/`) without explicit user approval
 6. **After each wave:** run `make verify-deploy` and check server health before proceeding
 7. **Commands to verify:** `python3 -m pytest tests/ -x -q` after any `src/` changes
+
+---
+
+## Skills Evaluation (top 20 by downloads on clawhub.ai/skills)
+
+> ⚠️ **Compatibility note:** ClawHub skills are built for the OpenClaw framework (a separate open-source AI agent platform, ~220k GitHub stars). They are **not directly installable** into this project via `clawhub install`. Evaluate them as **capability inspiration** — ideas worth building natively into the Python stack.
+
+### Source: clawhub.ai/skills (JS-rendered, scraped via third-party aggregators)
+Top 20 ranked by downloads as of Feb–Apr 2026.
+
+---
+
+### ✅ Worth building natively (3)
+
+| Rank | Skill | Downloads | What it adds | Already have? | Recommendation |
+|------|-------|-----------|--------------|---------------|----------------|
+| #7 | **Agent Browser** | 11,836 | Browser automation: navigate sites, fill forms, extract data, automate web workflows | ❌ No browser automation | **HIGH VALUE** — Playwright in Docker would complement Perplexity/Tavily search with actual browser interaction. Useful for form submission, logged-in pages, JS-heavy sites. |
+| #6 | **Gog (Google Workspace)** | 14,313 | Full Google suite: Calendar + Gmail + Drive + Contacts + Sheets + Docs | ✅ Calendar, ✅ Gmail (IMAP only) | **MEDIUM VALUE** — We have Calendar (OAuth2) and Gmail (App Password/IMAP). Missing: Google Drive, Contacts, Sheets. Worth extending `calendar_skills.py` for Drive/Contacts using the same OAuth2 token. |
+| #10 | **Sonoscli** | 10,304 | Sonos audio system control via Slack | ❌ No audio control | **MEDIUM VALUE (conditional)** — Only relevant if Sonos speakers exist on the network. Implementation: `soco` Python library. Zero server-side infrastructure needed. |
+
+---
+
+### ❌ Not needed — already covered (6)
+
+| Skill | Downloads | Reason |
+|-------|-----------|--------|
+| **Summarize** | 10,956 | Already have: `/digest`, `/brief`, research summarization in `research_agent.py` |
+| **Tavily Web Search** | 8,142 | Already integrated natively — `TAVILY_API_KEY` in .env |
+| **GitHub** | 10,611 | Dave uses GitHub Copilot CLI directly. Slack-native `/chat "show open PRs"` already routes through LLM + `gh`. |
+| **Wacli** (CLI utility) | 16,415 | We have our own rich CLI (`src/openclaw_cli.py`). No gap. |
+| **Weather** | 9,002 | Web search tools already return weather when asked. |
+| **Proactive Agent** | 7,010 | Already have: `bg_tasks.py`, `bg_briefing.py`, `bg_monitoring.py` handle proactive behaviors |
+
+---
+
+### ❌ Not relevant / gimmicky (11)
+
+| Skill | Downloads | Reason |
+|-------|-----------|--------|
+| **Capability Evolver** | 35,581 | "AI self-evolution" — vague/gimmicky for production use. Memory + MEMORY.md covers learning. |
+| **Self-Improving Agent** | 15,962 | Same as above. 132 stars but conceptually weak for a homelab assistant. |
+| **ByteRover** | 16,004 | Generic "multi-purpose task handler" — no clear value over existing setup. |
+| **ATXP** | 14,453 | "Advanced utility" — vague description, unclear value. |
+| **Humanize AI Text** | 8,771 | Not useful for a personal assistant; we want direct, honest responses. |
+| **Free Ride** | 7,927 | Unknown purpose; unclear from description. |
+| **Bird** | 7,767 | Unknown purpose; unclear from description. |
+| **Find Skills** | 7,077 | Discovers ClawHub skills — only useful within the OpenClaw framework. |
+| **Auto-Updater Skill** | 6,601 | Updates ClawHub skills — framework-specific, not applicable. |
+| **Nano Banana Pro** | 5,704 | Unknown purpose; unclear from description. |
+| **Obsidian** | 5,791 | Obsidian note sync — only useful if Dave uses Obsidian. Not confirmed. |
+
+---
+
+## Skills Implementation Waves
+
+### Wave 5 — Browser Automation (Agent Browser capability)
+**Size:** M + M | **Risk:** Medium | **Blocked by:** Waves 1-4 stable
+
+| Lane | Fleet | Size | Scope |
+|------|-------|------|-------|
+| 1 | Han 😉🚀 | M | Add Playwright to Docker container: `requirements.txt` + Dockerfile changes; browser health check |
+| 2 | Yoda 👽✨ | M | Implement `src/browser_skills.py`: navigate, screenshot, extract, fill_form; wire into Slack tool calls |
+
+**Done when:**
+- "Go to X website and extract the main article text" works via Slack
+- "Take a screenshot of openclaw.davevoyles.synology.me" returns PNG in Slack
+- Existing web search (Tavily/Perplexity) unaffected (regression check)
+
+---
+
+### Wave 6 — Google Drive + Contacts (Gog-inspired)
+**Size:** S + M | **Risk:** Low-Medium | **Blocked by:** Confirm OAuth2 scopes in existing token
+
+| Lane | Fleet | Size | Scope |
+|------|-------|------|-------|
+| 1 | Han 😉🚀 | S | Audit current Google OAuth2 scopes in `.env` / `scripts/google_oauth_setup.py`; identify what's missing for Drive + Contacts |
+| 2 | Yoda 👽✨ | M | Extend `calendar_skills.py` with Google Drive (list, read, upload) and Contacts (list, search) using same OAuth2 credentials |
+
+**Done when:**
+- "Show files in my Google Drive" works via Slack
+- "Find Dave's contact in Google Contacts" works
+- Calendar commands unaffected (regression check)
+
+---
+
+### Wave 7 — Sonos Audio Control (Sonoscli-inspired)
+**Size:** S | **Risk:** Low | **Blocked by:** Confirm Sonos speakers on network**
+**Note:** Solo lane — this is a single self-contained skill with no parallel split needed.
+
+- Install `soco` Python library
+- Implement `src/sonos_skills.py`: play, pause, volume, group, what's-playing
+- Wire into Slack: `/chat "play jazz on kitchen speaker"`
+
+**Done when:**
+- Sonos commands work via Slack on local network
+- No change to any existing skills
+
+---
+
+## Full Implementation Order (all waves)
+
+| Wave | Plugins/Skills | Size | Risk |
+|------|----------------|------|------|
+| 1 | Session Bloat Warning + Website Screenshot (plugin) | S+S | Low |
+| 2 | Receipt Scanner + PDF OCR (plugin) | M+M | Low-Med |
+| 3 | Apple PIM (plugin) | M+M | Medium |
+| 4 | Episodic Memory (plugin) | L | Medium |
+| 5 | Browser Automation / Playwright (skill-inspired) | M+M | Medium |
+| 6 | Google Drive + Contacts (skill-inspired) | S+M | Low-Med |
+| 7 | Sonos Control (skill-inspired) | S | Low |
+
+**Total: 7 waves, 13 lanes, ~4-6 hours of agent time at full fleet pace**
