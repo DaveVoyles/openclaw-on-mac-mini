@@ -77,6 +77,6 @@ jinja2~=3.1.0
 plotly~=5.14.0               # Interactive charts
 kaleido~=0.2.1               # Chart export (PNG/SVG)
 # Note: weasyprint already included for PDF generation
-matplotlib~=3.8
+matplotlib~=3.10
 dropbox~=12.0.2              # Dropbox API for folder watch and file access
 google-api-python-client~=2.100  # Google Calendar + Gmail API
