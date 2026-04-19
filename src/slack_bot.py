@@ -59,7 +59,6 @@ import aiohttp
 
 import file_skills
 from constants import ATTACHMENT_TEXT_MAX_CHARS
-from screenshot_skill import take_website_screenshot
 from document_skills import create_word
 from http_session import SessionManager
 from llm import analyze_image as llm_analyze_image
@@ -1922,6 +1921,7 @@ async def _handle_screenshot_intent(
     safe_hostname = re.sub(r"[^a-zA-Z0-9._-]", "_", parsed.netloc or "page")
 
     try:
+        from screenshot_skill import take_website_screenshot  # lazy import — lives in /app/skills
         png_bytes = await take_website_screenshot(url)
     except Exception as exc:
         log.warning("_handle_screenshot_intent: failed for %s: %s", url, exc)

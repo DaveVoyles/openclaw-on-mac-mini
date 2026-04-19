@@ -39,6 +39,7 @@ services:
       - .env
 
     environment:
+      - PYTHONPATH=/app/src:/app/skills:/app
       - HEALTH_PORT=8765
       - LOG_DIR=/logs
       - AUDIT_DIR=/audit
