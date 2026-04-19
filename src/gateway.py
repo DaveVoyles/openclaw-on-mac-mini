@@ -22,7 +22,7 @@ Rate limit: 10 requests/second per account.
 import asyncio
 import json
 import logging
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote as urlquote
 
 import aiohttp
@@ -73,7 +73,7 @@ async def _http_request(
     body: dict | None = None,
     extra_headers: dict | None = None,
     retries: int = 2,
-) -> dict | list:
+) -> dict[str, Any] | list[Any]:
     """Make an authenticated async request to Maton with retry on transient failures."""
     session = await _get_gateway_session()
     headers = _headers()
@@ -89,7 +89,7 @@ async def _http_request(
                 if resp.status >= 400:
                     text = await resp.text()
                     raise RuntimeError(f"HTTP {resp.status} from {url}: {text[:300]}")
-                return await resp.json()
+                return cast(dict[str, Any] | list[Any], await resp.json())
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             last_exc = e
             if attempt < retries:

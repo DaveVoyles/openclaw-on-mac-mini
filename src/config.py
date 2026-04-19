@@ -116,7 +116,6 @@ class _Config:
     copilot_proxy_enabled: bool = bool(os.getenv("COPILOT_PROXY_URL", ""))
     dashboard_api_token: str = os.getenv("DASHBOARD_API_TOKEN", "")
     dashboard_api_auth_required: bool = os.getenv("DASHBOARD_API_AUTH_REQUIRED", "true").lower() == "true"
-    webhook_secret: str = os.getenv("WEBHOOK_SECRET", "")
     webhook_require_auth: bool = os.getenv("WEBHOOK_REQUIRE_AUTH", "true").lower() == "true"
 
     # -- Spending / Budget -----------------------------------------------------

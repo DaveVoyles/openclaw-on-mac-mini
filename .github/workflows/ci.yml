@@ -64,12 +64,16 @@ jobs:
           source .venv/bin/activate
           ruff check src/ tests/ --output-format=github
 
-      - name: Type check with mypy
-        continue-on-error: true  # Warn only for now
+      - name: Type check (strict enforcement)
         run: |
           source .venv/bin/activate
-          pip install mypy
-          mypy src/ --ignore-missing-imports || true
+          python3 scripts/mypy_enforce.py
+
+      - name: Type check full src (warnings only)
+        continue-on-error: true
+        run: |
+          source .venv/bin/activate
+          python3 -m mypy src/ --ignore-missing-imports --show-error-codes 2>&1 | tail -5
 
       - name: Python syntax check
         run: |
