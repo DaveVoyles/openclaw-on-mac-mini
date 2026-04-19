@@ -942,38 +942,6 @@
           </details>
         </div>
 
-        <div class="card">
-          <h2>📲 SMS Preferences</h2>
-          <p style="color:var(--muted);font-size:0.82rem;margin-bottom:0.4rem">Optional SMS: view/update phone preferences and recent sends for a Discord user ID.</p>
-          <p style="color:var(--muted);font-size:0.78rem;margin-bottom:0.6rem">
-            Dashboard settings call <code>/api/sms/settings</code> (phone only). Verification and sending stay in Discord:
-            <code>/sms test</code>, <code>/sms test code:&lt;code&gt;</code>, and <code>/sms send</code>.
-          </p>
-          <form id="sms-settings-form" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:0.8rem">
-            <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.78rem;color:var(--muted)">
-              Discord User ID
-              <input id="sms-user-id" type="text" placeholder="123456789012345678" style="min-width:220px;padding:0.38rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)" />
-            </label>
-            <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.78rem;color:var(--muted)">
-              Phone (E.164)
-              <input id="sms-phone-number" type="text" placeholder="+15551234567" style="min-width:200px;padding:0.38rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)" />
-            </label>
-            <button type="submit" style="background:var(--spirit-blue);color:white;border:none;border-radius:6px;padding:0.45rem 0.9rem;cursor:pointer">Save</button>
-            <button type="button" onclick="loadSmsPanel()" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.45rem 0.9rem;cursor:pointer">Reload</button>
-          </form>
-          <p style="color:var(--muted);font-size:0.78rem;margin:0 0 0.6rem 0">
-            One-tap flow: <code>/sms config</code> → <code>/sms test</code> → <code>/sms test code:&lt;code&gt;</code> → <code>/sms send</code> (or right-click message → <strong>Send to SMS</strong>).
-          </p>
-          <div id="sms-settings-feedback" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.6rem"></div>
-          <div id="sms-status-content" class="scrollable-list" style="max-height:130px">
-            <p class="muted-text">Set a Discord user ID to load SMS status.</p>
-          </div>
-          <h3 style="margin:0.8rem 0 0.45rem 0;font-size:0.9rem;color:var(--muted)">Recent Sends</h3>
-          <div id="sms-history-content" class="scrollable-list" style="max-height:220px">
-            <p class="muted-text">No sends yet.</p>
-          </div>
-        </div>
-
         <!-- Container Health Matrix -->
         <div class="card">
           <h2>&#128373; Container Health Status</h2>
@@ -1537,45 +1505,6 @@
             <span class="stat-chip"><span class="stat-chip-label">Scope:</span> Awaiting channel ID</span>
           </div>
           <div id="inspector-latest" class="scrollable-list" style="max-height:260px"></div>
-        </div>
-
-        <div class="card" id="channel-profile-assistant-card">
-          <h2>🧠 Channel Profile Assistant</h2>
-          <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.6rem">
-            Review usage-driven profile recommendations for a scope. Standard flow is approve → apply, then revert if output quality regresses.
-          </p>
-          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:0.6rem">
-            <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.78rem;color:var(--muted)">
-              Discord Channel ID (required)
-              <input id="profile-assistant-channel-id" type="text" placeholder="123456789012345678" style="min-width:220px;padding:0.38rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)" />
-            </label>
-            <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.78rem;color:var(--muted)">
-              Discord Thread ID (optional)
-              <input id="profile-assistant-thread-id" type="text" placeholder="987654321098765432" style="min-width:220px;padding:0.38rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)" />
-            </label>
-            <button type="button" onclick="loadChannelProfileRecommendations()" style="background:var(--spirit-blue);color:#fff;border:none;border-radius:6px;padding:0.42rem 0.85rem;cursor:pointer" title="Load recommendations and usage signals for this scope">Inspect Scope</button>
-          </div>
-          <div id="profile-assistant-feedback" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem">
-            Enter a channel ID, then choose <strong>Inspect Scope</strong> to load recommendations and usage signals.
-          </div>
-          <div id="profile-assistant-signals" class="memory-stats-bar">
-            <span class="stat-chip"><span class="stat-chip-label">Scope:</span> Awaiting channel ID</span>
-          </div>
-          <div class="scrollable-list" style="max-height:260px;margin-top:0.6rem">
-            <table style="width:100%">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Recommendation</th>
-                  <th>Why suggested</th>
-                  <th>State</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="profile-assistant-body"></tbody>
-            </table>
-          </div>
-          <p id="profile-assistant-empty" style="color:var(--muted);text-align:center;padding:0.8rem;display:none">No recommendations for this scope yet. Interact more in-channel, then refresh.</p>
         </div>
 
         <!-- Research History -->
@@ -2385,7 +2314,6 @@
           loadRunTimeline();
           loadQualityEvals();
           loadQualityMetrics();
-          loadChannelProfileRecommendations({ quietIfMissing: true });
         } catch (e) {
           console.error(e);
         }
@@ -2647,125 +2575,6 @@
           loadMemories();
         } catch {
           setInspectorFeedback(`Failed to run ${action}.`, true);
-        }
-      }
-
-      function _profileAssistantScope() {
-        const channelId = (document.getElementById('profile-assistant-channel-id')?.value || '').trim();
-        const threadId = (document.getElementById('profile-assistant-thread-id')?.value || '').trim();
-        return { channelId, threadId };
-      }
-
-      function setProfileAssistantFeedback(message, isError = false) {
-        const el = document.getElementById('profile-assistant-feedback');
-        if (!el) return;
-        el.textContent = message;
-        el.style.color = isError ? 'var(--danger,#f85149)' : 'var(--muted)';
-      }
-
-      function _profileStatusBadge(status) {
-        const normalized = String(status || 'suggested').toLowerCase();
-        if (normalized === 'approved' || normalized === 'applied') {
-          return _statusChip('State', normalized.toUpperCase(), 'good');
-        }
-        if (normalized === 'rejected' || normalized === 'reverted') {
-          return _statusChip('State', normalized.toUpperCase(), 'bad');
-        }
-        return _statusChip('State', normalized.toUpperCase(), 'warn');
-      }
-
-      function renderProfileAssistant(data) {
-        const signalEl = document.getElementById('profile-assistant-signals');
-        const bodyEl = document.getElementById('profile-assistant-body');
-        const emptyEl = document.getElementById('profile-assistant-empty');
-        if (!signalEl || !bodyEl || !emptyEl) return;
-
-        const scope = data.scope || {};
-        const signals = data.signals || {};
-        const signalEntries = Object.entries(signals);
-        const signalChips = signalEntries.length
-          ? signalEntries.map(([k, v]) => `<span class="stat-chip"><span class="stat-chip-label">${esc(k)}:</span> ${esc(String(v || 0))}</span>`)
-          : ['<span class="stat-chip"><span class="stat-chip-label">Usage signals:</span> none captured yet</span>'];
-        signalEl.innerHTML = [
-          `<span class="stat-chip"><span class="stat-chip-label">Channel:</span> <code>${esc(scope.channel_id || '—')}</code></span>`,
-          `<span class="stat-chip"><span class="stat-chip-label">Thread:</span> <code>${esc(scope.thread_id || 'none')}</code></span>`,
-          ...signalChips,
-        ].join('');
-
-        const recommendations = data.recommendations || [];
-        bodyEl.innerHTML = '';
-        if (recommendations.length === 0) {
-          emptyEl.style.display = 'block';
-          return;
-        }
-        emptyEl.style.display = 'none';
-        recommendations.forEach(rec => {
-          const tr = document.createElement('tr');
-          const status = rec.status || 'suggested';
-          const id = rec.recommendation_id;
-          const recTone = Number(rec.confidence || 0) >= 0.8 ? 'good' : Number(rec.confidence || 0) >= 0.6 ? 'warn' : 'neutral';
-          tr.innerHTML = `<td><code>${esc(String(id || ''))}</code></td>
-            <td><code>${esc(rec.profile_field || '')}</code> → <strong>${esc(rec.recommended_value || '')}</strong><br/>${_statusChip('Confidence', (Number(rec.confidence || 0)).toFixed(2), recTone)}</td>
-            <td style="max-width:18rem;color:var(--muted)">${esc(rec.reason || '')}</td>
-            <td>${_profileStatusBadge(status)}</td>
-            <td style="white-space:nowrap">
-              <button onclick="submitProfileRecommendationAction(${Number(id || 0)}, 'approve')" style="padding:0.18rem 0.42rem;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--mint-green);cursor:pointer" title="Mark suggestion as approved">Approve</button>
-              <button onclick="submitProfileRecommendationAction(${Number(id || 0)}, 'reject')" style="padding:0.18rem 0.42rem;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--danger,#f85149);cursor:pointer" title="Reject suggestion and keep current profile">Reject</button>
-              <button onclick="submitProfileRecommendationAction(${Number(id || 0)}, 'apply')" style="padding:0.18rem 0.42rem;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--gold);cursor:pointer" title="Apply suggestion to active profile">Apply</button>
-              <button onclick="submitProfileRecommendationAction(${Number(id || 0)}, 'revert')" style="padding:0.18rem 0.42rem;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--muted);cursor:pointer" title="Revert a previously applied profile update">Revert</button>
-            </td>`;
-          bodyEl.appendChild(tr);
-        });
-      }
-
-      async function loadChannelProfileRecommendations(options = {}) {
-        const { quietIfMissing = false } = options;
-        const { channelId, threadId } = _profileAssistantScope();
-        if (!channelId) {
-          if (!quietIfMissing) setProfileAssistantFeedback('Channel ID is required.', true);
-          return;
-        }
-        localStorage.setItem('openclaw_profile_assistant_channel_id', channelId);
-        localStorage.setItem('openclaw_profile_assistant_thread_id', threadId || '');
-        setProfileAssistantFeedback('Loading profile recommendations…');
-        try {
-          const qs = new URLSearchParams({ channel_id: channelId });
-          if (threadId) qs.set('thread_id', threadId);
-          const resp = await fetch(`/api/channel-profile/recommendations?${qs.toString()}`);
-          const data = await resp.json();
-          if (!resp.ok) {
-            setProfileAssistantFeedback(data.error || 'Failed to load recommendations.', true);
-            return;
-          }
-          renderProfileAssistant(data);
-          setProfileAssistantFeedback('Recommendations loaded.');
-        } catch {
-          setProfileAssistantFeedback('Failed to load recommendations.', true);
-        }
-      }
-
-      async function submitProfileRecommendationAction(recommendationId, action) {
-        if (!recommendationId || !action) return;
-        setProfileAssistantFeedback(`Running ${action} on #${recommendationId}…`);
-        try {
-          const resp = await fetch('/api/channel-profile/recommendations/action', {
-            method: 'POST',
-            headers: _actionAuthHeaders('dashboard-ui'),
-            body: JSON.stringify({
-              recommendation_id: recommendationId,
-              action,
-              actor: 'dashboard-ui',
-            }),
-          });
-          const data = await resp.json();
-          if (!resp.ok) {
-            setProfileAssistantFeedback(data.error || 'Action failed.', true);
-            return;
-          }
-          setProfileAssistantFeedback(`Recommendation #${recommendationId} ${action} complete.`);
-          loadChannelProfileRecommendations({ quietIfMissing: true });
-        } catch {
-          setProfileAssistantFeedback('Action failed.', true);
         }
       }
 
@@ -3205,137 +3014,17 @@
           });
       }
 
-      function getSmsUserId() {
-          const raw = (document.getElementById('sms-user-id')?.value || '').trim();
-          return /^\d+$/.test(raw) ? raw : '';
-      }
-
-      function setSmsFeedback(text, isError = false) {
-          const el = document.getElementById('sms-settings-feedback');
-          if (!el) return;
-          el.textContent = text || '';
-          el.style.color = isError ? 'var(--danger,#f44336)' : 'var(--muted)';
-      }
-
-      function renderSmsStatus(data) {
-          const el = document.getElementById('sms-status-content');
-          if (!el) return;
-          if (!data || data.needs_user_id) {
-              el.innerHTML = '<p class="muted-text">Set a Discord user ID to load SMS status.</p>';
-              return;
-          }
-          if (!data.configured) {
-              el.innerHTML = `<p class="muted-text">SMS is not configured for user <code>${esc(String(data.user_id || ''))}</code>.</p>`;
-              return;
-          }
-          const verifyLabel = data.is_verified ? '✅ Verified' : '⚠️ Not verified';
-          const twilioLabel = data.twilio_enabled ? 'Enabled' : 'Disabled';
-          el.innerHTML = '<div class="memory-item">' +
-              `<div><strong>Phone:</strong> <code>${esc(data.masked_phone || 'not set')}</code></div>` +
-              `<div><strong>Verification:</strong> ${verifyLabel} (${esc(data.verification_status || 'unknown')})</div>` +
-              `<div><strong>Send budget:</strong> ${esc(String(data.remaining_sends || 0))} remaining in 10m</div>` +
-              `<div><strong>Twilio:</strong> ${esc(twilioLabel)}</div>` +
-              '</div>';
-      }
-
-      function renderSmsHistory(data) {
-          const el = document.getElementById('sms-history-content');
-          if (!el) return;
-          if (!data || data.needs_user_id) {
-              el.innerHTML = '<p class="muted-text">Set a Discord user ID to view history.</p>';
-              return;
-          }
-          const sends = data.sends || [];
-          if (sends.length === 0) {
-              el.innerHTML = '<p class="muted-text">No recent SMS sends for this user.</p>';
-              return;
-          }
-          el.innerHTML = sends.map(s => {
-              const ts = s.sent_at ? new Date(s.sent_at * 1000).toLocaleString() : 'Unknown time';
-              return `<div class="memory-item"><strong>${esc(ts)}</strong><div style="color:var(--muted);font-size:0.78rem">${esc(s.provider || 'sms')} · ${esc(s.status || 'unknown')} · <code>${esc(s.sid || '')}</code></div><div>${esc(s.preview || '')}</div></div>`;
-          }).join('');
-      }
-
-      async function loadSmsPanel() {
-          const userId = getSmsUserId();
-          if (!userId) {
-              renderSmsStatus({ needs_user_id: true });
-              renderSmsHistory({ needs_user_id: true });
-              setSmsFeedback('Enter a Discord user ID to load SMS data.');
-              return;
-          }
-          localStorage.setItem('openclaw_sms_user_id', userId);
-          try {
-              const [settingsResp, statusResp, historyResp] = await Promise.all([
-                  fetch(`/api/sms/settings?user_id=${encodeURIComponent(userId)}`),
-                  fetch(`/api/sms/status?user_id=${encodeURIComponent(userId)}`),
-                  fetch(`/api/sms/history?user_id=${encodeURIComponent(userId)}&limit=10`),
-              ]);
-              const settingsData = await settingsResp.json();
-              const statusData = await statusResp.json();
-              const historyData = await historyResp.json();
-              document.getElementById('sms-phone-number').value = settingsData.phone_number || '';
-              renderSmsStatus(statusData);
-              renderSmsHistory(historyData);
-              setSmsFeedback('');
-          } catch {
-              setSmsFeedback('Failed to load SMS dashboard data.', true);
-              renderSmsStatus({ needs_user_id: true });
-              renderSmsHistory({ sends: [] });
-          }
-      }
-
-      async function saveSmsSettings(event) {
-          event.preventDefault();
-          const userId = getSmsUserId();
-          if (!userId) {
-              setSmsFeedback('Discord user ID is required.', true);
-              return;
-          }
-          const phone = (document.getElementById('sms-phone-number')?.value || '').trim();
-          try {
-              const resp = await fetch('/api/sms/settings', {
-                  method: 'POST',
-                  headers: _actionAuthHeaders('dashboard-ui'),
-                  body: JSON.stringify({ user_id: Number(userId), phone_number: phone }),
-              });
-              const data = await resp.json();
-              if (!resp.ok) {
-                  setSmsFeedback(data.error || 'Failed to save SMS preferences.', true);
-                  return;
-              }
-              setSmsFeedback(phone ? 'SMS preferences saved.' : 'SMS preferences cleared.');
-              await loadSmsPanel();
-          } catch {
-              setSmsFeedback('Failed to save SMS preferences.', true);
-          }
-      }
-
       // Init
       (async () => {
         try {
-          const savedSmsUserId = localStorage.getItem('openclaw_sms_user_id') || '';
-          if (savedSmsUserId && document.getElementById('sms-user-id')) {
-            document.getElementById('sms-user-id').value = savedSmsUserId;
-          }
           const savedInspectorChannel = localStorage.getItem('openclaw_inspector_channel_id') || '';
           const savedInspectorThread = localStorage.getItem('openclaw_inspector_thread_id') || '';
-          const savedProfileAssistantChannel = localStorage.getItem('openclaw_profile_assistant_channel_id') || '';
-          const savedProfileAssistantThread = localStorage.getItem('openclaw_profile_assistant_thread_id') || '';
           if (savedInspectorChannel && document.getElementById('inspector-channel-id')) {
             document.getElementById('inspector-channel-id').value = savedInspectorChannel;
           }
           if (savedInspectorThread && document.getElementById('inspector-thread-id')) {
             document.getElementById('inspector-thread-id').value = savedInspectorThread;
           }
-          if (savedProfileAssistantChannel && document.getElementById('profile-assistant-channel-id')) {
-            document.getElementById('profile-assistant-channel-id').value = savedProfileAssistantChannel;
-          }
-          if (savedProfileAssistantThread && document.getElementById('profile-assistant-thread-id')) {
-            document.getElementById('profile-assistant-thread-id').value = savedProfileAssistantThread;
-          }
-          const smsForm = document.getElementById('sms-settings-form');
-          if (smsForm) smsForm.addEventListener('submit', saveSmsSettings);
           const d = await loadData();
           render(d);
           document.getElementById("loading").style.display = "none";
@@ -3360,9 +3049,7 @@
           loadQuotaStatus();
           loadSkillStats();
           loadConfigStatus();
-          loadSmsPanel();
           loadChannelMemoryInspector({ quietIfMissing: true });
-          loadChannelProfileRecommendations({ quietIfMissing: true });
           refreshStatus();
         } catch (e) {
           document.getElementById("loading").innerHTML =
@@ -3382,7 +3069,7 @@
           const el = document.getElementById('refresh-countdown');
           if (el) el.textContent = _refreshCountdown + 's';
       }, 1000);
-      setInterval(() => { _resetCountdown(); refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadPlans(); loadTaskStatuses(); loadAgentSessions(); loadApprovals(); loadRunTimeline(); loadQualityEvals(); loadQualityMetrics(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadQuotaStatus(); loadSkillStats(); loadConfigStatus(); loadSmsPanel(); loadChannelMemoryInspector({ quietIfMissing: true }); loadChannelProfileRecommendations({ quietIfMissing: true }); loadTopology(); refreshStatus(); }, 60000);
+      setInterval(() => { _resetCountdown(); refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadPlans(); loadTaskStatuses(); loadAgentSessions(); loadApprovals(); loadRunTimeline(); loadQualityEvals(); loadQualityMetrics(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadQuotaStatus(); loadSkillStats(); loadConfigStatus(); loadChannelMemoryInspector({ quietIfMissing: true }); loadTopology(); refreshStatus(); }, 60000);
 
       // D-5: Live Status Banner
       function refreshStatus() {
