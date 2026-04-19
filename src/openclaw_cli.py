@@ -422,6 +422,11 @@ _next_inject: str = ""
 # Tracks the last proactive context-overflow threshold band that was warned.
 # Resets per run_chat session; key = session_id or "" for no-session chat.
 _context_overflow_warned: dict[str, int] = {}
+# Tracks the last context-pressure band that triggered a proactive warning.
+# Resets at session start and when history is cleared so re-escalation warns again.
+_last_context_warn_band: str = ""
+
+_BAND_ORDER: dict[str, int] = {"": 0, "low": 1, "medium": 2, "high": 3, "critical": 4, "overflow": 5}
 
 
 DEFAULT_BASE_URL = "http://localhost:8765"
@@ -4129,6 +4134,37 @@ def _emit_context_overflow_warning(
     )
 
 
+def _maybe_warn_context_pressure(history: list[dict[str, str]]) -> None:
+    """Print a proactive warning when context pressure band escalates.
+
+    Only fires when the band moves to a higher level than the last warning
+    (high → critical → overflow). Silent for low/medium bands.
+    """
+    global _last_context_warn_band
+    sys_prompt = str(_PREFS.get("system_prompt", "") or "")
+    pending_inject = str(_next_inject or "")
+    pressure = _session_display_mod._context_pressure_snapshot(
+        history,
+        system_prompt=sys_prompt,
+        pending_inject=pending_inject,
+        model_hint=_PREFS.get("last_model", ""),
+        route_hint=_PREFS.get("route_mode", ""),
+    )
+    band = str(pressure["band"])
+    pct = int(pressure["pct_next_raw"])
+    if _BAND_ORDER.get(band, 0) <= _BAND_ORDER.get(_last_context_warn_band, 0):
+        return
+    if band == "high":
+        print(f"\n  {_YE}⚠ Context at {pct}% — consider /compact or /clear soon{_R}")
+    elif band == "critical":
+        print(f"\n  {_RE}⚠⚠ Context at {pct}% (critical) — run /compact now to avoid loss{_R}")
+    elif band == "overflow":
+        print(f"\n  \033[1;31m⚠⚠⚠ Context OVERFLOW ({pct}%) — next send will be truncated!{_R}")
+    else:
+        return
+    _last_context_warn_band = band
+
+
 def _make_prompt(session_id: str = "", autoroute_on: bool = True, multiline: bool = False, draft_active: bool = False) -> str:
     """Build the REPL prompt string, optionally with session hint or autoroute badge."""
     if _a11y_plain_mode():
@@ -5161,10 +5197,11 @@ def run_chat(
     no_banner: bool = False,
 ) -> int:
     """Run an interactive chat session against OpenClaw."""
-    global _context_overflow_warned
+    global _context_overflow_warned, _last_context_warn_band
     _load_prefs()
     # Reset per-session overflow-warning state so thresholds fire fresh each session.
     _context_overflow_warned.pop(session_id or "", None)
+    _last_context_warn_band = ""
     history: list[dict[str, str]] = load_conversation_history(session_id) if session_id else []
     registry = build_chat_command_registry()
     load_shell_history()
@@ -5271,6 +5308,8 @@ def run_chat(
             save_shell_history()
             return 0
         if result == _CMD_CONTINUE:
+            if not history:  # e.g. /clear was just run
+                _last_context_warn_band = ""
             continue
         if result == "_retry":
             _retry_prompt = str(_PREFS.pop("_retry_prompt", "") or "")
@@ -5451,6 +5490,7 @@ def run_chat(
         # Proactive context-overflow warning — fires once per threshold crossing.
         if not config.output_json and not _compact:
             _emit_context_overflow_warning(history, session_id=session_id)
+            _maybe_warn_context_pressure(history)
         if session_id:
             append_event(session_id, kind="chat", content=prompt, metadata={"summary": prompt})
             persist_response(session_id, prompt, response.response)
