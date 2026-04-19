@@ -391,12 +391,12 @@ Your saved notes are stored on the server — no need to copy/paste anything.
 
 ---
 
-## 🔖 View Your Saved Notes — `/saved`
+## 🔖 View Your Saved Notes — `/mypins`
 
 Want to look back at things you've bookmarked? Type:
 
 ```
-/saved
+/mypins
 ```
 
 OpenClaw will show you your last 5 saved notes — a short preview of each one and when you saved it. Only you can see this list.
