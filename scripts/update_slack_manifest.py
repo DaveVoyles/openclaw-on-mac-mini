@@ -205,7 +205,6 @@ MANIFEST: dict = {
             ],
             "user": [
                 "channels:read",
-                "channels:manage",
                 "groups:read",
                 "groups:write",
             ],
