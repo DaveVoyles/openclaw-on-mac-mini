@@ -472,9 +472,10 @@
                     <li><a href="#connecting-your-accounts">🔗 Connecting Accounts</a></li>
                     <li><a href="#connect-your-gmail-email-setup">📧 Gmail /email setup</a></li>
                     <li><a href="#check-your-calendar-calendar">📅 /calendar</a></li>
-                    <li><a href="#connect-your-dropbox-dropbox-connect">📦 /dropbox connect</a></li>
+                    <li><a href="#connect-your-dropbox-dropbox-connect">📦 /clawbox connect</a></li>
                     <li><a href="#windows-sync-without-extra-software">💻 Windows sync</a></li>
                     <li><a href="#getting-started-with-slack">💬 Getting started with Slack</a></li>
+                    <li><a href="#frequently-asked-questions">❓ FAQ</a></li>
                 </ol>
             </nav>
         </aside>
@@ -488,6 +489,9 @@
                 <p>You can use it two ways: from any browser, or through Slack.</p>
                 <blockquote class="tip-green">
                     <p><strong>This guide is for you</strong> — no technical knowledge needed.</p>
+                </blockquote>
+                <blockquote class="tip-green">
+                    <p>🚀 <strong>New here?</strong> Start with the <a href="/onboarding" style="font-weight:700;">interactive setup guide</a> — it walks you through everything in 5 easy steps.</p>
                 </blockquote>
             </div>
 
@@ -523,7 +527,7 @@
                     <a href="https://slack.com/downloads/ios" target="_blank">iPhone</a>, or
                     <a href="https://slack.com/downloads/android" target="_blank">Android</a> —
                     or use it in your browser at <a href="https://app.slack.com" target="_blank">app.slack.com</a>.
-                    Ask Dave for an invite link to join the family workspace.</p>
+                    Then <a href="https://example.com/ask-the-owner-for-a-current-invite~5eClcg" target="_blank"><strong>join the family workspace here</strong></a> (link valid until May 17, 2026 — ask Dave if expired).</p>
                 </blockquote>
                 <p>👉 <strong>New to Slack?</strong> See <a href="#getting-started-with-slack">Getting Started with Slack</a> at the bottom of this page — it covers everything from downloading the app to sending your first message.</p>
             </div>
@@ -1000,10 +1004,10 @@
 
             <!-- ── Section 34 ── -->
             <div class="section-card">
-                <h2 id="connect-your-dropbox-dropbox-connect">📦 Connect Your Dropbox — <code>/dropbox connect</code></h2>
+                <h2 id="connect-your-dropbox-dropbox-connect">📦 Connect Your Dropbox — <code>/clawbox connect</code></h2>
                 <p>Connecting your Dropbox is now <strong>one click</strong> — no developer accounts needed.</p>
                 <p><strong>Just type this in Slack:</strong></p>
-                <pre>/dropbox connect</pre>
+                <pre>/clawbox connect</pre>
                 <p>OpenClaw will send you a private link. Click it, sign into your Dropbox account, click <strong>Allow</strong>, and you're done. OpenClaw will DM you a confirmation.</p>
                 <blockquote>
                     <p>🔒 The link is private — only you can see it, and it expires in 10 minutes.</p>
@@ -1011,9 +1015,9 @@
 
                 <hr>
 
-                <p><strong>Using <code>/dropbox</code> once connected:</strong></p>
-                <pre>/dropbox list             — list files in your OpenClaw folder
-/dropbox status           — check if your Dropbox connection is working</pre>
+                <p><strong>Using <code>/clawbox</code> once connected:</strong></p>
+                <pre>/clawbox list             — list files in your OpenClaw folder
+/clawbox status           — check if your Dropbox connection is working</pre>
 
                 <h3>How the automatic watcher works:</h3>
                 <p>Once connected, whenever you drop a file into the <strong>OpenClaw</strong> folder in your Dropbox, OpenClaw will message you in Slack within 30 seconds:<br>
@@ -1021,7 +1025,7 @@
                 Just say yes and OpenClaw reads it for you.</p>
 
                 <p><strong>To disconnect your Dropbox:</strong></p>
-                <pre>/dropbox forget</pre>
+                <pre>/clawbox forget</pre>
             </div>
 
             <!-- ── Section 35 ── -->
@@ -1094,6 +1098,38 @@
                     <li><strong>The mobile app is great for quick questions.</strong> Download Slack on your phone and you can ask OpenClaw anything from anywhere.</li>
                     <li><strong>No typing needed for short questions.</strong> Just write naturally — "what does this letter mean?" works perfectly.</li>
                 </ul>
+            </div>
+
+            <!-- ── Section 37 ── -->
+            <div class="section-card">
+                <h2 id="frequently-asked-questions">❓ Frequently Asked Questions</h2>
+
+                <h3>Is my conversation private?</h3>
+                <p>Yes. OpenClaw runs on Dave's home server — not a public cloud. Only people Dave has invited can access it, and your direct messages are only visible to you. OpenClaw does not share your conversations with anyone.</p>
+
+                <h3>Does OpenClaw remember me between sessions?</h3>
+                <p>Yes — it keeps a short memory of your recent conversations so it can follow along if you refer to something earlier. However, very old messages may drop out of its context. If you notice it seems to have forgotten something important, just mention it again.</p>
+
+                <h3>Can I use it on my phone?</h3>
+                <p>Absolutely. Two easy options:</p>
+                <ul>
+                    <li><strong>Slack mobile app</strong> — download Slack for <a href="https://slack.com/downloads/ios" target="_blank">iPhone</a> or <a href="https://slack.com/downloads/android" target="_blank">Android</a>, sign in, and message OpenClaw just like on a computer.</li>
+                    <li><strong>Browser</strong> — open Safari or Chrome and go to <a href="http://chat.davevoyles.synology.me" target="_blank">chat.davevoyles.synology.me</a>. Works on any phone.</li>
+                </ul>
+
+                <h3>What if it gives a wrong answer?</h3>
+                <p>OpenClaw is an AI — it can occasionally make mistakes, especially on facts it wasn't specifically trained on. Always double-check important information (health, legal, financial decisions) with a professional source. If an answer seems off, just ask it to try again: "Are you sure about that?" or "Can you double-check that?"</p>
+
+                <h3>What can OpenClaw <em>not</em> do?</h3>
+                <ul>
+                    <li>It cannot browse the live internet (unless you ask it to search — and even then it may have limits).</li>
+                    <li>It cannot make phone calls, send emails on your behalf (unless you've connected Gmail), or access accounts you haven't linked.</li>
+                    <li>It does not know about events after its training cutoff date.</li>
+                    <li>It cannot control other apps on your phone or computer.</li>
+                </ul>
+                <blockquote>
+                    <p>💡 <strong>Rule of thumb:</strong> Use OpenClaw for questions, summaries, drafting text, and explaining things. For anything you'd normally call a professional about, use it as a starting point — not the final word.</p>
+                </blockquote>
             </div>
 
         </main>
