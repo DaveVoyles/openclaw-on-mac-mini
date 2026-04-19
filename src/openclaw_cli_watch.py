@@ -1219,8 +1219,8 @@ def cmd_watch_bell(rest: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def handle_watch_command(args: argparse.Namespace, *, config: "CliConfig") -> int:
-    """Run a resumable watch loop over a session workspace."""
+def _watch_init_args(args: argparse.Namespace, config: "CliConfig") -> dict:
+    """Parse and validate watch command arguments; return a dict of resolved values."""
     resume_id = str(getattr(args, "resume", "") or "").strip()
     requested_session = str(getattr(args, "session", "") or config.session_id or "").strip()
     if resume_id and requested_session and resume_id != requested_session:
@@ -1251,8 +1251,39 @@ def handle_watch_command(args: argparse.Namespace, *, config: "CliConfig") -> in
         explicit_targets = list((existing_state or {}).get("files") or (session_seed.files if session_seed else []) or [])
     normalized_targets, _ = collect_workspace_context(cwd=cwd, targets=explicit_targets)
 
+    return {
+        "resume_id": resume_id,
+        "requested_session": requested_session,
+        "existing_state": existing_state,
+        "goal": goal,
+        "mode": mode,
+        "interval_seconds": interval_seconds,
+        "max_polls": max_polls,
+        "on_change": on_change,
+        "cwd": cwd,
+        "normalized_targets": normalized_targets,
+        "plan_id": plan_id,
+        "task_id": task_id,
+    }
+
+
+def _watch_setup_session(
+    session_id: str,
+    *,
+    goal: str,
+    mode: str,
+    cwd: "str | None",
+    normalized_targets: list,
+    plan_id: str,
+    task_id: str,
+    interval_seconds: int,
+    max_polls: int,
+    on_change: bool,
+    existing_state: "dict | None",
+) -> tuple:
+    """Create/update the CLI session and build normalised watch state; return (session, state, resume_snapshot)."""
     session = ensure_cli_session(
-        resume_id or requested_session,
+        session_id,
         title=f"Watch: {goal[:60]}",
         cwd=cwd,
         files=normalized_targets,
@@ -1269,7 +1300,6 @@ def handle_watch_command(args: argparse.Namespace, *, config: "CliConfig") -> in
         automation_status="watching",
         watch_interval_seconds=interval_seconds,
     )
-
     resume_snapshot = normalize_watch_state(existing_state) if existing_state else None
     state = existing_state or build_watch_state(
         session=session,
@@ -1296,30 +1326,310 @@ def handle_watch_command(args: argparse.Namespace, *, config: "CliConfig") -> in
         }
     )
     save_watch_state(session.session_id, state)
+    return session, state, resume_snapshot
 
-    if not config.output_json:
-        if resume_snapshot:
-            print_watch_resume_snapshot(session.session_id, resume_snapshot, output_json=config.output_json)
-        if _RICH_AVAILABLE and _IS_TTY:
-            _body = _RichText()
-            _body.append("  session  ", style="dim")
-            _body.append(f"{session.session_id}\n")
-            _body.append("  mode     ", style="dim")
-            _body.append(f"{mode}\n")
-            _body.append("  goal     ", style="dim")
-            _body.append(f"{goal[:60]}\n")
-            _body.append("  interval ", style="dim")
-            _body.append(f"{interval_seconds}s")
-            _body.append("  ·  max ", style="dim")
-            _body.append(f"{'infinite' if max_polls == 0 else max_polls}\n")
-            _body.append("  Ctrl-C to pause & resume", style="dim")
-            _RICH_CONSOLE.print(_RichPanel(_body, border_style="cyan", title="[bold cyan]👁  watch[/]"))
-        else:
-            print(
-                f"Watching session {session.session_id} in {mode} mode "
-                f"(interval={interval_seconds}s, max polls={'infinite' if max_polls == 0 else max_polls})."
+
+def _watch_print_header(
+    session: Any,
+    *,
+    mode: str,
+    goal: str,
+    interval_seconds: int,
+    max_polls: int,
+    resume_snapshot: "dict | None",
+    config: "CliConfig",
+) -> None:
+    """Print the rich (or plain-text) watch startup banner."""
+    if config.output_json:
+        return
+    if resume_snapshot:
+        print_watch_resume_snapshot(session.session_id, resume_snapshot, output_json=config.output_json)
+    if _RICH_AVAILABLE and _IS_TTY:
+        _body = _RichText()
+        _body.append("  session  ", style="dim")
+        _body.append(f"{session.session_id}\n")
+        _body.append("  mode     ", style="dim")
+        _body.append(f"{mode}\n")
+        _body.append("  goal     ", style="dim")
+        _body.append(f"{goal[:60]}\n")
+        _body.append("  interval ", style="dim")
+        _body.append(f"{interval_seconds}s")
+        _body.append("  ·  max ", style="dim")
+        _body.append(f"{'infinite' if max_polls == 0 else max_polls}\n")
+        _body.append("  Ctrl-C to pause & resume", style="dim")
+        _RICH_CONSOLE.print(_RichPanel(_body, border_style="cyan", title="[bold cyan]👁  watch[/]"))
+    else:
+        print(
+            f"Watching session {session.session_id} in {mode} mode "
+            f"(interval={interval_seconds}s, max polls={'infinite' if max_polls == 0 else max_polls})."
+        )
+        print("Press Ctrl-C to stop and resume later with `openclaw watch --resume <session_id>`.")
+
+
+def _watch_run_iteration_with_retry(
+    session: Any,
+    state: dict,
+    *,
+    mode: str,
+    plan_id: str,
+    task_id: str,
+    interval_seconds: int,
+    max_polls: int,
+    config: "CliConfig",
+    args: argparse.Namespace,
+    workspace_signature: str,
+    force_run_once: bool,
+) -> dict:
+    """Execute one watch iteration with retry logic; return the updated state."""
+    if force_run_once:
+        state["force_run_once"] = False
+        resolve_watch_intervention(
+            state,
+            action="force-checkpoint",
+            status="applied",
+            note="Forced one checkpoint despite unchanged workspace.",
+        )
+        record_watch_progress(
+            session_id=session.session_id,
+            state=state,
+            iteration=state["poll_count"],
+            mode=mode,
+            phase="control",
+            message="Dashboard requested a forced checkpoint; running anyway.",
+            output_json=config.output_json,
+        )
+    state["active_checkpoint"] = start_watch_checkpoint(iteration=state["poll_count"], mode=mode)
+    save_watch_state(session.session_id, state)
+    retry_limit = max(1, int(state.get("retry_limit") or WATCH_RETRY_LIMIT))
+    attempt = 0
+    while True:
+        attempt += 1
+        active_checkpoint = state.setdefault("active_checkpoint", start_watch_checkpoint(iteration=state["poll_count"], mode=mode))
+        attempts = list(active_checkpoint.get("attempts") or [])
+        attempts.append({"attempt": attempt, "started_at": utc_timestamp(), "status": "running"})
+        active_checkpoint["attempts"] = attempts[-WATCH_PROGRESS_LOG_LIMIT:]
+        active_checkpoint["updated_at"] = utc_timestamp()
+        save_watch_state(session.session_id, state)
+
+        try:
+            result_text, output_path = execute_watch_iteration(
+                session=require_session(session.session_id),
+                state=state,
+                config=config,
+                output_override=str(getattr(args, "output", "") or "").strip(),
+                deep_research=bool(getattr(args, "deep", False)),
+                title=str(getattr(args, "title", "") or "").strip(),
+                on_progress=lambda phase, message: record_watch_progress(
+                    session_id=session.session_id,
+                    state=state,
+                    iteration=state["poll_count"],
+                    mode=mode,
+                    phase=phase,
+                    message=message,
+                    output_json=config.output_json,
+                ),
             )
-            print("Press Ctrl-C to stop and resume later with `openclaw watch --resume <session_id>`.")
+            finished_at = utc_timestamp()
+            active_checkpoint["attempts"][-1].update(
+                {
+                    "finished_at": finished_at,
+                    "status": "completed",
+                    "duration_seconds": _elapsed_seconds(
+                        active_checkpoint["attempts"][-1].get("started_at"),
+                        finished_at,
+                    ),
+                }
+            )
+            break
+        except Exception as exc:  # broad: intentional  # noqa: BLE001
+            error_message = str(exc).strip() or exc.__class__.__name__
+            transient = is_transient_watch_error(error_message)
+            finished_at = utc_timestamp()
+            active_checkpoint["attempts"][-1].update(
+                {
+                    "finished_at": finished_at,
+                    "status": "failed",
+                    "error": error_message,
+                    "transient": transient,
+                    "duration_seconds": _elapsed_seconds(
+                        active_checkpoint["attempts"][-1].get("started_at"),
+                        finished_at,
+                    ),
+                }
+            )
+            state["failure_count"] = int(state.get("failure_count") or 0) + 1
+            state["consecutive_failures"] = int(state.get("consecutive_failures") or 0) + 1
+            state["last_error"] = error_message
+            retry_entry = {
+                "poll": state["poll_count"],
+                "attempt": attempt,
+                "error": error_message,
+                "transient": transient,
+                "created_at": utc_timestamp(),
+                "delay_seconds": watch_retry_delay_seconds(attempt) if transient and attempt < retry_limit else 0,
+            }
+            retry_history = list(state.get("retry_history") or [])
+            retry_history.append(retry_entry)
+            state["retry_history"] = retry_history[-WATCH_PROGRESS_LOG_LIMIT:]
+            state["status"] = "retrying" if transient and attempt < retry_limit else "failed"
+            state["updated_at"] = utc_timestamp()
+            save_watch_state(session.session_id, state)
+            update_session(
+                session.session_id,
+                automation_mode=mode,
+                automation_status="retrying" if transient and attempt < retry_limit else "failed",
+                watch_interval_seconds=interval_seconds,
+            )
+            if transient and attempt < retry_limit:
+                delay_seconds = int(retry_entry.get("delay_seconds") or watch_retry_delay_seconds(attempt))
+                record_watch_progress(
+                    session_id=session.session_id,
+                    state=state,
+                    iteration=state["poll_count"],
+                    mode=mode,
+                    phase="retry",
+                    message=(
+                        f"Transient failure on attempt {attempt}/{retry_limit}: "
+                        f"{error_message}. Retrying in {delay_seconds}s."
+                    ),
+                    output_json=config.output_json,
+                )
+                print(f"  ↺ Watch auto-retried (attempt {attempt}): {error_message}")
+                time.sleep(delay_seconds)
+                continue
+            failure_summary = f"{mode} failed: {error_message[:160]}"
+            checkpoint_completed_at = utc_timestamp()
+            active_checkpoint.update(
+                {
+                    "status": "failed",
+                    "completed_at": checkpoint_completed_at,
+                    "summary": failure_summary,
+                    "error": error_message,
+                    "transient": transient,
+                    "duration_seconds": _elapsed_seconds(
+                        active_checkpoint.get("started_at"),
+                        checkpoint_completed_at,
+                    ),
+                }
+            )
+            state.setdefault("checkpoints", []).append(dict(active_checkpoint))
+            state["last_run_at"] = active_checkpoint["completed_at"]
+            state["last_summary"] = failure_summary
+            state["active_checkpoint"] = {}
+            save_watch_state(session.session_id, state)
+            append_event(
+                session.session_id,
+                kind="checkpoint",
+                content=failure_summary,
+                metadata={
+                    "summary": failure_summary,
+                    "mode": mode,
+                    "poll": state["poll_count"],
+                    "plan_id": plan_id,
+                    "task_id": task_id,
+                    "status": "failed",
+                    "error": error_message,
+                    "retry_count": attempt,
+                    "retry_delay_seconds": _watch_retry_delay_total(state),
+                    "elapsed_seconds": active_checkpoint.get("duration_seconds"),
+                },
+            )
+            if not config.output_json:
+                print(f"  ⚠ Watch stopped — exhausted retries after {attempt} attempt(s)")
+                if _PREFS.get("watch_bell", False):
+                    print("\a", end="", flush=True)
+            raise OpenClawCliError(
+                f"Watch poll {state['poll_count']} failed after {attempt} attempt(s): {error_message}"
+            ) from exc
+    checkpoint_summary = str(result_text or "").strip().splitlines()[0][:160] if str(result_text or "").strip() else f"{mode} checkpoint"
+    checkpoint = {
+        "poll": state["poll_count"],
+        "created_at": utc_timestamp(),
+        "completed_at": utc_timestamp(),
+        "summary": checkpoint_summary,
+        "output_path": output_path,
+        "workspace_signature": workspace_signature,
+        "status": "completed",
+        "attempt_count": attempt,
+        "progress": list(state.get("active_checkpoint", {}).get("progress") or []),
+        "attempts": list(state.get("active_checkpoint", {}).get("attempts") or []),
+        "started_at": str(state.get("active_checkpoint", {}).get("started_at") or ""),
+    }
+    checkpoint["duration_seconds"] = _elapsed_seconds(checkpoint.get("started_at") or checkpoint.get("created_at"), checkpoint.get("completed_at"))
+    state.setdefault("checkpoints", []).append(checkpoint)
+    state["workspace_signature"] = workspace_signature
+    state["last_run_at"] = checkpoint["completed_at"]
+    state["last_output_path"] = output_path
+    state["last_summary"] = checkpoint_summary
+    state["last_error"] = ""
+    state["consecutive_failures"] = 0
+    state["status"] = "running"
+    state["updated_at"] = checkpoint["completed_at"]
+    state["active_checkpoint"] = {}
+    save_watch_state(session.session_id, state)
+    append_event(
+        session.session_id,
+        kind="checkpoint",
+        content=checkpoint_summary,
+        metadata={
+            "summary": checkpoint_summary,
+            "mode": mode,
+            "poll": state["poll_count"],
+            "output_path": output_path,
+            "plan_id": plan_id,
+            "task_id": task_id,
+            "elapsed_seconds": checkpoint.get("duration_seconds"),
+            "retry_delay_seconds": _watch_retry_delay_total(state),
+        },
+    )
+    update_session(
+        session.session_id,
+        automation_mode=mode,
+        automation_status="running",
+        watch_interval_seconds=interval_seconds,
+    )
+    render_watch_iteration(
+        iteration=state["poll_count"],
+        mode=mode,
+        summary=checkpoint_summary,
+        output_path=output_path,
+        output_json=config.output_json,
+        max_polls=max_polls,
+    )
+    return state
+
+
+def handle_watch_command(args: argparse.Namespace, *, config: "CliConfig") -> int:
+    """Run a resumable watch loop over a session workspace."""
+    init = _watch_init_args(args, config)
+    session, state, resume_snapshot = _watch_setup_session(
+        init["resume_id"] or init["requested_session"],
+        goal=init["goal"],
+        mode=init["mode"],
+        cwd=init["cwd"],
+        normalized_targets=init["normalized_targets"],
+        plan_id=init["plan_id"],
+        task_id=init["task_id"],
+        interval_seconds=init["interval_seconds"],
+        max_polls=init["max_polls"],
+        on_change=init["on_change"],
+        existing_state=init["existing_state"],
+    )
+    _watch_print_header(
+        session,
+        mode=init["mode"],
+        goal=init["goal"],
+        interval_seconds=init["interval_seconds"],
+        max_polls=init["max_polls"],
+        resume_snapshot=resume_snapshot,
+        config=config,
+    )
+    mode = init["mode"]
+    plan_id = init["plan_id"]
+    task_id = init["task_id"]
+    interval_seconds = init["interval_seconds"]
+    max_polls = init["max_polls"]
+    on_change = init["on_change"]
 
     try:
         while max_polls == 0 or int(state.get("poll_count", 0) or 0) < max_polls:
@@ -1343,224 +1653,18 @@ def handle_watch_command(args: argparse.Namespace, *, config: "CliConfig") -> in
                     _iter_label = f"{state['poll_count']}/{max_polls}" if max_polls > 0 else f"iter {state['poll_count']}"
                     print(f"[watch {_iter_label}] unchanged; waiting for workspace updates.")
             else:
-                if force_run_once:
-                    state["force_run_once"] = False
-                    resolve_watch_intervention(
-                        state,
-                        action="force-checkpoint",
-                        status="applied",
-                        note="Forced one checkpoint despite unchanged workspace.",
-                    )
-                    record_watch_progress(
-                        session_id=session.session_id,
-                        state=state,
-                        iteration=state["poll_count"],
-                        mode=mode,
-                        phase="control",
-                        message="Dashboard requested a forced checkpoint; running anyway.",
-                        output_json=config.output_json,
-                    )
-                state["active_checkpoint"] = start_watch_checkpoint(iteration=state["poll_count"], mode=mode)
-                save_watch_state(session.session_id, state)
-                retry_limit = max(1, int(state.get("retry_limit") or WATCH_RETRY_LIMIT))
-                attempt = 0
-                while True:
-                    attempt += 1
-                    active_checkpoint = state.setdefault("active_checkpoint", start_watch_checkpoint(iteration=state["poll_count"], mode=mode))
-                    attempts = list(active_checkpoint.get("attempts") or [])
-                    attempts.append({"attempt": attempt, "started_at": utc_timestamp(), "status": "running"})
-                    active_checkpoint["attempts"] = attempts[-WATCH_PROGRESS_LOG_LIMIT:]
-                    active_checkpoint["updated_at"] = utc_timestamp()
-                    save_watch_state(session.session_id, state)
-
-                    try:
-                        result_text, output_path = execute_watch_iteration(
-                            session=require_session(session.session_id),
-                            state=state,
-                            config=config,
-                            output_override=str(getattr(args, "output", "") or "").strip(),
-                            deep_research=bool(getattr(args, "deep", False)),
-                            title=str(getattr(args, "title", "") or "").strip(),
-                            on_progress=lambda phase, message: record_watch_progress(
-                                session_id=session.session_id,
-                                state=state,
-                                iteration=state["poll_count"],
-                                mode=mode,
-                                phase=phase,
-                                message=message,
-                                output_json=config.output_json,
-                            ),
-                        )
-                        finished_at = utc_timestamp()
-                        active_checkpoint["attempts"][-1].update(
-                            {
-                                "finished_at": finished_at,
-                                "status": "completed",
-                                "duration_seconds": _elapsed_seconds(
-                                    active_checkpoint["attempts"][-1].get("started_at"),
-                                    finished_at,
-                                ),
-                            }
-                        )
-                        break
-                    except Exception as exc:  # broad: intentional  # noqa: BLE001
-                        error_message = str(exc).strip() or exc.__class__.__name__
-                        transient = is_transient_watch_error(error_message)
-                        finished_at = utc_timestamp()
-                        active_checkpoint["attempts"][-1].update(
-                            {
-                                "finished_at": finished_at,
-                                "status": "failed",
-                                "error": error_message,
-                                "transient": transient,
-                                "duration_seconds": _elapsed_seconds(
-                                    active_checkpoint["attempts"][-1].get("started_at"),
-                                    finished_at,
-                                ),
-                            }
-                        )
-                        state["failure_count"] = int(state.get("failure_count") or 0) + 1
-                        state["consecutive_failures"] = int(state.get("consecutive_failures") or 0) + 1
-                        state["last_error"] = error_message
-                        retry_entry = {
-                            "poll": state["poll_count"],
-                            "attempt": attempt,
-                            "error": error_message,
-                            "transient": transient,
-                            "created_at": utc_timestamp(),
-                            "delay_seconds": watch_retry_delay_seconds(attempt) if transient and attempt < retry_limit else 0,
-                        }
-                        retry_history = list(state.get("retry_history") or [])
-                        retry_history.append(retry_entry)
-                        state["retry_history"] = retry_history[-WATCH_PROGRESS_LOG_LIMIT:]
-                        state["status"] = "retrying" if transient and attempt < retry_limit else "failed"
-                        state["updated_at"] = utc_timestamp()
-                        save_watch_state(session.session_id, state)
-                        update_session(
-                            session.session_id,
-                            automation_mode=mode,
-                            automation_status="retrying" if transient and attempt < retry_limit else "failed",
-                            watch_interval_seconds=interval_seconds,
-                        )
-                        if transient and attempt < retry_limit:
-                            delay_seconds = int(retry_entry.get("delay_seconds") or watch_retry_delay_seconds(attempt))
-                            record_watch_progress(
-                                session_id=session.session_id,
-                                state=state,
-                                iteration=state["poll_count"],
-                                mode=mode,
-                                phase="retry",
-                                message=(
-                                    f"Transient failure on attempt {attempt}/{retry_limit}: "
-                                    f"{error_message}. Retrying in {delay_seconds}s."
-                                ),
-                                output_json=config.output_json,
-                            )
-                            print(f"  ↺ Watch auto-retried (attempt {attempt}): {error_message}")
-                            time.sleep(delay_seconds)
-                            continue
-                        failure_summary = f"{mode} failed: {error_message[:160]}"
-                        checkpoint_completed_at = utc_timestamp()
-                        active_checkpoint.update(
-                            {
-                                "status": "failed",
-                                "completed_at": checkpoint_completed_at,
-                                "summary": failure_summary,
-                                "error": error_message,
-                                "transient": transient,
-                                "duration_seconds": _elapsed_seconds(
-                                    active_checkpoint.get("started_at"),
-                                    checkpoint_completed_at,
-                                ),
-                            }
-                        )
-                        state.setdefault("checkpoints", []).append(dict(active_checkpoint))
-                        state["last_run_at"] = active_checkpoint["completed_at"]
-                        state["last_summary"] = failure_summary
-                        state["active_checkpoint"] = {}
-                        save_watch_state(session.session_id, state)
-                        append_event(
-                            session.session_id,
-                            kind="checkpoint",
-                            content=failure_summary,
-                            metadata={
-                                "summary": failure_summary,
-                                "mode": mode,
-                                "poll": state["poll_count"],
-                                "plan_id": plan_id,
-                                "task_id": task_id,
-                                "status": "failed",
-                                "error": error_message,
-                                "retry_count": attempt,
-                                "retry_delay_seconds": _watch_retry_delay_total(state),
-                                "elapsed_seconds": active_checkpoint.get("duration_seconds"),
-                            },
-                        )
-                        if not config.output_json:
-                            print(
-                                f"  ⚠ Watch stopped — exhausted retries after {attempt} attempt(s)"
-                            )
-                            if _PREFS.get("watch_bell", False):
-                                print("\a", end="", flush=True)
-                        raise OpenClawCliError(
-                            f"Watch poll {state['poll_count']} failed after {attempt} attempt(s): {error_message}"
-                        ) from exc
-                checkpoint_summary = str(result_text or "").strip().splitlines()[0][:160] if str(result_text or "").strip() else f"{mode} checkpoint"
-                checkpoint = {
-                    "poll": state["poll_count"],
-                    "created_at": utc_timestamp(),
-                    "completed_at": utc_timestamp(),
-                    "summary": checkpoint_summary,
-                    "output_path": output_path,
-                    "workspace_signature": workspace_signature,
-                    "status": "completed",
-                    "attempt_count": attempt,
-                    "progress": list(state.get("active_checkpoint", {}).get("progress") or []),
-                    "attempts": list(state.get("active_checkpoint", {}).get("attempts") or []),
-                    "started_at": str(state.get("active_checkpoint", {}).get("started_at") or ""),
-                }
-                checkpoint["duration_seconds"] = _elapsed_seconds(checkpoint.get("started_at") or checkpoint.get("created_at"), checkpoint.get("completed_at"))
-                state.setdefault("checkpoints", []).append(checkpoint)
-                state["workspace_signature"] = workspace_signature
-                state["last_run_at"] = checkpoint["completed_at"]
-                state["last_output_path"] = output_path
-                state["last_summary"] = checkpoint_summary
-                state["last_error"] = ""
-                state["consecutive_failures"] = 0
-                state["status"] = "running"
-                state["updated_at"] = checkpoint["completed_at"]
-                state["active_checkpoint"] = {}
-                save_watch_state(session.session_id, state)
-                append_event(
-                    session.session_id,
-                    kind="checkpoint",
-                    content=checkpoint_summary,
-                    metadata={
-                        "summary": checkpoint_summary,
-                        "mode": mode,
-                        "poll": state["poll_count"],
-                        "output_path": output_path,
-                        "plan_id": plan_id,
-                        "task_id": task_id,
-                        "elapsed_seconds": checkpoint.get("duration_seconds"),
-                        "retry_delay_seconds": _watch_retry_delay_total(state),
-                    },
-                )
-                update_session(
-                    session.session_id,
-                    automation_mode=mode,
-                    automation_status="running",
-                    watch_interval_seconds=interval_seconds,
-                )
-                render_watch_iteration(
-                    iteration=state["poll_count"],
+                state = _watch_run_iteration_with_retry(
+                    session, state,
                     mode=mode,
-                    summary=checkpoint_summary,
-                    output_path=output_path,
-                    output_json=config.output_json,
+                    plan_id=plan_id,
+                    task_id=task_id,
+                    interval_seconds=interval_seconds,
                     max_polls=max_polls,
+                    config=config,
+                    args=args,
+                    workspace_signature=workspace_signature,
+                    force_run_once=force_run_once,
                 )
-
             if max_polls and int(state.get("poll_count", 0) or 0) >= max_polls:
                 break
             time.sleep(interval_seconds)
