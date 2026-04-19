@@ -326,7 +326,6 @@ async def _trigger_scan_handler(request: web.Request) -> web.Response:
     auth_error = _require_api_action_auth(request)
     if auth_error is not None:
         return auth_error
-    import asyncio
 
     from discord_background import _run_proactive_scan
     bot = request.app["bot"]

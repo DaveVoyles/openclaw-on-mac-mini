@@ -62,7 +62,7 @@ from constants import ATTACHMENT_TEXT_MAX_CHARS
 from document_skills import create_word
 from http_session import SessionManager
 from llm import analyze_image as llm_analyze_image
-from trace_context import set_trace as _set_trace, trace_context as _trace_context
+from trace_context import set_trace as _set_trace
 
 log = logging.getLogger(__name__)
 
