@@ -175,7 +175,7 @@ MANIFEST: dict = {
                 "should_escape": False,
             },
             {
-                "command": "/dropbox",
+                "command": "/clawbox",
                 "description": "Browse recent files in your Dropbox watch folder",
                 "usage_hint": "[list]",
                 "should_escape": False,

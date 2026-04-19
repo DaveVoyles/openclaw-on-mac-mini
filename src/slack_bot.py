@@ -4295,7 +4295,7 @@ def create_slack_app():  # type: ignore[return]
     #   /dropbox status          — connection status
     # ------------------------------------------------------------------
 
-    @app.command("/dropbox")
+    @app.command("/clawbox")
     async def handle_slash_dropbox(ack: Any, body: dict[str, Any], client: Any) -> None:
         await ack()
         user_id = body.get("user_id", "")
