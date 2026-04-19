@@ -639,6 +639,7 @@
                     <li><strong>Got a weird error?</strong> Type <code>/status</code> to check if everything is connected properly.</li>
                     <li><strong>Forgot a command?</strong> Just describe what you want: "How do I search my files?" — OpenClaw will tell you the command.</li>
                     <li><strong>Need step-by-step help?</strong> Visit the <a href="/onboarding">interactive setup guide</a> — it walks you through everything.</li>
+                    <li>🏠 <strong>Quick command lookup?</strong> Open OpenClaw in Slack and tap the <strong>Home</strong> tab at the top — all commands and recent files are listed there without needing to remember them.</li>
                 </ul>
             </div>
             <a href="#top" class="back-to-top">↑ Back to top</a>
@@ -660,6 +661,9 @@
                         </ul>
                     </li>
                 </ol>
+                <blockquote>
+                    <p>💡 <strong>Tip:</strong> You can refer to files by name ("edit my report.docx") or just describe what you want — OpenClaw will ask you which file to use if it's unsure.</p>
+                </blockquote>
 
                 <h3>One-time setup</h3>
                 <p>Ask Dave to help set this up — he has an installer script that handles everything automatically. Once done, just drop files in the folder and OpenClaw picks them up.</p>
@@ -981,6 +985,21 @@
             <div class="section-card">
                 <h2 id="connecting-your-accounts">🔗 Connecting Your Accounts</h2>
                 <p>OpenClaw can connect to <strong>your own</strong> Gmail and Dropbox accounts. You set this up yourself with a quick command in Slack — no need to ask Dave. Each person connects their own account, so Chuck's email stays Chuck's and Lisa's stays Lisa's.</p>
+
+                <p>Here's what each connection does — all are optional:</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Connection</th><th>What it does</th><th>Who sets it up</th><th>Do I need it?</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>📧 Gmail</td><td>Read and search your emails with OpenClaw</td><td>You (one-time in Slack)</td><td>Optional — handy for finding past emails</td></tr>
+                            <tr><td>📅 Calendar</td><td>See upcoming events without opening Google Calendar</td><td>Dave (once for everyone)</td><td>Optional — Dave decides</td></tr>
+                            <tr><td>📦 Dropbox</td><td>Automatically process files you drop in Dropbox</td><td>You (one-time in Slack)</td><td>Optional — easier than dragging files into Slack</td></tr>
+                            <tr><td>💻 Windows Sync</td><td>Upload files from a folder on your PC automatically</td><td>Automatic with installer</td><td>Optional — for Windows users only</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <!-- ── Section 32 ── -->
@@ -1016,6 +1035,13 @@
 
                 <p><strong>To disconnect your Gmail:</strong></p>
                 <pre>/email forget</pre>
+
+                <h3>Troubleshooting</h3>
+                <ul>
+                    <li>❌ <strong>Google says "App passwords not available"?</strong> You need to enable 2-Step Verification first — go back to Step 1.</li>
+                    <li>❌ <strong>Still won't connect?</strong> Ask Dave — he can help troubleshoot in a DM. It usually takes 2 minutes.</li>
+                    <li>✅ <strong>Success looks like:</strong> OpenClaw replies <em>"Gmail connected!"</em> in Slack after you run <code>/email setup</code>.</li>
+                </ul>
             </div>
 
             <!-- ── Section 33 ── -->
