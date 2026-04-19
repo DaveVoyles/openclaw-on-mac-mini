@@ -60,6 +60,8 @@ TIMEOUT_SLOW: int = 30        # Web scraping, search APIs
 TIMEOUT_LONG: int = 60        # Container operations, LLM calls
 TIMEOUT_EXTENDED: int = 120   # Image generation, research
 
+DB_TIMEOUT_DEFAULT: int = 10  # seconds; prevent indefinite SQLite lock waits
+
 # ---------------------------------------------------------------------------
 # Config namespace — env vars take precedence over YAML
 # ---------------------------------------------------------------------------

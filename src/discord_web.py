@@ -65,17 +65,53 @@ def _git_sha() -> str:
         return "unknown"
 
 
+def _error_response(
+    code: str,
+    message: str,
+    status: int = 400,
+    details: dict | None = None,
+) -> web.Response:
+    """Return a standardized JSON error response."""
+    body: dict = {"error": code, "message": message}
+    if details:
+        body["details"] = details
+    return web.json_response(body, status=status)
+
+
 async def _health_handler(request: web.Request) -> web.Response:
     bot = request.app["bot"]
     uptime_s = time.monotonic() - bot.start_time
+    checks: dict[str, str] = {}
+
+    # Lightweight DB check (timeout=2 to keep /health fast)
+    try:
+        from thread_store import DB_PATH as _health_db_path
+        conn = sqlite3.connect(str(_health_db_path), timeout=2)
+        conn.execute("SELECT 1")
+        conn.close()
+        checks["db"] = "ok"
+    except Exception:
+        checks["db"] = "error"
+
+    # Vector store check (best-effort import only)
+    try:
+        from vector_store import _get_client
+        _get_client().heartbeat()
+        checks["vector_store"] = "ok"
+    except Exception:
+        checks["vector_store"] = "unavailable"
+
+    overall = "healthy" if checks.get("db") == "ok" else "degraded"
     payload = {
-        "status": "healthy",
+        "status": overall,
         "uptime_seconds": round(uptime_s, 1),
         "bot_user": str(bot.user) if bot.user else None,
         "guilds": len(bot.guilds),
         "python": platform.python_version(),
         "discord_py": discord.__version__,
         "git_sha": _git_sha(),
+        "checks": checks,
+        "ts": time.time(),
     }
     return web.json_response(payload)
 
@@ -268,9 +304,9 @@ async def _webhook_handler(request: web.Request) -> web.Response:
     if WEBHOOK_REQUIRE_AUTH:
         if not WEBHOOK_SECRET:
             log.error("Webhook rejected: WEBHOOK_REQUIRE_AUTH=true but WEBHOOK_SECRET is not configured")
-            return web.json_response({"error": "webhook auth not configured"}, status=503)
+            return _error_response("INTERNAL_ERROR", "webhook auth not configured", status=503)
         if not _is_authorized_bearer(request, WEBHOOK_SECRET):
-            return web.json_response({"error": "unauthorized"}, status=401)
+            return _error_response("UNAUTHORIZED", "unauthorized", status=401)
 
     from webhook_formatter import FORMATTERS, format_generic
 
@@ -350,9 +386,9 @@ def _require_api_action_auth(request: web.Request) -> web.Response | None:
         return None
     if not API_ACTION_TOKEN:
         log.error("API action auth required but DASHBOARD_API_TOKEN is not configured")
-        return web.json_response({"error": "api action auth not configured"}, status=503)
+        return _error_response("INTERNAL_ERROR", "api action auth not configured", status=503)
     if not _is_authorized_bearer(request, API_ACTION_TOKEN):
-        return web.json_response({"error": "unauthorized"}, status=401)
+        return _error_response("UNAUTHORIZED", "unauthorized", status=401)
     return None
 
 

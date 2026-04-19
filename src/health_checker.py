@@ -262,7 +262,7 @@ async def check_database(db_path: Path = Path("data/conversations.db")) -> Healt
             )
 
         # Try to connect and query
-        conn = sqlite3.connect(str(db_path))
+        conn = sqlite3.connect(str(db_path), timeout=10)
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
         table_count = cursor.fetchone()[0]

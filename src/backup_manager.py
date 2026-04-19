@@ -159,8 +159,8 @@ class BackupManager:
                 # Create backup using SQLite backup API
                 backup_file = db_dir / db_file.name
 
-                source = sqlite3.connect(str(db_file))
-                dest = sqlite3.connect(str(backup_file))
+                source = sqlite3.connect(str(db_file), timeout=10)
+                dest = sqlite3.connect(str(backup_file), timeout=10)
 
                 source.backup(dest)
 

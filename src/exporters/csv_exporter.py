@@ -82,7 +82,7 @@ async def _export_conversations(days: int | None, filters: dict[str, Any]) -> pd
     if days:
         cutoff = (datetime.now() - timedelta(days=days)).isoformat()
 
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), timeout=10)
     try:
         # Check if table exists
         cursor = conn.execute(
@@ -123,7 +123,7 @@ async def _export_trends(days: int | None, filters: dict[str, Any]) -> pd.DataFr
     if days:
         cutoff_ts = (datetime.now() - timedelta(days=days)).timestamp()
 
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), timeout=10)
     try:
         # Check if table exists
         cursor = conn.execute(
@@ -197,7 +197,7 @@ async def _export_costs(days: int | None, filters: dict[str, Any]) -> pd.DataFra
     if not db_path.exists():
         return pd.DataFrame()
 
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), timeout=10)
     try:
         # Check if cost tracking table exists
         cursor = conn.execute(

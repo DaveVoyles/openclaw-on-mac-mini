@@ -57,7 +57,7 @@ class CorrelationEngine:
             return
 
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with sqlite3.connect(self.db_path, timeout=10) as conn:
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS correlation_cache (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -103,7 +103,7 @@ class CorrelationEngine:
             cutoff = (datetime.now() - timedelta(days=days)).timestamp()
 
             try:
-                with sqlite3.connect(self.db_path) as conn:
+                with sqlite3.connect(self.db_path, timeout=10) as conn:
                     query = """
                         SELECT timestamp, volume
                         FROM trend_data
@@ -289,7 +289,7 @@ class CorrelationEngine:
     def _cache_correlation(self, result: CorrelationInsight) -> None:
         """Cache correlation result in database."""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with sqlite3.connect(self.db_path, timeout=10) as conn:
                 conn.execute("""
                     INSERT OR REPLACE INTO correlation_cache
                     (metric_a, metric_b, correlation, p_value, strength,

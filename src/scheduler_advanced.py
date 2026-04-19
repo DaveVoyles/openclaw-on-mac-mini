@@ -205,7 +205,7 @@ class SchedulerDatabase:
 
     def _init_db(self):
         """Initialize database schema."""
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=10) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS advanced_tasks (
                     task_id TEXT PRIMARY KEY,
@@ -255,7 +255,7 @@ class SchedulerDatabase:
 
     def save_task(self, task: AdvancedTask) -> None:
         """Persist task to database."""
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=10) as conn:
             conn.execute("""
                 INSERT OR REPLACE INTO advanced_tasks VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
@@ -283,7 +283,7 @@ class SchedulerDatabase:
     def load_tasks(self) -> list[AdvancedTask]:
         """Load all tasks from database."""
         tasks = []
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=10) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute("SELECT * FROM advanced_tasks")
             for row in cursor:
@@ -312,7 +312,7 @@ class SchedulerDatabase:
 
     def delete_task(self, task_id: str) -> bool:
         """Delete task from database."""
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=10) as conn:
             cursor = conn.execute("DELETE FROM advanced_tasks WHERE task_id = ?", (task_id,))
             conn.commit()
             return cursor.rowcount > 0
@@ -326,7 +326,7 @@ class SchedulerDatabase:
         retry_attempt: int = 0,
     ) -> int:
         """Log task execution."""
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=10) as conn:
             cursor = conn.execute("""
                 INSERT INTO execution_logs (
                     task_id, executed_at, status, result, duration_ms, retry_attempt
@@ -349,7 +349,7 @@ class SchedulerDatabase:
     ) -> list[ExecutionLog]:
         """Retrieve execution history."""
         logs = []
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=10) as conn:
             conn.row_factory = sqlite3.Row
             if task_id:
                 cursor = conn.execute("""

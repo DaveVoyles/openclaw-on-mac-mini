@@ -14,6 +14,19 @@ from aiohttp import web
 
 log = logging.getLogger("openclaw.api.export")
 
+
+def _error_response(
+    code: str,
+    message: str,
+    status: int = 400,
+    details: dict | None = None,
+) -> web.Response:
+    """Return a standardized JSON error response."""
+    body: dict = {"error": code, "message": message}
+    if details:
+        body["details"] = details
+    return web.json_response(body, status=status)
+
 # Simple in-memory API key store (in production, use database)
 API_KEYS = {
     os.getenv("EXPORT_API_KEY", "openclaw_export_key_demo"): {
@@ -69,11 +82,11 @@ async def export_conversations_handler(request: web.Request) -> web.Response:
     # Verify API key
     api_key = verify_api_key(request)
     if not api_key:
-        return web.json_response({"error": "Invalid API key"}, status=401)
+        return _error_response("UNAUTHORIZED", "Invalid API key", status=401)
 
     # Check rate limit
     if not check_rate_limit(api_key):
-        return web.json_response({"error": "Rate limit exceeded"}, status=429)
+        return _error_response("RATE_LIMITED", "Rate limit exceeded", status=429)
 
     # Parse parameters
     format_type = request.query.get("format", "csv")
@@ -102,10 +115,10 @@ async def export_conversations_handler(request: web.Request) -> web.Response:
             from exporters import export_to_parquet
             result = await export_to_parquet("conversations", output_path, days=days, filters=filters)
         else:
-            return web.json_response({"error": "Invalid format"}, status=400)
+            return _error_response("INVALID_REQUEST", "Invalid format", status=400)
 
         if not result["success"]:
-            return web.json_response({"error": result.get("error", "Export failed")}, status=500)
+            return _error_response("INTERNAL_ERROR", result.get("error", "Export failed"), status=500)
 
         # Schedule cleanup after 24 hours
         asyncio.create_task(_cleanup_file_after_delay(output_path, delay_hours=24))
@@ -121,17 +134,17 @@ async def export_conversations_handler(request: web.Request) -> web.Response:
 
     except Exception as e:  # broad: intentional
         log.error(f"Export failed: {e}", exc_info=True)
-        return web.json_response({"error": str(e)}, status=500)
+        return _error_response("INTERNAL_ERROR", str(e), status=500)
 
 
 async def export_trends_handler(request: web.Request) -> web.Response:
     """GET /api/export/trends?metric=stock_prices&format=parquet&days=90"""
     api_key = verify_api_key(request)
     if not api_key:
-        return web.json_response({"error": "Invalid API key"}, status=401)
+        return _error_response("UNAUTHORIZED", "Invalid API key", status=401)
 
     if not check_rate_limit(api_key):
-        return web.json_response({"error": "Rate limit exceeded"}, status=429)
+        return _error_response("RATE_LIMITED", "Rate limit exceeded", status=429)
 
     format_type = request.query.get("format", "csv")
     days = int(request.query.get("days", "30"))
@@ -160,10 +173,10 @@ async def export_trends_handler(request: web.Request) -> web.Response:
             from exporters import export_to_parquet
             result = await export_to_parquet("trends", output_path, days=days, filters=filters)
         else:
-            return web.json_response({"error": "Invalid format"}, status=400)
+            return _error_response("INVALID_REQUEST", "Invalid format", status=400)
 
         if not result["success"]:
-            return web.json_response({"error": result.get("error", "Export failed")}, status=500)
+            return _error_response("INTERNAL_ERROR", result.get("error", "Export failed"), status=500)
 
         asyncio.create_task(_cleanup_file_after_delay(output_path, delay_hours=24))
 
@@ -174,22 +187,22 @@ async def export_trends_handler(request: web.Request) -> web.Response:
 
     except Exception as e:  # broad: intentional
         log.error(f"Export failed: {e}", exc_info=True)
-        return web.json_response({"error": str(e)}, status=500)
+        return _error_response("INTERNAL_ERROR", str(e), status=500)
 
 
 async def generate_report_handler(request: web.Request) -> web.Response:
     """POST /api/reports/generate"""
     api_key = verify_api_key(request)
     if not api_key:
-        return web.json_response({"error": "Invalid API key"}, status=401)
+        return _error_response("UNAUTHORIZED", "Invalid API key", status=401)
 
     if not check_rate_limit(api_key):
-        return web.json_response({"error": "Rate limit exceeded"}, status=429)
+        return _error_response("RATE_LIMITED", "Rate limit exceeded", status=429)
 
     try:
         data = await request.json()
     except (json.JSONDecodeError, ValueError):
-        return web.json_response({"error": "Invalid JSON"}, status=400)
+        return _error_response("INVALID_REQUEST", "Invalid JSON body", status=400)
 
     report_type = data.get("report_type", "weekly_summary")
 
@@ -209,7 +222,7 @@ async def generate_report_handler(request: web.Request) -> web.Response:
         )
 
         if not result["success"]:
-            return web.json_response({"error": result.get("error", "Report generation failed")}, status=500)
+            return _error_response("INTERNAL_ERROR", result.get("error", "Report generation failed"), status=500)
 
         asyncio.create_task(_cleanup_file_after_delay(output_path, delay_hours=24))
 
@@ -220,17 +233,17 @@ async def generate_report_handler(request: web.Request) -> web.Response:
 
     except Exception as e:  # broad: intentional
         log.error(f"Report generation failed: {e}", exc_info=True)
-        return web.json_response({"error": str(e)}, status=500)
+        return _error_response("INTERNAL_ERROR", str(e), status=500)
 
 
 async def list_backups_handler(request: web.Request) -> web.Response:
     """GET /api/backups/list"""
     api_key = verify_api_key(request)
     if not api_key:
-        return web.json_response({"error": "Invalid API key"}, status=401)
+        return _error_response("UNAUTHORIZED", "Invalid API key", status=401)
 
     if not check_rate_limit(api_key):
-        return web.json_response({"error": "Rate limit exceeded"}, status=429)
+        return _error_response("RATE_LIMITED", "Rate limit exceeded", status=429)
 
     try:
         from backup_manager import BackupManager
@@ -257,17 +270,17 @@ async def list_backups_handler(request: web.Request) -> web.Response:
 
     except Exception as e:  # broad: intentional
         log.error(f"List backups failed: {e}", exc_info=True)
-        return web.json_response({"error": str(e)}, status=500)
+        return _error_response("INTERNAL_ERROR", str(e), status=500)
 
 
 async def create_backup_handler(request: web.Request) -> web.Response:
     """POST /api/backups/create"""
     api_key = verify_api_key(request)
     if not api_key:
-        return web.json_response({"error": "Invalid API key"}, status=401)
+        return _error_response("UNAUTHORIZED", "Invalid API key", status=401)
 
     if not check_rate_limit(api_key):
-        return web.json_response({"error": "Rate limit exceeded"}, status=429)
+        return _error_response("RATE_LIMITED", "Rate limit exceeded", status=429)
 
     try:
         data = await request.json()
@@ -284,11 +297,11 @@ async def create_backup_handler(request: web.Request) -> web.Response:
         if result["success"]:
             return web.json_response(result)
         else:
-            return web.json_response({"error": result.get("error", "Backup failed")}, status=500)
+            return _error_response("INTERNAL_ERROR", result.get("error", "Backup failed"), status=500)
 
     except Exception as e:  # broad: intentional
         log.error(f"Backup creation failed: {e}", exc_info=True)
-        return web.json_response({"error": str(e)}, status=500)
+        return _error_response("INTERNAL_ERROR", str(e), status=500)
 
 
 async def _cleanup_file_after_delay(file_path: Path, delay_hours: int = 24):

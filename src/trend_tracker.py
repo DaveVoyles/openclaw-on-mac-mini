@@ -94,7 +94,7 @@ class TrendTracker:
         """Get or create database connection."""
         if self._db is None:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._db = sqlite3.connect(str(self.db_path), check_same_thread=False)
+            self._db = sqlite3.connect(str(self.db_path), check_same_thread=False, timeout=10)
             self._db.row_factory = sqlite3.Row
             self._db.execute("PRAGMA journal_mode=WAL")
         return self._db

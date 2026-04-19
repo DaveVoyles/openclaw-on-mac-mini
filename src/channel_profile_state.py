@@ -139,7 +139,7 @@ def _get_channel_profile_db() -> sqlite3.Connection:
         if _CHANNEL_PROFILE_DB is None:
             db_path = _channel_profile_db_path()
             db_path.parent.mkdir(parents=True, exist_ok=True)
-            _CHANNEL_PROFILE_DB = sqlite3.connect(str(db_path), check_same_thread=False)
+            _CHANNEL_PROFILE_DB = sqlite3.connect(str(db_path), check_same_thread=False, timeout=10)
             _CHANNEL_CONFIG_STATE.db = _CHANNEL_PROFILE_DB
             _CHANNEL_PROFILE_DB.row_factory = sqlite3.Row
             _CHANNEL_PROFILE_DB.execute("PRAGMA journal_mode=WAL")

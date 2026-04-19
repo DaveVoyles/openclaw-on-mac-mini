@@ -157,7 +157,7 @@ class ReportGenerator:
         }
 
         if db_path.exists():
-            conn = sqlite3.connect(str(db_path))
+            conn = sqlite3.connect(str(db_path), timeout=10)
             try:
                 tables = {
                     row[0]

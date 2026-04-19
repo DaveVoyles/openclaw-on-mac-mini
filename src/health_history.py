@@ -21,7 +21,7 @@ class HealthEntry:
 class HealthHistory:
     def __init__(self, db_path: Path = DB_PATH):
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(str(db_path))
+        self.db = sqlite3.connect(str(db_path), timeout=10)
         self.db.execute("""
             CREATE TABLE IF NOT EXISTS health_checks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -85,7 +85,7 @@ class MLTrendAnalyzer:
             return
 
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with sqlite3.connect(self.db_path, timeout=10) as conn:
                 # Table may already exist - that's OK
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS trend_data (
@@ -127,7 +127,7 @@ class MLTrendAnalyzer:
         cutoff = (datetime.now() - timedelta(days=days)).timestamp()
 
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with sqlite3.connect(self.db_path, timeout=10) as conn:
                 query = """
                     SELECT timestamp, volume, sentiment
                     FROM trend_data

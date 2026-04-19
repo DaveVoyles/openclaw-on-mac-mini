@@ -56,7 +56,7 @@ class IncidentStore:
             fallback = Path("data/incidents.db")
             fallback.parent.mkdir(parents=True, exist_ok=True)
             self.db_path = fallback
-        self.conn = sqlite3.connect(str(self.db_path))
+        self.conn = sqlite3.connect(str(self.db_path), timeout=10)
         self.conn.row_factory = sqlite3.Row
         self._create_tables()
 
