@@ -294,3 +294,26 @@ docker compose -f docker-compose.prod.yml up -d --build
 - a new image starts but core `/ask` or dashboard behavior regresses
 
 If rollback does not restore service, move to [Troubleshooting](TROUBLESHOOTING.md) and inspect logs before making additional changes.
+
+---
+
+## Google OAuth2 — Drive and Contacts Scopes
+
+The `/drive` and `/contacts` Slack commands require additional Google OAuth2 scopes beyond the base Calendar scope.
+
+If those commands return **403 Forbidden**, the stored refresh token was issued without Drive or Contacts scopes. Re-authorize by running:
+
+```bash
+python scripts/google_oauth_setup.py
+```
+
+When prompted to choose scopes, ensure all of the following are included:
+
+| Scope | Used by |
+|---|---|
+| `https://www.googleapis.com/auth/calendar` | `/calendar` (existing) |
+| `https://www.googleapis.com/auth/drive.readonly` | `/drive list`, `/drive read` |
+| `https://www.googleapis.com/auth/drive.file` | `/drive upload` |
+| `https://www.googleapis.com/auth/contacts.readonly` | `/contacts search`, `/contacts get` |
+
+After re-authorizing, replace `GOOGLE_OAUTH_REFRESH_TOKEN` in `.env` with the new token and restart the bot.

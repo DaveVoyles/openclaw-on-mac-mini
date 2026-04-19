@@ -4732,6 +4732,154 @@ def _register_integration_handlers(app: Any) -> None:
             ),
         )
 
+    # ------------------------------------------------------------------
+    # /drive — Google Drive file browser and uploader
+    # ------------------------------------------------------------------
+    # Subcommands:
+    #   /drive list [query]       — list Drive files, optional Drive query syntax
+    #   /drive read <file_id>     — read/export a file as plain text
+    #   /drive upload <name> <content> — (advanced) create a new text file
+    # ------------------------------------------------------------------
+
+    @app.command("/drive")
+    async def handle_slash_drive(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id: str = body.get("user_id", "")
+        channel_id: str = body.get("channel_id", user_id)
+        text: str = (body.get("text") or "").strip()
+        parts = text.split(None, 1)
+        sub = parts[0].lower() if parts else "list"
+        arg = parts[1] if len(parts) > 1 else ""
+
+        if not _GOOGLE_REFRESH_TOKEN:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="📁 Google Drive is not connected. Ask Dave to run `scripts/google_oauth_setup.py` with Drive scopes.",
+            )
+            return
+
+        try:
+            from calendar_skills import list_drive_files, read_drive_file, upload_drive_file
+        except ImportError:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="❌ Drive skills module not found.",
+            )
+            return
+
+        if sub in ("list", ""):
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=f"📁 Listing Drive files{f' matching `{arg}`' if arg else ''}…",
+            )
+            result = await list_drive_files(query=arg)
+        elif sub == "read":
+            if not arg:
+                await client.chat_postEphemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="Usage: `/drive read <file_id>`",
+                )
+                return
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=f"📄 Reading Drive file `{arg}`…",
+            )
+            result = await read_drive_file(file_id=arg)
+        else:
+            result = (
+                "📁 *Drive commands:*\n"
+                "• `/drive list [query]` — list files (optional Drive query filter)\n"
+                "• `/drive read <file_id>` — read/export a file as plain text"
+            )
+
+        await client.chat_postEphemeral(
+            channel=channel_id,
+            user=user_id,
+            text=result,
+        )
+
+    # ------------------------------------------------------------------
+    # /contacts — Google People / Contacts search
+    # ------------------------------------------------------------------
+    # Subcommands:
+    #   /contacts search <query>       — search contacts by name or email
+    #   /contacts get <resource_name>  — get full contact details
+    # ------------------------------------------------------------------
+
+    @app.command("/contacts")
+    async def handle_slash_contacts(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id: str = body.get("user_id", "")
+        channel_id: str = body.get("channel_id", user_id)
+        text: str = (body.get("text") or "").strip()
+        parts = text.split(None, 1)
+        sub = parts[0].lower() if parts else ""
+        arg = parts[1] if len(parts) > 1 else ""
+
+        if not _GOOGLE_REFRESH_TOKEN:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="👤 Google Contacts is not connected. Ask Dave to run `scripts/google_oauth_setup.py` with Contacts scopes.",
+            )
+            return
+
+        try:
+            from calendar_skills import get_contact, search_contacts
+        except ImportError:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="❌ Contacts skills module not found.",
+            )
+            return
+
+        if sub == "search":
+            if not arg:
+                await client.chat_postEphemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="Usage: `/contacts search <name or email>`",
+                )
+                return
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=f"👤 Searching contacts for `{arg}`…",
+            )
+            result = await search_contacts(query=arg)
+        elif sub == "get":
+            if not arg:
+                await client.chat_postEphemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="Usage: `/contacts get <resource_name>` (e.g. `people/c1234`)",
+                )
+                return
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=f"👤 Fetching contact `{arg}`…",
+            )
+            result = await get_contact(resource_name=arg)
+        else:
+            result = (
+                "👤 *Contacts commands:*\n"
+                "• `/contacts search <query>` — search by name or email\n"
+                "• `/contacts get <resource_name>` — full contact details (e.g. `people/c1234`)"
+            )
+
+        await client.chat_postEphemeral(
+            channel=channel_id,
+            user=user_id,
+            text=result,
+        )
+
 
 
 def create_slack_app() -> Any | None:  # type: ignore[return]

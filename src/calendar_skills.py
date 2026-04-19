@@ -36,6 +36,23 @@ GOOGLE_REFRESH_TOKEN = _cfg.google_oauth_refresh_token
 
 _TOKEN_URL = "https://oauth2.googleapis.com/token"
 _CALENDAR_BASE = "https://www.googleapis.com/calendar/v3"
+_DRIVE_BASE = "https://www.googleapis.com/drive/v3"
+_DRIVE_UPLOAD_BASE = "https://www.googleapis.com/upload/drive/v3"
+_PEOPLE_BASE = "https://people.googleapis.com/v1"
+
+# ---------------------------------------------------------------------------
+# Required Google OAuth2 scopes (add when re-authorizing via
+# scripts/google_oauth_setup.py):
+#
+#   https://www.googleapis.com/auth/calendar             (existing — calendar R/W)
+#   https://www.googleapis.com/auth/drive.readonly       (list + read Drive files)
+#   https://www.googleapis.com/auth/drive.file           (upload Drive files)
+#   https://www.googleapis.com/auth/contacts.readonly    (search/get Contacts)
+#
+# If /drive or /contacts commands return HTTP 403, the current refresh token
+# was issued without these scopes.  Re-run the setup script and replace
+# GOOGLE_OAUTH_REFRESH_TOKEN in .env with the new token.
+# ---------------------------------------------------------------------------
 
 _http_session: aiohttp.ClientSession | None = None
 
@@ -292,10 +309,6 @@ async def get_todays_events() -> str:
     return "\n".join(lines)
 
 
-# ---------------------------------------------------------------------------
-# Registry
-# ---------------------------------------------------------------------------
-
 async def delete_calendar_event(event_id: str) -> str:
     """Delete a Google Calendar event by its ID."""
     if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET and GOOGLE_REFRESH_TOKEN):
@@ -321,9 +334,343 @@ async def delete_calendar_event(event_id: str) -> str:
         return f"❌ Calendar delete error: {e}"
 
 
+# ---------------------------------------------------------------------------
+# Google Drive skills
+# ---------------------------------------------------------------------------
+
+
+async def list_drive_files(query: str = "", max_results: int = 10) -> str:
+    """List files in Google Drive, optionally filtered by query (Drive query syntax)."""
+    if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET and GOOGLE_REFRESH_TOKEN):
+        return _not_configured()
+
+    token = await _get_access_token()
+    if not token:
+        return "❌ Failed to obtain Google access token. Check your OAuth credentials."
+
+    max_results = min(max(max_results, 1), 50)
+    params: dict = {
+        "pageSize": str(max_results),
+        "fields": "files(id,name,mimeType,modifiedTime,size)",
+        "orderBy": "modifiedTime desc",
+    }
+    if query:
+        params["q"] = query
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        session = await _get_session()
+        async with session.get(
+            f"{_DRIVE_BASE}/files",
+            headers=headers,
+            params=params,
+        ) as resp:
+            if resp.status == 403:
+                body = await resp.text()
+                return (
+                    "❌ Drive API returned 403 Forbidden.\n"
+                    "The current refresh token may lack Drive scopes.\n"
+                    "Re-run `python scripts/google_oauth_setup.py` and add "
+                    "`drive.readonly` scope, then update GOOGLE_OAUTH_REFRESH_TOKEN in .env.\n"
+                    f"Details: {body[:200]}"
+                )
+            if resp.status != 200:
+                body = await resp.text()
+                return f"❌ Drive API error {resp.status}: {body[:200]}"
+            data = await resp.json()
+    except Exception as e:  # broad: intentional
+        return f"❌ Drive request failed: {e}"
+
+    files = data.get("files", [])
+    if not files:
+        label = f" matching `{query}`" if query else ""
+        return f"✅ No files found{label}."
+
+    lines = [f"**Google Drive Files** ({len(files)} result(s){f' — query: `{query}`' if query else ''})"]
+    for f in files:
+        name = f.get("name", "(unnamed)")
+        fid = f.get("id", "?")
+        mime = f.get("mimeType", "")
+        modified = (f.get("modifiedTime") or "")[:10]
+        size_bytes = f.get("size")
+        size_str = f" · {int(size_bytes):,} B" if size_bytes else ""
+        lines.append(f"• **{name}**{size_str} · `{fid}` · {modified} · {mime}")
+
+    return _truncate("\n".join(lines))
+
+
+async def read_drive_file(file_id: str) -> str:
+    """Read/export a Google Drive file as plain text.
+
+    Supports Google Docs (exported as text/plain), Google Sheets (exported as CSV),
+    and regular files downloaded as-is.
+    """
+    if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET and GOOGLE_REFRESH_TOKEN):
+        return _not_configured()
+
+    token = await _get_access_token()
+    if not token:
+        return "❌ Failed to obtain Google access token. Check your OAuth credentials."
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Fetch file metadata first to determine MIME type
+    try:
+        session = await _get_session()
+        async with session.get(
+            f"{_DRIVE_BASE}/files/{file_id}",
+            headers=headers,
+            params={"fields": "id,name,mimeType"},
+        ) as meta_resp:
+            if meta_resp.status == 403:
+                return (
+                    "❌ Drive API returned 403 Forbidden. "
+                    "Ensure the refresh token has `drive.readonly` scope."
+                )
+            if meta_resp.status != 200:
+                body = await meta_resp.text()
+                return f"❌ Drive metadata error {meta_resp.status}: {body[:200]}"
+            meta = await meta_resp.json()
+    except Exception as e:
+        return f"❌ Drive metadata request failed: {e}"
+
+    name = meta.get("name", file_id)
+    mime = meta.get("mimeType", "")
+
+    # Choose export vs download URL
+    _GOOGLE_DOC_TYPES = {
+        "application/vnd.google-apps.document": ("export", "text/plain"),
+        "application/vnd.google-apps.spreadsheet": ("export", "text/csv"),
+        "application/vnd.google-apps.presentation": ("export", "text/plain"),
+    }
+
+    try:
+        session = await _get_session()
+        if mime in _GOOGLE_DOC_TYPES:
+            mode, export_mime = _GOOGLE_DOC_TYPES[mime]
+            async with session.get(
+                f"{_DRIVE_BASE}/files/{file_id}/export",
+                headers=headers,
+                params={"mimeType": export_mime},
+            ) as resp:
+                if resp.status != 200:
+                    body = await resp.text()
+                    return f"❌ Drive export error {resp.status}: {body[:200]}"
+                content = await resp.text()
+        else:
+            async with session.get(
+                f"{_DRIVE_BASE}/files/{file_id}",
+                headers=headers,
+                params={"alt": "media"},
+            ) as resp:
+                if resp.status != 200:
+                    body = await resp.text()
+                    return f"❌ Drive download error {resp.status}: {body[:200]}"
+                content = await resp.text()
+    except Exception as e:
+        return f"❌ Drive read failed: {e}"
+
+    return _truncate(f"**{name}**\n\n{content}")
+
+
+async def upload_drive_file(name: str, content: str, folder_id: str = "") -> str:
+    """Create a new plain-text file in Google Drive with the given name and content."""
+    if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET and GOOGLE_REFRESH_TOKEN):
+        return _not_configured()
+
+    token = await _get_access_token()
+    if not token:
+        return "❌ Failed to obtain Google access token. Check your OAuth credentials."
+
+    import json as _json
+
+    metadata: dict = {"name": name, "mimeType": "text/plain"}
+    if folder_id:
+        metadata["parents"] = [folder_id]
+
+    boundary = "openclaw_drive_boundary"
+    meta_bytes = _json.dumps(metadata).encode()
+    content_bytes = content.encode("utf-8")
+
+    body = (
+        f"--{boundary}\r\n"
+        f"Content-Type: application/json; charset=UTF-8\r\n\r\n"
+        + _json.dumps(metadata)
+        + f"\r\n--{boundary}\r\n"
+        f"Content-Type: text/plain; charset=UTF-8\r\n\r\n"
+        + content
+        + f"\r\n--{boundary}--"
+    )
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": f"multipart/related; boundary={boundary}",
+    }
+
+    try:
+        session = await _get_session()
+        async with session.post(
+            f"{_DRIVE_UPLOAD_BASE}/files",
+            headers=headers,
+            params={"uploadType": "multipart"},
+            data=body.encode("utf-8"),
+        ) as resp:
+            if resp.status == 403:
+                body_text = await resp.text()
+                return (
+                    "❌ Drive API returned 403 Forbidden. "
+                    "Ensure the refresh token has `drive.file` scope.\n"
+                    f"Details: {body_text[:200]}"
+                )
+            if resp.status not in (200, 201):
+                body_text = await resp.text()
+                return f"❌ Drive upload error {resp.status}: {body_text[:200]}"
+            data = await resp.json()
+    except Exception as e:
+        return f"❌ Drive upload failed: {e}"
+
+    file_id = data.get("id", "?")
+    return (
+        f"✅ File uploaded to Google Drive.\n"
+        f"Name: **{name}**\n"
+        f"ID: `{file_id}`"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Google Contacts / People skills
+# ---------------------------------------------------------------------------
+
+
+async def search_contacts(query: str, max_results: int = 10) -> str:
+    """Search Google Contacts by name or email."""
+    if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET and GOOGLE_REFRESH_TOKEN):
+        return _not_configured()
+
+    token = await _get_access_token()
+    if not token:
+        return "❌ Failed to obtain Google access token. Check your OAuth credentials."
+
+    max_results = min(max(max_results, 1), 30)
+    params = {
+        "query": query,
+        "pageSize": str(max_results),
+        "readMask": "names,emailAddresses,phoneNumbers",
+    }
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        session = await _get_session()
+        async with session.get(
+            f"{_PEOPLE_BASE}/people:searchContacts",
+            headers=headers,
+            params=params,
+        ) as resp:
+            if resp.status == 403:
+                body = await resp.text()
+                return (
+                    "❌ Contacts API returned 403 Forbidden.\n"
+                    "The current refresh token may lack Contacts scopes.\n"
+                    "Re-run `python scripts/google_oauth_setup.py` and add "
+                    "`contacts.readonly` scope, then update GOOGLE_OAUTH_REFRESH_TOKEN in .env.\n"
+                    f"Details: {body[:200]}"
+                )
+            if resp.status != 200:
+                body = await resp.text()
+                return f"❌ Contacts API error {resp.status}: {body[:200]}"
+            data = await resp.json()
+    except Exception as e:
+        return f"❌ Contacts search failed: {e}"
+
+    results = data.get("results", [])
+    if not results:
+        return f"✅ No contacts found matching `{query}`."
+
+    lines = [f"**Contacts matching `{query}`** ({len(results)} result(s))"]
+    for r in results:
+        person = r.get("person", {})
+        names = person.get("names", [])
+        display = names[0].get("displayName", "(no name)") if names else "(no name)"
+        emails = [e.get("value", "") for e in person.get("emailAddresses", [])]
+        phones = [p.get("value", "") for p in person.get("phoneNumbers", [])]
+        parts = [f"**{display}**"]
+        if emails:
+            parts.append(", ".join(emails))
+        if phones:
+            parts.append(", ".join(phones))
+        lines.append("• " + " · ".join(parts))
+
+    return _truncate("\n".join(lines))
+
+
+async def get_contact(resource_name: str) -> str:
+    """Get detailed info for a specific Google Contact by resource name (e.g. people/c1234)."""
+    if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET and GOOGLE_REFRESH_TOKEN):
+        return _not_configured()
+
+    token = await _get_access_token()
+    if not token:
+        return "❌ Failed to obtain Google access token. Check your OAuth credentials."
+
+    params = {
+        "personFields": "names,emailAddresses,phoneNumbers,organizations,addresses",
+    }
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        session = await _get_session()
+        async with session.get(
+            f"{_PEOPLE_BASE}/{resource_name}",
+            headers=headers,
+            params=params,
+        ) as resp:
+            if resp.status == 403:
+                body = await resp.text()
+                return (
+                    "❌ Contacts API returned 403 Forbidden. "
+                    "Ensure the refresh token has `contacts.readonly` scope.\n"
+                    f"Details: {body[:200]}"
+                )
+            if resp.status != 200:
+                body = await resp.text()
+                return f"❌ Contacts API error {resp.status}: {body[:200]}"
+            person = await resp.json()
+    except Exception as e:
+        return f"❌ Contact fetch failed: {e}"
+
+    names = person.get("names", [])
+    display = names[0].get("displayName", "(no name)") if names else "(no name)"
+    emails = [e.get("value", "") for e in person.get("emailAddresses", [])]
+    phones = [p.get("value", "") for p in person.get("phoneNumbers", [])]
+    orgs = [o.get("name", "") for o in person.get("organizations", [])]
+    addrs = [a.get("formattedValue", "") for a in person.get("addresses", [])]
+
+    lines = [f"**{display}** (`{resource_name}`)"]
+    if emails:
+        lines.append(f"📧 Email: {', '.join(emails)}")
+    if phones:
+        lines.append(f"📞 Phone: {', '.join(phones)}")
+    if orgs:
+        lines.append(f"🏢 Org: {', '.join(orgs)}")
+    if addrs:
+        lines.append(f"📍 Address: {'; '.join(addrs)}")
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Registry
+# ---------------------------------------------------------------------------
+
 CALENDAR_SKILLS = {
     "get_upcoming_events": get_upcoming_events,
     "create_calendar_event": create_calendar_event,
     "get_todays_events": get_todays_events,
     "delete_calendar_event": delete_calendar_event,
+    "list_drive_files": list_drive_files,
+    "read_drive_file": read_drive_file,
+    "upload_drive_file": upload_drive_file,
+    "search_contacts": search_contacts,
+    "get_contact": get_contact,
 }
