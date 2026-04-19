@@ -1295,6 +1295,18 @@ def _top_context_bar_lines(
     cwd_label = Path(cwd).name or cwd or "(none)"
     turns = history_len // 2
     turns_label = f"{turns} message{'s' if turns != 1 else ''}" if turns else "new session"
+    if turns >= 60:
+        detail_parts_ctx = [_progress_cell("context", f"{turns} turns", status="error")]
+        cue_parts_ctx = ["context limit approaching — /clear now or responses may be cut off"]
+    elif turns >= 40:
+        detail_parts_ctx = [_progress_cell("context", f"{turns} turns", status="warn")]
+        cue_parts_ctx = ["context is large — quality may degrade; /clear to reset or /save to archive"]
+    elif turns >= 20:
+        detail_parts_ctx = [_progress_cell("context", f"{turns} turns", status="warn")]
+        cue_parts_ctx = ["session is getting long — consider /clear to start fresh"]
+    else:
+        detail_parts_ctx = []
+        cue_parts_ctx = []
     routing_label = "smart" if autoroute_on else "manual"
     summary_parts = [
         _progress_cell("folder", cwd_label),
@@ -1306,8 +1318,8 @@ def _top_context_bar_lines(
     if session and session.files:
         summary_parts.append(_progress_cell("files", str(len(session.files))))
 
-    detail_parts: list[str] = []
-    cue_parts: list[str] = []
+    detail_parts: list[str] = list(detail_parts_ctx)
+    cue_parts: list[str] = list(cue_parts_ctx)
     if not autoroute_on:
         cue_parts.append("routing is manual — run /autoroute on to let openclaw pick the best tool automatically")
     if session:
