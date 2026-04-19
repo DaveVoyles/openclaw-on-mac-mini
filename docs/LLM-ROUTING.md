@@ -142,7 +142,7 @@ Set via `ROUTING_PROFILE` env var or `cfg.routing_profile`.
 
 ### 3. Provider selection for tools
 
-Tool-requiring queries always go to Gemini (native function calling). `select_tool_route()` picks the first available native-tool provider from: Gemini → Anthropic → OpenAI → Copilot → Ollama.
+Tool-requiring queries go to GPT-4o via GitHub Models API when `COPILOT_TOOLS_ENABLED=true` (default), or Gemini when `false`. `select_tool_route()` picks the first available native-tool provider from: Copilot/GPT-4o → Gemini → Anthropic → OpenAI → Ollama.
 
 ---
 
@@ -155,6 +155,8 @@ This is the **single place** where non-Gemini HTTP calls happen. Add new provide
 ```python
 COPILOT_PROXY_URL: str        # env COPILOT_PROXY_URL
 COPILOT_PROXY_ENABLED: bool   # True when proxy URL is set
+GITHUB_MODELS_ENABLED: bool   # True when GitHub Models API is available
+COPILOT_AVAILABLE: bool       # True when COPILOT_PROXY_ENABLED OR GITHUB_MODELS_ENABLED
 
 @dataclass
 class ProviderResponse:
@@ -191,11 +193,12 @@ def reset_token_usage(provider=None) -> None
 | **Audit log** | Every successful call appends a JSONL line to `data/routing_audit.jsonl` |
 | **Async token isolation** | `_last_usage` is a `contextvars.ContextVar` — no cross-contamination under concurrency |
 
-### Copilot proxy routing
+### Copilot / GitHub Models routing
 
-When `COPILOT_PROXY_ENABLED`:
-- OpenAI and Anthropic calls route through `COPILOT_PROXY_URL` with `COPILOT_PROXY_TOKEN`
-- The proxy serves both GPT-4o and Claude models via OpenAI-compatible format
+When `COPILOT_AVAILABLE` (`COPILOT_PROXY_ENABLED` OR `GITHUB_MODELS_ENABLED`):
+- OpenAI and Anthropic calls route through the GitHub Models API (`https://models.github.ai/inference`) with `COPILOT_PROXY_TOKEN`
+- GitHub Models API is the current production path (`GITHUB_MODELS_ENABLED=true`); the local proxy (`COPILOT_PROXY_URL`) is optional/legacy
+- The API serves both GPT-4o and Claude models via OpenAI-compatible format
 
 `model_router.py` re-exports all symbols for backwards compatibility.
 

@@ -287,14 +287,14 @@ graph TB
     subgraph AI ["🤖 AI / LLM Backends"]
         Gemini["Google Gemini\ngemini-2.5-flash\n(primary, tools)"]
         Ollama["Ollama Local\ngemma4:e4b\n(chat + native tools)"]
-        OpenAI["OpenAI GPT-4o\n(via Copilot proxy)"]
-        Anthropic["Anthropic Claude\nSonnet 4.5\n(via Copilot proxy)"]
-        CopilotProxy["Copilot Proxy\nlocalhost:9191\n(routes to OpenAI/Anthropic)"]
+        OpenAI["OpenAI GPT-4o\n(via GitHub Models API)"]
+        Anthropic["Anthropic Claude\nSonnet 4.5\n(via GitHub Models API)"]
+        CopilotProxy["GitHub Models API\nhttps://models.github.ai/inference\n(routes to OpenAI/Anthropic)"]
         ModelRouter["model_router.py\nQuery Classifier"]
     end
 
     LLM -->|"model_router.py"| ModelRouter
-    ModelRouter -->|"tool-calling queries"| Gemini
+    ModelRouter -->|"tool-calling queries\n(COPILOT_TOOLS_ENABLED=true)"| CopilotProxy
     ModelRouter -->|"simple chat"| Ollama
     ModelRouter -->|"code queries"| CopilotProxy
     ModelRouter -->|"creative writing"| CopilotProxy
@@ -508,7 +508,7 @@ graph TB
 | **Knowledge routing**          | `qmd.py` `remember_fact()` → `_classify_fact()` → routes to `user_profile` / `rules_engine` / QMD+ChromaDB based on content                     |
 | **Auto-RAG injection**        | `bot.py` pre-LLM → `vector_store.recall(top_k=5)` + `user_profile` + `rules_engine` → context block injected before every LLM call              |
 | **Multi-model routing**       | `bot.py` → `model_router.py` `classify_query()` → code→Claude, creative→GPT-4o, tools→Gemini, chat→Gemma                                       |
-| **Copilot proxy**             | `llm/chat.py` → model router/copilot bridge → `localhost:9191/v1/chat/completions` → GitHub Copilot API → OpenAI/Anthropic response                              |
+| **GitHub Models API**         | `llm/chat.py` → model router/copilot bridge → `https://models.github.ai/inference/v1/chat/completions` → GitHub Copilot API → OpenAI/Anthropic response                              |
 | **Fact extraction**           | `bot.py` post-response → `fact_extractor.extract_facts()` → `should_store()` similarity check → `qmd.remember_fact()` with confidence=0.6       |
 | **Ollama tool calling**       | `llm/chat.py` + `ollama_tools.py` `ollama_chat_with_tools()` → Ollama API with tool declarations → execute read-only tools → return result           |
 | **Notification prefs**       | `/notify` → `notify_cog.py` → `notification_prefs.py` → `data/notification_prefs.json`; checked before every alert dispatch                      |
@@ -529,16 +529,16 @@ OpenClaw supports 5 model backends, selected automatically by `model_router.py` 
 | ---------- | ------------------ | ------------------------- | --------------------------------- |
 | `gemini`   | Gemini 2.5 Flash   | Google AI API             | Tool calling, complex analysis    |
 | `local`    | Gemma 4 E4B        | Ollama (localhost:11434)  | Simple chat, native tool calling  |
-| `openai`   | GPT-4o             | Copilot proxy (:9191)     | Creative writing, general knowledge |
-| `anthropic`| Claude Sonnet 4.5  | Copilot proxy (:9191)     | Code review, careful reasoning    |
+| `openai`   | GPT-4o             | GitHub Models API         | Creative writing, general knowledge, tool calling |
+| `anthropic`| Claude Sonnet 4.5  | GitHub Models API         | Code review, careful reasoning    |
 | `auto`     | (classified)       | (routed by category)      | Default — picks best model        |
 
-### Copilot Proxy Architecture
+### GitHub Models API Architecture
 
-GPT-4o and Claude are accessed through a local proxy server that translates OpenAI-compatible API calls using your GitHub Copilot subscription. No separate API keys needed.
+GPT-4o and Claude are accessed through the GitHub Models API (`https://models.github.ai/inference`), which provides OpenAI-compatible endpoints backed by your GitHub Copilot subscription. No separate API keys needed. The local Copilot proxy (`localhost:9191`) is optional/legacy.
 
 ```
-Bot (`llm/chat.py`) → `model_router.py` (classify) → Copilot Proxy (:9191) → GitHub Copilot API → OpenAI/Anthropic
+Bot (`llm/chat.py`) → `model_router.py` (classify) → GitHub Models API (models.github.ai) → OpenAI/Anthropic
 ```
 
 Setup: `bash scripts/setup-copilot-proxy.sh`

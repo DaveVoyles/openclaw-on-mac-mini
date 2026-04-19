@@ -53,19 +53,19 @@ Available values: `copilot-first | balanced | gemini-first | cost-saver`.
 
 | `COPILOT_TOOLS_ENABLED` | Model | Provider |
 | --- | --- | --- |
-| `false` (default) | Gemini | Direct — reliable native function calling |
-| `true` (opt-in, W29) | `gpt-4o` | Copilot proxy — enterprise function calling |
+| `true` (default) | `gpt-4o` | GitHub Models API — enterprise function calling |
+| `false` (fallback) | Gemini | Direct — reliable native function calling |
 
 ### Environment variables
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `ROUTING_PROFILE` | `copilot-first` | System-wide routing profile |
-| `COPILOT_PROXY_URL` | `http://host.docker.internal:9191/v1` | Copilot proxy endpoint |
+| `COPILOT_PROXY_URL` | `http://host.docker.internal:9191/v1` | Copilot proxy endpoint (optional; GitHub Models is the default path) |
 | `OPENAI_MODEL` | `gpt-4o` | Default Copilot non-code model |
 | `ANTHROPIC_MODEL` | `claude-sonnet-4.5` | Default Copilot code model |
 | `COPILOT_REASONING_MODEL` | `o1-mini` | Model for reasoning/math queries (W29) |
-| `COPILOT_TOOLS_ENABLED` | `false` | Allow Copilot proxy to handle tool calls (W29) |
+| `COPILOT_TOOLS_ENABLED` | `true` | Route tool calls to GPT-4o via GitHub Models API (false = Gemini fallback) |
 | `OPENAI_MINI_MODEL` | `gpt-4o-mini` | Fast-path model for short queries |
 
 ---
