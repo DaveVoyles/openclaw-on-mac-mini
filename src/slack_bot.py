@@ -2604,19 +2604,10 @@ async def _get_gmail_body(message_id: str) -> str:
         return "(Could not load email body)"
 
 
-def create_slack_app() -> Any | None:  # type: ignore[return]
-    """Build and return a configured AsyncApp, or None if Slack is disabled."""
-    if not _slack_is_configured():
-        return None
 
-    try:
-        from slack_bolt.async_app import AsyncApp
-    except ImportError:
-        log.error("slack_bolt not installed — run: pip install slack_bolt>=1.18.0")
-        return None
 
-    app = AsyncApp(token=SLACK_BOT_TOKEN)
-
+def _register_core_handlers(app: Any) -> None:
+    """Register core event handlers: App Home, @mention, DM, /chat, reactions, and basic commands."""
     # ------------------------------------------------------------------
     # Handler: App Home tab opened
     # ------------------------------------------------------------------
@@ -3105,6 +3096,10 @@ def create_slack_app() -> Any | None:  # type: ignore[return]
 
         await _process_batch(client, channel, thread_ts, user_files, action)
 
+
+
+def _register_file_handlers(app: Any) -> None:
+    """Register file event handlers: file_shared, Block Kit action buttons, /files command, compare/translate."""
     # ------------------------------------------------------------------
     # Handler: file_shared — auto-brief + Block Kit action buttons
     # ------------------------------------------------------------------
@@ -3506,6 +3501,10 @@ def create_slack_app() -> Any | None:  # type: ignore[return]
             model_pref="gemini",
         )
 
+
+
+def _register_slash_commands(app: Any) -> None:
+    """Register slash command handlers: /metrics, /brief, /mystats, /template, /mypins, /filesearch, /schedule, /clear, /nickname."""
     # ------------------------------------------------------------------
     # Handler: /metrics — usage summary for last 7 days
     # ------------------------------------------------------------------
@@ -3997,6 +3996,10 @@ def create_slack_app() -> Any | None:  # type: ignore[return]
             text=f"✅ Got it! I'll call you *{name}* from now on. 👋",
         )
 
+
+
+def _register_integration_handlers(app: Any) -> None:
+    """Register integration handlers: Gmail (/inbox, /email, /today, /calendar), Dropbox (/clawbox), channels (/clawchan)."""
     # ------------------------------------------------------------------
     # Wave 10 Leia: /inbox — show unread Gmail emails
     # ------------------------------------------------------------------
@@ -4574,6 +4577,26 @@ def create_slack_app() -> Any | None:  # type: ignore[return]
                 "_Note: channel deletion is not supported by Slack's API — archive is the closest option._"
             ),
         )
+
+
+
+def create_slack_app() -> Any | None:  # type: ignore[return]
+    """Build and return a configured AsyncApp, or None if Slack is disabled."""
+    if not _slack_is_configured():
+        return None
+
+    try:
+        from slack_bolt.async_app import AsyncApp
+    except ImportError:
+        log.error("slack_bolt not installed — run: pip install slack_bolt>=1.18.0")
+        return None
+
+    app = AsyncApp(token=SLACK_BOT_TOKEN)
+
+    _register_core_handlers(app)
+    _register_file_handlers(app)
+    _register_slash_commands(app)
+    _register_integration_handlers(app)
 
     return app
 
