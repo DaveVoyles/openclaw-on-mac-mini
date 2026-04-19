@@ -62,6 +62,7 @@ from constants import ATTACHMENT_TEXT_MAX_CHARS
 from document_skills import create_word
 from http_session import SessionManager
 from llm import analyze_image as llm_analyze_image
+from trace_context import set_trace as _set_trace, trace_context as _trace_context
 
 log = logging.getLogger(__name__)
 
@@ -2645,6 +2646,8 @@ def create_slack_app():  # type: ignore[return]
         thread_ts: str = event.get("thread_ts") or msg_ts
         raw_text: str = event.get("text", "")
 
+        _set_trace(command="mention")
+
         asyncio.create_task(_check_new_user_onboarding(user_id, client))
 
         # Strip @mention token(s) and extract optional --model flag
@@ -2715,6 +2718,7 @@ def create_slack_app():  # type: ignore[return]
         raw_text: str = (event.get("text") or "").strip()
         files: list[dict] = event.get("files", [])
 
+        _set_trace(command="dm")
         asyncio.create_task(_check_new_user_onboarding(user_id, client))
 
         if not raw_text and not files:

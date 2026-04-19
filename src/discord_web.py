@@ -29,6 +29,7 @@ from metrics_collector import get_collector
 log = logging.getLogger("openclaw")
 
 from config import cfg as _web_cfg
+from trace_context import set_trace as _set_trace, trace_context as _trace_context
 
 HEALTH_PORT = _web_cfg.health_port
 ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
@@ -301,54 +302,55 @@ async def _webhook_handler(request: web.Request) -> web.Response:
     The handler formats a human-readable Discord notification and posts it
     to ALERT_CHANNEL_ID (if configured), then returns 200 OK.
     """
-    if WEBHOOK_REQUIRE_AUTH:
-        if not WEBHOOK_SECRET:
-            log.error("Webhook rejected: WEBHOOK_REQUIRE_AUTH=true but WEBHOOK_SECRET is not configured")
-            return _error_response("INTERNAL_ERROR", "webhook auth not configured", status=503)
-        if not _is_authorized_bearer(request, WEBHOOK_SECRET):
-            return _error_response("UNAUTHORIZED", "unauthorized", status=401)
-
-    from webhook_formatter import FORMATTERS, format_generic
-
-    bot = request.app["bot"]
     source = request.match_info.get("source", "unknown").lower()
-    try:
-        payload = await request.json()
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        log.debug("Webhook JSON parse failed: %s", exc)
-        payload = {}
+    with _trace_context(command=f"webhook:{source}"):
+        if WEBHOOK_REQUIRE_AUTH:
+            if not WEBHOOK_SECRET:
+                log.error("Webhook rejected: WEBHOOK_REQUIRE_AUTH=true but WEBHOOK_SECRET is not configured")
+                return _error_response("INTERNAL_ERROR", "webhook auth not configured", status=503)
+            if not _is_authorized_bearer(request, WEBHOOK_SECRET):
+                return _error_response("UNAUTHORIZED", "unauthorized", status=401)
 
-    if not isinstance(payload, dict):
-        payload = {"raw": str(payload)}
+        from webhook_formatter import FORMATTERS, format_generic
 
-    formatter = FORMATTERS.get(source)
-    if formatter:
-        title, description, color = formatter(payload)
-    else:
-        title, description, color = format_generic(source, payload)
-    log.info("Webhook received from %s: %s", source, description[:120])
+        bot = request.app["bot"]
+        try:
+            payload = await request.json()
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            log.debug("Webhook JSON parse failed: %s", exc)
+            payload = {}
 
-    if ALERT_CHANNEL_ID:
-        channel = bot.get_channel(ALERT_CHANNEL_ID)
-        if channel:
-            embed = discord.Embed(title=title, description=description, color=color)
-            embed.set_footer(text=f"Incoming webhook → {source}")
-            try:
-                await channel.send(embed=embed)
-            except Exception as e:  # broad: intentional — tests inject generic exceptions
-                log.error("Failed to send webhook notification: %s", e)
+        if not isinstance(payload, dict):
+            payload = {"raw": str(payload)}
 
-            _error_keywords = {"error", "fail", "critical", "down", "unhealthy", "exception", "warning"}
-            payload_lower = json.dumps(payload).lower()
-            event_lower = (payload.get("eventType") or payload.get("event") or "").lower()
-            is_error_event = (
-                any(kw in payload_lower for kw in _error_keywords)
-                or event_lower in ("error", "warning", "applicationupdate", "health")
-            )
-            if is_error_event:
-                asyncio.create_task(_analyze_webhook_event(source, payload, channel))
+        formatter = FORMATTERS.get(source)
+        if formatter:
+            title, description, color = formatter(payload)
+        else:
+            title, description, color = format_generic(source, payload)
+        log.info("Webhook received from %s: %s", source, description[:120])
 
-    return web.json_response({"ok": True})
+        if ALERT_CHANNEL_ID:
+            channel = bot.get_channel(ALERT_CHANNEL_ID)
+            if channel:
+                embed = discord.Embed(title=title, description=description, color=color)
+                embed.set_footer(text=f"Incoming webhook → {source}")
+                try:
+                    await channel.send(embed=embed)
+                except Exception as e:  # broad: intentional — tests inject generic exceptions
+                    log.error("Failed to send webhook notification: %s", e)
+
+                _error_keywords = {"error", "fail", "critical", "down", "unhealthy", "exception", "warning"}
+                payload_lower = json.dumps(payload).lower()
+                event_lower = (payload.get("eventType") or payload.get("event") or "").lower()
+                is_error_event = (
+                    any(kw in payload_lower for kw in _error_keywords)
+                    or event_lower in ("error", "warning", "applicationupdate", "health")
+                )
+                if is_error_event:
+                    asyncio.create_task(_analyze_webhook_event(source, payload, channel))
+
+        return web.json_response({"ok": True})
 
 
 async def _analyze_webhook_event(source: str, payload: dict, channel):
@@ -660,6 +662,7 @@ async def _v1_chat_completions_handler(request: web.Request) -> web.Response | w
     if not prompt:
         return web.json_response({"error": "Last message content is required"}, status=400)
 
+    _set_trace(command="chat_completions")
     history = [{"role": m.get("role", "user"), "content": m.get("content", "")} for m in messages[:-1]]
     model_name = str(body.get("model") or "openclaw-auto")
     model_pref = _OAI_MODEL_MAP.get(model_name, "auto")

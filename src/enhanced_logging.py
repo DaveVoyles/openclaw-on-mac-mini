@@ -39,6 +39,8 @@ class JSONFormatter(logging.Formatter):
             log_data["exception"] = self.formatException(record.exc_info)
 
         # Add extra fields
+        if hasattr(record, "trace_id"):
+            log_data["trace_id"] = record.trace_id
         if hasattr(record, "user_id"):
             log_data["user_id"] = record.user_id
         if hasattr(record, "correlation_id"):

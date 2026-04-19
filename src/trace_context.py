@@ -55,18 +55,41 @@ class TraceLogFilter(logging.Filter):
         return True
 
 
+def set_trace(command: str = "", user_id: int = 0, channel_id: int = 0, **extra) -> None:
+    """Set trace context for the current async task.
+
+    Creates a new TraceContext with a fresh trace_id and stores it in the
+    ContextVar.  Unlike ``trace_context()``, this does *not* automatically
+    reset on exit — call ``clear_trace()`` when the request is done, or use
+    the ``trace_context()`` context manager instead.
+    """
+    ctx = TraceContext(command=command, user_id=user_id, channel_id=channel_id, extra=extra)
+    _current_trace.set(ctx)
+
+
+def clear_trace() -> None:
+    """Clear the trace context for the current async task."""
+    _current_trace.set(None)
+
+
+# Alias kept for callers that use the longer name from the task spec.
+TraceLoggingFilter = TraceLogFilter
+
+
 def setup_trace_logging() -> None:
     """Configure the openclaw logger with trace context injection.
 
-    Call once at startup. Adds a TraceLogFilter to all existing handlers and
-    updates their format strings to include ``[trace_id]``.
+    Call once at startup. Adds a TraceLogFilter to the root logger so all
+    loggers benefit, and updates existing handler format strings to include
+    ``[trace_id]``.
     """
-    logger = logging.getLogger("openclaw")
     trace_filter = TraceLogFilter()
 
-    handlers = logger.handlers or logging.root.handlers
+    # Register on root logger — filter runs once regardless of handler count.
+    logging.root.addFilter(trace_filter)
+
+    handlers = logging.getLogger("openclaw").handlers or logging.root.handlers
     for handler in handlers:
-        handler.addFilter(trace_filter)
         if handler.formatter:
             fmt = handler.formatter._fmt
             if fmt and "trace_id" not in fmt:
