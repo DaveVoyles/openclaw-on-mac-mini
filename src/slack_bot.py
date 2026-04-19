@@ -437,14 +437,16 @@ _MODEL_ALIASES: dict[str, str] = {
 }
 
 _WELCOME_MESSAGE = (
-    "👋 *Hi! I'm OpenClaw — your personal AI assistant.*\n\n"
-    "Here's what I can do:\n"
-    "• 📄 *Edit or proofread a document* → drag in a Word file and say \"fix this\" or \"make it more professional\"\n"
-    "• 📊 *Understand a spreadsheet* → upload your Excel file and ask \"what does this show?\" or \"summarize this\"\n"
-    "• 💬 *Answer any question* → just ask, like you would Google or Gemini\n"
-    "• 🖼️ *Describe an image* → drop in a photo and ask what's in it\n\n"
-    "*Try it now:* upload a file, or just type a question!\n"
-    "Type `/help` anytime to see examples."
+    "👋 *Hi! I'm OpenClaw — your personal AI assistant, right here in Slack.*\n\n"
+    "Here are some things you can ask me right now:\n"
+    "• \"What should I make for dinner tonight with chicken and vegetables?\" 🍳\n"
+    "• \"Help me write a message to my doctor about rescheduling my appointment\" ✍️\n"
+    "• \"What does this letter say?\" *(then drop in a photo or PDF)* 📄\n"
+    "• \"Look at this spreadsheet and tell me what it shows\" *(drop in an Excel file)* 📊\n"
+    "• \"What's a good birthday gift for someone who likes gardening?\" 🎁\n"
+    "• \"Explain this in plain English\" *(paste in any confusing text)* 🤔\n\n"
+    "*You don't need any special commands — just talk to me like you'd talk to a friend!*\n"
+    "Type `/help` anytime to see more examples."
 )
 
 _HELP_TEXT = (
@@ -531,6 +533,7 @@ SLACK_USER_TOKEN = os.getenv("SLACK_USER_TOKEN", "")
 OPENCLAW_UPLOAD_KEY = os.getenv("OPENCLAW_UPLOAD_KEY", "")
 OPENCLAW_UPLOAD_PORT = int(os.getenv("OPENCLAW_UPLOAD_PORT", "8080"))
 SLACK_NOTIFY_USER_ID = os.getenv("SLACK_NOTIFY_USER_ID", "")
+_slack_client_ref: Any = None  # set at startup for use in upload handler
 _AI_FILES_DIR = Path(os.getenv("AI_FILES_DIR", "/ai-files"))
 _KNOWN_FILES_PATH = Path(__file__).parent.parent / "data" / "known_files.json"
 _LAST_SYNC_PATH = Path(__file__).parent.parent / "data" / "last_sync.json"
@@ -609,6 +612,9 @@ async def _handle_upload(request: "aiohttp.web.Request") -> "aiohttp.web.Respons
     data = await field.read(decode=True)
     dest.write_bytes(data)
     log.info("Upload: wrote %d bytes to %s", len(data), dest)
+
+    if _slack_client_ref and SLACK_NOTIFY_USER_ID:
+        asyncio.create_task(_notify_upload_received(dest.name, len(data)))
 
     return web.json_response({"status": "ok", "filename": dest.name, "size": len(data)})
 
@@ -864,6 +870,25 @@ async def _file_alert_loop(client: Any) -> None:
                 _save_known_files(known)
         except Exception as exc:
             log.warning("file_alert_loop: error during poll: %s", exc)
+
+
+
+async def _notify_upload_received(filename: str, size: int) -> None:
+    """DM the notify user when a file is uploaded via the HTTP endpoint."""
+    if size > 1024:
+        size_human = f"{size // 1024} KB"
+    else:
+        size_human = f"{size} bytes"
+    try:
+        await _slack_client_ref.chat_postMessage(
+            channel=SLACK_NOTIFY_USER_ID,
+            text=(
+                f"📥 *Got it!* I received `{filename}` ({size_human}). "
+                "Just ask me what to do with it — for example: \"summarize this\" or \"what's in this file?\""
+            ),
+        )
+    except Exception as exc:
+        log.debug("_notify_upload_received: failed to DM %s: %s", SLACK_NOTIFY_USER_ID, exc)
 
 
 async def _send_file_alert(client: Any, filename: str) -> None:
@@ -4947,6 +4972,18 @@ async def create_slack_handler() -> Any | None:  # type: ignore[return]
     if SLACK_NOTIFY_USER_ID:
         asyncio.create_task(_file_alert_loop(app.client))
         log.info("Proactive file-alert loop started (notifying %s)", SLACK_NOTIFY_USER_ID)
+
+    # Make the Slack client available to the upload HTTP handler
+    global _slack_client_ref
+    _slack_client_ref = app.client
+
+    # Seed digest prefs for notify user so digest is on by default
+    if SLACK_NOTIFY_USER_ID:
+        _prefs = _load_digest_prefs()
+        if SLACK_NOTIFY_USER_ID not in _prefs:
+            _prefs[SLACK_NOTIFY_USER_ID] = {"enabled": True, "last_sent": 0}
+            _save_digest_prefs(_prefs)
+            log.info("Seeded digest prefs for notify user %s", SLACK_NOTIFY_USER_ID)
 
     # Start digest background loop
     asyncio.create_task(_digest_loop(app.client))
