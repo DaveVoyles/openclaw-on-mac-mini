@@ -406,19 +406,20 @@ You type /chat "What's downloading right now?"
     &darr;
 OpenClaw checks: does this need tool use? &rarr; Yes ("download" keyword)
     &darr;
-Sent to Gemini 2.5 Flash with 117 tool declarations
+Sent to GPT-4o via GitHub Models with 117 tool declarations
     &darr;
-Gemini calls get_download_queue
+GPT-4o calls get_download_queue
     &darr;
 OpenClaw queries SABnzbd + qBittorrent APIs
     &darr;
-Gemini formats the results into a human-readable answer
+GPT-4o formats the results into a human-readable answer
     &darr;
 You get a Discord embed with your active downloads</code></pre>
         <p>
-          Gemini can chain up to <strong>5 tool calls</strong> per question.
+          GPT-4o via GitHub Models can chain up to <strong>5 tool calls</strong> per question
+          (Gemini 2.5 Flash is the fallback when GitHub Models is unavailable).
           Simple chat goes to Ollama at zero cost. The response footer shows
-          which model answered (🔄 auto, 🏠 local, ☁️ gemini).
+          which model answered (🔄 auto, 🏠 local, ☁️ gpt-4o, ☁️ gemini).
         </p>
       </div>
 
@@ -495,7 +496,7 @@ You get a Discord embed with your active downloads</code></pre>
       <p>
         The most powerful command. Uses <strong>hybrid routing</strong>:
         conversational queries go to local Ollama (free, fast), tool-requiring
-        queries go to Gemini 2.5 Flash with function calling. OpenClaw also
+        queries go to GPT-4o via GitHub Models API (function calling; Gemini 2.5 Flash is the fallback). OpenClaw also
         shortlists the most relevant tools for each request, so you can ask in
         plain English instead of remembering specific skill names. You can
         override routing per-message or set a sticky default.
@@ -672,23 +673,23 @@ You get a Discord embed with your active downloads</code></pre>
           <td>
             Tool-requiring ("sonarr", "status", "docker", "download", etc.)
           </td>
-          <td>Gemini 2.5 Flash</td>
-          <td>~$0.0005/query</td>
-          <td>🔄 Rate counters</td>
+          <td>GPT-4o via GitHub Models (function calling)</td>
+          <td>Free (GitHub Models)</td>
+          <td>☁️ <code>gpt-4o</code></td>
         </tr>
         <tr>
           <td>
             Weather / forecast ("weather", "rain", "forecast", "temperature")
           </td>
-          <td>Gemini 2.5 Flash + <code>get_weather</code> tool</td>
-          <td>~$0.0005/query</td>
-          <td>🔄 Rate counters</td>
+          <td>GPT-4o via GitHub Models + <code>get_weather</code> tool</td>
+          <td>Free (GitHub Models)</td>
+          <td>☁️ <code>gpt-4o</code></td>
         </tr>
         <tr>
           <td>Hallucination detected in Ollama response</td>
-          <td>Gemini 2.5 Flash (re-routed automatically)</td>
-          <td>~$0.0005/query</td>
-          <td>🔄 Rate counters</td>
+          <td>GPT-4o via GitHub Models (re-routed automatically; Gemini fallback if GitHub Models unavailable)</td>
+          <td>Free (GitHub Models)</td>
+          <td>☁️ <code>gpt-4o</code></td>
         </tr>
         <tr>
           <td>User forced <code>model:gemini</code></td>
