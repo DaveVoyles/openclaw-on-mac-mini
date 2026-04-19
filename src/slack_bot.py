@@ -469,6 +469,16 @@ _SIMPLE_SYSTEM_PREFIX = (
     "Use short sentences. Write as if explaining to someone who is not technical. "
 )
 
+_BROWSER_NAV_PATTERNS = re.compile(
+    r"""(?ix)
+    \b(?:go\s+to|navigate\s+to|visit|open|browse\s+to|
+        extract\s+from|get\s+content\s+from|read\s+page\s+at|
+        fetch\s+page\s+at|scrape)\s+
+    (https?://[^\s>]+)
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
 _SCREENSHOT_PATTERNS = re.compile(
     r"""(?ix)
     (?:take\s+a?\s*|grab\s+a?\s*|capture\s+a?\s*|get\s+a?\s*)?
@@ -1916,6 +1926,49 @@ async def _alert_admin(client: Any, message: str) -> None:
         log.warning("_alert_admin: failed to DM admin: %s", exc)
 
 
+async def _handle_browser_nav_intent(
+    client: Any,
+    channel: str,
+    raw_text: str,
+    thread_ts: str | None = None,
+) -> bool:
+    """Detect browser navigation intent in raw_text; fetch page content and post result.
+
+    Returns True if a navigation intent was detected (caller should return early).
+    """
+    m = _BROWSER_NAV_PATTERNS.search(raw_text)
+    if not m:
+        return False
+
+    url = m.group(1)
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+
+    try:
+        from browser_skills import navigate_and_extract  # lazy import — lives in /app/skills
+
+        content = await navigate_and_extract(url)
+    except Exception as exc:
+        log.warning("_handle_browser_nav_intent: failed for %s: %s", url, exc)
+        kwargs: dict[str, Any] = {
+            "channel": channel,
+            "text": f"⚠️ Couldn't fetch {url} — site may be down or blocking bots.",
+        }
+        if thread_ts:
+            kwargs["thread_ts"] = thread_ts
+        await client.chat_postMessage(**kwargs)
+        return True
+
+    reply_kwargs: dict[str, Any] = {
+        "channel": channel,
+        "text": f"🌐 Content from <{url}|{url}>:\n```\n{content}\n```",
+    }
+    if thread_ts:
+        reply_kwargs["thread_ts"] = thread_ts
+    await client.chat_postMessage(**reply_kwargs)
+    return True
+
+
 async def _handle_screenshot_intent(
     client: Any,
     channel: str,
@@ -2745,7 +2798,9 @@ def _register_core_handlers(app: Any) -> None:
         if await _handle_screenshot_intent(client, channel, prompt_raw, thread_ts=thread_ts):
             return
 
-        # Smart file suggestion — only when no file is attached
+        # Browser navigation intent — fetch page content before any LLM call
+        if await _handle_browser_nav_intent(client, channel, prompt_raw, thread_ts=thread_ts):
+            return
         if not event.get("files"):
             match = _match_question_to_history(user_id, prompt_raw)
             if match:
@@ -2812,6 +2867,10 @@ def _register_core_handlers(app: Any) -> None:
         # Screenshot intent — capture and upload before any LLM call
         thread_ts_dm: str | None = event.get("thread_ts")
         if await _handle_screenshot_intent(client, channel, raw_text, thread_ts=thread_ts_dm):
+            return
+
+        # Browser navigation intent — fetch page content before any LLM call
+        if await _handle_browser_nav_intent(client, channel, raw_text, thread_ts=thread_ts_dm):
             return
 
         # Clarification prompt for vague top-level DMs (not thread replies)
