@@ -127,7 +127,7 @@ MANIFEST: dict = {
                 "should_escape": False,
             },
             {
-                "command": "/saved",
+                "command": "/bookmarks",
                 "description": "View your bookmarked bot responses",
                 "usage_hint": "(no arguments needed)",
                 "should_escape": False,

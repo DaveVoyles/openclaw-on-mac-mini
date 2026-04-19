@@ -3724,7 +3724,7 @@ def create_slack_app():  # type: ignore[return]
                 text=f"⚠️ Couldn't upload {match.name}. Please try again in a moment.",
             )
 
-    @app.command("/saved")
+    @app.command("/bookmarks")
     async def handle_slash_saved(ack: Any, body: dict[str, Any], client: Any) -> None:
         await ack()
         user_id: str = body.get("user_id", "")
