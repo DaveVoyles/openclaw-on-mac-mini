@@ -38,6 +38,42 @@ WEBHOOK_REQUIRE_AUTH = _web_cfg.webhook_require_auth
 API_ACTION_TOKEN = _web_cfg.dashboard_api_token
 API_ACTION_AUTH_REQUIRED = _web_cfg.dashboard_api_auth_required
 
+# ---------------------------------------------------------------------------
+# Endpoint auth posture
+#
+# PUBLIC  (no auth required — intentional):
+#   GET  /health            — load balancer / uptime probe
+#   GET  /health/llm        — LLM health check
+#   GET  /health/llm/circuit — circuit-breaker state
+#   GET  /health/memory     — memory subsystem check
+#   GET  /health/services   — services health check
+#
+# LOCALHOST-ONLY (sensitive internal data; guarded by _require_internal):
+#   GET  /metrics           — Prometheus metrics (internal scraper only)
+#   GET  /smoke             — triggers live API calls; exposes system state
+#
+# API TOKEN AUTH (via _require_api_action_auth):
+#   POST /health/llm/reset  — resets circuit-breaker state
+#   POST /api/trigger-scan  — triggers background scan
+#
+# HMAC / conditional auth:
+#   POST /webhook/{source}  — guarded by WEBHOOK_REQUIRE_AUTH + WEBHOOK_SECRET
+# ---------------------------------------------------------------------------
+
+_ALLOWED_INTERNAL_IPS = {"127.0.0.1", "::1"}
+
+
+def _require_internal(request: web.Request) -> web.Response | None:
+    """Return 403 if the request did not originate from localhost.
+
+    Used to restrict internal-only endpoints (/metrics, /smoke) to the local
+    machine only. Returns None when the caller is permitted to proceed.
+    """
+    peer = request.remote or ""
+    if peer not in _ALLOWED_INTERNAL_IPS:
+        return web.Response(status=403, text="Forbidden: internal endpoint")
+    return None
+
 
 # ---------------------------------------------------------------------------
 # Route handlers
@@ -119,6 +155,8 @@ async def _health_handler(request: web.Request) -> web.Response:
 
 async def _metrics_handler(request: web.Request) -> web.Response:
     """Expose Prometheus-format metrics for Grafana / Uptime Kuma scraping."""
+    if (guard := _require_internal(request)) is not None:
+        return guard
     bot = request.app["bot"]
     uptime_s = time.monotonic() - bot.start_time
     guilds = len(bot.guilds)
@@ -166,6 +204,8 @@ async def _metrics_handler(request: web.Request) -> web.Response:
 
 async def _smoke_handler(request: web.Request) -> web.Response:
     """Run lightweight subsystem smoke tests and return JSON results."""
+    if (guard := _require_internal(request)) is not None:
+        return guard
     from datetime import datetime, timezone
 
     checks: dict[str, dict] = {}
@@ -290,7 +330,8 @@ async def _trigger_scan_handler(request: web.Request) -> web.Response:
 
     from discord_background import _run_proactive_scan
     bot = request.app["bot"]
-    asyncio.create_task(_run_proactive_scan(bot))
+    from bg_tasks import managed_task
+    managed_task(_run_proactive_scan(bot), name="proactive-scan", timeout=300.0)
     return web.json_response({"status": "scan triggered"})
 
 
@@ -348,7 +389,8 @@ async def _webhook_handler(request: web.Request) -> web.Response:
                     or event_lower in ("error", "warning", "applicationupdate", "health")
                 )
                 if is_error_event:
-                    asyncio.create_task(_analyze_webhook_event(source, payload, channel))
+                    from bg_tasks import managed_task
+                    managed_task(_analyze_webhook_event(source, payload, channel), name="analyze-webhook-event", timeout=60.0)
 
         return web.json_response({"ok": True})
 

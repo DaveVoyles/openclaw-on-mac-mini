@@ -135,7 +135,7 @@ jobs:
   generate-changelog:
     name: Generate Changelog
     needs: validate
-    runs-on: [self-hosted, macOS, ARM64, openclaw]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
       changelog: ${{ steps.changelog.outputs.changelog }}
@@ -274,7 +274,7 @@ jobs:
   notify:
     name: Notify Release
     needs: create-release
-    runs-on: [self-hosted, macOS, ARM64, openclaw]
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
 
