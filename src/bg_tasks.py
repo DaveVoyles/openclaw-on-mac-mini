@@ -10,7 +10,8 @@ import logging
 import os
 import sys
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
+from typing import Any
 
 from bg_briefing import evening_digest_loop, morning_briefing_loop  # noqa: F401
 from bg_healing import audit_writer_loop, background_cleanup_loop, proactive_insight_loop  # noqa: F401
@@ -26,6 +27,58 @@ _BACKGROUND_TASKS: dict[str, asyncio.Task] = {}
 _BACKGROUND_FACTORIES: dict[str, Callable[[], Awaitable[None]]] = {}
 _BACKGROUND_STOPPING = False
 _BACKGROUND_RESTART_DELAY_SECONDS: int = 5  # initial restart delay before exponential backoff
+
+# --- managed_task: lightweight fire-and-forget wrapper ---
+
+_active_tasks: set[asyncio.Task] = set()
+
+
+def managed_task(
+    coro: Coroutine[Any, Any, Any],
+    *,
+    name: str = "managed",
+    timeout: float | None = 300.0,
+    error_callback: Any = None,
+) -> asyncio.Task:
+    """Create a tracked asyncio task with timeout and error logging.
+
+    Prevents fire-and-forget tasks from silently failing. All exceptions
+    are logged. Tasks are tracked in _active_tasks and removed on completion.
+
+    Args:
+        coro: The coroutine to run as a task.
+        name: Human-readable name for logging.
+        timeout: Seconds before task is cancelled (None = unlimited).
+        error_callback: Optional callable(exc) called on task failure.
+    """
+    async def _wrapped() -> None:
+        try:
+            if timeout is not None:
+                await asyncio.wait_for(coro, timeout=timeout)
+            else:
+                await coro
+        except asyncio.TimeoutError:
+            log.warning("managed_task '%s' timed out after %.0fs", name, timeout)
+        except asyncio.CancelledError:
+            log.debug("managed_task '%s' cancelled", name)
+            raise
+        except Exception as exc:
+            log.error("managed_task '%s' failed: %s", name, exc, exc_info=True)
+            if error_callback is not None:
+                try:
+                    error_callback(exc)
+                except Exception:
+                    pass
+
+    task = asyncio.create_task(_wrapped(), name=name)
+    _active_tasks.add(task)
+    task.add_done_callback(_active_tasks.discard)
+    return task
+
+
+def get_active_task_count() -> int:
+    """Return number of currently running managed tasks."""
+    return len(_active_tasks)
 
 
 class _BackoffTracker:

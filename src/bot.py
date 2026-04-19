@@ -645,7 +645,8 @@ class OpenClawBot(commands.Bot):
                 except Exception as exc:  # broad: intentional  # noqa: BLE001 — audit log rotation can fail in many ways
                     log.debug("Audit log rotation failed: %s", exc)
 
-        asyncio.create_task(_audit_log_rotation_loop(), name="audit-log-rotation")
+        from bg_tasks import managed_task
+        managed_task(_audit_log_rotation_loop(), name="audit-log-rotation", timeout=None)
 
         # Start Slack bot if configured
         if os.getenv("SLACK_ENABLED", "false").lower() == "true":
