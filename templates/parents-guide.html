@@ -245,7 +245,7 @@
         /* ── Inline code ───────────────────────────────────────── */
         code {
             background: #ede9fa;
-            color: #5b21b6;
+            color: #7c3aed;
             padding: 2px 7px;
             border-radius: 5px;
             font-family: 'Consolas', 'Cascadia Code', 'Courier New', monospace;
@@ -474,6 +474,7 @@
                     <li><a href="#check-your-calendar-calendar">📅 /calendar</a></li>
                     <li><a href="#connect-your-dropbox-dropbox-connect">📦 /dropbox connect</a></li>
                     <li><a href="#windows-sync-without-extra-software">💻 Windows sync</a></li>
+                    <li><a href="#getting-started-with-slack">💬 Getting started with Slack</a></li>
                 </ol>
             </nav>
         </aside>
@@ -507,14 +508,24 @@
             <!-- ── Section 2 ── -->
             <div class="section-card">
                 <h2 id="option-2-use-it-from-slack">💬 Option 2: Use it from Slack</h2>
-                <p>If you have Slack installed, you can chat with OpenClaw directly:</p>
+                <p>If you have Slack installed, you can chat with OpenClaw directly via a private Direct Message — no channels needed.</p>
                 <ol>
                     <li>Open Slack</li>
-                    <li>In the left sidebar, find <strong>@OpenClaw</strong> under Direct Messages</li>
-                    <li>Type your question and press Enter</li>
+                    <li>In the left sidebar, find <strong>@OpenClaw</strong> under <strong>Direct Messages</strong></li>
+                    <li>Type your question and press Enter — OpenClaw will reply privately, just to you</li>
                 </ol>
-                <p>Or you can use the slash command from any channel:</p>
+                <p>You can also use slash commands from any channel:</p>
                 <pre>/ask what does this word mean?</pre>
+                <blockquote>
+                    <p>📲 <strong>Don't have Slack yet?</strong> Download it free for
+                    <a href="https://slack.com/downloads/mac" target="_blank">Mac</a>,
+                    <a href="https://slack.com/downloads/windows" target="_blank">Windows</a>,
+                    <a href="https://slack.com/downloads/ios" target="_blank">iPhone</a>, or
+                    <a href="https://slack.com/downloads/android" target="_blank">Android</a> —
+                    or use it in your browser at <a href="https://app.slack.com" target="_blank">app.slack.com</a>.
+                    Ask Dave for an invite link to join the family workspace.</p>
+                </blockquote>
+                <p>👉 <strong>New to Slack?</strong> See <a href="#getting-started-with-slack">Getting Started with Slack</a> at the bottom of this page — it covers everything from downloading the app to sending your first message.</p>
             </div>
 
             <!-- ── Section 3 ── -->
@@ -1018,6 +1029,71 @@
                 <h2 id="windows-sync-without-extra-software">💻 Windows: Sync Without Extra Software</h2>
                 <p>If you're on Windows and can't use the SSH sync method, OpenClaw now supports uploading files directly over the network. The Windows installer (<code>Install-OpenClaw.ps1</code>) automatically tests this connection during setup.</p>
                 <p>If you see "✅ Upload server reachable" during install, the HTTP fallback is working and your files will sync even without additional tools installed.</p>
+            </div>
+
+            <!-- ── Section 36 ── -->
+            <div class="section-card">
+                <h2 id="getting-started-with-slack">💬 Getting Started with Slack</h2>
+                <p>Slack is a messaging app — think of it like iMessage or WhatsApp, but organized for a family or small group. It's free and works on any device. Here's everything you need to know to get comfortable with it.</p>
+
+                <h3>Download Slack</h3>
+                <p>Download it free for your device:</p>
+                <ul>
+                    <li><a href="https://slack.com/downloads/mac" target="_blank">Mac</a></li>
+                    <li><a href="https://slack.com/downloads/windows" target="_blank">Windows</a></li>
+                    <li><a href="https://slack.com/downloads/ios" target="_blank">iPhone / iPad</a></li>
+                    <li><a href="https://slack.com/downloads/android" target="_blank">Android</a></li>
+                    <li>Or use it directly in your browser at <a href="https://app.slack.com" target="_blank">app.slack.com</a> — no download required</li>
+                </ul>
+                <blockquote>
+                    <p>🔑 After installing, ask Dave for an invite link to join the family Slack workspace.</p>
+                </blockquote>
+
+                <h3>Channels vs. Direct Messages — what's the difference?</h3>
+                <p><strong>Channels</strong> are group chats where everyone in the family can see the conversation. You'll spot them in the left sidebar with names like <strong>#general</strong>. Think of it like a shared family bulletin board.</p>
+                <p><strong>Direct Messages (DMs)</strong> are private, one-on-one conversations — only you and the other person can see them. This is where you talk to OpenClaw.</p>
+                <blockquote class="tip-green">
+                    <p>✅ <strong>You do not need to use a channel to talk to OpenClaw.</strong> Always use a Direct Message — it's private, instant, and keeps your conversation tidy.</p>
+                </blockquote>
+
+                <h3>How to find and message OpenClaw</h3>
+                <ol>
+                    <li>Open Slack on your device</li>
+                    <li>Look at the left sidebar — scroll down to the <strong>Direct Messages</strong> section</li>
+                    <li>Click on <strong>OpenClaw</strong> (it may show as <strong>@OpenClaw</strong> or with a 🐾 icon)</li>
+                    <li>Type anything in the message box at the bottom and press <strong>Enter</strong></li>
+                    <li>OpenClaw will reply within a few seconds</li>
+                </ol>
+                <p>If you don't see OpenClaw in the list, click the <strong>+</strong> next to Direct Messages and search for <strong>OpenClaw</strong>.</p>
+
+                <h3>What are slash commands?</h3>
+                <p>Slash commands are shortcuts that start with a <code>/</code> (forward slash). You type them directly in the message box and press Enter — no need to write a full sentence.</p>
+                <p><strong>Examples you'll see throughout this guide:</strong></p>
+                <ul>
+                    <li><code>/help</code> — shows everything OpenClaw can do</li>
+                    <li><code>/simple on</code> — switches to shorter, plain-English answers</li>
+                    <li><code>/brief</code> — shows a summary of your recent files</li>
+                    <li><code>/ask what does this mean?</code> — ask a quick question from any channel</li>
+                </ul>
+                <p>Whenever you see something in this guide starting with <code>/</code>, just type it into Slack and press Enter.</p>
+
+                <h3>How to send a file to OpenClaw</h3>
+                <p>You can share Word documents, Excel spreadsheets, and PDFs right in the chat — just like attaching something to an email:</p>
+                <ol>
+                    <li>Open your DM with <strong>OpenClaw</strong></li>
+                    <li>Drag a file from your desktop and drop it into the chat window<br><em>(or click the <strong>+</strong> button next to the message box and choose a file)</em></li>
+                    <li>Press <strong>Enter</strong> to send it</li>
+                    <li>OpenClaw will ask what you'd like to do — just reply in plain English</li>
+                </ol>
+
+                <h3>Tips for new Slack users</h3>
+                <ul>
+                    <li><strong>You can't break anything.</strong> Just try it — if something doesn't work, type <code>/help</code>.</li>
+                    <li><strong>OpenClaw only sees your direct messages to it.</strong> It does not read other channels or anyone else's conversations.</li>
+                    <li><strong>Your conversation is saved.</strong> Scroll up in the DM at any time to see past questions and answers.</li>
+                    <li><strong>The mobile app is great for quick questions.</strong> Download Slack on your phone and you can ask OpenClaw anything from anywhere.</li>
+                    <li><strong>No typing needed for short questions.</strong> Just write naturally — "what does this letter mean?" works perfectly.</li>
+                </ul>
             </div>
 
         </main>
