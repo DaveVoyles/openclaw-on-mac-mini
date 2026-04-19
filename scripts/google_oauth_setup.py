@@ -31,6 +31,11 @@ SCOPES = [
     "https://www.googleapis.com/auth/calendar",
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.send",
+    # Google Drive — required for /drive list, /drive read, /drive upload
+    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/drive.file",
+    # Google Contacts — required for /contacts search, /contacts get
+    "https://www.googleapis.com/auth/contacts.readonly",
 ]
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/auth"
