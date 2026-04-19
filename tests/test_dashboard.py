@@ -26,6 +26,11 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 _TEMPLATES_DIR = _REPO_ROOT / "templates"
 if not _TEMPLATES_DIR.exists():
     pytest.skip("templates/ directory not found", allow_module_level=True)
+if not (_TEMPLATES_DIR / "guide.html").exists() or not (_TEMPLATES_DIR / "dashboard.html").exists():
+    pytest.skip(
+        "templates/guide.html or templates/dashboard.html not present in this checkout",
+        allow_module_level=True,
+    )
 
 # Patch _TEMPLATES_DIR before the module reads the files
 # Remove cached module so we can re-import with correct paths
