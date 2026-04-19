@@ -4467,7 +4467,7 @@ def create_slack_app():  # type: ignore[return]
     # channels:manage, groups:read, groups:write scopes.
     # ------------------------------------------------------------------
 
-    @app.command("/chanadmin")
+    @app.command("/cladmin")
     async def handle_slash_channels(ack: Any, body: dict[str, Any], client: Any) -> None:
         await ack()
         user_id = body.get("user_id", "")
