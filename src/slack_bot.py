@@ -59,6 +59,7 @@ import aiohttp
 
 import file_skills
 from constants import ATTACHMENT_TEXT_MAX_CHARS
+from screenshot_skill import take_website_screenshot
 from document_skills import create_word
 from http_session import SessionManager
 from llm import analyze_image as llm_analyze_image
@@ -467,6 +468,22 @@ _SIMPLE_FLAG_RE = re.compile(r"\s*--simple\b", re.IGNORECASE)
 _SIMPLE_SYSTEM_PREFIX = (
     "Please respond in plain, simple language. Avoid jargon and technical terms. "
     "Use short sentences. Write as if explaining to someone who is not technical. "
+)
+
+_SCREENSHOT_PATTERNS = re.compile(
+    r"""(?ix)
+    (?:take\s+a?\s*|grab\s+a?\s*|capture\s+a?\s*|get\s+a?\s*)?
+    screenshot\s+(?:of\s+|from\s+)?
+    (https?://\S+|\S+\.\S+)
+    |
+    (?:screenshot|capture)\s+this\s+(?:page|site|url|website)?:?\s*
+    (https?://\S+|\S+\.\S+)
+    |
+    show\s+me\s+(?:what\s+)?
+    (https?://\S+|\S+\.\S+)
+    \s*(?:looks?\s+like|appearance|screenshot)
+    """,
+    re.IGNORECASE | re.VERBOSE,
 )
 
 # ------------------------------------------------------------------
@@ -1880,6 +1897,55 @@ async def _alert_admin(client: Any, message: str) -> None:
         log.warning("_alert_admin: failed to DM admin: %s", exc)
 
 
+async def _handle_screenshot_intent(
+    client: Any,
+    channel: str,
+    raw_text: str,
+    thread_ts: str | None = None,
+) -> bool:
+    """Detect screenshot intent in raw_text; capture and upload if found.
+
+    Returns True if a screenshot intent was detected (caller should return early).
+    """
+    m = _SCREENSHOT_PATTERNS.search(raw_text)
+    if not m:
+        return False
+
+    url = next((g for g in m.groups() if g), None)
+    if not url:
+        return False
+
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+
+    parsed = urllib.parse.urlparse(url)
+    safe_hostname = re.sub(r"[^a-zA-Z0-9._-]", "_", parsed.netloc or "page")
+
+    try:
+        png_bytes = await take_website_screenshot(url)
+    except Exception as exc:
+        log.warning("_handle_screenshot_intent: failed for %s: %s", url, exc)
+        kwargs: dict[str, Any] = {
+            "channel": channel,
+            "text": f"⚠️ Couldn't screenshot {url} — site may be down or blocking bots. Try a different URL.",
+        }
+        if thread_ts:
+            kwargs["thread_ts"] = thread_ts
+        await client.chat_postMessage(**kwargs)
+        return True
+
+    upload_kwargs: dict[str, Any] = {
+        "channel": channel,
+        "filename": f"screenshot_{safe_hostname}.png",
+        "content": png_bytes,
+        "initial_comment": f"📸 Screenshot of {url}",
+    }
+    if thread_ts:
+        upload_kwargs["thread_ts"] = thread_ts
+    await client.files_upload_v2(**upload_kwargs)
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Slack app factory
 # ---------------------------------------------------------------------------
@@ -2655,6 +2721,10 @@ def _register_core_handlers(app: Any) -> None:
         prompt, model_pref, use_simple = _parse_flags(prompt_raw)
         use_simple = use_simple or _get_user_simple(user_id)
 
+        # Screenshot intent — capture and upload before any LLM call
+        if await _handle_screenshot_intent(client, channel, prompt_raw, thread_ts=thread_ts):
+            return
+
         # Smart file suggestion — only when no file is attached
         if not event.get("files"):
             match = _match_question_to_history(user_id, prompt_raw)
@@ -2718,6 +2788,11 @@ def _register_core_handlers(app: Any) -> None:
 
         prompt, model_pref, use_simple = _parse_flags(raw_text)
         use_simple = use_simple or _get_user_simple(user_id)
+
+        # Screenshot intent — capture and upload before any LLM call
+        thread_ts_dm: str | None = event.get("thread_ts")
+        if await _handle_screenshot_intent(client, channel, raw_text, thread_ts=thread_ts_dm):
+            return
 
         # Clarification prompt for vague top-level DMs (not thread replies)
         has_files = bool(event.get("files"))
