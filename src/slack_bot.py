@@ -4516,7 +4516,7 @@ def create_slack_app():  # type: ignore[return]
                         members = ch.get("num_members", "?")
                         is_private = "🔒" if ch.get("is_private") else "#"
                         lines.append(f"  {is_private} {name}  ({members} members)")
-                    lines.append(f"\n_{len(channels)} channel(s) total. Use `/channels archive <name>` to archive one._")
+                    lines.append(f"\n_{len(channels)} channel(s) total. Use `/clawchan archive <name>` to archive one._")
                     msg = "\n".join(lines)
                 await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg)
             except Exception as exc:
