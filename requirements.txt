@@ -68,7 +68,7 @@ scipy~=1.15.0  # Scientific computing
 requests~=2.31.0  # For API calls if httpx not suitable
 
 # Phase 3: Data Export & Reporting
-pyarrow~=18.0
+pyarrow~=23.0
 
 jinja2~=3.1.0
 
