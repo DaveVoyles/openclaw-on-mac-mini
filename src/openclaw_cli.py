@@ -5188,6 +5188,309 @@ def _run_chat_write_back(
                 print(f"  {_BRE}error:{_R} could not write {_wb_path}: {_wb_err}")
 
 
+def _run_chat_initialize_session(
+    config: CliConfig,
+    *,
+    input_func: Any,
+    session_id: str,
+    no_banner: bool,
+) -> tuple[list[dict[str, str]], Any, Any, bool]:
+    """Build initial chat session state: history, registry, prompt_session, bp_enabled."""
+    history: list[dict[str, str]] = load_conversation_history(session_id) if session_id else []
+    registry = build_chat_command_registry()
+    load_shell_history()
+    _setup_readline()
+    prompt_session = _build_prompt_toolkit_session() if input_func is input and not _a11y_plain_mode() else None
+    # Enable bracketed paste for the readline/input() path only; prompt_toolkit handles it natively.
+    bp_enabled = prompt_session is None and input_func is input
+    if bp_enabled:
+        _enable_bracketed_paste()
+    if not no_banner:
+        _print_startup_banner(config, session_id)
+    return history, registry, prompt_session, bp_enabled
+
+
+def _run_chat_read_prompt(
+    *,
+    input_func: Any,
+    prompt_session: Any,
+    bp_enabled: bool,
+    session_id: str,
+    history: list[dict[str, str]],
+) -> tuple[str | None, bool, int | None]:
+    """Read the next prompt line. Returns (prompt, autoroute_on, exit_code).
+
+    If exit_code is not None, the caller should return it.
+    """
+    global _last_interrupted_prompt
+    try:
+        autoroute_on = _session_auto_route_enabled(session_id)
+        prompt_str = _make_prompt(session_id=session_id, autoroute_on=autoroute_on, multiline=_multiline_mode, draft_active=bool(_draft_buffer))
+        if _multiline_mode:
+            prompt = _read_multiline_input(input_func, prompt_str)
+        elif prompt_session is not None:
+            prompt = str(prompt_session.prompt(prompt_str)).strip()
+        elif bp_enabled:
+            prompt = _read_input_with_paste(input_func, prompt_str).strip()
+        else:
+            prompt = str(input_func(prompt_str)).strip()
+        return prompt, autoroute_on, None
+    except EOFError:
+        print()
+        if bp_enabled:
+            _disable_bracketed_paste()
+        # Auto-summarize: promote the last user prompt to session title if still generic
+        if session_id and history:
+            _last_prompt = next(
+                (t["content"] for t in reversed(history) if t.get("role") == "user"), ""
+            )
+            if _last_prompt:
+                _sess = load_session(session_id)
+                if _sess and (not _sess.title or _sess.title.startswith("Session ")):
+                    _sess.title = _last_prompt[:60].strip()
+                    save_session(_sess)
+        save_shell_history()
+        return None, False, 0
+    except KeyboardInterrupt:
+        print()
+        if bp_enabled:
+            _disable_bracketed_paste()
+        if prompt_session is not None:
+            _partial = str(getattr(prompt_session.default_buffer, "text", "")).strip()
+            if _partial:
+                _last_interrupted_prompt = _partial
+                print(f"  {_DM}↳ prompt interrupted — type /draft restore to recover it{_R}")
+        elif readline is not None:
+            _partial = readline.get_line_buffer().strip()
+            if _partial:
+                _last_interrupted_prompt = _partial
+                print(f"  {_DM}↳ prompt interrupted — type /draft restore to recover it{_R}")
+        save_shell_history()
+        return None, False, 130
+
+
+def _run_chat_process_slash(
+    prompt: str,
+    *,
+    registry: Any,
+    history: list[dict[str, str]],
+    session_id: str,
+    config: CliConfig,
+    ask_func: Any,
+) -> tuple[str, str, CliConfig, Any]:
+    """Process slash commands, alias expansion, and retry/tldr sentinels.
+
+    Returns (action, prompt, config, ctx) where action is one of:
+      - 'proceed':  fall through to LLM call with returned prompt/config/ctx
+      - 'continue': caller should ``continue`` the loop
+      - 'quit':     caller should ``return 0``
+    """
+    global _last_context_warn_band
+
+    # Alias expansion — one level only (no recursion) to avoid cycles
+    if prompt.startswith("/"):
+        _tok = prompt[1:].split(None, 1)
+        _alias_name = _tok[0].lower() if _tok else ""
+        _user_aliases = _PREFS.get("aliases", {})
+        if _alias_name in _user_aliases:
+            prompt = _user_aliases[_alias_name]
+            if len(_tok) > 1:
+                prompt = prompt + " " + _tok[1]
+
+    # Inline help: /cmd ? prints description without dispatching
+    _help_match = re.match(r"^/(\S+)\s+\?$", prompt)
+    if _help_match:
+        _help_name = _help_match.group(1)
+        _help_cmd = registry._lookup.get(_help_name)
+        if _help_cmd:
+            print(f"  {_BCY}/{_help_cmd.name}{_R}  —  {_help_cmd.description}")
+            if _help_cmd.aliases:
+                aliases_str = ", ".join(f"{_DM}/{a}{_R}" for a in _help_cmd.aliases)
+                print(f"  {_DM}aliases:{_R} {aliases_str}")
+        else:
+            print(f"  {_DM}Unknown command /{_help_name} — type /help for a list.{_R}")
+        return "continue", prompt, config, None
+
+    ctx = ChatCommandContext(history=history, session_id=session_id, config=config)
+    result = registry.dispatch(prompt, ctx)
+    if result == _CMD_QUIT:
+        save_shell_history()
+        return "quit", prompt, config, ctx
+    if result == _CMD_CONTINUE:
+        if not history:  # e.g. /clear was just run
+            _last_context_warn_band = ""
+        return "continue", prompt, config, ctx
+    if result == "_retry":
+        _retry_prompt = str(_PREFS.pop("_retry_prompt", "") or "")
+        _retry_model = str(_PREFS.pop("_retry_model", "") or "")
+        if _retry_prompt:
+            prompt = _retry_prompt
+            if _retry_model:
+                config = _dc_replace(config, model=_retry_model)
+        else:
+            return "continue", prompt, config, ctx
+    if result == "_tldr":
+        _tldr_prompt = str(_PREFS.pop("_tldr_prompt", "") or "")
+        if _tldr_prompt:
+            try:
+                _tldr_response = _with_spinner(
+                    f"{_e('💬', '>>')} Summarizing…",
+                    ask_func,
+                    _tldr_prompt,
+                    config=config,
+                    history=[],
+                    output_json=config.output_json,
+                )
+                print(f"\n{_DM}↳ tldr summary:{_R}")
+                print_response(_tldr_response, output_json=config.output_json, elapsed=None)
+                _print_animated_separator()
+            except Exception as _tldr_err:
+                print(f"  {_RE}error:{_R} /tldr failed: {_tldr_err}")
+        return "continue", prompt, config, ctx
+
+    # Unknown slash command — don't send to the AI; suggest closest match.
+    if prompt.startswith("/"):
+        cmd_name = prompt.split()[0][1:]  # strip leading /
+        _print_error(f"Unknown command {_BCY}/{cmd_name}{_R}. Type {_BCY}/help{_R} for a list.")
+        _known = list(registry._lookup.keys())
+        _suggestions = difflib.get_close_matches(cmd_name, _known, n=1, cutoff=0.6)
+        if _suggestions:
+            print(f"  {_DM}Did you mean {_R}{_BCY}/{_suggestions[0]}{_R}{_DM}?{_R}")
+        _print_predictive_affordances(
+            [
+                "/palette <term> to search commands by name or purpose",
+                "/shortcuts to review quick keyboard and command gestures",
+            ],
+            title="Command recovery",
+            border_style="yellow",
+        )
+        return "continue", prompt, config, ctx
+
+    return "proceed", prompt, config, ctx
+
+
+def _run_chat_handle_autoroute(
+    prompt: str,
+    *,
+    registry: Any,
+    ctx: Any,
+    session_id: str,
+) -> str | None:
+    """Apply REPL autoroute to a prompt. Returns 'quit', 'continue', or None to proceed."""
+    route_decision = route_repl_prompt(prompt, session_id=session_id)
+    if route_decision.kind in {ReplRouteKind.ANALYZE, ReplRouteKind.RESEARCH, ReplRouteKind.WRITE}:
+        _PREFS["_last_grounding_block"] = {
+            "type": route_decision.kind.value,
+            "query": route_decision.args_text.strip() or route_decision.target_text.strip(),
+            "confidence": round(route_decision.confidence, 2),
+            "rationale": route_decision.rationale,
+            "grounded": "grounded by" in route_decision.rationale.lower(),
+        }
+    if route_decision.should_auto_execute_plan():
+        print(_format_route_announcement(route_decision))
+        _append_repl_route_event(session_id, prompt, route_decision)
+        try:
+            routed = _execute_routed_plan(
+                prompt=prompt,
+                decision=route_decision,
+                registry=registry,
+                ctx=ctx,
+            )
+        except OpenClawCliError as exc:
+            print(f"{_BRE}error:{_R} {exc}", file=sys.stderr)
+        else:
+            if routed == _CMD_QUIT:
+                save_shell_history()
+                return "quit"
+            if routed == _CMD_CONTINUE:
+                return "continue"
+    if route_decision.should_auto_route():
+        print(_format_route_announcement(route_decision))
+        _append_repl_route_event(session_id, prompt, route_decision)
+        routed = registry.dispatch(route_decision.to_slash_command(), ctx)
+        if routed == _CMD_QUIT:
+            save_shell_history()
+            return "quit"
+        if routed == _CMD_CONTINUE:
+            return "continue"
+    # Prompt was classified but confidence was too low — show a brief hint.
+    if route_decision.kind == ReplRouteKind.CHAT and session_id:
+        _hint_rationale = (route_decision.rationale or "")[:80]
+        print(f"  {_DM}↳ stayed in chat — confidence below threshold · {_hint_rationale}{_R}")
+    return None
+
+
+def _run_chat_handle_clarification(
+    prompt: str,
+    response: Any,
+    *,
+    history: list[dict[str, str]],
+    config: CliConfig,
+    ask_func: Any,
+) -> tuple[bool, str, Any]:
+    """If the response looks like a clarifying question, prompt for more input.
+
+    Returns (handled, prompt, response). When handled, history was already
+    extended with both the original turn and the clarification turn.
+    """
+    _resp_text_for_q = (response.response or "").strip()
+    if not (
+        _IS_TTY
+        and not config.output_json
+        and len(_resp_text_for_q) <= _CLARIFYING_MAX_CHARS
+        and _CLARIFYING_Q_RE.search(_resp_text_for_q)
+        and not _CLARIFYING_NOISE.search(_resp_text_for_q)
+    ):
+        return False, prompt, response
+    try:
+        _clarify = input(f"  {_DM}↳ {_R}").strip()
+    except (EOFError, KeyboardInterrupt):
+        _clarify = ""
+    if not _clarify:
+        return False, prompt, response
+    # Add the clarification to history and send immediately.
+    history.extend([
+        {"role": "user", "content": prompt},
+        {"role": "assistant", "content": response.response},
+    ])
+    try:
+        if ask_func is invoke_openclaw and should_use_streaming(config):
+            _spin_stop2, _spin_thread2, _spin_cancel2 = _ui_utils_mod._start_stream_spinner(
+                f"{_e('💬', '>>')} Thinking…",
+                is_tty=_IS_TTY,
+                output_json=config.output_json,
+            )
+            response = invoke_openclaw_stream(
+                _clarify,
+                config=config,
+                history=list(history),
+                _stop_spinner=_spin_stop2,
+                _cancel_event=_spin_cancel2,
+            )
+            if _spin_stop2 is not None and not _spin_stop2.is_set():
+                _spin_stop2.set()
+            if _spin_thread2 is not None:
+                _spin_thread2.join(timeout=0.5)
+            if _spin_cancel2 is not None and _spin_cancel2.is_set():
+                raise KeyboardInterrupt
+        else:
+            response = _with_spinner(
+                f"{_e('💬', '>>')} Thinking…",
+                ask_func,
+                _clarify,
+                config=config,
+                history=list(history),
+                output_json=config.output_json,
+            )
+        print_response(response, output_json=config.output_json, elapsed=None)
+        _print_animated_separator()
+        history.append({"role": "user", "content": _clarify})
+        history.append({"role": "assistant", "content": response.response})
+        return True, _clarify, response
+    except (KeyboardInterrupt, OpenClawCliError):
+        return False, prompt, response
+
+
 def run_chat(
     config: CliConfig,
     *,
@@ -5202,63 +5505,19 @@ def run_chat(
     # Reset per-session overflow-warning state so thresholds fire fresh each session.
     _context_overflow_warned.pop(session_id or "", None)
     _last_context_warn_band = ""
-    history: list[dict[str, str]] = load_conversation_history(session_id) if session_id else []
-    registry = build_chat_command_registry()
-    load_shell_history()
-    _setup_readline()
-    prompt_session = _build_prompt_toolkit_session() if input_func is input and not _a11y_plain_mode() else None
-    # Enable bracketed paste for the readline/input() path only; prompt_toolkit handles it natively.
-    _bp_enabled = prompt_session is None and input_func is input
-    if _bp_enabled:
-        _enable_bracketed_paste()
-    if not no_banner:
-        _print_startup_banner(config, session_id)
+    history, registry, prompt_session, _bp_enabled = _run_chat_initialize_session(
+        config, input_func=input_func, session_id=session_id, no_banner=no_banner
+    )
     while True:
-        try:
-            autoroute_on = _session_auto_route_enabled(session_id)
-            prompt_str = _make_prompt(session_id=session_id, autoroute_on=autoroute_on, multiline=_multiline_mode, draft_active=bool(_draft_buffer))
-            if _multiline_mode:
-                prompt = _read_multiline_input(input_func, prompt_str)
-            elif prompt_session is not None:
-                prompt = str(prompt_session.prompt(prompt_str)).strip()
-            elif _bp_enabled:
-                prompt = _read_input_with_paste(input_func, prompt_str).strip()
-            else:
-                prompt = str(input_func(prompt_str)).strip()
-        except EOFError:
-            print()
-            if _bp_enabled:
-                _disable_bracketed_paste()
-            # Auto-summarize: promote the last user prompt to session title if still generic
-            if session_id and history:
-                _last_prompt = next(
-                    (t["content"] for t in reversed(history) if t.get("role") == "user"), ""
-                )
-                if _last_prompt:
-                    _sess = load_session(session_id)
-                    if _sess and (not _sess.title or _sess.title.startswith("Session ")):
-                        _sess.title = _last_prompt[:60].strip()
-                        save_session(_sess)
-            save_shell_history()
-            return 0
-        except KeyboardInterrupt:
-            print()
-            if _bp_enabled:
-                _disable_bracketed_paste()
-            global _last_interrupted_prompt
-            if prompt_session is not None:
-                _partial = str(getattr(prompt_session.default_buffer, "text", "")).strip()
-                if _partial:
-                    _last_interrupted_prompt = _partial
-                    print(f"  {_DM}↳ prompt interrupted — type /draft restore to recover it{_R}")
-            elif readline is not None:
-                _partial = readline.get_line_buffer().strip()
-                if _partial:
-                    _last_interrupted_prompt = _partial
-                    print(f"  {_DM}↳ prompt interrupted — type /draft restore to recover it{_R}")
-            save_shell_history()
-            return 130
-
+        prompt, autoroute_on, exit_code = _run_chat_read_prompt(
+            input_func=input_func,
+            prompt_session=prompt_session,
+            bp_enabled=_bp_enabled,
+            session_id=session_id,
+            history=history,
+        )
+        if exit_code is not None:
+            return exit_code
         if not prompt:
             continue
 
@@ -5276,128 +5535,29 @@ def run_chat(
         # Paste guard — warn on large pastes that would trigger risky routing
         prompt = _paste_guard(prompt, input_func=input_func, autoroute_on=autoroute_on)
         if prompt is None:
-            continue  # user declined — skip this turn
-
-        # Alias expansion — one level only (no recursion) to avoid cycles
-        if prompt.startswith("/"):
-            _tok = prompt[1:].split(None, 1)
-            _alias_name = _tok[0].lower() if _tok else ""
-            _user_aliases = _PREFS.get("aliases", {})
-            if _alias_name in _user_aliases:
-                prompt = _user_aliases[_alias_name]
-                if len(_tok) > 1:
-                    prompt = prompt + " " + _tok[1]
-
-        # Inline help: /cmd ? prints description without dispatching
-        _help_match = re.match(r"^/(\S+)\s+\?$", prompt)
-        if _help_match:
-            _help_name = _help_match.group(1)
-            _help_cmd = registry._lookup.get(_help_name)
-            if _help_cmd:
-                print(f"  {_BCY}/{_help_cmd.name}{_R}  —  {_help_cmd.description}")
-                if _help_cmd.aliases:
-                    aliases_str = ", ".join(f"{_DM}/{a}{_R}" for a in _help_cmd.aliases)
-                    print(f"  {_DM}aliases:{_R} {aliases_str}")
-            else:
-                print(f"  {_DM}Unknown command /{_help_name} — type /help for a list.{_R}")
             continue
 
-        ctx = ChatCommandContext(history=history, session_id=session_id, config=config)
-        result = registry.dispatch(prompt, ctx)
-        if result == _CMD_QUIT:
-            save_shell_history()
+        action, prompt, config, ctx = _run_chat_process_slash(
+            prompt,
+            registry=registry,
+            history=history,
+            session_id=session_id,
+            config=config,
+            ask_func=ask_func,
+        )
+        if action == "quit":
             return 0
-        if result == _CMD_CONTINUE:
-            if not history:  # e.g. /clear was just run
-                _last_context_warn_band = ""
-            continue
-        if result == "_retry":
-            _retry_prompt = str(_PREFS.pop("_retry_prompt", "") or "")
-            _retry_model = str(_PREFS.pop("_retry_model", "") or "")
-            if _retry_prompt:
-                prompt = _retry_prompt
-                if _retry_model:
-                    config = _dc_replace(config, model=_retry_model)
-            else:
-                continue
-        if result == "_tldr":
-            _tldr_prompt = str(_PREFS.pop("_tldr_prompt", "") or "")
-            if _tldr_prompt:
-                try:
-                    _tldr_response = _with_spinner(
-                        f"{_e('💬', '>>')} Summarizing…",
-                        ask_func,
-                        _tldr_prompt,
-                        config=config,
-                        history=[],
-                        output_json=config.output_json,
-                    )
-                    print(f"\n{_DM}↳ tldr summary:{_R}")
-                    print_response(_tldr_response, output_json=config.output_json, elapsed=None)
-                    _print_animated_separator()
-                except Exception as _tldr_err:
-                    print(f"  {_RE}error:{_R} /tldr failed: {_tldr_err}")
-            continue
-
-        # Unknown slash command — don't send to the AI; suggest closest match.
-        if prompt.startswith("/"):
-            cmd_name = prompt.split()[0][1:]  # strip leading /
-            _print_error(f"Unknown command {_BCY}/{cmd_name}{_R}. Type {_BCY}/help{_R} for a list.")
-            _known = list(registry._lookup.keys())
-            _suggestions = difflib.get_close_matches(cmd_name, _known, n=1, cutoff=0.6)
-            if _suggestions:
-                print(f"  {_DM}Did you mean {_R}{_BCY}/{_suggestions[0]}{_R}{_DM}?{_R}")
-            _print_predictive_affordances(
-                [
-                    "/palette <term> to search commands by name or purpose",
-                    "/shortcuts to review quick keyboard and command gestures",
-                ],
-                title="Command recovery",
-                border_style="yellow",
-            )
+        if action == "continue":
             continue
 
         if autoroute_on:
-            route_decision = route_repl_prompt(prompt, session_id=session_id)
-            if route_decision.kind in {ReplRouteKind.ANALYZE, ReplRouteKind.RESEARCH, ReplRouteKind.WRITE}:
-                _PREFS["_last_grounding_block"] = {
-                    "type": route_decision.kind.value,
-                    "query": route_decision.args_text.strip() or route_decision.target_text.strip(),
-                    "confidence": round(route_decision.confidence, 2),
-                    "rationale": route_decision.rationale,
-                    "grounded": "grounded by" in route_decision.rationale.lower(),
-                }
-            if route_decision.should_auto_execute_plan():
-                print(_format_route_announcement(route_decision))
-                _append_repl_route_event(session_id, prompt, route_decision)
-                try:
-                    routed = _execute_routed_plan(
-                        prompt=prompt,
-                        decision=route_decision,
-                        registry=registry,
-                        ctx=ctx,
-                    )
-                except OpenClawCliError as exc:
-                    print(f"{_BRE}error:{_R} {exc}", file=sys.stderr)
-                else:
-                    if routed == _CMD_QUIT:
-                        save_shell_history()
-                        return 0
-                    if routed == _CMD_CONTINUE:
-                        continue
-            if route_decision.should_auto_route():
-                print(_format_route_announcement(route_decision))
-                _append_repl_route_event(session_id, prompt, route_decision)
-                routed = registry.dispatch(route_decision.to_slash_command(), ctx)
-                if routed == _CMD_QUIT:
-                    save_shell_history()
-                    return 0
-                if routed == _CMD_CONTINUE:
-                    continue
-            # Prompt was classified but confidence was too low — show a brief hint.
-            if route_decision.kind == ReplRouteKind.CHAT and session_id:
-                _hint_rationale = (route_decision.rationale or "")[:80]
-                print(f"  {_DM}↳ stayed in chat — confidence below threshold · {_hint_rationale}{_R}")
+            route_action = _run_chat_handle_autoroute(
+                prompt, registry=registry, ctx=ctx, session_id=session_id
+            )
+            if route_action == "quit":
+                return 0
+            if route_action == "continue":
+                continue
 
         try:
             _t0 = time.monotonic()
@@ -5421,65 +5581,9 @@ def run_chat(
         if _auto_injected_paths and _EDIT_INTENT_RE.search(prompt) and _IS_TTY and not config.output_json:
             _run_chat_write_back(prompt, response, _auto_injected_paths, config)
 
-        # Clarifying question detection: if the AI responded with a short question
-        # instead of a real answer, surface an inline follow-up prompt.
-        _resp_text_for_q = (response.response or "").strip()
-        _clarify_handled = False
-        if (
-            _IS_TTY
-            and not config.output_json
-            and len(_resp_text_for_q) <= _CLARIFYING_MAX_CHARS
-            and _CLARIFYING_Q_RE.search(_resp_text_for_q)
-            and not _CLARIFYING_NOISE.search(_resp_text_for_q)
-        ):
-            try:
-                _clarify = input(f"  {_DM}↳ {_R}").strip()
-            except (EOFError, KeyboardInterrupt):
-                _clarify = ""
-            if _clarify:
-                # Add the clarification to history and send immediately.
-                history.extend([
-                    {"role": "user", "content": prompt},
-                    {"role": "assistant", "content": response.response},
-                ])
-                try:
-                    if ask_func is invoke_openclaw and should_use_streaming(config):
-                        _spin_stop2, _spin_thread2, _spin_cancel2 = _ui_utils_mod._start_stream_spinner(
-                            f"{_e('💬', '>>')} Thinking…",
-                            is_tty=_IS_TTY,
-                            output_json=config.output_json,
-                        )
-                        response = invoke_openclaw_stream(
-                            _clarify,
-                            config=config,
-                            history=list(history),
-                            _stop_spinner=_spin_stop2,
-                            _cancel_event=_spin_cancel2,
-                        )
-                        if _spin_stop2 is not None and not _spin_stop2.is_set():
-                            _spin_stop2.set()
-                        if _spin_thread2 is not None:
-                            _spin_thread2.join(timeout=0.5)
-                        if _spin_cancel2 is not None and _spin_cancel2.is_set():
-                            raise KeyboardInterrupt
-                    else:
-                        response = _with_spinner(
-                            f"{_e('💬', '>>')} Thinking…",
-                            ask_func,
-                            _clarify,
-                            config=config,
-                            history=list(history),
-                            output_json=config.output_json,
-                        )
-                    print_response(response, output_json=config.output_json, elapsed=None)
-                    _print_animated_separator()
-                    _last_response_text = response.response or ""
-                    history.append({"role": "user", "content": _clarify})
-                    history.append({"role": "assistant", "content": response.response})
-                    _clarify_handled = True
-                    prompt = _clarify
-                except (KeyboardInterrupt, OpenClawCliError):
-                    pass
+        _clarify_handled, prompt, response = _run_chat_handle_clarification(
+            prompt, response, history=history, config=config, ask_func=ask_func
+        )
         if not _clarify_handled:
             history.extend(
                 [
@@ -5500,7 +5604,6 @@ def run_chat(
                 if _sess and (not _sess.title or _sess.title.startswith("Session ")):
                     _sess.title = prompt[:60].strip()
                     save_session(_sess)
-
 
 def run_async(coro: Any) -> Any:
     """Run an async coroutine from the synchronous CLI entrypoint."""
