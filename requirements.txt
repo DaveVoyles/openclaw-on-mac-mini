@@ -69,11 +69,11 @@ requests>=2.31.0  # For API calls if httpx not suitable
 
 # Phase 3: Data Export & Reporting
 pyarrow>=15.0.0
-reportlab>=4.0.0
+
 jinja2>=3.1.0
 
 # Phase 3: Financial Data & Visualization
-polygon-api-client>=1.14.1  # Polygon.io stock data API
+
 plotly>=5.14.0               # Interactive charts
 kaleido>=0.2.1               # Chart export (PNG/SVG)
 # Note: weasyprint already included for PDF generation

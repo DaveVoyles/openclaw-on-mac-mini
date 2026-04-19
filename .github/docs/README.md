@@ -41,3 +41,7 @@ Keep these files local to this repo:
 3. Merge new upstream detail intentionally instead of overwriting local docs wholesale.
 4. Add links from this file to any additional docs that agents should read.
 5. If this file does not exist in a consumer repo, agents should continue with the shared instructions only.
+
+## Archive
+
+Superseded wave-plan and spec files are stored in [archive/](archive/) — do not load unless specifically reviewing historical plans.
