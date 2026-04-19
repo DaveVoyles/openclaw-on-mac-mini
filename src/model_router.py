@@ -189,6 +189,7 @@ def classify_query(
         is_code=bool(_CODE_PATTERN.search(message or "")),
         is_creative=bool(_CREATIVE_PATTERN.search(message or "")),
         is_analysis=bool(_ANALYSIS_PATTERN.search(message or "")),
+        is_reasoning=bool(_REASONING_PATTERN.search(message or "")),
         routing_profile=routing_profile,
         text=message or "",
         has_tools=needs_tools,

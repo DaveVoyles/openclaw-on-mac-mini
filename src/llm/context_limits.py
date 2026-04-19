@@ -31,6 +31,18 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     "claude-3-opus": 200_000,
     "claude-3-haiku": 200_000,
     "ollama": 8_192,
+    # Copilot proxy model names (host.docker.internal:9191/v1)
+    "copilot/gpt-4o": 128_000,
+    "copilot/gpt-4o-mini": 128_000,
+    "copilot/gpt-4.1": 1_047_576,
+    "copilot/gpt-4.1-mini": 1_047_576,
+    "copilot/o1": 200_000,
+    "copilot/o1-mini": 200_000,
+    "copilot/o3-mini": 200_000,
+    "copilot/claude-sonnet-4.5": 200_000,
+    "copilot/claude-sonnet-4": 200_000,
+    "copilot/claude-opus-4": 200_000,
+    "copilot/claude-3-5-sonnet": 200_000,
 }
 
 # Sorted longest-first so the most specific prefix always wins.

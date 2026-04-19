@@ -246,6 +246,7 @@ def select_auto_route(
     is_code: bool,
     is_creative: bool,
     is_analysis: bool,
+    is_reasoning: bool = False,
     routing_profile: str = "",
     text: str = "",
     has_tools: bool = False,
@@ -276,6 +277,17 @@ def select_auto_route(
             f"copilot mini-model fast-path (≤{_MINI_TOKEN_THRESHOLD} tokens)",
             profile,
             model_override=_MINI_MODEL,
+        )
+
+    # Complex reasoning fast-path: route to o1-mini via Copilot proxy when available.
+    # This takes priority over profile-based routing because o1-mini outperforms
+    # general-purpose models on math, multi-step logic, and deep analysis.
+    if is_reasoning and copilot_available:
+        return AutoRouteDecision(
+            "copilot",
+            "complex reasoning query: o1-mini via Copilot proxy",
+            profile,
+            model_override="copilot/o1-mini",
         )
 
     registry = build_provider_capability_registry(

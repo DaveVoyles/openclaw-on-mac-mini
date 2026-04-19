@@ -68,6 +68,33 @@ class TestModelContextWindows:
     def test_gemini_1_5_flash_prefix(self):
         assert cl_mod.get_model_context_window("gemini-1.5-flash-8b") == 1_048_576
 
+    def test_copilot_proxy_gpt4o(self):
+        assert cl_mod.get_model_context_window("copilot/gpt-4o") == 128_000
+
+    def test_copilot_proxy_gpt41(self):
+        assert cl_mod.get_model_context_window("copilot/gpt-4.1") == 1_047_576
+
+    def test_copilot_proxy_gpt41_mini(self):
+        assert cl_mod.get_model_context_window("copilot/gpt-4.1-mini") == 1_047_576
+
+    def test_copilot_proxy_o1_mini(self):
+        assert cl_mod.get_model_context_window("copilot/o1-mini") == 200_000
+
+    def test_copilot_proxy_o3_mini(self):
+        assert cl_mod.get_model_context_window("copilot/o3-mini") == 200_000
+
+    def test_copilot_proxy_claude_sonnet(self):
+        assert cl_mod.get_model_context_window("copilot/claude-sonnet-4.5") == 200_000
+
+    def test_copilot_proxy_claude_opus(self):
+        assert cl_mod.get_model_context_window("copilot/claude-opus-4") == 200_000
+
+    def test_copilot_proxy_claude_35_sonnet(self):
+        assert cl_mod.get_model_context_window("copilot/claude-3-5-sonnet") == 200_000
+
+    def test_copilot_proxy_case_insensitive(self):
+        assert cl_mod.get_model_context_window("COPILOT/GPT-4O") == 128_000
+
 
 # ===========================================================================
 # 2. _resolve_context_limit_profile — model-registry path
