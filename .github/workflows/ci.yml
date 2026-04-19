@@ -9,6 +9,9 @@ on:
       - 'requirements*.txt'
       - 'pyproject.toml'
       - '.github/workflows/ci.yml'
+      - 'scripts/validate_schema.py'
+      - 'config/env_schema.yaml'
+      - '.env.example'
   pull_request:
     branches: [main]
     paths:
@@ -17,6 +20,9 @@ on:
       - 'requirements*.txt'
       - 'pyproject.toml'
       - '.github/workflows/ci.yml'
+      - 'scripts/validate_schema.py'
+      - 'config/env_schema.yaml'
+      - '.env.example'
   workflow_dispatch:  # Manual trigger — always runs full suite
 
 concurrency:
@@ -101,6 +107,9 @@ jobs:
         run: |
           source .venv/bin/activate
           python3 scripts/syntax_check.py
+
+      - name: Validate env schema
+        run: python3 scripts/validate_schema.py --warn-only
 
       - name: Quality eval smoke gate (offline)
         run: |
