@@ -47,10 +47,10 @@ def _make_qmd(**overrides):
 # ---------------------------------------------------------------------------
 
 class TestIDHelpers:
-    def test_content_id_is_deterministic(self):
+    def test_memory_store_ops_unit_content_id_is_deterministic(self):
         assert _mem_content_id("hello") == _mem_content_id("hello")
 
-    def test_content_id_differs_for_different_content(self):
+    def test_memory_store_ops_unit_content_id_differs_for_different_content(self):
         assert _mem_content_id("hello") != _mem_content_id("world")
 
     def test_content_id_length_is_12(self):
@@ -140,7 +140,7 @@ class TestStoreMemory:
 
 class TestRecallMemories:
     @pytest.mark.asyncio
-    async def test_returns_list(self):
+    async def test_memory_store_ops_unit_returns_list(self):
         vs = _make_vector_store(search_all=AsyncMock(return_value=[]))
         with patch.dict(sys.modules, {"vector_store": vs}):
             results = await recall_memories("test query")
@@ -203,7 +203,7 @@ class TestRecallMemories:
 
 class TestForgetMemory:
     @pytest.mark.asyncio
-    async def test_returns_true_when_deletion_succeeds(self):
+    async def test_memory_store_ops_unit_returns_true_when_deletion_succeeds(self):
         vs = _make_vector_store()
         with patch.dict(sys.modules, {"vector_store": vs}):
             removed = await forget_memory("mem_abc123")
@@ -242,7 +242,7 @@ class TestForgetMemory:
 
 class TestMemoryStats:
     @pytest.mark.asyncio
-    async def test_returns_dict_with_expected_keys(self):
+    async def test_memory_store_ops_unit_returns_dict_with_expected_keys(self):
         vs = _make_vector_store()
         qmd = _make_qmd()
         rules_mock = MagicMock()

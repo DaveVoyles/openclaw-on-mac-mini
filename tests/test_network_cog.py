@@ -59,7 +59,7 @@ def _make_cog():
 
 # ── __init__ ──────────────────────────────────────────────────────────────────
 
-def test_init():
+def test_network_cog_init():
     cog = _make_cog()
     assert cog.bot is not None
 
@@ -67,7 +67,7 @@ def test_init():
 # ── cog_command_error ─────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_cog_command_error_not_done():
+async def test_network_cog_cog_command_error_not_done():
     from discord import app_commands
     cog = _make_cog()
     inter = _make_interaction(done=False)

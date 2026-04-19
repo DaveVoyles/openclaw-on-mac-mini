@@ -47,16 +47,16 @@ from model_aliases import (
 # ---------------------------------------------------------------------------
 
 class TestNormalizeModelInput:
-    def test_empty_string_returns_empty(self):
+    def test_model_aliases_constants_empty_string_returns_empty(self):
         assert normalize_model_input("") == ""
 
-    def test_none_returns_empty(self):
+    def test_model_aliases_constants_none_returns_empty(self):
         assert normalize_model_input(None) == ""
 
-    def test_whitespace_stripped(self):
+    def test_model_aliases_constants_whitespace_stripped(self):
         assert normalize_model_input("  openai  ") == "openai"
 
-    def test_lowercased(self):
+    def test_model_aliases_constants_lowercased(self):
         assert normalize_model_input("GEMINI") == "gemini"
 
     def test_alias_claude_maps_to_anthropic(self):
@@ -85,10 +85,10 @@ class TestNormalizeModelInput:
 # ---------------------------------------------------------------------------
 
 class TestModelInputSuggestion:
-    def test_empty_input_returns_empty(self):
+    def test_model_aliases_constants_empty_input_returns_empty(self):
         assert model_input_suggestion("") == ""
 
-    def test_none_returns_empty(self):
+    def test_model_aliases_constants_none_returns_empty_v2(self):
         assert model_input_suggestion(None) == ""
 
     def test_valid_pref_returns_empty(self):

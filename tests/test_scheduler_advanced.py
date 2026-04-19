@@ -145,7 +145,7 @@ class TestSchedulerDatabase:
         assert loaded.condition.enabled is True
         assert loaded.condition.condition_script == "temperature > 100"
 
-    def test_delete_task(self, scheduler_db):
+    def test_scheduler_advanced_delete_task(self, scheduler_db):
         task = AdvancedTask(
             task_id="test-del",
             action="test",
@@ -256,7 +256,7 @@ class TestAdvancedScheduler:
         assert tasks[0].task_id == "adv-1"
         assert tasks[1].task_id == "adv-2"
 
-    def test_delete_task(self, scheduler):
+    def test_scheduler_advanced_delete_task_v2(self, scheduler):
         task = scheduler.create_task(action="temp_task")
         assert scheduler.get_task(task.task_id) is not None
 
@@ -329,7 +329,7 @@ class TestAdvancedScheduler:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_execute_task_success(self, scheduler):
+    async def test_scheduler_advanced_execute_task_success(self, scheduler):
         mock_skill = AsyncMock(return_value="Success!")
         scheduler.register_skills({"test_skill": mock_skill})
 
@@ -471,7 +471,7 @@ class TestAdvancedSchedulerIntegration:
         """Test complete workflow: create, execute, log, query history."""
         call_count = 0
 
-        async def test_skill(param: str = ""):
+        async def test_scheduler_advanced_skill(param: str = ""):
             nonlocal call_count
             call_count += 1
             return f"Executed with {param}"
@@ -521,7 +521,7 @@ class TestParseUtc:
         result = _parse_utc("2024-01-01T09:00:00")
         assert result.tzinfo == datetime.timezone.utc
 
-    def test_aware_datetime_converted_to_utc(self):
+    def test_scheduler_advanced_aware_datetime_converted_to_utc(self):
         result = _parse_utc("2024-01-01T09:00:00+05:00")
         assert result.tzinfo == datetime.timezone.utc
         assert result.hour == 4  # 9 - 5

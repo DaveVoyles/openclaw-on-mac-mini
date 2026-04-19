@@ -40,7 +40,7 @@ class TestSkillStats:
 
 
 class TestCacheKey:
-    def test_deterministic(self):
+    def test_llm_tools_deterministic(self):
         k1 = mod._cache_key("get_stats", {"host": "nas", "port": 5001})
         k2 = mod._cache_key("get_stats", {"port": 5001, "host": "nas"})
         assert k1 == k2  # sorted args → same hash

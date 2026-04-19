@@ -75,7 +75,7 @@ def _make_prefs(
 
 # ── __init__ ──────────────────────────────────────────────────────────────────
 
-def test_init():
+def test_notify_cog_init():
     cog = _make_cog()
     assert cog.bot is not None
 

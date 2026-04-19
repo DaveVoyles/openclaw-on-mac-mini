@@ -99,7 +99,7 @@ class TestLoadSystemPrompt:
         v2 = llm_client._load_system_prompt()
         assert "Version 2." in v2
 
-    def test_strips_whitespace(self, tmp_path, monkeypatch):
+    def test_llm_client_strips_whitespace(self, tmp_path, monkeypatch):
         prompts_dir = tmp_path / "prompts"
         prompts_dir.mkdir()
         (prompts_dir / "system.txt").write_text("  padded  \n")
@@ -175,7 +175,7 @@ class TestConvertSchema:
 # ---------------------------------------------------------------------------
 
 class TestBuildTools:
-    def test_returns_list(self):
+    def test_llm_client_returns_list(self):
         result = llm_client._build_tools([])
         assert isinstance(result, list)
 
@@ -227,7 +227,7 @@ class TestResetModels:
 # ---------------------------------------------------------------------------
 
 class TestGetToolDeclarations:
-    def test_returns_list(self):
+    def test_llm_client_returns_list_v2(self):
         result = llm_client._get_tool_declarations()
         assert isinstance(result, list)
 

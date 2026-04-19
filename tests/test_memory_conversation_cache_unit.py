@@ -125,11 +125,11 @@ class TestConversationCacheClearAll:
 # ---------------------------------------------------------------------------
 
 class TestConversationCacheActiveCount:
-    def test_active_count_counts_non_expired(self):
+    def test_memory_conversation_cache_unit_active_count_counts_non_expired(self):
         cache, conv = _make_cache_with_conv()
         assert cache.active_count == 1
 
-    def test_active_count_excludes_expired(self):
+    def test_memory_conversation_cache_unit_active_count_excludes_expired(self):
         cache, conv = _make_cache_with_conv()
         conv.last_active = time.monotonic() - (CONTEXT_TTL + 100)
         assert cache.active_count == 0
@@ -144,7 +144,7 @@ class TestConversationCacheActiveCount:
 # ---------------------------------------------------------------------------
 
 class TestConversationCacheStats:
-    def test_stats_returns_string(self):
+    def test_memory_conversation_cache_unit_stats_returns_string(self):
         cache, _ = _make_cache_with_conv()
         result = cache.stats()
         assert isinstance(result, str)

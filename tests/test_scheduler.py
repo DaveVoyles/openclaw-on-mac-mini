@@ -103,7 +103,7 @@ class TestTaskSchedulerCreate:
 
 
 class TestTaskSchedulerRemove:
-    def test_remove_existing_returns_true(self, sched):
+    def test_scheduler_remove_existing_returns_true(self, sched):
         task = sched.create("list_containers", {})
         assert sched.remove(task.task_id) is True
 
@@ -112,7 +112,7 @@ class TestTaskSchedulerRemove:
         sched.remove(task.task_id)
         assert sched.get(task.task_id) is None
 
-    def test_remove_nonexistent_returns_false(self, sched):
+    def test_scheduler_remove_nonexistent_returns_false(self, sched):
         assert sched.remove("sched-999") is False
 
     def test_remove_does_not_affect_other_tasks(self, sched):
@@ -313,7 +313,7 @@ class TestSchedulerPersistence:
             assert loaded is not None
             assert loaded.action == "list_containers"
 
-    def test_save_writes_valid_json(self, tmp_path):
+    def test_scheduler_save_writes_valid_json(self, tmp_path):
         temp_file = tmp_path / "schedules.json"
         with patch.object(scheduler_module, "SCHEDULE_FILE", temp_file):
             s = TaskScheduler()

@@ -16,17 +16,17 @@ from utils import atomic_write, safe_call
 
 
 class TestAtomicWrite:
-    def test_atomic_write_creates_file(self, tmp_path):
+    def test_utils_atomic_write_creates_file(self, tmp_path):
         target = tmp_path / "output.json"
         atomic_write(target, '{"ok": true}')
         assert target.read_text() == '{"ok": true}'
 
-    def test_atomic_write_creates_parent_dirs(self, tmp_path):
+    def test_utils_atomic_write_creates_parent_dirs(self, tmp_path):
         target = tmp_path / "a" / "b" / "c" / "deep.txt"
         atomic_write(target, "nested")
         assert target.read_text() == "nested"
 
-    def test_atomic_write_overwrites_existing(self, tmp_path):
+    def test_utils_atomic_write_overwrites_existing(self, tmp_path):
         target = tmp_path / "file.txt"
         target.write_text("old")
         atomic_write(target, "new")

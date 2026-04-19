@@ -41,7 +41,7 @@ class TestConstants:
 # ---------------------------------------------------------------------------
 
 class TestCliVersion:
-    def test_returns_string(self):
+    def test_openclaw_cli_update_unit_returns_string(self):
         result = cli_version()
         assert isinstance(result, str)
 
@@ -226,7 +226,7 @@ class TestCheckForUpdate:
             check_for_update()
         assert update_mod._latest_version == prev
 
-    def test_function_is_callable(self):
+    def test_openclaw_cli_update_unit_function_is_callable(self):
         assert callable(check_for_update)
 
     def test_accepts_timeout_kwarg(self):

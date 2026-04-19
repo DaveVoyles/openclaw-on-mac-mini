@@ -21,12 +21,12 @@ def test_separator_fill_default_char():
     assert result == "─" * 10
 
 
-def test_separator_fill_high_contrast():
+def test_openclaw_cli_exec_unit_separator_fill_high_contrast():
     result = _separator_fill(5, high_contrast=True)
     assert result == "=" * 5
 
 
-def test_separator_fill_plain_mode():
+def test_openclaw_cli_exec_unit_separator_fill_plain_mode():
     result = _separator_fill(5, plain_mode=True)
     assert result == "=" * 5
 

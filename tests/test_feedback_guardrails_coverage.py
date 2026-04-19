@@ -29,19 +29,19 @@ def _reset_state():
 # ---------------------------------------------------------------------------
 
 class TestPruneFeedbackEventBuffer:
-    def test_keeps_events_within_window(self):
+    def test_feedback_guardrails_coverage_keeps_events_within_window(self):
         now = 1000.0
         events = [990.0, 995.0, 999.0]
         result = _prune_feedback_event_buffer(events, now, 60.0)
         assert result == [990.0, 995.0, 999.0]
 
-    def test_removes_stale_events(self):
+    def test_feedback_guardrails_coverage_removes_stale_events(self):
         now = 1000.0
         events = [900.0, 930.0, 970.0, 999.0]
         result = _prune_feedback_event_buffer(events, now, 60.0)
         assert result == [970.0, 999.0]
 
-    def test_empty_list_returns_empty(self):
+    def test_feedback_guardrails_coverage_empty_list_returns_empty(self):
         assert _prune_feedback_event_buffer([], 1000.0, 60.0) == []
 
     def test_zero_window(self):
@@ -51,7 +51,7 @@ class TestPruneFeedbackEventBuffer:
         assert 1000.0 in result
         assert 999.9 not in result
 
-    def test_negative_window_treated_as_zero(self):
+    def test_feedback_guardrails_coverage_negative_window_treated_as_zero(self):
         now = 1000.0
         events = [999.9, 1000.0]
         result = _prune_feedback_event_buffer(events, now, -10.0)
@@ -206,7 +206,7 @@ class TestApplyFeedbackGuardrailsEdgeCases:
 # ---------------------------------------------------------------------------
 
 class TestResetFeedbackGuardrailsForTests:
-    def test_reset_clears_state(self):
+    def test_feedback_guardrails_coverage_reset_clears_state(self):
         _apply_feedback_guardrails(
             user_id=1, channel_id=2, message_id=3, rating="helpful", now=1000.0
         )

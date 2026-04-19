@@ -8,10 +8,10 @@ from copy_workflow_formatter import build_copy_workflow_payload, strip_discord_m
 # ===========================================================================
 
 class TestStripDiscordMarkdownNoise:
-    def test_empty_returns_empty(self):
+    def test_copy_workflow_formatter_empty_returns_empty(self):
         assert strip_discord_markdown_noise("") == ""
 
-    def test_none_returns_empty(self):
+    def test_copy_workflow_formatter_none_returns_empty(self):
         assert strip_discord_markdown_noise(None) == ""  # type: ignore
 
     def test_strips_bold(self):
@@ -76,7 +76,7 @@ class TestStripDiscordMarkdownNoise:
         result = strip_discord_markdown_noise("a\n\n\n\nb")
         assert "\n\n\n" not in result
 
-    def test_plain_text_unchanged(self):
+    def test_copy_workflow_formatter_plain_text_unchanged(self):
         text = "This is plain text."
         assert strip_discord_markdown_noise(text) == text
 
@@ -90,7 +90,7 @@ class TestStripDiscordMarkdownNoise:
 # ===========================================================================
 
 class TestBuildCopyWorkflowPayload:
-    def test_empty_returns_empty(self):
+    def test_copy_workflow_formatter_empty_returns_empty_v2(self):
         assert build_copy_workflow_payload("") == ""
 
     def test_single_line_returned_as_summary(self):

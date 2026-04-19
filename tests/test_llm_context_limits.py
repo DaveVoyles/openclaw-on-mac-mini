@@ -27,7 +27,7 @@ class TestModelContextWindows:
         assert "claude-3-5-sonnet" in cl_mod.MODEL_CONTEXT_WINDOWS
         assert "ollama" in cl_mod.MODEL_CONTEXT_WINDOWS
 
-    def test_exact_match(self):
+    def test_llm_context_limits_exact_match(self):
         assert cl_mod.get_model_context_window("gpt-4o") == 128_000
 
     def test_prefix_match_with_hyphen_suffix(self):
@@ -38,7 +38,7 @@ class TestModelContextWindows:
         # "ollama:mistral" should match "ollama"
         assert cl_mod.get_model_context_window("ollama:mistral") == 8_192
 
-    def test_case_insensitive(self):
+    def test_llm_context_limits_case_insensitive(self):
         assert cl_mod.get_model_context_window("GPT-4O") == 128_000
         assert cl_mod.get_model_context_window("Gemini-1.5-Pro") == 2_097_152
 
@@ -48,13 +48,13 @@ class TestModelContextWindows:
         # This should NOT match "gpt-4o"
         assert result != 128_000 or result is None  # no false positive
 
-    def test_unknown_model_returns_none(self):
+    def test_llm_context_limits_unknown_model_returns_none(self):
         assert cl_mod.get_model_context_window("totally-unknown-model") is None
 
-    def test_none_input_returns_none(self):
+    def test_llm_context_limits_none_input_returns_none(self):
         assert cl_mod.get_model_context_window(None) is None
 
-    def test_empty_string_returns_none(self):
+    def test_llm_context_limits_empty_string_returns_none(self):
         assert cl_mod.get_model_context_window("") is None
 
     def test_claude_3_5_sonnet_prefix(self):

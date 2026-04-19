@@ -29,7 +29,7 @@ class TestTruncate:
         s = "a" * 100
         assert _truncate(s, limit=100) == s
 
-    def test_over_limit_truncated(self):
+    def test_advanced_skills_over_limit_truncated(self):
         s = "a" * 200
         result = _truncate(s, limit=100)
         assert len(result) <= 100

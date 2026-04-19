@@ -197,14 +197,14 @@ class TestPersistence:
             assert abs(t2.total_cost - cost1) < 1e-9
             assert t2._data["calls"] == calls1
 
-    def test_corrupted_file_falls_back_to_empty(self, tmp_path):
+    def test_spending_corrupted_file_falls_back_to_empty(self, tmp_path):
         temp_file = tmp_path / "spending.json"
         temp_file.write_text("this is not valid json{{{}}")
         with patch.object(spending_module, "SPENDING_FILE", temp_file):
             t = SpendingTracker()
             assert t.total_cost == 0.0  # Graceful fallback
 
-    async def test_save_writes_valid_json(self, tmp_path):
+    async def test_spending_save_writes_valid_json(self, tmp_path):
         temp_file = tmp_path / "spending.json"
         with patch.object(spending_module, "SPENDING_FILE", temp_file):
             t = SpendingTracker()

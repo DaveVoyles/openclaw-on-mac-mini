@@ -33,7 +33,7 @@ def _make_result(
 # ===========================================================================
 
 class TestAlertState:
-    def test_defaults(self):
+    def test_alert_patreon_defaults(self):
         state = AlertState()
         assert state.last_alert_time == 0.0
         assert state.alert_count == 0

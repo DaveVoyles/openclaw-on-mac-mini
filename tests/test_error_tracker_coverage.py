@@ -26,7 +26,7 @@ def _write_outcomes(journal_path: Path, outcomes: list[dict]):
 
 
 class TestGetRecentOutcomes:
-    def test_returns_empty_when_no_file(self):
+    def test_error_tracker_coverage_returns_empty_when_no_file(self):
         assert mod.get_recent_outcomes() == []
 
     def test_returns_entries_within_window(self, isolated_journal):
@@ -46,7 +46,7 @@ class TestGetRecentOutcomes:
         result = mod.get_recent_outcomes(hours=1)
         assert result == []
 
-    def test_limits_results(self, isolated_journal):
+    def test_error_tracker_coverage_limits_results(self, isolated_journal):
         for i in range(10):
             mod.record_outcome(user_id=i, question=f"q{i}", model_used="gpt", success=True)
         result = mod.get_recent_outcomes(limit=5)
@@ -91,7 +91,7 @@ class TestGetErrorStats:
         assert "ollama" in stats["model_breakdown"]
         assert stats["model_breakdown"]["ollama"]["failures"] == 1
 
-    def test_avg_latency(self, isolated_journal):
+    def test_error_tracker_coverage_avg_latency(self, isolated_journal):
         mod.record_outcome(user_id=1, question="q", model_used="gpt", success=True, latency_ms=1000)
         mod.record_outcome(user_id=1, question="q", model_used="gpt", success=True, latency_ms=3000)
         stats = mod.get_error_stats()
@@ -143,7 +143,7 @@ class TestCheckErrorPatterns:
 
 
 class TestGetPastIncidents:
-    def test_returns_empty_when_no_file(self):
+    def test_error_tracker_coverage_returns_empty_when_no_file_v2(self):
         result = mod.get_past_incidents()
         assert result == []
 
@@ -180,7 +180,7 @@ class TestGetPastIncidents:
         assert len(result) == 1
         assert result[0]["patterns"][0]["type"] == "high_failure_rate"
 
-    def test_limits_results(self, isolated_journal):
+    def test_error_tracker_coverage_limits_results_v2(self, isolated_journal):
         incidents = [
             {"ts": time.time(), "patterns": [{"type": "t"}], "diagnosis": {}, "fix": {}}
             for _ in range(10)
@@ -193,3 +193,46 @@ class TestGetPastIncidents:
         mod.INCIDENTS_FILE.write_text("not valid json")
         result = mod.get_past_incidents()
         assert result == []
+
+# --- Merged from test_error_tracker.py ---
+"""Tests for trace persistence in error_tracker outcomes."""
+
+import json
+
+import error_tracker as mod
+
+
+def test_record_outcome_persists_explicit_trace_id(tmp_path, monkeypatch):
+    journal = tmp_path / "error_journal.jsonl"
+    monkeypatch.setattr(mod, "JOURNAL_FILE", journal)
+
+    mod.record_outcome(
+        user_id=1,
+        question="q",
+        model_used="gemini",
+        success=False,
+        error_msg="boom",
+        trace_id="trace-explicit-1",
+    )
+
+    line = journal.read_text().strip()
+    payload = json.loads(line)
+    assert payload["trace_id"] == "trace-explicit-1"
+
+
+def test_record_outcome_uses_active_trace_when_missing(tmp_path, monkeypatch):
+    journal = tmp_path / "error_journal.jsonl"
+    monkeypatch.setattr(mod, "JOURNAL_FILE", journal)
+    monkeypatch.setattr(mod, "get_trace_id", lambda: "trace-from-context")
+
+    mod.record_outcome(
+        user_id=2,
+        question="q2",
+        model_used="gemini",
+        success=True,
+    )
+
+    line = journal.read_text().strip()
+    payload = json.loads(line)
+    assert payload["trace_id"] == "trace-from-context"
+

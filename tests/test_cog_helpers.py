@@ -25,7 +25,7 @@ class TestTruncateForEmbed:
         assert len(result) <= 4000
         assert result.endswith("(truncated)")
 
-    def test_custom_limit(self):
+    def test_cog_helpers_custom_limit(self):
         text = "a" * 200
         result = ch.truncate_for_embed(text, limit=100)
         assert len(result) <= 100
@@ -77,7 +77,7 @@ class TestSplitResponse:
         for chunk in chunks:
             assert len(chunk) <= 3900
 
-    def test_custom_limit(self):
+    def test_cog_helpers_custom_limit_v2(self):
         text = "hello world " * 50  # ~600 chars
         chunks = ch.split_response(text, limit=100)
         assert len(chunks) > 1

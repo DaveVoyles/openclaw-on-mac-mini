@@ -29,23 +29,23 @@ from json_utils import (
 
 
 class TestTryParseJson:
-    def test_valid_object(self):
+    def test_simple_modules_valid_object(self):
         assert try_parse_json('{"key": "value"}') == {"key": "value"}
 
-    def test_valid_array(self):
+    def test_simple_modules_valid_array(self):
         assert try_parse_json("[1, 2, 3]") == [1, 2, 3]
 
     def test_valid_nested(self):
         result = try_parse_json('{"a": {"b": [1, 2]}}')
         assert result == {"a": {"b": [1, 2]}}
 
-    def test_invalid_json_returns_none(self):
+    def test_simple_modules_invalid_json_returns_none(self):
         assert try_parse_json("{bad json}") is None
 
-    def test_empty_string_returns_none(self):
+    def test_simple_modules_empty_string_returns_none(self):
         assert try_parse_json("") is None
 
-    def test_whitespace_only_returns_none(self):
+    def test_simple_modules_whitespace_only_returns_none(self):
         assert try_parse_json("   \n  ") is None
 
     def test_plain_text_returns_none(self):
@@ -59,7 +59,7 @@ class TestTryParseJson:
     def test_trailing_comma_returns_none(self):
         assert try_parse_json('{"a": 1,}') is None
 
-    def test_none_input_returns_none(self):
+    def test_simple_modules_none_input_returns_none(self):
         # try_parse_json expects str; passing None hits TypeError branch
         assert try_parse_json(None) is None  # type: ignore[arg-type]
 
@@ -71,7 +71,7 @@ class TestTryParseJson:
 
 
 class TestExtractJsonBlock:
-    def test_fenced_json_block(self):
+    def test_simple_modules_fenced_json_block(self):
         text = '```json\n{"key": "val"}\n```'
         assert extract_json_block(text) == '{"key": "val"}'
 
@@ -93,15 +93,15 @@ class TestExtractJsonBlock:
         text = '{"a": 1}'
         assert extract_json_block(text) == '{"a": 1}'
 
-    def test_nested_object(self):
+    def test_simple_modules_nested_object(self):
         text = '{"outer": {"inner": true}}'
         result = extract_json_block(text)
         assert result == '{"outer": {"inner": true}}'
 
-    def test_no_json_returns_none(self):
+    def test_simple_modules_no_json_returns_none(self):
         assert extract_json_block("just plain text") is None
 
-    def test_empty_string_returns_none(self):
+    def test_simple_modules_empty_string_returns_none_v2(self):
         assert extract_json_block("") is None
 
     def test_string_with_escaped_quotes(self):
@@ -155,10 +155,10 @@ class TestRepairJson:
         result = repair_json('```json\n{"x": 99}\n```')
         assert result == {"x": 99}
 
-    def test_empty_string_returns_none(self):
+    def test_simple_modules_empty_string_returns_none_v3(self):
         assert repair_json("") is None
 
-    def test_whitespace_only_returns_none(self):
+    def test_simple_modules_whitespace_only_returns_none_v2(self):
         assert repair_json("   ") is None
 
     def test_completely_broken_returns_none(self):
@@ -188,7 +188,7 @@ class TestFormatToolResult:
         assert json.loads(result) == {"x": 10}
         assert "\n" in result
 
-    def test_plain_string_returned_as_is(self):
+    def test_simple_modules_plain_string_returned_as_is(self):
         assert format_tool_result("hello") == "hello"
 
     def test_number_returned_as_string(self):
@@ -214,7 +214,7 @@ class TestFormatToolResult:
     def test_empty_dict(self):
         assert format_tool_result({}) == "{}"
 
-    def test_empty_list(self):
+    def test_simple_modules_empty_list(self):
         assert format_tool_result([]) == "[]"
 
 
@@ -230,10 +230,10 @@ from nlp_entities import (
 
 
 class TestPhraseInText:
-    def test_exact_match(self):
+    def test_simple_modules_exact_match(self):
         assert _phrase_in_text("plex is running", "plex") is True
 
-    def test_no_match(self):
+    def test_simple_modules_no_match(self):
         assert _phrase_in_text("hello world", "plex") is False
 
     def test_word_boundary_left(self):
@@ -248,7 +248,7 @@ class TestDedupe:
     def test_removes_duplicates_preserves_order(self):
         assert _dedupe(["a", "b", "a", "c", "b"]) == ["a", "b", "c"]
 
-    def test_empty_list(self):
+    def test_simple_modules_empty_list_v2(self):
         assert _dedupe([]) == []
 
     def test_no_duplicates(self):
@@ -276,7 +276,7 @@ class TestExtractEntities:
         assert "services" in result
         assert "sonarr" in result["services"]
 
-    def test_league_nba(self):
+    def test_simple_modules_league_nba(self):
         result = extract_entities("who won the nba game")
         assert "leagues" in result
         assert "NBA" in result["leagues"]
@@ -291,7 +291,7 @@ class TestExtractEntities:
         assert "platforms" in result
         assert "PlayStation" in result["platforms"]
 
-    def test_platform_xbox(self):
+    def test_simple_modules_platform_xbox(self):
         result = extract_entities("xbox series x news")
         assert "platforms" in result
         assert "Xbox" in result["platforms"]
@@ -301,7 +301,7 @@ class TestExtractEntities:
         assert "wwe" in result
         assert "WWE RAW" in result["wwe"]
 
-    def test_wwe_smackdown(self):
+    def test_simple_modules_wwe_smackdown(self):
         result = extract_entities("smackdown results")
         assert "wwe" in result
         assert "WWE SmackDown" in result["wwe"]
@@ -315,7 +315,7 @@ class TestExtractEntities:
         result = extract_entities("hello how are you today")
         assert result == {}
 
-    def test_multiple_services(self):
+    def test_simple_modules_multiple_services(self):
         result = extract_entities("sonarr and radarr both crashed")
         assert "sonarr" in result["services"]
         assert "radarr" in result["services"]
@@ -332,15 +332,15 @@ class TestExtractEntities:
 
 
 class TestEnrichRouteTextAndHints:
-    def test_services_added_to_hints(self):
+    def test_simple_modules_services_added_to_hints(self):
         text, hints = enrich_route_text_and_hints("restart plex", {})
         assert hints.get("services") == ["plex"]
 
-    def test_league_added_to_hints(self):
+    def test_simple_modules_league_added_to_hints(self):
         _, hints = enrich_route_text_and_hints("nba scores tonight", {})
         assert hints.get("league") == "NBA"
 
-    def test_platform_added_to_hints(self):
+    def test_simple_modules_platform_added_to_hints(self):
         _, hints = enrich_route_text_and_hints("ps5 exclusives", {})
         assert "PlayStation" in hints.get("platforms", [])
 
@@ -473,7 +473,7 @@ class TestTodoManagerAdd:
         item = mgr.add("Urgent task", user_id=1, priority="high")
         assert item.priority == "high"
 
-    def test_add_with_due_date(self, mgr):
+    def test_simple_modules_add_with_due_date(self, mgr):
         item = mgr.add("Doctor", user_id=1, due_date="2099-01-01")
         assert item.due_date == "2099-01-01"
 
@@ -532,12 +532,12 @@ class TestTodoManagerList:
         items = mgr.list_for_user(1, filter_="overdue")
         assert not any(i.id == item.id for i in items)
 
-    def test_list_empty_user(self, mgr):
+    def test_simple_modules_list_empty_user(self, mgr):
         assert mgr.list_for_user(999) == []
 
 
 class TestTodoManagerComplete:
-    def test_complete_marks_done(self, mgr):
+    def test_simple_modules_complete_marks_done(self, mgr):
         item = mgr.add("Task", user_id=1)
         result = mgr.complete(item.id, user_id=1)
         assert result is not None
@@ -551,7 +551,7 @@ class TestTodoManagerComplete:
     def test_complete_nonexistent_returns_none(self, mgr):
         assert mgr.complete("deadbeef", user_id=1) is None
 
-    def test_complete_persists(self, mgr, tmp_path):
+    def test_simple_modules_complete_persists(self, mgr, tmp_path):
         item = mgr.add("Task", user_id=1)
         mgr.complete(item.id, user_id=1)
         db = tmp_path / "todos.json"
@@ -560,7 +560,7 @@ class TestTodoManagerComplete:
 
 
 class TestTodoManagerDelete:
-    def test_delete_returns_true(self, mgr):
+    def test_simple_modules_delete_returns_true(self, mgr):
         item = mgr.add("To delete", user_id=1)
         assert mgr.delete(item.id, user_id=1) is True
 
@@ -569,14 +569,14 @@ class TestTodoManagerDelete:
         mgr.delete(item.id, user_id=1)
         assert mgr.list_for_user(1, filter_="all") == []
 
-    def test_delete_wrong_user_returns_false(self, mgr):
+    def test_simple_modules_delete_wrong_user_returns_false(self, mgr):
         item = mgr.add("Task", user_id=1)
         assert mgr.delete(item.id, user_id=2) is False
 
-    def test_delete_nonexistent_returns_false(self, mgr):
+    def test_simple_modules_delete_nonexistent_returns_false(self, mgr):
         assert mgr.delete("deadbeef", user_id=1) is False
 
-    def test_delete_persists(self, mgr, tmp_path):
+    def test_simple_modules_delete_persists(self, mgr, tmp_path):
         item = mgr.add("Task", user_id=1)
         mgr.delete(item.id, user_id=1)
         db = tmp_path / "todos.json"
@@ -608,7 +608,7 @@ class TestTodoManagerPersistence:
         mgr = TodoManager(path=db)
         assert mgr.list_for_user(1) == []
 
-    def test_save_creates_parent_dirs(self, tmp_path, monkeypatch):
+    def test_simple_modules_save_creates_parent_dirs(self, tmp_path, monkeypatch):
         db = tmp_path / "deep" / "nested" / "todos.json"
         monkeypatch.setattr(_todo_module, "DATA_PATH", db)
         mgr = TodoManager(path=db)

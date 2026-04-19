@@ -263,7 +263,7 @@ class TestAuditLoggerLogUserAction:
         audit_logger.log_user_action("u1", "join", "joined #general")
         audit_logger.logger.info.assert_called_once()
 
-    def test_message_contains_action(self, audit_logger):
+    def test_enhanced_logging_message_contains_action(self, audit_logger):
         audit_logger.log_user_action("u1", "leave")
         call_args = audit_logger.logger.info.call_args
         assert "leave" in call_args[0][0]
@@ -280,7 +280,7 @@ class TestAuditLoggerLogUserAction:
         audit_logger.log_user_action("u1", "test_action", "some detail", result="success")
         mock_fn.assert_called_once()
 
-    def test_default_result_is_success(self, audit_logger):
+    def test_enhanced_logging_default_result_is_success(self, audit_logger):
         audit_logger.log_user_action("u1", "act")
         extra = audit_logger.logger.info.call_args[1]["extra"]
         assert extra["metadata"]["result"] == "success"
@@ -330,11 +330,11 @@ class TestAuditLoggerLogCommandExecution:
 
 
 class TestAuditLoggerLogPermissionChange:
-    def test_calls_warning(self, audit_logger):
+    def test_enhanced_logging_calls_warning(self, audit_logger):
         audit_logger.log_permission_change("admin-1", "user-2", "promote")
         audit_logger.logger.warning.assert_called_once()
 
-    def test_message_contains_action(self, audit_logger):
+    def test_enhanced_logging_message_contains_action_v2(self, audit_logger):
         audit_logger.log_permission_change("a", "u", "demote")
         msg = audit_logger.logger.warning.call_args[0][0]
         assert "demote" in msg
@@ -351,7 +351,7 @@ class TestAuditLoggerLogPermissionChange:
 
 
 class TestAuditLoggerLogConfigChange:
-    def test_calls_warning(self, audit_logger):
+    def test_enhanced_logging_calls_warning_v2(self, audit_logger):
         audit_logger.log_config_change("u1", "max_retries", 3, 5)
         audit_logger.logger.warning.assert_called_once()
 
@@ -411,7 +411,7 @@ class TestAuditLoggerLogSecurityEvent:
 
 
 class TestAuditLoggerLogFailedAuth:
-    def test_delegates_to_log_security_event(self, audit_logger):
+    def test_enhanced_logging_delegates_to_log_security_event(self, audit_logger):
         with patch.object(audit_logger, "log_security_event") as mock_se:
             audit_logger.log_failed_auth("bad_user", "wrong password")
             mock_se.assert_called_once_with(
@@ -423,7 +423,7 @@ class TestAuditLoggerLogFailedAuth:
 
 
 class TestAuditLoggerLogSuspiciousActivity:
-    def test_delegates_to_log_security_event(self, audit_logger):
+    def test_enhanced_logging_delegates_to_log_security_event_v2(self, audit_logger):
         with patch.object(audit_logger, "log_security_event") as mock_se:
             audit_logger.log_suspicious_activity("u1", "port scanning")
             mock_se.assert_called_once_with(
@@ -451,7 +451,7 @@ def _make_log_entry(user_id="u1", category="user_action", age_days=0):
 
 
 class TestGetAuditLogs:
-    def test_returns_empty_when_file_missing(self, tmp_path):
+    def test_enhanced_logging_returns_empty_when_file_missing(self, tmp_path):
         al = AuditLogger()
         with patch("enhanced_logging.Path") as mock_path_cls:
             mock_path_cls.return_value.exists.return_value = False
@@ -468,7 +468,7 @@ class TestGetAuditLogs:
             result = al.get_audit_logs()
         assert len(result) == 2
 
-    def test_filters_by_user_id(self):
+    def test_enhanced_logging_filters_by_user_id(self):
         al = AuditLogger()
         entries = "\n".join([_make_log_entry("alice"), _make_log_entry("bob")])
         m = mock_open(read_data=entries)
@@ -502,7 +502,7 @@ class TestGetAuditLogs:
             result = al.get_audit_logs(days=7)
         assert len(result) == 1
 
-    def test_skips_invalid_json_lines(self):
+    def test_enhanced_logging_skips_invalid_json_lines(self):
         al = AuditLogger()
         entries = "not valid json\n" + _make_log_entry("u1")
         m = mock_open(read_data=entries)

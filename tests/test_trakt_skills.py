@@ -28,7 +28,7 @@ def test_trakt_skills_registered():
     assert "search_trakt" in TRAKT_SKILLS
 
 
-def test_skills_are_callables():
+def test_trakt_skills_skills_are_callables():
     """Verify all Trakt skills are callable."""
     for skill_name, skill_func in TRAKT_SKILLS.items():
         assert callable(skill_func), f"{skill_name} is not callable"

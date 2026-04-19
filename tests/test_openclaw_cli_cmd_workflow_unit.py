@@ -259,7 +259,7 @@ def test_cmd_workflow_unknown_sub(capsys):
 # _cmd_macrostatus
 # ---------------------------------------------------------------------------
 
-def test_cmd_macrostatus_no_macros(capsys):
+def test_openclaw_cli_cmd_workflow_unit_cmd_macrostatus_no_macros(capsys):
     cli = _mock_cli(_PREFS={"macros": {}})
     with patch.object(mod, "_get_cli_mod", return_value=cli):
         result = mod._cmd_macrostatus(_ctx(""))

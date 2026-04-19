@@ -37,7 +37,7 @@ class TestMarkdownTableParser:
             assert len(parsed_headers) == 2
             assert len(parsed_rows) <= 5
 
-    def test_empty_string(self):
+    def test_property_based_empty_string(self):
         """Empty string should return None."""
         assert _parse_markdown_table("") is None
 

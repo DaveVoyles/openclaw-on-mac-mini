@@ -62,7 +62,7 @@ class TestThreadPath:
 # ---------------------------------------------------------------------------
 
 class TestSaveThread:
-    def test_invalid_name_returns_error(self):
+    def test_memory_thread_persistence_unit_invalid_name_returns_error(self):
         tp = ThreadPersistence()
         result = tp.save_thread(_make_conv(), 1, "invalid name!")
         assert "❌" in result
@@ -103,13 +103,13 @@ class TestSaveThread:
 # ---------------------------------------------------------------------------
 
 class TestLoadThread:
-    def test_invalid_name_returns_error(self):
+    def test_memory_thread_persistence_unit_invalid_name_returns_error_v2(self):
         tp = ThreadPersistence()
         conv, msg = tp.load_thread(1, "bad name!!")
         assert conv is None
         assert "❌" in msg
 
-    def test_missing_file_returns_error(self, tmp_path, monkeypatch):
+    def test_memory_thread_persistence_unit_missing_file_returns_error(self, tmp_path, monkeypatch):
         threads = tmp_path / "threads"
         monkeypatch.setattr(mtp_module, "THREADS_DIR", threads)
         tp = ThreadPersistence()
@@ -231,12 +231,12 @@ class TestListThreads:
 # ---------------------------------------------------------------------------
 
 class TestDeleteThread:
-    def test_invalid_name_returns_error(self):
+    def test_memory_thread_persistence_unit_invalid_name_returns_error_v3(self):
         tp = ThreadPersistence()
         result = tp.delete_thread(1, "bad name!!")
         assert "❌" in result
 
-    def test_missing_file_returns_error(self, tmp_path, monkeypatch):
+    def test_memory_thread_persistence_unit_missing_file_returns_error_v2(self, tmp_path, monkeypatch):
         threads = tmp_path / "threads"
         monkeypatch.setattr(mtp_module, "THREADS_DIR", threads)
         tp = ThreadPersistence()

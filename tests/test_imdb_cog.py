@@ -97,7 +97,7 @@ _SAMPLE_SERIES = {
 
 # ── __init__ ──────────────────────────────────────────────────────────────────
 
-def test_init():
+def test_imdb_cog_init():
     cog = _make_cog()
     assert cog.bot is not None
 

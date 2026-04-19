@@ -4,7 +4,7 @@ from channel_profiles import channel_context_prefix, resolve_retrieval_profile_s
 
 
 class TestResolveRetrievalProfileSettings:
-    def test_returns_dict(self):
+    def test_channel_profiles_returns_dict(self):
         result = resolve_retrieval_profile_settings("any query")
         assert isinstance(result, dict)
 
@@ -37,7 +37,7 @@ class TestChannelContextPrefix:
     def test_sports_channel_returns_prefix(self):
         assert channel_context_prefix("wwe") == "Channel: #wwe\n"
 
-    def test_empty_string_returns_empty(self):
+    def test_channel_profiles_empty_string_returns_empty(self):
         assert channel_context_prefix("") == ""
 
     def test_general_channel_returns_empty(self):

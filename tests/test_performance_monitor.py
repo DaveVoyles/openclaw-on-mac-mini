@@ -139,7 +139,7 @@ async def test_monitor_performance_decorator_async():
     monitor = get_monitor()
 
     @monitor_performance("test_async_op")
-    async def test_func():
+    async def test_performance_monitor_func():
         await asyncio.sleep(0.1)
         return "done"
 
@@ -153,7 +153,7 @@ def test_monitor_performance_decorator_sync():
     monitor = get_monitor()
 
     @monitor_performance("test_sync_op")
-    def test_func():
+    def test_performance_monitor_func_v2():
         time.sleep(0.1)
         return "done"
 

@@ -182,7 +182,7 @@ class TestGetStockQuote:
                 assert "rate limit" in result["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_caching(self):
+    async def test_polygon_skills_caching(self):
         """Test that successful responses are cached."""
         mock_response_data = {
             "results": [

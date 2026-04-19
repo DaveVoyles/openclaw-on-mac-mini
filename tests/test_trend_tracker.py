@@ -68,7 +68,7 @@ def test_track_entity_multiple_points(temp_db):
     assert points[2].volume == 7
 
 
-def test_get_trend_with_category_filter(temp_db):
+def test_trend_tracker_get_trend_with_category_filter(temp_db):
     """Test getting trends with category filter."""
     # Add data for same topic in different categories
     temp_db.track_entity("Bitcoin", "Finance", volume=10)
@@ -223,7 +223,7 @@ def test_detect_anomalies(temp_db):
     assert any("spike" in reason.lower() for _, reason in anomalies)
 
 
-def test_get_trending_topics(temp_db):
+def test_trend_tracker_get_trending_topics(temp_db):
     """Test getting multiple trending topics."""
     # Add data for multiple topics with clear spikes
     topics = [
@@ -541,7 +541,7 @@ class TestTrackEntityEdgeCases:
 
 
 class TestGetTrendWithCategory:
-    def test_get_trend_with_category_filter(self, temp_db):
+    def test_trend_tracker_get_trend_with_category_filter_v2(self, temp_db):
         """get_trend filters by category when provided."""
         temp_db.track_entity("Bitcoin", "Finance", volume=10)
         temp_db.track_entity("Bitcoin", "Crypto", volume=20)

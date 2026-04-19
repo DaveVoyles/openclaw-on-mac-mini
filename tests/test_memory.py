@@ -85,7 +85,7 @@ class TestConversation:
         conv = Conversation()
         assert not conv.is_expired
 
-    def test_is_expired_after_ttl(self):
+    def test_memory_is_expired_after_ttl(self):
         conv = Conversation()
         conv.last_active = time.monotonic() - CONTEXT_TTL - 1
         assert conv.is_expired
@@ -125,13 +125,13 @@ class TestConversation:
 
 
 class TestConversationStore:
-    def test_get_creates_new_conversation(self):
+    def test_memory_get_creates_new_conversation(self):
         store = ConversationStore()
         conv = store.get(1, 100, "Alice")
         assert conv is not None
         assert conv.user_name == "Alice"
 
-    def test_get_returns_same_conversation_for_same_key(self):
+    def test_memory_get_returns_same_conversation_for_same_key(self):
         store = ConversationStore()
         conv1 = store.get(1, 100, "Alice")
         conv1.add_user_message("hello")
@@ -176,13 +176,13 @@ class TestConversationStore:
         store.clear_all()
         assert store.active_count == 0
 
-    def test_active_count_counts_non_expired(self):
+    def test_memory_active_count_counts_non_expired(self):
         store = ConversationStore()
         store.get(1, 100)
         store.get(2, 200)
         assert store.active_count == 2
 
-    def test_active_count_excludes_expired(self):
+    def test_memory_active_count_excludes_expired(self):
         store = ConversationStore()
         conv1 = store.get(1, 100)
         store.get(2, 200)
@@ -235,15 +235,15 @@ class TestNormalizeText:
     def test_strips_and_collapses(self):
         assert _normalize_text("  hello   world  ") == "hello world"
 
-    def test_none_returns_empty(self):
+    def test_memory_none_returns_empty(self):
         assert _normalize_text(None) == ""  # type: ignore
 
-    def test_empty_string(self):
+    def test_memory_empty_string(self):
         assert _normalize_text("") == ""
 
 
 class TestMessageText:
-    def test_joins_string_parts(self):
+    def test_memory_joins_string_parts(self):
         assert _message_text({"parts": ["hello", " world"]}) == "hello world"
 
     def test_ignores_non_strings(self):
@@ -265,7 +265,7 @@ class TestMessageSalienceScore:
         msg = {"role": "model", "parts": ["Short."]}
         assert _message_salience_score(msg, 0) >= 1
 
-    def test_long_text_adds_bonus(self):
+    def test_memory_long_text_adds_bonus(self):
         long = "word " * 40
         assert _message_salience_score({"parts": [long]}, 0) >= 1
 
@@ -279,7 +279,7 @@ class TestExtractKeyTopics:
         msgs = [{"parts": ["python python python code"]}, {"parts": ["python code"]}]
         assert "python" in _extract_key_topics(msgs, limit=5)
 
-    def test_stopwords_excluded(self):
+    def test_memory_stopwords_excluded(self):
         msgs = [{"parts": ["the the and the is"]}]
         topics = _extract_key_topics(msgs)
         assert "the" not in topics and "and" not in topics
@@ -287,7 +287,7 @@ class TestExtractKeyTopics:
     def test_empty_messages(self):
         assert _extract_key_topics([]) == []
 
-    def test_limit_respected(self):
+    def test_memory_limit_respected(self):
         msgs = [{"parts": ["alpha beta gamma delta epsilon zeta"]}]
         assert len(_extract_key_topics(msgs, limit=2)) <= 2
 
@@ -316,13 +316,13 @@ class TestRelativeAge:
     def test_under_60s(self):
         assert _relative_age(30) == "just now"
 
-    def test_minutes(self):
+    def test_memory_minutes(self):
         assert "m ago" in _relative_age(120)
 
-    def test_hours(self):
+    def test_memory_hours(self):
         assert "h ago" in _relative_age(7200)
 
-    def test_days(self):
+    def test_memory_days(self):
         assert "d ago" in _relative_age(86400 * 3)
 
 
@@ -366,7 +366,7 @@ class TestConversationStoreThreads:
         assert "✅" in store2.load_thread(1, 100, "mythread")
         assert "🗑️" in store2.delete_thread(1, "mythread")
 
-    def test_list_empty(self, tmp_path, monkeypatch):
+    def test_memory_list_empty(self, tmp_path, monkeypatch):
         monkeypatch.setattr(_mem_mod, "THREADS_DIR", tmp_path)
         from memory import ConversationStore
         result = ConversationStore().list_threads(1)

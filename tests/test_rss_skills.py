@@ -80,7 +80,7 @@ class TestParseFeed:
         # date/summary may be empty on Python 3.14 due to Element bool deprecation
         assert isinstance(items[0]["date"], str)
 
-    def test_limit_respected(self):
+    def test_rss_skills_limit_respected(self):
         _, items = mod._parse_feed(SAMPLE_RSS_XML, limit=1)
         assert len(items) == 1
 

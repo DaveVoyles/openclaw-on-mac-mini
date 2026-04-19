@@ -91,7 +91,7 @@ class TestApprovalRequest:
 
 
 class TestApprovalStoreCreate:
-    def test_create_returns_request(self, store):
+    def test_approvals_create_returns_request(self, store):
         req = store.create("restart_container", "sonarr", RiskLevel.HIGH, 123, "Alice", 456)
         assert req.action == "restart_container"
         assert req.target == "sonarr"
@@ -128,7 +128,7 @@ class TestApprovalStoreCreate:
 
 
 class TestApprovalStoreGet:
-    def test_get_returns_none_for_unknown_id(self, store):
+    def test_approvals_get_returns_none_for_unknown_id(self, store):
         assert store.get("nonexistent") is None
 
     def test_get_returns_request_by_id(self, store):
@@ -168,7 +168,7 @@ class TestApprovalStoreResolve:
     def test_resolve_unknown_request_returns_none(self, store):
         assert store.resolve("noexist", True, 1, "X") is None
 
-    def test_resolve_already_resolved_returns_none(self, store):
+    def test_approvals_resolve_already_resolved_returns_none(self, store):
         req = store.create("restart", "sonarr", RiskLevel.HIGH, 1, "Alice", 1)
         store.resolve(req.request_id, True, 2, "Bob")
         result = store.resolve(req.request_id, True, 3, "Charlie")
@@ -253,7 +253,7 @@ class TestEmergencyStop:
         set_emergency_stop(False)
         assert not is_emergency_stopped()
 
-    def test_toggle_multiple_times(self):
+    def test_approvals_toggle_multiple_times(self):
         set_emergency_stop(True)
         set_emergency_stop(False)
         set_emergency_stop(True)

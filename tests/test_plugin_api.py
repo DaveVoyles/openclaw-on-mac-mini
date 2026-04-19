@@ -327,7 +327,7 @@ class TestPluginAPIUtilities:
         version = plugin_api.get_version()
         assert version == "unknown"
 
-    def test_has_permission(self, tmp_path):
+    def test_plugin_api_has_permission(self, tmp_path):
         """Test declared permissions are granted."""
         api = PluginAPI(
             plugin_name="test-plugin",

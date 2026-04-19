@@ -20,7 +20,7 @@ from skills_facade import SKILLS, get_skill, list_skills, skill_exists
 
 
 class TestGetSkillEdgeCases:
-    def test_returns_none_for_empty_string(self):
+    def test_skills_facade_unit_returns_none_for_empty_string(self):
         assert get_skill("") is None
 
     def test_returns_none_when_skills_empty(self):

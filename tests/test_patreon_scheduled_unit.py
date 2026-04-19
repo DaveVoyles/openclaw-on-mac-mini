@@ -46,7 +46,7 @@ class TestPatreonMonitoringTask:
     def test_name_is_string(self):
         assert isinstance(PATREON_MONITORING_TASK["name"], str)
 
-    def test_function_is_callable(self):
+    def test_patreon_scheduled_unit_function_is_callable(self):
         assert callable(PATREON_MONITORING_TASK["function"])
 
     def test_function_is_scheduled_health_check(self):

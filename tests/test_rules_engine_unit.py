@@ -31,7 +31,7 @@ class TestConstants:
     def test_rules_file_is_path(self):
         assert isinstance(RULES_FILE, Path)
 
-    def test_similarity_threshold_in_range(self):
+    def test_rules_engine_unit_similarity_threshold_in_range(self):
         assert 0.0 < RULE_SIMILARITY_THRESHOLD < 1.0
 
     def test_similarity_threshold_value(self):
@@ -39,7 +39,7 @@ class TestConstants:
 
 
 class TestDetectCorrectionEdgeCases:
-    def test_whitespace_only_returns_false(self):
+    def test_rules_engine_unit_whitespace_only_returns_false(self):
         assert detect_correction("   ") is False
 
     def test_i_said_triggers(self):
@@ -86,7 +86,7 @@ async def test_save_and_reload_rules(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_all_rules_returns_list(tmp_path, monkeypatch):
+async def test_rules_engine_unit_get_all_rules_returns_list(tmp_path, monkeypatch):
     rules_file = tmp_path / "rules.json"
     rules_file.write_text(json.dumps([{"id": "x", "rule": "test rule", "source": ""}]))
     monkeypatch.setattr(mod, "RULES_FILE", rules_file)

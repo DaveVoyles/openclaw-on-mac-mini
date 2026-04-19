@@ -30,7 +30,7 @@ class TestConstants:
     def test_default_top_k_is_5(self):
         assert DEFAULT_TOP_K == 5
 
-    def test_similarity_threshold_in_range(self):
+    def test_vector_store_config_unit_similarity_threshold_in_range(self):
         assert 0.0 < SIMILARITY_THRESHOLD < 1.0
 
     def test_collection_names_are_strings(self):
@@ -56,7 +56,7 @@ class TestRecallGuardNotes:
         notes = consume_recall_guard_notes()
         assert notes == ["note1", "note2"]
 
-    def test_consume_clears_notes(self):
+    def test_vector_store_config_unit_consume_clears_notes(self):
         _set_recall_guard_notes(["something"])
         consume_recall_guard_notes()
         assert consume_recall_guard_notes() == []
@@ -74,7 +74,7 @@ class TestRecallGuardNotes:
 
 
 class TestGetEmbeddingFunction:
-    def test_returns_none_when_no_model_set(self, monkeypatch):
+    def test_vector_store_config_unit_returns_none_when_no_model_set(self, monkeypatch):
         monkeypatch.setattr(mod, "EMBEDDING_MODEL", "")
         fn = mod._get_embedding_function()
         assert fn is None

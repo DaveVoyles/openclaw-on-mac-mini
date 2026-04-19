@@ -116,7 +116,7 @@ class TestUserRoles:
 class TestUserSettings:
     """Test user settings and preferences"""
 
-    def test_update_settings(self, user_manager):
+    def test_user_manager_update_settings(self, user_manager):
         """Test updating user settings"""
         user = user_manager.register_user(123, "test")
 
@@ -181,7 +181,7 @@ class TestSessionManagement:
 class TestQuotaManagement:
     """Test API quota management"""
 
-    def test_default_quota(self, user_manager):
+    def test_user_manager_default_quota(self, user_manager):
         """Test default quota is 100"""
         user = user_manager.register_user(123, "test")
         assert user.api_quota_daily == 100
@@ -192,7 +192,7 @@ class TestQuotaManagement:
         user = user_manager.register_user(123, "test")
         assert user_manager.check_quota(user.id) is True
 
-    def test_consume_quota(self, user_manager):
+    def test_user_manager_consume_quota(self, user_manager):
         """Test consuming quota"""
         user = user_manager.register_user(123, "test")
 
@@ -201,7 +201,7 @@ class TestQuotaManagement:
         updated = user_manager.get_user(user.id)
         assert updated.api_quota_used == 10
 
-    def test_quota_exceeded(self, user_manager):
+    def test_user_manager_quota_exceeded(self, user_manager):
         """Test quota enforcement"""
         user = user_manager.register_user(123, "test")
         user_manager.set_quota(user.id, 10)
@@ -213,7 +213,7 @@ class TestQuotaManagement:
         assert user_manager.check_quota(user.id) is False
         assert user_manager.consume_quota(user.id, 1) is False
 
-    def test_set_custom_quota(self, user_manager):
+    def test_user_manager_set_custom_quota(self, user_manager):
         """Test setting custom quota limit"""
         user = user_manager.register_user(123, "test")
         user_manager.set_quota(user.id, 500)
@@ -273,7 +273,7 @@ class TestActivityLogging:
 class TestStatistics:
     """Test user statistics"""
 
-    def test_get_stats(self, user_manager):
+    def test_user_manager_get_stats(self, user_manager):
         """Test getting user statistics"""
         user_manager.register_user(1, "admin", UserRole.ADMIN)
         user_manager.register_user(2, "member1", UserRole.MEMBER)

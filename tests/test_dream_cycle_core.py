@@ -120,7 +120,7 @@ class TestIndexHelpers:
     def test_next_id_empty(self):
         assert mod._next_id({"entries": []}) == "mem_001"
 
-    def test_next_id_increments(self):
+    def test_dream_cycle_core_next_id_increments(self):
         index = {"entries": [{"id": "mem_005"}, {"id": "mem_003"}]}
         assert mod._next_id(index) == "mem_006"
 

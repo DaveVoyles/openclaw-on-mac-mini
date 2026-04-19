@@ -33,7 +33,7 @@ def test_finance_skills_registered():
     assert "get_box_office_stocks" in SKILLS
 
 
-def test_skills_are_callables():
+def test_new_api_skills_skills_are_callables():
     """Verify all new skills are callable functions."""
     new_skills = [
         "search_news",

@@ -105,7 +105,7 @@ def test_correlation_skills_registered():
     assert "explain_correlation" in CORRELATION_SKILLS
 
 
-def test_skills_are_callables():
+def test_correlation_engine_skills_are_callables():
     """Verify correlation skills are callable."""
     for skill_name, skill_func in CORRELATION_SKILLS.items():
         assert callable(skill_func), f"{skill_name} is not callable"

@@ -11,13 +11,13 @@ pytestmark = pytest.mark.smoke
 class TestResponseSeemsValidGemma:
     """Gemma provider — tool-hallucination detection."""
 
-    def test_accepts_genuine_answer(self):
+    def test_answer_policy_accepts_genuine_answer(self):
         assert ap.response_seems_valid("The weather in Philadelphia is 72°F and sunny.", provider="gemma")
 
-    def test_rejects_empty(self):
+    def test_answer_policy_rejects_empty(self):
         assert not ap.response_seems_valid("", provider="gemma")
 
-    def test_rejects_short(self):
+    def test_answer_policy_rejects_short(self):
         assert not ap.response_seems_valid("Ok", provider="gemma")
 
     def test_rejects_now_searching(self):
@@ -44,13 +44,13 @@ class TestResponseSeemsValidGemma:
 class TestResponseSeemsValidRemote:
     """Remote providers (copilot, openai, anthropic, gemini)."""
 
-    def test_accepts_genuine_answer(self):
+    def test_answer_policy_accepts_genuine_answer_v2(self):
         assert ap.response_seems_valid("Here is the Pythagorean theorem: a² + b² = c².", provider="copilot")
 
-    def test_rejects_empty(self):
+    def test_answer_policy_rejects_empty_v2(self):
         assert not ap.response_seems_valid("", provider="openai")
 
-    def test_rejects_short(self):
+    def test_answer_policy_rejects_short_v2(self):
         assert not ap.response_seems_valid("Sure", provider="anthropic")
 
     def test_rejects_one_moment_placeholder(self):

@@ -150,7 +150,7 @@ class TestOllamaToolAllowlist:
 
 
 class TestConvertToolsForOllama:
-    def test_empty_input_returns_empty(self):
+    def test_ollama_tools_empty_input_returns_empty(self):
         assert convert_tools_for_ollama([]) == []
 
     def test_blocked_tool_filtered_out(self):

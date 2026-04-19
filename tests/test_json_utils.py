@@ -9,33 +9,33 @@ from json_utils import (
 
 
 class TestTryParseJson:
-    def test_valid_object(self):
+    def test_json_utils_valid_object(self):
         result = try_parse_json('{"key": "value"}')
         assert result == {"key": "value"}
 
-    def test_valid_array(self):
+    def test_json_utils_valid_array(self):
         result = try_parse_json('[1, 2, 3]')
         assert result == [1, 2, 3]
 
-    def test_invalid_json_returns_none(self):
+    def test_json_utils_invalid_json_returns_none(self):
         assert try_parse_json("{not valid}") is None
 
-    def test_empty_string_returns_none(self):
+    def test_json_utils_empty_string_returns_none(self):
         assert try_parse_json("") is None
 
-    def test_whitespace_only_returns_none(self):
+    def test_json_utils_whitespace_only_returns_none(self):
         assert try_parse_json("   ") is None
 
-    def test_none_input_returns_none(self):
+    def test_json_utils_none_input_returns_none(self):
         assert try_parse_json(None) is None
 
-    def test_nested_object(self):
+    def test_json_utils_nested_object(self):
         result = try_parse_json('{"a": {"b": [1, 2]}}')
         assert result == {"a": {"b": [1, 2]}}
 
 
 class TestExtractJsonBlock:
-    def test_fenced_json_block(self):
+    def test_json_utils_fenced_json_block(self):
         text = '```json\n{"key": "value"}\n```'
         result = extract_json_block(text)
         assert result == '{"key": "value"}'
@@ -55,7 +55,7 @@ class TestExtractJsonBlock:
         result = extract_json_block(text)
         assert result == '[1, 2, 3]'
 
-    def test_no_json_returns_none(self):
+    def test_json_utils_no_json_returns_none(self):
         assert extract_json_block("no json here") is None
 
     def test_nested_braces(self):
@@ -88,10 +88,10 @@ class TestRepairJson:
         result = repair_json(text)
         assert result == {"key": "val"}
 
-    def test_empty_string_returns_none(self):
+    def test_json_utils_empty_string_returns_none_v2(self):
         assert repair_json("") is None
 
-    def test_none_input_returns_none(self):
+    def test_json_utils_none_input_returns_none_v2(self):
         assert repair_json(None) is None
 
     def test_block_comment_stripped(self):
@@ -122,7 +122,7 @@ class TestFormatToolResult:
         result = format_tool_result('{"a": 1}')
         assert '"a": 1' in result
 
-    def test_plain_string_returned_as_is(self):
+    def test_json_utils_plain_string_returned_as_is(self):
         result = format_tool_result("plain text")
         assert result == "plain text"
 

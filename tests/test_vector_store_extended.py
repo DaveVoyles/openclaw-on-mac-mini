@@ -45,7 +45,7 @@ def _chroma_result(items):
 # ---------------------------------------------------------------------------
 
 class TestGetEmbeddingFunction:
-    def test_returns_none_when_no_model_set(self):
+    def test_vector_store_extended_returns_none_when_no_model_set(self):
         with patch("vector_store_config.EMBEDDING_MODEL", ""):
             result = mod._get_embedding_function()
         assert result is None
@@ -124,10 +124,10 @@ class TestInferRecallDomains:
         domains = mod._infer_recall_domains("sports roundup")
         assert "sports" in domains
 
-    def test_empty_string_returns_empty(self):
+    def test_vector_store_extended_empty_string_returns_empty(self):
         assert mod._infer_recall_domains("") == set()
 
-    def test_none_returns_empty(self):
+    def test_vector_store_extended_none_returns_empty(self):
         assert mod._infer_recall_domains(None) == set()
 
 
@@ -633,7 +633,7 @@ class TestBumpAccess:
         assert meta["last_accessed"] == 12345.0
 
     @pytest.mark.asyncio
-    async def test_skips_missing_doc(self):
+    async def test_vector_store_extended_skips_missing_doc(self):
         col = _make_fake_col()
         col.get.return_value = {"ids": [], "metadatas": []}
         with patch("vector_store_client._get_collection", return_value=col):
@@ -706,7 +706,7 @@ class TestGetDecayedDocuments:
 
 class TestMarkDecayed:
     @pytest.mark.asyncio
-    async def test_returns_zero_for_empty_list(self):
+    async def test_vector_store_extended_returns_zero_for_empty_list(self):
         col = _make_fake_col()
         with patch("vector_store_client._get_collection", return_value=col):
             count = await mod.mark_decayed(mod.MEMORIES_COLLECTION, [])
@@ -727,7 +727,7 @@ class TestMarkDecayed:
         assert meta.get("decayed") is True
 
     @pytest.mark.asyncio
-    async def test_skips_missing_doc(self):
+    async def test_vector_store_extended_skips_missing_doc_v2(self):
         col = _make_fake_col()
         col.get.return_value = {"ids": [], "metadatas": []}
         with patch("vector_store_client._get_collection", return_value=col):
@@ -776,7 +776,7 @@ class TestGetStats:
 
 class TestGetScopedMemorySummary:
     @pytest.mark.asyncio
-    async def test_raises_when_channel_id_none(self):
+    async def test_vector_store_extended_raises_when_channel_id_none(self):
         with pytest.raises(ValueError, match="channel_id is required"):
             await mod.get_scoped_memory_summary(channel_id=None)
 
@@ -895,7 +895,7 @@ class TestGetScopedMemorySummary:
 
 class TestClearScopedMemory:
     @pytest.mark.asyncio
-    async def test_raises_when_channel_id_none(self):
+    async def test_vector_store_extended_raises_when_channel_id_none_v2(self):
         with pytest.raises(ValueError, match="channel_id is required"):
             await mod.clear_scoped_memory(channel_id=None)
 
@@ -1164,7 +1164,7 @@ class TestRetentionWindowSeconds:
     def test_unknown_defaults_to_standard(self):
         assert mod._retention_window_seconds("unknown") == 6 * 3600
 
-    def test_none_defaults_to_standard(self):
+    def test_vector_store_extended_none_defaults_to_standard(self):
         assert mod._retention_window_seconds(None) == 6 * 3600
 
 
@@ -1176,7 +1176,7 @@ class TestNormalizeScopeId:
     def test_returns_none_for_none(self):
         assert mod._normalize_scope_id(None) is None
 
-    def test_returns_none_for_empty_string(self):
+    def test_vector_store_extended_returns_none_for_empty_string(self):
         assert mod._normalize_scope_id("") is None
 
     def test_returns_none_for_whitespace(self):
@@ -1185,7 +1185,7 @@ class TestNormalizeScopeId:
     def test_returns_string_for_int(self):
         assert mod._normalize_scope_id(42) == "42"
 
-    def test_strips_whitespace(self):
+    def test_vector_store_extended_strips_whitespace(self):
         assert mod._normalize_scope_id("  10  ") == "10"
 
 

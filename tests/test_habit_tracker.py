@@ -17,7 +17,7 @@ class TestHabitTrackerLoad:
     def test_starts_empty(self, tracker):
         assert tracker._habits == {}
 
-    def test_loads_existing_data(self, tmp_path):
+    def test_habit_tracker_loads_existing_data(self, tmp_path):
         path = tmp_path / "habits.json"
         data = {
             "abc12345": {
@@ -34,7 +34,7 @@ class TestHabitTrackerLoad:
         assert "abc12345" in t._habits
         assert t._habits["abc12345"].name == "Exercise"
 
-    def test_bad_json_starts_empty(self, tmp_path):
+    def test_habit_tracker_bad_json_starts_empty(self, tmp_path):
         path = tmp_path / "habits.json"
         path.write_text("{broken")
         t = HabitTracker(path=path)
@@ -56,7 +56,7 @@ class TestAddHabit:
         h = tracker.add_habit("u1", "Long run", frequency="weekly")
         assert h.frequency == "weekly"
 
-    def test_add_persists(self, tracker):
+    def test_habit_tracker_add_persists(self, tracker):
         tracker.add_habit("u1", "Meditate")
         saved = json.loads(tracker.path.read_text())
         assert len(saved) == 1
@@ -129,12 +129,12 @@ class TestListForUser:
         assert len(habits) == 1
         assert habits[0].user_id == "u1"
 
-    def test_list_empty_user(self, tracker):
+    def test_habit_tracker_list_empty_user(self, tracker):
         assert tracker.list_for_user("nobody") == []
 
 
 class TestDeleteHabit:
-    def test_delete_returns_true(self, tracker):
+    def test_habit_tracker_delete_returns_true(self, tracker):
         tracker.add_habit("u1", "Exercise")
         result = tracker.delete_habit("u1", "Exercise")
         assert result is True
@@ -145,10 +145,10 @@ class TestDeleteHabit:
         result = tracker.delete_habit("u1", "EXERCISE")
         assert result is True
 
-    def test_delete_nonexistent_returns_false(self, tracker):
+    def test_habit_tracker_delete_nonexistent_returns_false(self, tracker):
         assert tracker.delete_habit("u1", "Ghost") is False
 
-    def test_delete_wrong_user_returns_false(self, tracker):
+    def test_habit_tracker_delete_wrong_user_returns_false(self, tracker):
         tracker.add_habit("u1", "Exercise")
         assert tracker.delete_habit("u2", "Exercise") is False
 

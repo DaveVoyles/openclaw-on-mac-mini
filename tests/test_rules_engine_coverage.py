@@ -144,7 +144,7 @@ async def test_add_rule_chromadb_failure_ignored(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_get_all_rules_returns_list(tmp_path, monkeypatch):
+async def test_rules_engine_coverage_get_all_rules_returns_list(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "RULES_FILE", tmp_path / "rules.json")
     with patch.dict("sys.modules", {"vector_store": MagicMock(add_document=AsyncMock())}):
         await mod.add_rule("Rule one", "")

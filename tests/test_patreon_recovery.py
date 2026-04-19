@@ -52,7 +52,7 @@ class TestDetermineRecoveryAction:
     def setup_method(self):
         self.mgr = PatreonRecoveryManager()
 
-    def test_ok_status_returns_none(self):
+    def test_patreon_recovery_ok_status_returns_none(self):
         result = _health(PatreonHealthStatus.OK)
         assert self.mgr._determine_recovery_action(result) == RecoveryAction.NONE
 
@@ -96,7 +96,7 @@ class TestDetermineRecoveryAction:
 
 class TestAttemptRecovery:
     @pytest.mark.asyncio
-    async def test_ok_status_returns_none(self):
+    async def test_patreon_recovery_ok_status_returns_none_v2(self):
         mgr = PatreonRecoveryManager()
         result = _health(PatreonHealthStatus.OK)
         out = await mgr.attempt_recovery(result)
@@ -152,11 +152,11 @@ class TestAttemptRecovery:
 # ===========================================================================
 
 class TestRecoveryHistory:
-    def test_empty_initially(self):
+    def test_patreon_recovery_empty_initially(self):
         mgr = PatreonRecoveryManager()
         assert mgr.get_recovery_history() == []
 
-    def test_limit_respected(self):
+    def test_patreon_recovery_limit_respected(self):
         mgr = PatreonRecoveryManager()
         for i in range(20):
             mgr._recovery_history.append(

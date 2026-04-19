@@ -82,7 +82,7 @@ class TestQuickGenerate:
 # ---------------------------------------------------------------------------
 
 class TestFactExtractorNoBareClient:
-    def test_no_genai_client_in_source(self):
+    def test_quick_generate_no_genai_client_in_source(self):
         import inspect
 
         import fact_extractor
@@ -105,7 +105,7 @@ class TestFactExtractorNoBareClient:
 # ---------------------------------------------------------------------------
 
 class TestGoalTrackerNoBareClient:
-    def test_no_genai_client_in_source(self):
+    def test_quick_generate_no_genai_client_in_source_v2(self):
         import inspect
 
         import goal_tracker
@@ -126,7 +126,7 @@ class TestGoalTrackerNoBareClient:
 # ---------------------------------------------------------------------------
 
 class TestErrorTrackerNoBareClient:
-    def test_no_genai_client_in_source(self):
+    def test_quick_generate_no_genai_client_in_source_v3(self):
         import inspect
 
         import error_tracker

@@ -26,7 +26,7 @@ class TestOpenclawTypes:
         ctx: MessageContext = {"user_id": "123"}
         assert ctx["user_id"] == "123"
 
-    def test_message_context_full(self):
+    def test_patreon_scheduled_types_message_context_full(self):
         ctx: MessageContext = {
             "user_id": "123",
             "channel_id": "456",
@@ -43,7 +43,7 @@ class TestOpenclawTypes:
         assert msg["role"] == "user"
         assert msg["content"] == "hello"
 
-    def test_skill_result_success(self):
+    def test_patreon_scheduled_types_skill_result_success(self):
         result: SkillResult = {"success": True, "data": {"key": "val"}, "message": "ok"}
         assert result["success"] is True
 
@@ -56,7 +56,7 @@ class TestOpenclawTypes:
         resp: APIResponse = {"status": "ok", "data": {}, "error": None}
         assert resp["status"] == "ok"
 
-    def test_news_article_minimal(self):
+    def test_patreon_scheduled_types_news_article_minimal(self):
         article: NewsArticle = {"title": "Big news", "url": "https://example.com"}
         assert article["title"] == "Big news"
 
@@ -143,7 +143,7 @@ class TestScheduledPatreonHealthCheck:
         assert "timestamp" in result
 
     @pytest.mark.asyncio
-    async def test_exception_returns_failure_dict(self):
+    async def test_patreon_scheduled_types_exception_returns_failure_dict(self):
         mock_checker = AsyncMock()
         mock_checker.check_health = AsyncMock(side_effect=RuntimeError("network down"))
 

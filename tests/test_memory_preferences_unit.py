@@ -145,7 +145,7 @@ class TestGetRoutingProfile:
         monkeypatch.setattr(mp_module, "_PREFS_DIR", tmp_path / "prefs")
         assert get_routing_profile(999) == ""
 
-    def test_returns_stored_profile(self, tmp_path, monkeypatch):
+    def test_memory_preferences_unit_returns_stored_profile(self, tmp_path, monkeypatch):
         prefs_dir = tmp_path / "prefs"
         prefs_dir.mkdir(parents=True)
         monkeypatch.setattr(mp_module, "_PREFS_DIR", prefs_dir)

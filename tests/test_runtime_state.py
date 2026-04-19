@@ -19,7 +19,7 @@ from runtime_state import (
 )
 
 
-def test_request_context_sets_channel_and_thread():
+def test_runtime_state_request_context_sets_channel_and_thread():
     assert get_current_channel_id() is None
     assert get_current_thread_id() is None
 

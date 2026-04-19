@@ -61,7 +61,7 @@ def _make_cog():
 
 # ── __init__ ──────────────────────────────────────────────────────────────────
 
-def test_init():
+def test_journal_cog_init():
     cog = _make_cog()
     assert cog.bot is not None
 

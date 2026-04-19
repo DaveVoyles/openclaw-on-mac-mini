@@ -12,7 +12,7 @@ class TestPhraseInText:
     def test_simple_match(self):
         assert _phrase_in_text("i use plex daily", "plex") is True
 
-    def test_no_match(self):
+    def test_nlp_entities_no_match(self):
         assert _phrase_in_text("nothing relevant here", "plex") is False
 
     def test_word_boundary_respected(self):
@@ -31,16 +31,16 @@ class TestPhraseInText:
 
 
 class TestDedupe:
-    def test_removes_duplicates(self):
+    def test_nlp_entities_removes_duplicates(self):
         assert _dedupe(["a", "b", "a", "c"]) == ["a", "b", "c"]
 
-    def test_preserves_order(self):
+    def test_nlp_entities_preserves_order(self):
         assert _dedupe(["c", "b", "a"]) == ["c", "b", "a"]
 
-    def test_empty_list(self):
+    def test_nlp_entities_empty_list(self):
         assert _dedupe([]) == []
 
-    def test_no_duplicates_unchanged(self):
+    def test_nlp_entities_no_duplicates_unchanged(self):
         assert _dedupe(["x", "y", "z"]) == ["x", "y", "z"]
 
     def test_all_duplicates(self):
@@ -64,7 +64,7 @@ class TestExtractEntities:
         result = extract_entities("sab nzbd stopped seeding")
         assert "sabnzbd" in result.get("services", [])
 
-    def test_multiple_services(self):
+    def test_nlp_entities_multiple_services(self):
         result = extract_entities("plex and sonarr are both broken")
         services = result.get("services", [])
         assert "plex" in services
@@ -74,7 +74,7 @@ class TestExtractEntities:
         result = extract_entities("plex plex plex is broken")
         assert result.get("services") == ["plex"]
 
-    def test_league_nba(self):
+    def test_nlp_entities_league_nba(self):
         result = extract_entities("nba finals game 7 recap")
         assert "NBA" in result.get("leagues", [])
 
@@ -94,7 +94,7 @@ class TestExtractEntities:
         result = extract_entities("monday night raw highlights")
         assert "WWE RAW" in result.get("wwe", [])
 
-    def test_wwe_smackdown(self):
+    def test_nlp_entities_wwe_smackdown(self):
         result = extract_entities("smackdown results this week")
         assert "WWE SmackDown" in result.get("wwe", [])
 
@@ -106,7 +106,7 @@ class TestExtractEntities:
         result = extract_entities("playing on ps5 right now")
         assert "PlayStation" in result.get("platforms", [])
 
-    def test_platform_xbox(self):
+    def test_nlp_entities_platform_xbox(self):
         result = extract_entities("xbox series x game pass")
         assert "Xbox" in result.get("platforms", [])
 
@@ -146,7 +146,7 @@ class TestEnrichRouteTextAndHints:
         assert "entities" in hints
         assert "plex" in hints["entities"]["services"]
 
-    def test_services_added_to_hints(self):
+    def test_nlp_entities_services_added_to_hints(self):
         _, hints = enrich_route_text_and_hints("sonarr stopped working", {})
         assert hints.get("services") == ["sonarr"]
 
@@ -154,11 +154,11 @@ class TestEnrichRouteTextAndHints:
         _, hints = enrich_route_text_and_hints("sonarr stopped working", {"services": ["custom"]})
         assert hints["services"] == ["custom"]
 
-    def test_league_added_to_hints(self):
+    def test_nlp_entities_league_added_to_hints(self):
         _, hints = enrich_route_text_and_hints("nba game tonight", {})
         assert hints.get("league") == "NBA"
 
-    def test_platform_added_to_hints(self):
+    def test_nlp_entities_platform_added_to_hints(self):
         _, hints = enrich_route_text_and_hints("ps5 controller disconnecting", {})
         assert "PlayStation" in hints.get("platforms", [])
 

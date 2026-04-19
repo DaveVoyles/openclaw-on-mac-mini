@@ -11,7 +11,7 @@ from model_routing_policy import MultimodalRouteDecision, select_multimodal_rout
 # ---------------------------------------------------------------------------
 
 class TestSelectMultimodalRoute:
-    def test_prefers_copilot_when_available(self):
+    def test_multimodal_route_prefers_copilot_when_available(self):
         result = select_multimodal_route(copilot_available=True, has_openai_key=False)
         assert isinstance(result, MultimodalRouteDecision)
         assert result.provider == "copilot"
@@ -30,7 +30,7 @@ class TestSelectMultimodalRoute:
         result = select_multimodal_route(copilot_available=True, has_openai_key=True)
         assert result.provider == "copilot"
 
-    def test_returns_frozen_dataclass(self):
+    def test_multimodal_route_returns_frozen_dataclass(self):
         result = select_multimodal_route(copilot_available=True, has_openai_key=False)
         with pytest.raises((AttributeError, TypeError)):
             result.provider = "other"  # type: ignore[misc]
@@ -96,7 +96,7 @@ class TestAnalyzeImageRouting:
         assert result == "Copilot desc"
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_gemini_when_copilot_returns_none(self):
+    async def test_multimodal_route_falls_back_to_gemini_when_copilot_returns_none(self):
         from unittest.mock import MagicMock
 
         from llm.response import analyze_image

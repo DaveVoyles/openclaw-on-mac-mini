@@ -6116,7 +6116,7 @@ class TestMacroProgress:
         assert "Step 1/2" in out
         assert "Step 2/2" in out
 
-    def test_cmd_macrostatus_no_macros(self, capsys, monkeypatch, tmp_path):
+    def test_openclaw_cli_cmd_macrostatus_no_macros(self, capsys, monkeypatch, tmp_path):
         """/macrostatus returns _CMD_CONTINUE when no macros are saved."""
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
         monkeypatch.setattr(mod, "_IS_TTY", False)
@@ -6350,7 +6350,7 @@ class TestCmdHeatmap:
         out = capsys.readouterr().out
         assert "Heatmap" in out or "heatmap" in out or "Peak hour" in out
 
-    def test_cli_build_is_wave50(self):
+    def test_openclaw_cli_cli_build_is_wave50(self):
         """_CLI_BUILD must equal 'wave50'."""
         assert mod._CLI_BUILD == "wave50"
     """Tests for _cmd_ratehint."""
@@ -7358,7 +7358,7 @@ class TestCmdPromptFormat:
         assert result == mod._CMD_CONTINUE
         assert mod._PREFS.get("prompt_format") == mod._DEFAULT_PROMPT_FORMAT
 
-    def test_cmd_prompt_set_format(self, monkeypatch):
+    def test_openclaw_cli_cmd_prompt_set_format(self, monkeypatch):
         """/prompt {build} ❯  sets prompt_format pref correctly (trailing space stripped)."""
         monkeypatch.setattr(mod, "_IS_TTY", False)
         monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
@@ -7427,7 +7427,7 @@ class TestCmdTip:
         ):
             assert command in tips_text
 
-    def test_cli_build_is_wave50(self):
+    def test_openclaw_cli_cli_build_is_wave50_v2(self):
         """_CLI_BUILD is updated to wave50."""
         assert mod._CLI_BUILD == "wave50"
 
@@ -7529,7 +7529,7 @@ class TestCmdBindlist:
         result = mod._cmd_bindlist(self._ctx())
         assert result == mod._CMD_CONTINUE
 
-    def test_cli_build_is_wave50(self):
+    def test_openclaw_cli_cli_build_is_wave50_v3(self):
         """_CLI_BUILD == 'wave50'."""
         assert mod._CLI_BUILD == "wave50"
 
@@ -7839,7 +7839,7 @@ class TestCmdTimeline:
         out = capsys.readouterr().out
         assert "Timeline" in out or "2024-06" in out
 
-    def test_cli_build_is_wave50(self):
+    def test_openclaw_cli_cli_build_is_wave50_v4(self):
         """_CLI_BUILD == 'wave50'."""
         assert mod._CLI_BUILD == "wave50"
 
@@ -8093,7 +8093,7 @@ class TestCmdColorscheme:
         assert result == mod._CMD_CONTINUE
         assert prefs.get("color_scheme") == "default"
 
-    def test_cli_build_is_wave50(self):
+    def test_openclaw_cli_cli_build_is_wave50_v5(self):
         assert mod._CLI_BUILD == "wave50"
 
 
@@ -8785,7 +8785,7 @@ class TestLoadPrefs:
         # Restore
         mod._PREFS.update(saved)
 
-    def test_load_prefs_silently_ignores_missing_file(self, tmp_path, monkeypatch):
+    def test_openclaw_cli_load_prefs_silently_ignores_missing_file(self, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "nonexistent"))
         # Should not raise
         mod._load_prefs()
@@ -8875,7 +8875,7 @@ class TestOpenClawCliError:
     def test_is_runtime_error_subclass(self):
         assert issubclass(mod.OpenClawCliError, RuntimeError)
 
-    def test_message_preserved(self):
+    def test_openclaw_cli_message_preserved(self):
         exc = mod.OpenClawCliError("something went wrong")
         assert str(exc) == "something went wrong"
 
@@ -8990,7 +8990,7 @@ class TestAnalyzeHealthPayload:
         _, ok = mod.analyze_health_payload("failed")
         assert ok is False
 
-    def test_empty_string_returns_none(self):
+    def test_openclaw_cli_empty_string_returns_none(self):
         _, ok = mod.analyze_health_payload("")
         assert ok is None
 
@@ -9129,7 +9129,7 @@ class TestDeleteKeychainToken:
         result = auth_mod.delete_keychain_token(account="user")
         assert result is False
 
-    def test_returns_true_when_deletion_succeeds(self, monkeypatch):
+    def test_openclaw_cli_returns_true_when_deletion_succeeds(self, monkeypatch):
         monkeypatch.setattr(auth_mod.sys, "platform", "darwin")
         fake_result = MagicMock()
         fake_result.returncode = 0

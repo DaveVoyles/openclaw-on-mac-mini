@@ -241,7 +241,7 @@ class TestCheckQualityDriftAlert:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_import_failure_returns_false(self, monkeypatch):
+    async def test_bg_healing_import_failure_returns_false(self, monkeypatch):
         monkeypatch.setattr(bg_healing, "ALERT_CHANNEL_ID", 123)
         with patch.dict("sys.modules", {"dashboard": None, "dashboard.api_handlers": None}):
             result = await bg_healing._check_quality_drift_alert(_make_bot())
@@ -292,7 +292,7 @@ class TestCheckQualityDriftAlert:
         channel.send.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_channel_not_found_returns_false(self, monkeypatch):
+    async def test_bg_healing_channel_not_found_returns_false(self, monkeypatch):
         from alert_manager import reset_bounded_alert_cache
         reset_bounded_alert_cache()
 
@@ -316,7 +316,7 @@ class TestCheckQualityDriftAlert:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_non_dict_calibration_returns_false(self, monkeypatch):
+    async def test_bg_healing_non_dict_calibration_returns_false(self, monkeypatch):
         monkeypatch.setattr(bg_healing, "ALERT_CHANNEL_ID", 123)
         mock_module = MagicMock()
         mock_module._build_offline_quality_calibration_payload.return_value = "not a dict"
@@ -352,7 +352,7 @@ class TestParseHealActionsExtended:
         assert ("auto_cleanup_disk", "") in actions
         assert ("fix_qbit_download_path", "") in actions
 
-    def test_fix_arr_remote_path(self):
+    def test_bg_healing_fix_arr_remote_path(self):
         actions = bg_healing._parse_heal_actions("SELF_HEAL: fix_arr_remote_path")
         assert actions == [("fix_arr_remote_path", "")]
 
@@ -391,7 +391,7 @@ class TestExecuteSelfHealing:
         assert results == []
 
     @pytest.mark.asyncio
-    async def test_fix_qbit_download_path(self):
+    async def test_bg_healing_fix_qbit_download_path(self):
         mock_fix = AsyncMock(return_value="fixed path")
         with patch.object(bg_healing, "_parse_heal_actions", return_value=[("fix_qbit_download_path", "")]), \
              patch("bg_healing.audit_log"), \
@@ -400,7 +400,7 @@ class TestExecuteSelfHealing:
         assert any("qBittorrent" in r for r in results)
 
     @pytest.mark.asyncio
-    async def test_auto_cleanup_disk(self):
+    async def test_bg_healing_auto_cleanup_disk(self):
         mock_cleanup = AsyncMock(return_value="freed 10GB")
         mock_maintenance = MagicMock()
         mock_maintenance.auto_cleanup_disk = mock_cleanup
@@ -443,7 +443,7 @@ class TestExecuteSelfHealing:
 
 class TestRunProactiveScan:
     @pytest.mark.asyncio
-    async def test_no_alert_channel_id_returns_early(self, monkeypatch):
+    async def test_bg_healing_no_alert_channel_id_returns_early(self, monkeypatch):
         monkeypatch.setattr(bg_healing, "ALERT_CHANNEL_ID", 0)
         bot = _make_bot()
         # Should return without calling gather signals
@@ -642,7 +642,7 @@ class TestCheckQualityDriftAlertExtended:
     """Cover extra branches in _check_quality_drift_alert."""
 
     @pytest.mark.asyncio
-    async def test_non_dict_drift_returns_false(self, monkeypatch):
+    async def test_bg_healing_non_dict_drift_returns_false(self, monkeypatch):
         """Calibration with non-dict drift key returns False early (line 148)."""
         monkeypatch.setattr(bg_healing, "ALERT_CHANNEL_ID", 99)
 
@@ -704,7 +704,7 @@ class TestGatherSystemSignals:
         return fake_maint, fake_hh
 
     @pytest.mark.asyncio
-    async def test_returns_none_when_all_clean(self):
+    async def test_bg_healing_returns_none_when_all_clean(self):
         """Returns None when all services healthy and no log anomalies (line 279)."""
         fake_maint, fake_hh = self._make_maint_hh()
         with patch("bg_healing.check_arr_health", new=AsyncMock(return_value="OK: arr")), \
@@ -717,7 +717,7 @@ class TestGatherSystemSignals:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_returns_summary_when_errors_found(self):
+    async def test_bg_healing_returns_summary_when_errors_found(self):
         """Returns (summary, log_snippets) when error patterns detected (lines 281-293)."""
         fake_maint, fake_hh = self._make_maint_hh()
         with patch("bg_healing.check_arr_health", new=AsyncMock(return_value="ERROR: sonarr down")), \
@@ -797,7 +797,7 @@ class TestExecuteSelfHealingExtended:
     """Cover fix_arr_remote_path action in _execute_self_healing."""
 
     @pytest.mark.asyncio
-    async def test_fix_arr_remote_path(self):
+    async def test_bg_healing_fix_arr_remote_path_v2(self):
         """fix_arr_remote_path action calls the skill and returns result (lines 345-349)."""
         analysis = "SELF_HEAL: fix_arr_remote_path"
         import types
@@ -822,7 +822,7 @@ class TestCopilotFixView:
     """Cover _CopilotFixView interaction methods."""
 
     @pytest.mark.asyncio
-    async def test_on_timeout_disables_buttons(self):
+    async def test_bg_healing_on_timeout_disables_buttons(self):
         """on_timeout disables all child buttons (lines 380-390)."""
         view = bg_healing._CopilotFixView(["fix this"])
         # Real children (buttons) from discord.ui.View
@@ -886,7 +886,7 @@ class TestCopilotFixView:
         interaction.response.edit_message.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_ack_handles_interaction_responded(self):
+    async def test_bg_healing_ack_handles_interaction_responded(self):
         """_ack handles InteractionResponded gracefully (line 413-414)."""
         import discord
         view = bg_healing._CopilotFixView(["fix this"])
@@ -909,7 +909,7 @@ class TestCopilotFixView:
         interaction.response.defer_update.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_deny_button_sends_skip_message(self):
+    async def test_bg_healing_deny_button_sends_skip_message(self):
         """deny_button sends skip confirmation and stops the view (lines 474-481)."""
         view = bg_healing._CopilotFixView(["fix this"])
         channel = MagicMock()

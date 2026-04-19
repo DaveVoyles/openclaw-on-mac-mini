@@ -541,7 +541,7 @@ def test_recommendations_none_channel_returns_empty():
 # ---------------------------------------------------------------------------
 
 
-def test_request_context_sets_channel_and_thread():
+def test_channel_profile_state_request_context_sets_channel_and_thread():
     from channel_profile_state import (
         get_current_channel_id,
         get_current_thread_id,

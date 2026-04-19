@@ -143,7 +143,7 @@ class TestCreateStockChart:
 
     @patch("src.visualization._save_chart")
     @patch("src.visualization._get_cached_chart")
-    def test_caching(self, mock_get_cached, mock_save, sample_stock_data):
+    def test_visualization_caching(self, mock_get_cached, mock_save, sample_stock_data):
         """Test that charts are cached properly."""
         # First call - no cache
         mock_get_cached.return_value = None

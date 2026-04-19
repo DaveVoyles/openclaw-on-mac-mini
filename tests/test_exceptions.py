@@ -96,7 +96,7 @@ class TestAPIError:
         assert err.status_code == 502
         assert err.service == "GitHub"
 
-    def test_message_preserved(self):
+    def test_exceptions_message_preserved(self):
         err = APIError("bad gateway")
         assert str(err) == "bad gateway"
 
@@ -119,7 +119,7 @@ class TestRateLimitError:
         err = RateLimitError("OpenAI", retry_after=30.5)
         assert err.retry_after == 30.5
 
-    def test_message_format(self):
+    def test_exceptions_message_format(self):
         err = RateLimitError("OpenAI")
         assert str(err) == "OpenAI rate limit exceeded"
 
@@ -127,7 +127,7 @@ class TestRateLimitError:
         with pytest.raises(APIError):
             raise RateLimitError("svc")
 
-    def test_catchable_as_openclaw_error(self):
+    def test_exceptions_catchable_as_openclaw_error(self):
         with pytest.raises(OpenClawError):
             raise RateLimitError("svc")
 
@@ -150,7 +150,7 @@ class TestTimeoutError:
         assert err.service == "Spotify"
         assert err.timeout_seconds == 5.0
 
-    def test_catchable_as_openclaw_error(self):
+    def test_exceptions_catchable_as_openclaw_error_v2(self):
         with pytest.raises(OpenClawError):
             raise TimeoutError("svc")
 
@@ -165,11 +165,11 @@ class TestToolError:
         assert err.tool_name == "my_tool"
         assert err.reason == "something went wrong"
 
-    def test_message_format(self):
+    def test_exceptions_message_format_v2(self):
         err = ToolError("my_tool", "something went wrong")
         assert str(err) == "Tool 'my_tool' failed: something went wrong"
 
-    def test_catchable_as_openclaw_error(self):
+    def test_exceptions_catchable_as_openclaw_error_v3(self):
         with pytest.raises(OpenClawError):
             raise ToolError("t", "r")
 
@@ -184,11 +184,11 @@ class TestPermissionError:
         assert err.user_id == 42
         assert err.action == "delete_all"
 
-    def test_message_format(self):
+    def test_exceptions_message_format_v3(self):
         err = PermissionError(42, "delete_all")
         assert str(err) == "User 42 lacks permission for: delete_all"
 
-    def test_catchable_as_openclaw_error(self):
+    def test_exceptions_catchable_as_openclaw_error_v4(self):
         with pytest.raises(OpenClawError):
             raise PermissionError(1, "action")
 
@@ -198,19 +198,19 @@ class TestPermissionError:
 # ---------------------------------------------------------------------------
 
 class TestConfigError:
-    def test_inherits_from_openclaw_error(self):
+    def test_exceptions_inherits_from_openclaw_error(self):
         assert issubclass(ConfigError, OpenClawError)
 
-    def test_message_preserved(self):
+    def test_exceptions_message_preserved_v2(self):
         err = ConfigError("Missing API key")
         assert str(err) == "Missing API key"
 
 
 class TestDatabaseError:
-    def test_inherits_from_openclaw_error(self):
+    def test_exceptions_inherits_from_openclaw_error_v2(self):
         assert issubclass(DatabaseError, OpenClawError)
 
-    def test_message_preserved(self):
+    def test_exceptions_message_preserved_v3(self):
         err = DatabaseError("connection refused")
         assert str(err) == "connection refused"
 
@@ -227,7 +227,7 @@ class TestAPIConnectionError:
         assert "newsapi" in str(err)
         assert "Connection timeout" in str(err)
 
-    def test_is_api_error(self):
+    def test_exceptions_is_api_error(self):
         assert issubclass(APIConnectionError, APIError)
 
 
@@ -242,7 +242,7 @@ class TestAuthenticationError:
         assert err.detail == "Invalid token"
         assert "Invalid token" in str(err)
 
-    def test_is_api_error(self):
+    def test_exceptions_is_api_error_v2(self):
         assert issubclass(AuthenticationError, APIError)
 
 

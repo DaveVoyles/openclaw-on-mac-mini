@@ -70,7 +70,7 @@ class TestGetRoutingProfile:
             json.dump(prefs, f)
         assert mp.get_routing_profile(42) == ""
 
-    def test_returns_stored_profile(self):
+    def test_per_user_routing_returns_stored_profile(self):
         prefs = {"routing_profile": "gemini-first"}
         path = mp._prefs_path(7)
         path.parent.mkdir(parents=True, exist_ok=True)

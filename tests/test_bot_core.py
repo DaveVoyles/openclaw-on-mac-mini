@@ -26,13 +26,13 @@ class TestTruncateForEmbed:
         text = "x" * 100
         assert mod.truncate_for_embed(text, limit=100) == text
 
-    def test_over_limit_truncated(self):
+    def test_bot_core_over_limit_truncated(self):
         text = "a" * 200
         result = mod.truncate_for_embed(text, limit=100)
         assert len(result) <= 100
         assert result.endswith("… (truncated)")
 
-    def test_empty_string(self):
+    def test_bot_core_empty_string(self):
         assert mod.truncate_for_embed("", limit=100) == ""
 
 
@@ -80,7 +80,7 @@ class TestFormatMarkdownForDiscord:
         result = mod._format_markdown_for_discord(text)
         assert "# heading" in result  # not converted inside code block
 
-    def test_plain_text_unchanged(self):
+    def test_bot_core_plain_text_unchanged(self):
         text = "Just regular text"
         assert mod._format_markdown_for_discord(text) == text
 
@@ -104,7 +104,7 @@ class TestSplitResponse:
         for chunk in chunks:
             assert len(chunk) <= _bf_current._EMBED_LIMIT + 1  # +1 for trailing ellipsis
 
-    def test_empty_string(self):
+    def test_bot_core_empty_string_v2(self):
         assert mod._split_response("") == [""]
 
 

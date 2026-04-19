@@ -23,7 +23,7 @@ def test_health_skills_registered():
     assert "get_nutrition_info" in HEALTH_SKILLS
 
 
-def test_skills_are_callables():
+def test_health_skills_skills_are_callables():
     """Verify all health skills are callable."""
     for skill_name, skill_func in HEALTH_SKILLS.items():
         assert callable(skill_func), f"{skill_name} is not callable"

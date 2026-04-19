@@ -11,10 +11,10 @@ from nlp_entities import _dedupe, _phrase_in_text, enrich_route_text_and_hints, 
 # ===========================================================================
 
 class TestNormalizeModelInput:
-    def test_empty_returns_empty(self):
+    def test_model_nlp_profiler_empty_returns_empty(self):
         assert normalize_model_input("") == ""
 
-    def test_none_returns_empty(self):
+    def test_model_nlp_profiler_none_returns_empty(self):
         assert normalize_model_input(None) == ""  # type: ignore
 
     def test_known_alias_normalized(self):
@@ -23,10 +23,10 @@ class TestNormalizeModelInput:
     def test_valid_input_unchanged(self):
         assert normalize_model_input("gemini") == "gemini"
 
-    def test_strips_whitespace(self):
+    def test_model_nlp_profiler_strips_whitespace(self):
         assert normalize_model_input("  gemini  ") == "gemini"
 
-    def test_lowercased(self):
+    def test_model_nlp_profiler_lowercased(self):
         assert normalize_model_input("GEMINI") == "gemini"
 
     def test_unknown_input_returned_as_is(self):
@@ -34,7 +34,7 @@ class TestNormalizeModelInput:
 
 
 class TestModelInputSuggestion:
-    def test_empty_returns_empty(self):
+    def test_model_nlp_profiler_empty_returns_empty_v2(self):
         assert model_input_suggestion("") == ""
 
     def test_valid_model_returns_empty(self):
@@ -59,10 +59,10 @@ class TestModelInputSuggestion:
 # ===========================================================================
 
 class TestPhraseInText:
-    def test_exact_match(self):
+    def test_model_nlp_profiler_exact_match(self):
         assert _phrase_in_text("the nfl game", "nfl") is True
 
-    def test_no_match(self):
+    def test_model_nlp_profiler_no_match(self):
         assert _phrase_in_text("basketball score", "nfl") is False
 
     def test_word_boundary_enforced(self):
@@ -75,25 +75,25 @@ class TestPhraseInText:
 
 
 class TestDedupe:
-    def test_removes_duplicates(self):
+    def test_model_nlp_profiler_removes_duplicates(self):
         assert _dedupe(["a", "b", "a", "c"]) == ["a", "b", "c"]
 
-    def test_preserves_order(self):
+    def test_model_nlp_profiler_preserves_order(self):
         assert _dedupe(["c", "a", "b"]) == ["c", "a", "b"]
 
-    def test_empty_list(self):
+    def test_model_nlp_profiler_empty_list(self):
         assert _dedupe([]) == []
 
-    def test_no_duplicates_unchanged(self):
+    def test_model_nlp_profiler_no_duplicates_unchanged(self):
         assert _dedupe(["x", "y"]) == ["x", "y"]
 
 
 class TestExtractEntities:
-    def test_returns_dict(self):
+    def test_model_nlp_profiler_returns_dict(self):
         result = extract_entities("what's on plex tonight")
         assert isinstance(result, dict)
 
-    def test_empty_string(self):
+    def test_model_nlp_profiler_empty_string(self):
         result = extract_entities("")
         assert isinstance(result, dict)
 
@@ -124,7 +124,7 @@ class TestEnrichRouteTextAndHints:
         if "entities" in hints:
             assert isinstance(hints["entities"], dict)
 
-    def test_empty_message(self):
+    def test_model_nlp_profiler_empty_message(self):
         text, hints = enrich_route_text_and_hints("", {})
         assert isinstance(hints, dict)
 
@@ -139,7 +139,7 @@ class TestEnrichRouteTextAndHints:
 # ===========================================================================
 
 class TestProfiler:
-    def test_initial_state_not_profiling(self):
+    def test_model_nlp_profiler_initial_state_not_profiling(self):
         from profiler import Profiler
         p = Profiler()
         assert not p._is_profiling
@@ -154,7 +154,7 @@ class TestProfiler:
         assert "Profile Duration" in output
         assert not p._is_profiling
 
-    def test_double_start_raises(self):
+    def test_model_nlp_profiler_double_start_raises(self):
         from profiler import Profiler
         p = Profiler()
         p.start_cpu_profiling()
@@ -164,7 +164,7 @@ class TestProfiler:
         finally:
             p.stop_cpu_profiling()
 
-    def test_stop_without_start_raises(self):
+    def test_model_nlp_profiler_stop_without_start_raises(self):
         from profiler import Profiler
         p = Profiler()
         with pytest.raises(RuntimeError, match="No active"):

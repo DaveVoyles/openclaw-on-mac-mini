@@ -33,7 +33,7 @@ class TestNeedsTools:
         "is anything broken in the media stack",
         "give me the box office financials and new releases for the last week in table form with emojis",
     ])
-    def test_tool_queries_detected(self, query):
+    def test_llm_patterns_tool_queries_detected(self, query):
         assert mod._needs_tools(query) is True, f"Expected True for: {query}"
 
     @pytest.mark.parametrize("query", [

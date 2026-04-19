@@ -72,7 +72,7 @@ class TestSSRFGuard:
 # ---------------------------------------------------------------------------
 
 class TestContentHash:
-    def test_deterministic(self):
+    def test_monitor_skills_deterministic(self):
         assert ms._content_hash("hello") == ms._content_hash("hello")
 
     def test_different_for_different_input(self):
@@ -91,10 +91,10 @@ class TestContentHash:
 # ---------------------------------------------------------------------------
 
 class TestSnapshotStorage:
-    def test_load_returns_empty_when_no_file(self):
+    def test_monitor_skills_load_returns_empty_when_no_file(self):
         assert ms._load_snapshots() == {}
 
-    def test_save_and_load_roundtrip(self, tmp_path):
+    def test_monitor_skills_save_and_load_roundtrip(self, tmp_path):
         data = {"https://example.com": {"url": "https://example.com", "hash": "abc123"}}
         ms._save_snapshots(data)
         loaded = ms._load_snapshots()
@@ -203,7 +203,7 @@ class TestCheckUrlForChanges:
 
 class TestListAndRemove:
     @pytest.mark.asyncio
-    async def test_list_empty(self):
+    async def test_monitor_skills_list_empty(self):
         result = await ms.list_monitored_urls()
         assert "No URLs" in result
 

@@ -277,7 +277,7 @@ def test_cmd_prompt_view_current(capsys):
     assert "openclaw>" in captured.out
 
 
-def test_cmd_prompt_set_format(capsys):
+def test_openclaw_cli_cmd_system_unit_cmd_prompt_set_format(capsys):
     cli = _mock_cli(_PREFS={"prompt_format": "openclaw>"})
     with patch.object(mod, "_m", return_value=cli):
         result = mod._cmd_prompt(_ctx("{route} ❯"))

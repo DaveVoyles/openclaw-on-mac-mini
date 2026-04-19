@@ -37,7 +37,7 @@ def test_parse_utc_timestamp_empty():
     assert mod._parse_utc_timestamp(None) is None
 
 
-def test_parse_utc_timestamp_invalid():
+def test_openclaw_cli_watch_unit_parse_utc_timestamp_invalid():
     assert mod._parse_utc_timestamp("not-a-date") is None
 
 
@@ -75,7 +75,7 @@ def test_elapsed_seconds_uses_now_when_finished_is_none():
 # ---------------------------------------------------------------------------
 
 
-def test_format_elapsed_compact_sub_second():
+def test_openclaw_cli_watch_unit_format_elapsed_compact_sub_second():
     assert mod._format_elapsed_compact(0.5) == "0.5s"
 
 
@@ -84,17 +84,17 @@ def test_format_elapsed_compact_seconds():
     assert mod._format_elapsed_compact(45) == "45s"
 
 
-def test_format_elapsed_compact_minutes():
+def test_openclaw_cli_watch_unit_format_elapsed_compact_minutes():
     assert mod._format_elapsed_compact(90) == "1m 30s"
     assert mod._format_elapsed_compact(120) == "2m"
 
 
-def test_format_elapsed_compact_hours():
+def test_openclaw_cli_watch_unit_format_elapsed_compact_hours():
     assert mod._format_elapsed_compact(3600) == "1h"
     assert mod._format_elapsed_compact(3661) == "1h 1m"
 
 
-def test_format_elapsed_compact_invalid():
+def test_openclaw_cli_watch_unit_format_elapsed_compact_invalid():
     assert mod._format_elapsed_compact("bad") == "0s"
     assert mod._format_elapsed_compact(None) == "0s"
 
@@ -108,14 +108,14 @@ def test_single_line_excerpt_within_limit():
     assert mod._single_line_excerpt("hello world", max_chars=50) == "hello world"
 
 
-def test_single_line_excerpt_truncates():
+def test_openclaw_cli_watch_unit_single_line_excerpt_truncates():
     text = "a" * 100
     result = mod._single_line_excerpt(text, max_chars=20)
     assert result.endswith("…")
     assert len(result) <= 20
 
 
-def test_single_line_excerpt_collapses_whitespace():
+def test_openclaw_cli_watch_unit_single_line_excerpt_collapses_whitespace():
     assert mod._single_line_excerpt("foo\n  bar  \nbaz", max_chars=100) == "foo bar baz"
 
 
@@ -124,7 +124,7 @@ def test_single_line_excerpt_collapses_whitespace():
 # ---------------------------------------------------------------------------
 
 
-def test_dedupe_preserve_order_basic():
+def test_openclaw_cli_watch_unit_dedupe_preserve_order_basic():
     result = mod._dedupe_preserve_order(["a", "b", "a", "c"])
     assert result == ["a", "b", "c"]
 

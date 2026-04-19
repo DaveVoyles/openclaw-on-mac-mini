@@ -58,7 +58,7 @@ def test_parse_utc_timestamp_none():
     assert sd._parse_utc_timestamp(None) is None
 
 
-def test_parse_utc_timestamp_invalid():
+def test_openclaw_cli_session_display_unit_parse_utc_timestamp_invalid():
     assert sd._parse_utc_timestamp("not-a-date") is None
 
 
@@ -66,7 +66,7 @@ def test_parse_utc_timestamp_invalid():
 # _format_elapsed_compact
 # ---------------------------------------------------------------------------
 
-def test_format_elapsed_compact_sub_second():
+def test_openclaw_cli_session_display_unit_format_elapsed_compact_sub_second():
     assert sd._format_elapsed_compact(0.5) == "0.5s"
 
 
@@ -78,7 +78,7 @@ def test_format_elapsed_compact_tens():
     assert sd._format_elapsed_compact(42) == "42s"
 
 
-def test_format_elapsed_compact_minutes():
+def test_openclaw_cli_session_display_unit_format_elapsed_compact_minutes():
     assert sd._format_elapsed_compact(90) == "1m 30s"
 
 
@@ -86,7 +86,7 @@ def test_format_elapsed_compact_exact_minute():
     assert sd._format_elapsed_compact(60) == "1m"
 
 
-def test_format_elapsed_compact_hours():
+def test_openclaw_cli_session_display_unit_format_elapsed_compact_hours():
     assert sd._format_elapsed_compact(3600) == "1h"
 
 
@@ -94,7 +94,7 @@ def test_format_elapsed_compact_hours_minutes():
     assert sd._format_elapsed_compact(3660) == "1h 1m"
 
 
-def test_format_elapsed_compact_invalid():
+def test_openclaw_cli_session_display_unit_format_elapsed_compact_invalid():
     assert sd._format_elapsed_compact("bad") == "0s"
 
 
@@ -116,7 +116,7 @@ def test_single_line_excerpt_truncated():
     assert result.endswith("…")
 
 
-def test_single_line_excerpt_collapses_whitespace():
+def test_openclaw_cli_session_display_unit_single_line_excerpt_collapses_whitespace():
     result = sd._single_line_excerpt("hello   world\n\tfoo", max_chars=100)
     assert "\n" not in result
     assert "\t" not in result
@@ -403,7 +403,7 @@ def test_normalize_watch_state_filters_non_dicts():
 # _dedupe_preserve_order
 # ---------------------------------------------------------------------------
 
-def test_dedupe_preserve_order_basic():
+def test_openclaw_cli_session_display_unit_dedupe_preserve_order_basic():
     result = sd._dedupe_preserve_order(["a", "b", "a", "c"])
     assert result == ["a", "b", "c"]
 
@@ -453,14 +453,14 @@ def test_resolve_runbook_template_default_operator():
 # _format_collaboration_entry
 # ---------------------------------------------------------------------------
 
-def test_format_collaboration_entry_basic():
+def test_openclaw_cli_session_display_unit_format_collaboration_entry_basic():
     entry = {"actor": "alice", "summary": "finished the task"}
     result = sd._format_collaboration_entry(entry)
     assert "alice" in result
     assert "finished the task" in result
 
 
-def test_format_collaboration_entry_with_tags():
+def test_openclaw_cli_session_display_unit_format_collaboration_entry_with_tags():
     entry = {"actor": "bob", "summary": "review done", "tags": ["urgent", "v2"]}
     result = sd._format_collaboration_entry(entry)
     assert "#urgent" in result

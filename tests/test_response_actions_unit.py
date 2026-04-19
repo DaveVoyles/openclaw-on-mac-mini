@@ -126,7 +126,7 @@ class TestResponseActionsInit:
 
 class TestGenerateFollowUps:
     @pytest.mark.asyncio
-    async def test_returns_empty_on_import_error(self):
+    async def test_response_actions_unit_returns_empty_on_import_error(self):
         with patch("response_actions.json") as _json_mod:
             with patch.dict("sys.modules", {"llm.chat": None}):
                 result = await _generate_follow_ups("q", "a")

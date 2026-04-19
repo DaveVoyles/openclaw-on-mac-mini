@@ -22,7 +22,7 @@ from vector_store import (
 # ===========================================================================
 
 class TestRecallGuardNotes:
-    def test_empty_initially(self):
+    def test_vector_store_pure_empty_initially(self):
         # Reset state
         _set_recall_guard_notes([])
         assert consume_recall_guard_notes() == []
@@ -32,7 +32,7 @@ class TestRecallGuardNotes:
         notes = consume_recall_guard_notes()
         assert notes == ["note1", "note2"]
 
-    def test_consume_clears_notes(self):
+    def test_vector_store_pure_consume_clears_notes(self):
         _set_recall_guard_notes(["note"])
         consume_recall_guard_notes()
         assert consume_recall_guard_notes() == []
@@ -51,10 +51,10 @@ class TestExtractExplicitRecallDomains:
     def test_no_directive_returns_empty(self):
         assert _extract_explicit_recall_domains("what is the weather?") == set()
 
-    def test_empty_string(self):
+    def test_vector_store_pure_empty_string(self):
         assert _extract_explicit_recall_domains("") == set()
 
-    def test_none_handled(self):
+    def test_vector_store_pure_none_handled(self):
         assert _extract_explicit_recall_domains(None) == set()  # type: ignore
 
 
@@ -63,10 +63,10 @@ class TestExtractExplicitRecallDomains:
 # ===========================================================================
 
 class TestInferRecallDomains:
-    def test_empty_string(self):
+    def test_vector_store_pure_empty_string_v2(self):
         assert _infer_recall_domains("") == set()
 
-    def test_none_handled(self):
+    def test_vector_store_pure_none_handled_v2(self):
         assert _infer_recall_domains(None) == set()  # type: ignore
 
     def test_sports_domain_inferred(self):
@@ -83,7 +83,7 @@ class TestInferRecallDomains:
 # ===========================================================================
 
 class TestNormalizeScopeId:
-    def test_none_returns_none(self):
+    def test_vector_store_pure_none_returns_none(self):
         assert _normalize_scope_id(None) is None
 
     def test_int_converts_to_str(self):
@@ -92,10 +92,10 @@ class TestNormalizeScopeId:
     def test_string_stripped(self):
         assert _normalize_scope_id("  456  ") == "456"
 
-    def test_empty_string_returns_none(self):
+    def test_vector_store_pure_empty_string_returns_none(self):
         assert _normalize_scope_id("") is None
 
-    def test_whitespace_only_returns_none(self):
+    def test_vector_store_pure_whitespace_only_returns_none(self):
         assert _normalize_scope_id("   ") is None
 
 
@@ -116,14 +116,14 @@ class TestCombineScopeWhere:
         result = _combine_scope_where(None, channel_id="123", thread_id="456")
         assert "$and" in result
 
-    def test_base_and_channel_combined(self):
+    def test_vector_store_pure_base_and_channel_combined(self):
         base = {"type": "note"}
         result = _combine_scope_where(base, channel_id="123", thread_id=None)
         assert "$and" in result
         assert {"channel_id": "123"} in result["$and"]
         assert base in result["$and"]
 
-    def test_no_scope_no_base_returns_none(self):
+    def test_vector_store_pure_no_scope_no_base_returns_none(self):
         assert _combine_scope_where(None, channel_id=None, thread_id=None) is None
 
 
@@ -162,7 +162,7 @@ class TestAllowFallbackResult:
         meta = {"channel_id": "123", "thread_id": "456"}
         assert _allow_fallback_result(meta, channel_id="123", thread_id="456") is True
 
-    def test_wrong_thread_blocked(self):
+    def test_vector_store_pure_wrong_thread_blocked(self):
         meta = {"channel_id": "123", "thread_id": "999"}
         assert _allow_fallback_result(meta, channel_id="123", thread_id="456") is False
 
@@ -177,7 +177,7 @@ class TestCompactionPriority:
         p_high = _compaction_priority("doc2", {"access_count": 10})
         assert p_low < p_high  # lower priority = pruned first
 
-    def test_empty_meta_does_not_raise(self):
+    def test_vector_store_pure_empty_meta_does_not_raise(self):
         p = _compaction_priority("doc", {})
         assert isinstance(p, tuple)
 

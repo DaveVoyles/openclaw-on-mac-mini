@@ -116,7 +116,7 @@ class TestIndexIO:
         assert idx["version"] == "3.0"
         assert idx["entries"] == []
 
-    def test_save_and_load_roundtrip(self, tmp_path):
+    def test_dream_cycle_save_and_load_roundtrip(self, tmp_path):
         path = tmp_path / "index.json"
         idx = mod._load_index(path)
         idx["entries"].append({"id": "e1", "text": "hello"})
@@ -133,7 +133,7 @@ class TestIndexIO:
         assert idx["entries"] == []
         assert (tmp_path / "index.json.bak").exists()
 
-    def test_save_creates_parent_dirs(self, tmp_path):
+    def test_dream_cycle_save_creates_parent_dirs(self, tmp_path):
         path = tmp_path / "deep" / "nested" / "index.json"
         mod._save_index(path, {"version": "3.0", "entries": []})
         assert path.exists()
@@ -226,7 +226,7 @@ class TestIndexHelpers:
         index = {"entries": [{"id": "mem_001", "sourceId": "other"}]}
         assert mod._find_by_source_id(index, "missing") is None
 
-    def test_next_id_increments(self):
+    def test_dream_cycle_next_id_increments(self):
         index = {"entries": [{"id": "mem_001"}, {"id": "mem_005"}]}
         assert mod._next_id(index) == "mem_006"
 

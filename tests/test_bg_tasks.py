@@ -305,7 +305,7 @@ class TestStopBackgroundTasks:
 
 
 class TestHandleBackgroundTaskDone:
-    def test_stopping_flag_prevents_restart(self, monkeypatch):
+    def test_bg_tasks_stopping_flag_prevents_restart(self, monkeypatch):
         monkeypatch.setattr(bg_tasks, "_BACKGROUND_STOPPING", True)
         task = MagicMock(spec=asyncio.Task)
         task.cancelled.return_value = False
@@ -382,7 +382,7 @@ class TestHandleBackgroundTaskDone:
 
 
 class TestRestartBackgroundTask:
-    def test_stopping_flag_prevents_restart(self, monkeypatch):
+    def test_bg_tasks_stopping_flag_prevents_restart_v2(self, monkeypatch):
         monkeypatch.setattr(bg_tasks, "_BACKGROUND_STOPPING", True)
         with patch.object(bg_tasks, "_launch_background_task") as mock_launch:
             bg_tasks._restart_background_task("nonexistent")

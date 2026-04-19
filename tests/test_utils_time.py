@@ -50,13 +50,13 @@ class TestFormatDuration:
     def test_one_second(self):
         assert "1 second" in format_duration(1)
 
-    def test_minutes(self):
+    def test_utils_time_minutes(self):
         assert format_duration(300) == "5 minutes"
 
-    def test_hours(self):
+    def test_utils_time_hours(self):
         assert format_duration(7200) == "2 hours"
 
-    def test_days(self):
+    def test_utils_time_days(self):
         assert format_duration(86400) == "1 day"
 
     def test_combined_precision_2(self):
@@ -79,10 +79,10 @@ class TestFormatDurationShort:
     def test_seconds(self):
         assert format_duration_short(30) == "30s"
 
-    def test_minutes(self):
+    def test_utils_time_minutes_v2(self):
         assert format_duration_short(300) == "5m"
 
-    def test_hours(self):
+    def test_utils_time_hours_v2(self):
         assert format_duration_short(7200) == "2h"
 
     def test_combined(self):

@@ -143,7 +143,7 @@ def test_clean_sources_dash_bullets_stripped():
     assert len(result) == 2
 
 
-def test_clean_sources_deduplicates():
+def test_openclaw_cli_health_unit_clean_sources_deduplicates():
     sources = "https://example.com\nhttps://example.com"
     result = mod._clean_sources_for_display(sources)
     assert len(result) == 1

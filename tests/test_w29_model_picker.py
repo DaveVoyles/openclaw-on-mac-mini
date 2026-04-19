@@ -113,8 +113,8 @@ class TestContextLimits:
     def test_claude_sonnet_4_context_window(self):
         assert get_model_context_window("claude-sonnet-4") == 200_000
 
-    def test_unknown_model_returns_none(self):
+    def test_w29_model_picker_unknown_model_returns_none(self):
         assert get_model_context_window("unknown-model-xyz") is None
 
-    def test_none_returns_none(self):
+    def test_w29_model_picker_none_returns_none(self):
         assert get_model_context_window(None) is None

@@ -267,7 +267,7 @@ class TestSendMorningBriefing:
         assert channel.send.await_count == 1
 
     @pytest.mark.asyncio
-    async def test_returns_early_no_alert_channel(self, monkeypatch):
+    async def test_discord_background_extended_returns_early_no_alert_channel(self, monkeypatch):
         monkeypatch.setattr(bg_briefing, "ALERT_CHANNEL_ID", 0)
         bot = MagicMock()
         bot.get_channel = MagicMock(return_value=None)
@@ -277,7 +277,7 @@ class TestSendMorningBriefing:
         # Should not raise
 
     @pytest.mark.asyncio
-    async def test_returns_early_channel_not_found(self, monkeypatch):
+    async def test_discord_background_extended_returns_early_channel_not_found(self, monkeypatch):
         monkeypatch.setattr(bg_briefing, "ALERT_CHANNEL_ID", 999)
         bot = MagicMock()
         bot.get_channel = MagicMock(return_value=None)
@@ -385,7 +385,7 @@ class TestSendEveningDigest:
         await mod.send_evening_digest(bot)
 
     @pytest.mark.asyncio
-    async def test_returns_early_channel_not_found(self, monkeypatch):
+    async def test_discord_background_extended_returns_early_channel_not_found_v2(self, monkeypatch):
         monkeypatch.setattr(bg_briefing, "ALERT_CHANNEL_ID", 999)
         bot = MagicMock()
         bot.get_channel = MagicMock(return_value=None)
@@ -456,7 +456,7 @@ class TestCheckQualityDriftAlertEdgeCases:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_import_failure_returns_false(self, monkeypatch):
+    async def test_discord_background_extended_import_failure_returns_false(self, monkeypatch):
         monkeypatch.setattr(bg_healing, "ALERT_CHANNEL_ID", 123)
         import sys
         # Use patch.dict to safely hide dashboard modules during the test.
@@ -467,14 +467,14 @@ class TestCheckQualityDriftAlertEdgeCases:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_non_dict_calibration_returns_false(self, monkeypatch):
+    async def test_discord_background_extended_non_dict_calibration_returns_false(self, monkeypatch):
         monkeypatch.setattr(bg_healing, "ALERT_CHANNEL_ID", 123)
         with patch("dashboard.api_handlers._build_offline_quality_calibration_payload", return_value="not a dict"):
             result = await bg_healing._check_quality_drift_alert(MagicMock())
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_non_dict_drift_returns_false(self, monkeypatch):
+    async def test_discord_background_extended_non_dict_drift_returns_false(self, monkeypatch):
         monkeypatch.setattr(bg_healing, "ALERT_CHANNEL_ID", 123)
         with patch("dashboard.api_handlers._build_offline_quality_calibration_payload",
                    return_value={"drift": "string not dict"}):
@@ -496,7 +496,7 @@ class TestCheckQualityDriftAlertEdgeCases:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_channel_not_found_returns_false(self, monkeypatch):
+    async def test_discord_background_extended_channel_not_found_returns_false(self, monkeypatch):
         from alert_manager import reset_bounded_alert_cache
         reset_bounded_alert_cache()
 
@@ -543,7 +543,7 @@ class TestCheckQualityDriftAlertEdgeCases:
 
 class TestGatherSystemSignals:
     @pytest.mark.asyncio
-    async def test_returns_none_when_all_clean(self):
+    async def test_discord_background_extended_returns_none_when_all_clean(self):
         with patch("bg_healing.check_arr_health", AsyncMock(return_value="OK healthy")), \
              patch("bg_healing.check_download_clients", AsyncMock(return_value="OK")), \
              patch("bg_healing.check_plex_status", AsyncMock(return_value="online")), \
@@ -553,7 +553,7 @@ class TestGatherSystemSignals:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_returns_summary_when_errors_found(self):
+    async def test_discord_background_extended_returns_summary_when_errors_found(self):
         with patch("bg_healing.check_arr_health", AsyncMock(return_value="error: connection refused")), \
              patch("bg_healing.check_download_clients", AsyncMock(return_value="OK")), \
              patch("bg_healing.check_plex_status", AsyncMock(return_value="OK")), \
@@ -619,7 +619,7 @@ class TestGatherSystemSignals:
 
 class TestExecuteSelfHealingActions:
     @pytest.mark.asyncio
-    async def test_fix_qbit_download_path(self):
+    async def test_discord_background_extended_fix_qbit_download_path(self):
         analysis = "SELF_HEAL: fix_qbit_download_path"
         import sys
         fake_maintenance = MagicMock()
@@ -630,7 +630,7 @@ class TestExecuteSelfHealingActions:
         assert any("qBittorrent" in r or "qbit" in r.lower() for r in results)
 
     @pytest.mark.asyncio
-    async def test_fix_arr_remote_path(self):
+    async def test_discord_background_extended_fix_arr_remote_path(self):
         analysis = "SELF_HEAL: fix_arr_remote_path"
         import sys
         fake_maintenance = MagicMock()
@@ -641,7 +641,7 @@ class TestExecuteSelfHealingActions:
         assert any("arr" in r.lower() or "path" in r.lower() for r in results)
 
     @pytest.mark.asyncio
-    async def test_auto_cleanup_disk(self):
+    async def test_discord_background_extended_auto_cleanup_disk(self):
         analysis = "SELF_HEAL: auto_cleanup_disk"
         import sys
         fake_maintenance = MagicMock()
@@ -685,7 +685,7 @@ class TestExecuteSelfHealingActions:
 
 class TestCopilotFixView:
     @pytest.mark.asyncio
-    async def test_on_timeout_disables_buttons(self):
+    async def test_discord_background_extended_on_timeout_disables_buttons(self):
         view = bg_healing._CopilotFixView(["fix the auth module"])
         button = MagicMock()
         button.disabled = False
@@ -743,7 +743,7 @@ class TestCopilotFixView:
         interaction.response.edit_message.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_ack_handles_interaction_responded(self):
+    async def test_discord_background_extended_ack_handles_interaction_responded(self):
         view = bg_healing._CopilotFixView(["fix it"])
         # no children
 
@@ -756,7 +756,7 @@ class TestCopilotFixView:
         await view._ack(interaction)
 
     @pytest.mark.asyncio
-    async def test_deny_button_sends_skip_message(self):
+    async def test_discord_background_extended_deny_button_sends_skip_message(self):
         view = bg_healing._CopilotFixView(["fix it"])
         interaction = MagicMock()
         interaction.user = MagicMock()
@@ -799,7 +799,7 @@ class TestCopilotFixView:
 
 class TestRunProactiveScan:
     @pytest.mark.asyncio
-    async def test_returns_early_no_alert_channel(self, monkeypatch):
+    async def test_discord_background_extended_returns_early_no_alert_channel_v2(self, monkeypatch):
         monkeypatch.setattr(bg_healing, "ALERT_CHANNEL_ID", 0)
         await bg_healing._run_proactive_scan(MagicMock())  # Should not raise
 
@@ -850,7 +850,7 @@ class TestRunProactiveScan:
         channel.send.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_handles_llm_timeout(self, monkeypatch):
+    async def test_discord_background_extended_handles_llm_timeout(self, monkeypatch):
         monkeypatch.setattr(bg_healing, "ALERT_CHANNEL_ID", 123)
         bot = _make_bot()
 
@@ -899,7 +899,7 @@ class TestPostErrorAlert:
         await bg_monitoring._post_error_alert(MagicMock(), [])
 
     @pytest.mark.asyncio
-    async def test_returns_early_channel_not_found(self, monkeypatch):
+    async def test_discord_background_extended_returns_early_channel_not_found_v3(self, monkeypatch):
         monkeypatch.setattr(bg_monitoring, "ALERT_CHANNEL_ID", 123)
         bot = MagicMock()
         bot.get_channel = MagicMock(return_value=None)
@@ -1036,7 +1036,7 @@ class TestErrorMonitorLoop:
 
 class TestCheckContainerHealth:
     @pytest.mark.asyncio
-    async def test_returns_early_no_alert_channel(self, monkeypatch):
+    async def test_discord_background_extended_returns_early_no_alert_channel_v3(self, monkeypatch):
         monkeypatch.setattr(bg_monitoring, "ALERT_CHANNEL_ID", 0)
         await bg_monitoring._check_container_health(MagicMock())
 
@@ -1164,7 +1164,7 @@ class TestCheckContainerHealth:
 
 class TestCheckMonstervisionCookies:
     @pytest.mark.asyncio
-    async def test_returns_early_no_alert_channel(self, monkeypatch):
+    async def test_discord_background_extended_returns_early_no_alert_channel_v4(self, monkeypatch):
         monkeypatch.setattr(bg_monitoring, "ALERT_CHANNEL_ID", 0)
         bg_monitoring._cookie_alert_sent = False
         await bg_monitoring._check_monstervision_cookies(MagicMock())
@@ -1407,7 +1407,7 @@ class TestBuildBackgroundTaskFactories:
 # ===========================================================================
 
 class TestHandleBackgroundTaskDone:
-    def test_no_op_when_stopping(self, monkeypatch):
+    def test_discord_background_extended_no_op_when_stopping(self, monkeypatch):
         monkeypatch.setattr(bg_tasks, "_BACKGROUND_STOPPING", True)
         task = MagicMock()
         bg_tasks._handle_background_task_done("test_task", task)
@@ -1467,7 +1467,7 @@ class TestHandleBackgroundTaskDone:
 # ===========================================================================
 
 class TestRestartBackgroundTask:
-    def test_no_op_when_stopping(self, monkeypatch):
+    def test_discord_background_extended_no_op_when_stopping_v2(self, monkeypatch):
         monkeypatch.setattr(bg_tasks, "_BACKGROUND_STOPPING", True)
         bg_tasks._restart_background_task("nonexistent")
 

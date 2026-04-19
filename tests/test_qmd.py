@@ -142,7 +142,7 @@ class TestQMDPersistence:
             result = await m2.search("persistent")
             assert "persistent fact" in result
 
-    def test_corrupted_file_falls_back_to_empty(self, tmp_path):
+    def test_qmd_corrupted_file_falls_back_to_empty(self, tmp_path):
         temp_file = tmp_path / "qmd.json"
         temp_file.write_text("[invalid json{{")
         with patch.object(qmd_module, "MEMORY_FILE", temp_file):

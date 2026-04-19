@@ -50,7 +50,7 @@ class TestPaginateItems:
         pages = uc.paginate_items(items, per_page=10)
         assert len(pages) == 1
 
-    def test_returns_list(self):
+    def test_ui_components_returns_list(self):
         pages = uc.paginate_items(["a", "b"], per_page=10)
         assert isinstance(pages, list)
         assert len(pages) >= 1

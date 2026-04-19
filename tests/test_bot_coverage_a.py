@@ -247,7 +247,7 @@ class TestRecordQualityMetric:
             event="test_event", context="test_ctx"
         )
 
-    def test_exception_is_swallowed(self):
+    def test_bot_coverage_a_exception_is_swallowed(self):
         """If get_collector raises, _record_quality_metric does not propagate it."""
         bad_module = MagicMock()
         bad_module.get_collector.side_effect = RuntimeError("no collector")
@@ -280,7 +280,7 @@ class TestRecordBudgetPolicyMetric:
             decision="proceed",
         )
 
-    def test_exception_is_swallowed(self):
+    def test_bot_coverage_a_exception_is_swallowed_v2(self):
         """If get_collector raises, _record_budget_policy_metric does not propagate it."""
         bad_module = MagicMock()
         bad_module.get_collector.side_effect = RuntimeError("no collector")
@@ -394,7 +394,7 @@ class TestUncertaintyMarkersPath:
 
 
 class TestSafeScoreAnswerQualityLowEvidence:
-    def test_low_evidence_emits_metric(self, monkeypatch):
+    def test_bot_coverage_a_low_evidence_emits_metric(self, monkeypatch):
         """When scored evidence < 0.5, _record_quality_metric is called (best-effort)."""
         calls = []
         monkeypatch.setattr(qh_mod, "_record_quality_metric", lambda event, **kw: calls.append(event))
@@ -511,7 +511,7 @@ class TestShouldPreferFileForMultichunkResponse:
 
 
 class TestBuildCoverageSummaryForEmbed:
-    def test_returns_none_for_non_dict(self):
+    def test_bot_coverage_a_returns_none_for_non_dict(self):
         """Non-dict input → None (line 737)."""
         assert mod._build_coverage_summary_for_embed(None) is None
         assert mod._build_coverage_summary_for_embed("string") is None
@@ -586,7 +586,7 @@ class TestBuildCoverageSummaryForEmbed:
 
 
 class TestBuildAskRecoveryBlock:
-    def test_returns_none_for_non_dict(self):
+    def test_bot_coverage_a_returns_none_for_non_dict_v2(self):
         """Non-dict input → None (line 775)."""
         assert mod._build_ask_recovery_block(None) is None
         assert mod._build_ask_recovery_block(42) is None

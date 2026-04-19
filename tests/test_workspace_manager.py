@@ -171,7 +171,7 @@ class TestWorkspaceUpdates:
         updated = workspace_manager.get_workspace(workspace.id)
         assert updated.description == "New description"
 
-    def test_update_settings(self, managers, sample_users):
+    def test_workspace_manager_update_settings(self, managers, sample_users):
         """Test updating workspace settings"""
         _, workspace_manager = managers
         owner, _, _, _ = sample_users
@@ -277,7 +277,7 @@ class TestMemberManagement:
 class TestQuotaManagement:
     """Test workspace quota management"""
 
-    def test_default_quota(self, managers, sample_users):
+    def test_workspace_manager_default_quota(self, managers, sample_users):
         """Test default workspace quota is 500"""
         _, workspace_manager = managers
         owner, _, _, _ = sample_users
@@ -285,7 +285,7 @@ class TestQuotaManagement:
         workspace = workspace_manager.create_workspace("test", owner.id)
         assert workspace.api_quota_daily == 500
 
-    def test_consume_quota(self, managers, sample_users):
+    def test_workspace_manager_consume_quota(self, managers, sample_users):
         """Test consuming workspace quota"""
         _, workspace_manager = managers
         owner, _, _, _ = sample_users
@@ -297,7 +297,7 @@ class TestQuotaManagement:
         updated = workspace_manager.get_workspace(workspace.id)
         assert updated.api_quota_used == 50
 
-    def test_quota_exceeded(self, managers, sample_users):
+    def test_workspace_manager_quota_exceeded(self, managers, sample_users):
         """Test quota enforcement"""
         _, workspace_manager = managers
         owner, _, _, _ = sample_users
@@ -310,7 +310,7 @@ class TestQuotaManagement:
         assert workspace_manager.check_quota(workspace.id) is False
         assert workspace_manager.consume_quota(workspace.id, 1) is False
 
-    def test_set_custom_quota(self, managers, sample_users):
+    def test_workspace_manager_set_custom_quota(self, managers, sample_users):
         """Test setting custom quota"""
         _, workspace_manager = managers
         owner, _, _, _ = sample_users
@@ -404,7 +404,7 @@ class TestSharedResources:
 class TestStatistics:
     """Test workspace statistics"""
 
-    def test_get_stats(self, managers, sample_users):
+    def test_workspace_manager_get_stats(self, managers, sample_users):
         """Test getting workspace statistics"""
         _, workspace_manager = managers
         owner, member1, member2, _ = sample_users

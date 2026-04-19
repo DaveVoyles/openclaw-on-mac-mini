@@ -31,7 +31,7 @@ class TestAnsiGating:
 # ---------------------------------------------------------------------------
 
 class TestGetIsTty:
-    def test_returns_bool(self):
+    def test_openclaw_cli_ui_core_unit_returns_bool(self):
         result = _get_is_tty()
         assert isinstance(result, bool)
 

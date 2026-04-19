@@ -59,5 +59,5 @@ class TestShouldExtract:
     def test_empty_message_returns_false(self):
         assert should_extract(1, "") is False
 
-    def test_whitespace_only_returns_false(self):
+    def test_fact_extractor_whitespace_only_returns_false(self):
         assert should_extract(1, "   ") is False

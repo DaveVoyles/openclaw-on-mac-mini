@@ -29,10 +29,10 @@ from vector_store_scope import (
 
 
 class TestExtractExplicitRecallDomains:
-    def test_empty_string_returns_empty(self):
+    def test_vector_store_scope_unit_empty_string_returns_empty(self):
         assert _extract_explicit_recall_domains("") == set()
 
-    def test_none_handled(self):
+    def test_vector_store_scope_unit_none_handled(self):
         assert _extract_explicit_recall_domains(None) == set()
 
     def test_sports_directive(self):
@@ -45,10 +45,10 @@ class TestExtractExplicitRecallDomains:
 
 
 class TestInferRecallDomains:
-    def test_empty_string(self):
+    def test_vector_store_scope_unit_empty_string(self):
         assert _infer_recall_domains("") == set()
 
-    def test_none_handled(self):
+    def test_vector_store_scope_unit_none_handled_v2(self):
         assert _infer_recall_domains(None) == set()
 
     def test_wwe_inferred_from_single_term(self):
@@ -61,13 +61,13 @@ class TestInferRecallDomains:
 
 
 class TestNormalizeScopeId:
-    def test_none_returns_none(self):
+    def test_vector_store_scope_unit_none_returns_none(self):
         assert _normalize_scope_id(None) is None
 
     def test_int_returns_string(self):
         assert _normalize_scope_id(42) == "42"
 
-    def test_empty_string_returns_none(self):
+    def test_vector_store_scope_unit_empty_string_returns_none(self):
         assert _normalize_scope_id("") is None
 
     def test_whitespace_returns_none(self):
@@ -78,7 +78,7 @@ class TestNormalizeScopeId:
 
 
 class TestCombineScopeWhere:
-    def test_no_scope_no_base_returns_none(self):
+    def test_vector_store_scope_unit_no_scope_no_base_returns_none(self):
         result = _combine_scope_where(None, channel_id=None, thread_id=None)
         assert result is None
 
@@ -91,7 +91,7 @@ class TestCombineScopeWhere:
         assert result is not None
         assert "$and" in result
 
-    def test_base_and_channel_combined(self):
+    def test_vector_store_scope_unit_base_and_channel_combined(self):
         base = {"type": "memory"}
         result = _combine_scope_where(base, channel_id="100", thread_id=None)
         assert result is not None
@@ -149,7 +149,7 @@ class TestAllowFallbackResult:
         meta = {"channel_id": "100", "thread_id": "50"}
         assert _allow_fallback_result(meta, channel_id="100", thread_id="50") is True
 
-    def test_wrong_thread_blocked(self):
+    def test_vector_store_scope_unit_wrong_thread_blocked(self):
         meta = {"channel_id": "100", "thread_id": "99"}
         assert _allow_fallback_result(meta, channel_id="100", thread_id="50") is False
 

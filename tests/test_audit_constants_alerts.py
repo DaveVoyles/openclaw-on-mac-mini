@@ -44,7 +44,7 @@ class TestAuditLog:
         entry = _audit_buffer[-1]
         assert entry["user_id"] == "42"
 
-    def test_default_result_is_success(self):
+    def test_audit_constants_alerts_default_result_is_success(self):
         audit_log("u", "act")
         assert _audit_buffer[-1]["result"] == "success"
 

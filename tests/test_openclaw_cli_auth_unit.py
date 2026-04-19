@@ -47,7 +47,7 @@ class TestOpenClawCliError:
         with pytest.raises(OpenClawCliError, match="oops"):
             raise OpenClawCliError("oops")
 
-    def test_message_preserved(self):
+    def test_openclaw_cli_auth_unit_message_preserved(self):
         err = OpenClawCliError("token is missing")
         assert "token is missing" in str(err)
 
@@ -198,7 +198,7 @@ class TestWriteKeychainToken:
             with pytest.raises(OpenClawCliError):
                 write_keychain_token("my-token", account="testuser")
 
-    def test_subprocess_exception_raises(self):
+    def test_openclaw_cli_auth_unit_subprocess_exception_raises(self):
         with patch("openclaw_cli_auth.subprocess.run", side_effect=OSError("binary missing")):
             with pytest.raises(OpenClawCliError, match="Keychain"):
                 write_keychain_token("my-token", account="testuser")
@@ -254,7 +254,7 @@ class TestDeleteKeychainToken:
                 with pytest.raises(OpenClawCliError):
                     delete_keychain_token(account="testuser")
 
-    def test_subprocess_exception_raises(self):
+    def test_openclaw_cli_auth_unit_subprocess_exception_raises_v2(self):
         with patch("openclaw_cli_auth.sys") as mock_sys:
             mock_sys.platform = "darwin"
             with patch("openclaw_cli_auth.subprocess.run", side_effect=OSError("binary gone")):

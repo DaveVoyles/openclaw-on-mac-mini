@@ -122,7 +122,7 @@ def test_get_progress_nonexistent_user(onboarding_manager):
     assert progress is None
 
 
-def test_persistence(tmp_path):
+def test_onboarding_persistence(tmp_path):
     """Test that progress is persisted to disk."""
     # Create manager and start onboarding
     manager1 = OnboardingManager(data_dir=tmp_path)

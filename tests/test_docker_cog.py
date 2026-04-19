@@ -107,7 +107,7 @@ class TestListContainersStructured:
             result = await _list_containers_structured()
             assert result == []
 
-    async def test_skips_invalid_json_lines(self):
+    async def test_docker_cog_skips_invalid_json_lines(self):
         output = 'not_json\n{"Names": "good"}\n'
         with patch("cogs.docker_cog._run", new=AsyncMock(return_value=(0, output, ""))):
             result = await _list_containers_structured()
@@ -231,7 +231,7 @@ class TestContainerActionView:
         assert view.requester_id == 42
         assert view.container_name == "mycontainer"
 
-    async def test_interaction_check_rejects_other_user(self):
+    async def test_docker_cog_interaction_check_rejects_other_user(self):
         container = _sample_container()
         view = ContainerActionView(container, requester_id=42)
         interaction = _make_interaction(user_id=99)
@@ -239,7 +239,7 @@ class TestContainerActionView:
         assert result is False
         interaction.response.send_message.assert_called_once()
 
-    async def test_interaction_check_allows_requester(self):
+    async def test_docker_cog_interaction_check_allows_requester(self):
         container = _sample_container()
         view = ContainerActionView(container, requester_id=42)
         interaction = _make_interaction(user_id=42)
@@ -402,7 +402,7 @@ class TestContainerActionView:
                                 mock_store.create.assert_called_once()
                                 interaction.response.send_message.assert_called_once()
 
-    async def test_on_timeout_disables_children(self):
+    async def test_docker_cog_on_timeout_disables_children(self):
         container = _sample_container()
         view = ContainerActionView(container, requester_id=1)
         # Add some mock children via internal attribute
@@ -488,7 +488,7 @@ class TestContainerSelectView:
         view = ContainerSelectView([], requester_id=1)
         assert len(view.children) == 0
 
-    async def test_interaction_check_rejects_other_user(self):
+    async def test_docker_cog_interaction_check_rejects_other_user_v2(self):
         containers = [_sample_container()]
         view = ContainerSelectView(containers, requester_id=42)
         interaction = _make_interaction(user_id=99)
@@ -496,14 +496,14 @@ class TestContainerSelectView:
         assert result is False
         interaction.response.send_message.assert_called_once()
 
-    async def test_interaction_check_allows_requester(self):
+    async def test_docker_cog_interaction_check_allows_requester_v2(self):
         containers = [_sample_container()]
         view = ContainerSelectView(containers, requester_id=42)
         interaction = _make_interaction(user_id=42)
         result = await view.interaction_check(interaction)
         assert result is True
 
-    async def test_on_timeout_disables_children(self):
+    async def test_docker_cog_on_timeout_disables_children_v2(self):
         containers = [_sample_container()]
         view = ContainerSelectView(containers, requester_id=1)
         view.message = None
@@ -579,7 +579,7 @@ class TestContainersCmd:
 # ---------------------------------------------------------------------------
 
 class TestStatusCmd:
-    async def test_status_cmd_success(self):
+    async def test_docker_cog_status_cmd_success(self):
         bot = _make_bot()
         cog = DockerCog(bot)
         interaction = _make_interaction()

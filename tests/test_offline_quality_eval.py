@@ -108,10 +108,10 @@ class TestBucketRank:
     def test_unknown_maps_to_very_slow_rank(self):
         assert _bucket_rank("unknown") == _bucket_rank("very-slow")
 
-    def test_case_insensitive(self):
+    def test_offline_quality_eval_case_insensitive(self):
         assert _bucket_rank("Fast") == _bucket_rank("fast")
 
-    def test_whitespace_stripped(self):
+    def test_offline_quality_eval_whitespace_stripped(self):
         assert _bucket_rank("  slow  ") == _bucket_rank("slow")
 
 
@@ -165,13 +165,13 @@ class TestClamp:
 # ---------------------------------------------------------------------------
 
 class TestNormalizeDomain:
-    def test_strips_www(self):
+    def test_offline_quality_eval_strips_www(self):
         assert _normalize_domain("www.example.com") == "example.com"
 
-    def test_lowercases(self):
+    def test_offline_quality_eval_lowercases(self):
         assert _normalize_domain("EXAMPLE.COM") == "example.com"
 
-    def test_strips_whitespace(self):
+    def test_offline_quality_eval_strips_whitespace(self):
         assert _normalize_domain("  example.com  ") == "example.com"
 
     def test_no_www(self):
@@ -293,7 +293,7 @@ class TestEvaluateClaimGrounding:
         result = _evaluate_claim_grounding(text)
         assert result["source_fields_missing"] is True
 
-    def test_returns_dict_with_expected_keys(self):
+    def test_offline_quality_eval_returns_dict_with_expected_keys(self):
         result = _evaluate_claim_grounding("The revenue grew 15%.")
         assert "evidence_completeness" in result
         assert "claim_like_count" in result

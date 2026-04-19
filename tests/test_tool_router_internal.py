@@ -37,12 +37,12 @@ class TestTokenize:
         assert "bc" in tokens
         assert "def" in tokens
 
-    def test_lowercases(self):
+    def test_tool_router_internal_lowercases(self):
         tokens = _tokenize("Hello WORLD")
         assert "hello" in tokens
         assert "world" in tokens
 
-    def test_empty_string(self):
+    def test_tool_router_internal_empty_string(self):
         assert _tokenize("") == set()
 
     def test_none_like_empty(self):
@@ -259,19 +259,19 @@ class TestMatchingWorkflowBundles:
 # ---------------------------------------------------------------------------
 
 class TestExtractRequestedItemCountRouter:
-    def test_top_n_stories(self):
+    def test_tool_router_internal_top_n_stories(self):
         assert _extract_requested_item_count("give me top 5 stories") == 5
 
     def test_at_least_n_items(self):
         assert _extract_requested_item_count("at least 3 items from today") == 3
 
-    def test_bare_count(self):
+    def test_tool_router_internal_bare_count(self):
         assert _extract_requested_item_count("10 headlines this week") == 10
 
-    def test_no_count_returns_none(self):
+    def test_tool_router_internal_no_count_returns_none(self):
         assert _extract_requested_item_count("what happened today?") is None
 
-    def test_capped_at_25(self):
+    def test_tool_router_internal_capped_at_25(self):
         assert _extract_requested_item_count("top 50 stories") == 25
 
 

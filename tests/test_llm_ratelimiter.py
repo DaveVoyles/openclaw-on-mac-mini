@@ -134,7 +134,7 @@ class TestIsConfigured:
 
 
 class TestGetRateInfo:
-    def test_returns_string(self):
+    def test_llm_ratelimiter_returns_string(self):
         result = get_rate_info()
         assert isinstance(result, str)
 

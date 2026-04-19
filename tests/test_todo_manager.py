@@ -14,10 +14,10 @@ def mgr(tmp_path):
 
 
 class TestTodoManagerLoad:
-    def test_starts_empty_when_no_file(self, mgr):
+    def test_todo_manager_starts_empty_when_no_file(self, mgr):
         assert mgr._items == []
 
-    def test_loads_existing_data(self, tmp_path):
+    def test_todo_manager_loads_existing_data(self, tmp_path):
         path = tmp_path / "todos.json"
         item = {
             "id": "abc12345",
@@ -33,7 +33,7 @@ class TestTodoManagerLoad:
         assert len(manager._items) == 1
         assert manager._items[0].title == "Buy milk"
 
-    def test_bad_json_starts_empty(self, tmp_path):
+    def test_todo_manager_bad_json_starts_empty(self, tmp_path):
         path = tmp_path / "todos.json"
         path.write_text("{ broken json", encoding="utf-8")
         manager = TodoManager(path=path)
@@ -56,11 +56,11 @@ class TestTodoManagerAdd:
         item = mgr.add("Urgent", user_id=1, priority="high")
         assert item.priority == "high"
 
-    def test_add_with_due_date(self, mgr):
+    def test_todo_manager_add_with_due_date(self, mgr):
         item = mgr.add("Task", user_id=1, due_date="2025-12-31")
         assert item.due_date == "2025-12-31"
 
-    def test_add_persists_to_disk(self, mgr):
+    def test_todo_manager_add_persists_to_disk(self, mgr):
         mgr.add("Persist me", user_id=1)
         saved = json.loads(mgr._path.read_text(encoding="utf-8"))
         assert len(saved) == 1
@@ -68,7 +68,7 @@ class TestTodoManagerAdd:
 
 
 class TestTodoManagerComplete:
-    def test_complete_marks_done(self, mgr):
+    def test_todo_manager_complete_marks_done(self, mgr):
         item = mgr.add("Do laundry", user_id=1)
         completed = mgr.complete(item.id, 1)
         assert completed is not None
@@ -83,7 +83,7 @@ class TestTodoManagerComplete:
         result = mgr.complete("nonexistent", 1)
         assert result is None
 
-    def test_complete_persists(self, mgr):
+    def test_todo_manager_complete_persists(self, mgr):
         item = mgr.add("Task", user_id=1)
         mgr.complete(item.id, 1)
         saved = json.loads(mgr._path.read_text(encoding="utf-8"))
@@ -91,7 +91,7 @@ class TestTodoManagerComplete:
 
 
 class TestTodoManagerDelete:
-    def test_delete_returns_true(self, mgr):
+    def test_todo_manager_delete_returns_true(self, mgr):
         item = mgr.add("Delete me", user_id=1)
         assert mgr.delete(item.id, 1) is True
         assert mgr._items == []
@@ -103,7 +103,7 @@ class TestTodoManagerDelete:
     def test_delete_returns_false_bad_id(self, mgr):
         assert mgr.delete("nope", 1) is False
 
-    def test_delete_persists(self, mgr):
+    def test_todo_manager_delete_persists(self, mgr):
         item = mgr.add("Task", user_id=1)
         mgr.delete(item.id, 1)
         saved = json.loads(mgr._path.read_text(encoding="utf-8"))

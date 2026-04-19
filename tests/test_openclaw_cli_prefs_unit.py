@@ -150,7 +150,7 @@ def test_normalize_personalization_theme():
 # _load_prefs
 # ---------------------------------------------------------------------------
 
-def test_load_prefs_silently_ignores_missing_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+def test_openclaw_cli_prefs_unit_load_prefs_silently_ignores_missing_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
     # No prefs.json in the temp dir — should not raise
     mod._load_prefs()

@@ -38,7 +38,7 @@ class TestSummaryPath:
 # ---------------------------------------------------------------------------
 
 class TestLoadLastSummary:
-    def test_returns_empty_when_no_file(self, tmp_path, monkeypatch):
+    def test_memory_session_unit_returns_empty_when_no_file(self, tmp_path, monkeypatch):
         summaries = tmp_path / "summaries"
         monkeypatch.setattr(ms_module, "SUMMARIES_DIR", summaries)
         assert _load_last_summary(99) == ""
@@ -52,7 +52,7 @@ class TestLoadLastSummary:
         result = _load_last_summary(1)
         assert result == "Discussed deployment pipeline"
 
-    def test_returns_empty_on_corrupt_file(self, tmp_path, monkeypatch):
+    def test_memory_session_unit_returns_empty_on_corrupt_file(self, tmp_path, monkeypatch):
         summaries = tmp_path / "summaries"
         summaries.mkdir(parents=True)
         monkeypatch.setattr(ms_module, "SUMMARIES_DIR", summaries)
@@ -178,7 +178,7 @@ class TestCreateSessionHandover:
 # ---------------------------------------------------------------------------
 
 class TestLoadLastHandover:
-    def test_returns_empty_when_no_file(self, tmp_path, monkeypatch):
+    def test_memory_session_unit_returns_empty_when_no_file_v2(self, tmp_path, monkeypatch):
         monkeypatch.setattr(ms_module, "HANDOVER_DIR", tmp_path / "handovers")
         assert load_last_handover(99) == ""
 
@@ -190,7 +190,7 @@ class TestLoadLastHandover:
         (handover_dir / "1_last_handover.json").write_text(json.dumps(payload))
         assert load_last_handover(1) == "Next: deploy the fix"
 
-    def test_returns_empty_on_corrupt_file(self, tmp_path, monkeypatch):
+    def test_memory_session_unit_returns_empty_on_corrupt_file_v2(self, tmp_path, monkeypatch):
         handover_dir = tmp_path / "handovers"
         handover_dir.mkdir(parents=True)
         monkeypatch.setattr(ms_module, "HANDOVER_DIR", handover_dir)

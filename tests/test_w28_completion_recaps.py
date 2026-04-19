@@ -163,13 +163,13 @@ class TestPreviewPanel:
 # ---------------------------------------------------------------------------
 
 class TestWordCount:
-    def test_single_word(self):
+    def test_w28_completion_recaps_single_word(self):
         assert _word_count("hello") == 1
 
     def test_multi_word(self):
         assert _word_count("hello world foo bar") == 4
 
-    def test_empty_string(self):
+    def test_w28_completion_recaps_empty_string(self):
         assert _word_count("") == 0
 
     def test_extra_whitespace(self):
@@ -234,7 +234,7 @@ def _make_analyze_ctx(goal: str = "test goal") -> MagicMock:
 
 
 class TestAnalyzeRecap:
-    def test_recap_printed_when_response_nonempty(self, cmd_core_mod, capsys):
+    def test_w28_completion_recaps_recap_printed_when_response_nonempty(self, cmd_core_mod, capsys):
         mock_m = _make_mock_cli_mod("Hello world foo bar baz")
         ctx = _make_analyze_ctx()
         with (
@@ -247,7 +247,7 @@ class TestAnalyzeRecap:
         assert "✓ Analysis complete" in out
         assert "5 words" in out
 
-    def test_recap_not_printed_when_response_empty(self, cmd_core_mod, capsys):
+    def test_w28_completion_recaps_recap_not_printed_when_response_empty(self, cmd_core_mod, capsys):
         mock_m = _make_mock_cli_mod("")
         ctx = _make_analyze_ctx()
         with (
@@ -259,7 +259,7 @@ class TestAnalyzeRecap:
         out = capsys.readouterr().out
         assert "✓ Analysis complete" not in out
 
-    def test_recap_word_count_correct(self, cmd_core_mod, capsys):
+    def test_w28_completion_recaps_recap_word_count_correct(self, cmd_core_mod, capsys):
         text = "one two three four five six seven eight nine ten"
         mock_m = _make_mock_cli_mod(text)
         ctx = _make_analyze_ctx()
@@ -377,7 +377,7 @@ def _make_write_mock_cli_mod(response_text: str) -> MagicMock:
 
 
 class TestWriteRecap:
-    def test_recap_printed_when_response_nonempty(self, cmd_core_mod, capsys):
+    def test_w28_completion_recaps_recap_printed_when_response_nonempty_v2(self, cmd_core_mod, capsys):
         mock_m = _make_write_mock_cli_mod("Draft text here with some words")
         ctx = _make_write_ctx()
         with (
@@ -389,7 +389,7 @@ class TestWriteRecap:
         out = capsys.readouterr().out
         assert "✓ Draft complete" in out
 
-    def test_recap_not_printed_when_response_empty(self, cmd_core_mod, capsys):
+    def test_w28_completion_recaps_recap_not_printed_when_response_empty_v2(self, cmd_core_mod, capsys):
         mock_m = _make_write_mock_cli_mod("")
         ctx = _make_write_ctx()
         with (
@@ -401,7 +401,7 @@ class TestWriteRecap:
         out = capsys.readouterr().out
         assert "✓ Draft complete" not in out
 
-    def test_recap_word_count_correct(self, cmd_core_mod, capsys):
+    def test_w28_completion_recaps_recap_word_count_correct_v2(self, cmd_core_mod, capsys):
         text = " ".join(["word"] * 42)
         mock_m = _make_write_mock_cli_mod(text)
         ctx = _make_write_ctx()

@@ -13,19 +13,19 @@ from reminder_manager import Reminder, ReminderManager, parse_time_expression
 # ===========================================================================
 
 class TestParseTimeExpression:
-    def test_in_minutes(self):
+    def test_reminder_manager_in_minutes(self):
         before = time.time()
         result = parse_time_expression("in 30m")
         assert result is not None
         assert abs(result - (before + 30 * 60)) < 2
 
-    def test_in_hours(self):
+    def test_reminder_manager_in_hours(self):
         before = time.time()
         result = parse_time_expression("in 2h")
         assert result is not None
         assert abs(result - (before + 7200)) < 2
 
-    def test_in_seconds(self):
+    def test_reminder_manager_in_seconds(self):
         before = time.time()
         result = parse_time_expression("in 45s")
         assert result is not None
@@ -42,7 +42,7 @@ class TestParseTimeExpression:
         assert result is not None
         assert result > time.time()
 
-    def test_at_with_minutes(self):
+    def test_reminder_manager_at_with_minutes(self):
         result = parse_time_expression("at 3:30pm")
         assert result is not None
 
@@ -75,10 +75,10 @@ class TestReminderManager:
         monkeypatch.setattr(mod, "REMINDERS_FILE", tmp_path / "reminders.json")
         return ReminderManager()
 
-    def test_empty_initially(self, mgr):
+    def test_reminder_manager_empty_initially(self, mgr):
         assert mgr.list_for_user(1) == []
 
-    def test_add_reminder(self, mgr):
+    def test_reminder_manager_add_reminder(self, mgr):
         r = mgr.add(1, 100, "Buy milk", time.time() + 3600)
         assert isinstance(r, Reminder)
         assert r.user_id == 1
@@ -118,7 +118,7 @@ class TestReminderManager:
         assert any(r.id == past.id for r in due)
         assert not any(r.id == future.id for r in due)
 
-    def test_mark_fired_one_shot(self, mgr):
+    def test_reminder_manager_mark_fired_one_shot(self, mgr):
         r = mgr.add(1, 100, "Once", time.time() - 1)
         mgr.mark_fired(r.id)
         due = mgr.get_due()

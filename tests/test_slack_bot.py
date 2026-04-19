@@ -337,7 +337,7 @@ class TestSlackBot(unittest.TestCase):
 
         # Build a slim test-shim since handle_slash_files is a closure
         # We test the logic by reconstructing the equivalent coroutine.
-        async def test_logic():
+        async def test_slack_bot_logic():
             with patch.object(
                 slack_bot.file_skills,
                 "list_local_files",
@@ -374,7 +374,7 @@ class TestSlackBot(unittest.TestCase):
 
         collected = []
 
-        async def test_logic():
+        async def test_slack_bot_logic_v2():
             with patch.object(
                 slack_bot.file_skills,
                 "list_local_files",

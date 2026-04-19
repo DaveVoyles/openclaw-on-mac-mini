@@ -82,7 +82,7 @@ class TestToolHealthTracker:
         assert s["a"]["total"] == 2
         assert s["a"]["success_rate"] == 0.5
 
-    def test_persistence(self, tmp_path):
+    def test_tool_health_persistence(self, tmp_path):
         health_file = tmp_path / "tool_health.json"
         with patch("tool_health._HEALTH_FILE", health_file):
             t1 = ToolHealthTracker(persist_every=1)

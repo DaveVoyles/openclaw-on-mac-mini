@@ -70,14 +70,14 @@ class TestOpenclawTypes:
         assert openclaw_types.URL is not None
         assert openclaw_types.FilePath is not None
 
-    def test_callback_aliases(self):
+    def test_zero_coverage_modules_callback_aliases(self):
         assert openclaw_types.ErrorHandler is not None
         assert openclaw_types.AsyncCallback is not None
         assert openclaw_types.AsyncCallbackWithResult is not None
 
     # -- MessageContext -------------------------------------------------------
 
-    def test_message_context_full(self):
+    def test_zero_coverage_modules_message_context_full(self):
         ctx: MessageContext = {
             "user_id": "123",
             "channel_id": "456",
@@ -132,7 +132,7 @@ class TestOpenclawTypes:
 
     # -- SkillResult ----------------------------------------------------------
 
-    def test_skill_result_success(self):
+    def test_zero_coverage_modules_skill_result_success(self):
         r: SkillResult = {
             "status": "success",
             "data": {"answer": 42},
@@ -195,7 +195,7 @@ class TestOpenclawTypes:
         assert a["title"] == "Big News"
         assert a["sentiment"] == 0.75
 
-    def test_news_article_minimal(self):
+    def test_zero_coverage_modules_news_article_minimal(self):
         a: NewsArticle = {"title": "Short", "url": "https://x.com", "source": "X"}
         assert a["source"] == "X"
 
@@ -313,7 +313,7 @@ class TestOpenclawTypes:
 class TestProfiler:
     """CPU profiler start/stop, stats, flame graph, and helper functions."""
 
-    def test_init(self):
+    def test_zero_coverage_modules_init(self):
         p = Profiler()
         assert p._cpu_profiler is None
         assert p._is_profiling is False
@@ -340,7 +340,7 @@ class TestProfiler:
             p.start_cpu_profiling()
         p.stop_cpu_profiling()
 
-    def test_stop_without_start_raises(self):
+    def test_zero_coverage_modules_stop_without_start_raises(self):
         p = Profiler()
         with pytest.raises(RuntimeError, match="No active profiling session"):
             p.stop_cpu_profiling()
@@ -475,7 +475,7 @@ def rm(tmp_path, monkeypatch):
 
 
 class TestReminder:
-    def test_defaults(self):
+    def test_zero_coverage_modules_defaults(self):
         r = Reminder()
         assert isinstance(r.id, str)
         assert len(r.id) == 8
@@ -532,7 +532,7 @@ class TestReminderManager:
         mgr = ReminderManager()
         assert mgr._reminders == []
 
-    def test_add_reminder(self, rm):
+    def test_zero_coverage_modules_add_reminder(self, rm):
         r = rm.add(user_id=1, channel_id=200, message="Test", fire_at=time.time() + 60)
         assert r.user_id == 1
         assert r.channel_id == 200
@@ -543,7 +543,7 @@ class TestReminderManager:
         r = rm.add(1, 200, "Daily", time.time() + 3600, recurring="daily")
         assert r.recurring == "daily"
 
-    def test_add_persists(self, rm, tmp_path, monkeypatch):
+    def test_zero_coverage_modules_add_persists(self, rm, tmp_path, monkeypatch):
         """add() writes to the file."""
         rf = tmp_path / "reminders.json"
         monkeypatch.setattr(rm_mod, "REMINDERS_FILE", rf)
@@ -598,7 +598,7 @@ class TestReminderManager:
         r.fired = True
         assert rm.get_due() == []
 
-    def test_mark_fired_one_shot(self, rm):
+    def test_zero_coverage_modules_mark_fired_one_shot(self, rm):
         r = rm.add(1, 100, "Once", time.time() - 1)
         rm.mark_fired(r.id)
         assert r.fired is True
@@ -625,15 +625,15 @@ class TestReminderManager:
 
 
 class TestParseTimeExpression:
-    def test_in_minutes(self):
+    def test_zero_coverage_modules_in_minutes(self):
         ts = parse_time_expression("in 30m")
         assert ts == pytest.approx(time.time() + 30 * 60, abs=2)
 
-    def test_in_hours(self):
+    def test_zero_coverage_modules_in_hours(self):
         ts = parse_time_expression("in 2h")
         assert ts == pytest.approx(time.time() + 2 * 3600, abs=2)
 
-    def test_in_seconds(self):
+    def test_zero_coverage_modules_in_seconds(self):
         ts = parse_time_expression("in 10s")
         assert ts == pytest.approx(time.time() + 10, abs=2)
 
@@ -672,7 +672,7 @@ class TestParseTimeExpression:
         ts = parse_time_expression("at 12am")
         assert ts is not None
 
-    def test_at_with_minutes(self):
+    def test_zero_coverage_modules_at_with_minutes(self):
         ts = parse_time_expression("at 10:30")
         assert ts is not None
 
@@ -824,7 +824,7 @@ class TestScheduledPatreonHealthCheck:
         alert_mgr.send_alert_if_needed.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_exception_returns_failure_dict(self):
+    async def test_zero_coverage_modules_exception_returns_failure_dict(self):
         checker = MagicMock()
         checker.check_health = AsyncMock(side_effect=RuntimeError("network error"))
         with patch.object(patreon_scheduled, "get_patreon_checker", return_value=checker):

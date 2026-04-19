@@ -448,7 +448,7 @@ class TestEmbedCode:
 class TestStatistics:
     """Test global sharing statistics"""
 
-    def test_get_stats(self, managers, sample_user):
+    def test_share_manager_get_stats(self, managers, sample_user):
         """Test getting global statistics"""
         _, share_manager = managers
 

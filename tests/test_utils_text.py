@@ -31,7 +31,7 @@ class TestTruncate:
 
 
 class TestSplitByLength:
-    def test_empty_string(self):
+    def test_utils_text_empty_string(self):
         assert split_by_length("", 10) == []
 
     def test_no_split_needed(self):

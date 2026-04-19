@@ -55,16 +55,16 @@ class TestDetectGoal:
 # ---------------------------------------------------------------------------
 
 class TestLoadSaveGoals:
-    def test_load_returns_empty_when_no_file(self):
+    def test_goal_tracker_load_returns_empty_when_no_file(self):
         assert _load_goals() == []
 
-    def test_save_and_load_roundtrip(self):
+    def test_goal_tracker_save_and_load_roundtrip(self):
         goals = [{"goal": "Learn Rust", "user_id": 1, "status": "active"}]
         _save_goals(goals)
         loaded = _load_goals()
         assert loaded == goals
 
-    def test_save_creates_parent_dirs(self, tmp_path, monkeypatch):
+    def test_goal_tracker_save_creates_parent_dirs(self, tmp_path, monkeypatch):
         nested = tmp_path / "deep" / "goals.json"
         monkeypatch.setattr(gt, "GOALS_FILE", nested)
         _save_goals([{"goal": "test"}])
@@ -94,7 +94,7 @@ class TestGetActiveGoals:
         assert len(active) == 1
         assert active[0]["goal"] == "Learn Rust"
 
-    def test_filters_by_user_id(self):
+    def test_goal_tracker_filters_by_user_id(self):
         goals = [
             {"goal": "User1 goal", "user_id": 1, "status": "active"},
             {"goal": "User2 goal", "user_id": 2, "status": "active"},

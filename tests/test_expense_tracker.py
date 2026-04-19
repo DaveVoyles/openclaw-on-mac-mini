@@ -14,10 +14,10 @@ def tracker(tmp_path):
 
 
 class TestExpenseTrackerLoad:
-    def test_starts_empty_when_no_file(self, tracker):
+    def test_expense_tracker_starts_empty_when_no_file(self, tracker):
         assert tracker._expenses == []
 
-    def test_loads_existing_data(self, tmp_path):
+    def test_expense_tracker_loads_existing_data(self, tmp_path):
         path = tmp_path / "expenses.json"
         e = Expense(id="abc12345", amount=9.99, category="food", note="lunch",
                     user_id="u1", timestamp="2024-01-01T12:00:00+00:00")
@@ -30,7 +30,7 @@ class TestExpenseTrackerLoad:
         assert len(t._expenses) == 1
         assert t._expenses[0].category == "food"
 
-    def test_bad_json_starts_empty(self, tmp_path):
+    def test_expense_tracker_bad_json_starts_empty(self, tmp_path):
         path = tmp_path / "expenses.json"
         path.write_text("not json at all!")
         t = ExpenseTracker(path=path)
@@ -45,7 +45,7 @@ class TestExpenseTrackerAdd:
         assert e.category == "food"
         assert e.user_id == "user1"
 
-    def test_add_persists_to_disk(self, tracker):
+    def test_expense_tracker_add_persists_to_disk(self, tracker):
         tracker.add("user1", 5.00, "transport", "bus")
         saved = json.loads(tracker.path.read_text())
         assert len(saved) == 1

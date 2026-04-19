@@ -18,10 +18,10 @@ def monitor(tmp_path, monkeypatch):
 
 
 class TestResourceMonitorLoad:
-    def test_starts_empty_when_no_file(self, monitor):
+    def test_resource_monitor_starts_empty_when_no_file(self, monitor):
         assert monitor._thresholds == {}
 
-    def test_loads_existing_data(self, tmp_path, monkeypatch):
+    def test_resource_monitor_loads_existing_data(self, tmp_path, monkeypatch):
         path = tmp_path / "monitors.json"
         data = {
             "mycontainer": {
@@ -39,7 +39,7 @@ class TestResourceMonitorLoad:
         assert "mycontainer" in m._thresholds
         assert m._thresholds["mycontainer"].cpu_percent == 75.0
 
-    def test_bad_json_starts_empty(self, tmp_path, monkeypatch):
+    def test_resource_monitor_bad_json_starts_empty(self, tmp_path, monkeypatch):
         path = tmp_path / "monitors.json"
         path.write_text("not json")
         monkeypatch.setattr(rm, "MONITOR_FILE", path)
@@ -66,12 +66,12 @@ class TestSetThreshold:
 
 
 class TestRemoveThreshold:
-    def test_remove_existing_returns_true(self, monitor):
+    def test_resource_monitor_remove_existing_returns_true(self, monitor):
         monitor.set_threshold("redis")
         assert monitor.remove("redis") is True
         assert "redis" not in monitor._thresholds
 
-    def test_remove_nonexistent_returns_false(self, monitor):
+    def test_resource_monitor_remove_nonexistent_returns_false(self, monitor):
         assert monitor.remove("ghost") is False
 
     def test_remove_persists(self, monitor):

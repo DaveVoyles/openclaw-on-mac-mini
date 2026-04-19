@@ -45,7 +45,7 @@ class TestConversationAddMessage:
         conv.add_user_message("Hello")
         assert conv.history[0] == {"role": "user", "parts": ["Hello"]}
 
-    def test_updates_last_active(self):
+    def test_memory_conversation_unit_updates_last_active(self):
         conv = Conversation()
         before = conv.last_active
         time.sleep(0.01)
@@ -71,7 +71,7 @@ class TestConversationUpdateFromLLM:
         conv.update_from_llm(new_history)
         assert conv.history == new_history
 
-    def test_updates_last_active(self):
+    def test_memory_conversation_unit_updates_last_active_v2(self):
         conv = Conversation()
         before = conv.last_active
         time.sleep(0.01)
@@ -133,7 +133,7 @@ class TestConversationExpiry:
         conv = Conversation()
         assert conv.age_minutes >= 0
 
-    def test_is_expired_after_ttl(self):
+    def test_memory_conversation_unit_is_expired_after_ttl(self):
         conv = Conversation()
         # Simulate an old last_active by subtracting more than CONTEXT_TTL
         conv.last_active = time.monotonic() - (CONTEXT_TTL + 10)
@@ -145,13 +145,13 @@ class TestConversationExpiry:
 # ---------------------------------------------------------------------------
 
 class TestConversationStoreInMemory:
-    def test_get_creates_new_conversation(self):
+    def test_memory_conversation_unit_get_creates_new_conversation(self):
         cs = ConversationStore()
         conv = cs.get(1, 100, "Bob")
         assert conv is not None
         assert isinstance(conv, Conversation)
 
-    def test_get_returns_same_conversation_for_same_key(self):
+    def test_memory_conversation_unit_get_returns_same_conversation_for_same_key(self):
         cs = ConversationStore()
         conv1 = cs.get(1, 100, "Bob")
         conv2 = cs.get(1, 100, "Bob")
@@ -177,13 +177,13 @@ class TestConversationStoreInMemory:
         cs.clear_all()
         assert cs.active_count == 0
 
-    def test_active_count_excludes_expired(self):
+    def test_memory_conversation_unit_active_count_excludes_expired(self):
         cs = ConversationStore()
         conv = cs.get(1, 100)
         conv.last_active = time.monotonic() - (CONTEXT_TTL + 10)
         assert cs.active_count == 0
 
-    def test_stats_returns_string(self):
+    def test_memory_conversation_unit_stats_returns_string(self):
         cs = ConversationStore()
         result = cs.stats()
         assert isinstance(result, str)

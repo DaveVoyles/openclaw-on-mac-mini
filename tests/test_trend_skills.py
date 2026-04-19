@@ -73,7 +73,7 @@ async def test_untrack_topic_failure(mock_tracker):
 
 
 @pytest.mark.asyncio
-async def test_get_trending_topics(mock_tracker):
+async def test_trend_skills_get_trending_topics(mock_tracker):
     """Test getting trending topics."""
     # Mock TrendAnalysis object
     mock_analysis = MagicMock()

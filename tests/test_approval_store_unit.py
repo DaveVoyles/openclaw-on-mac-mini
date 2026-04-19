@@ -45,7 +45,7 @@ def _create_req(store: ApprovalStore, **overrides):
 
 
 class TestApprovalStoreCreate:
-    def test_create_returns_request(self, store):
+    def test_approval_store_unit_create_returns_request(self, store):
         req = _create_req(store)
         assert req is not None
         assert req.action == "restart_container"
@@ -79,7 +79,7 @@ class TestApprovalStoreGet:
         fetched = store.get(req.request_id)
         assert fetched is req
 
-    def test_get_returns_none_for_unknown_id(self, store):
+    def test_approval_store_unit_get_returns_none_for_unknown_id(self, store):
         assert store.get("doesnotexist") is None
 
     def test_get_auto_expires_stale_request(self, store):
@@ -104,7 +104,7 @@ class TestApprovalStoreResolve:
         assert result is req
         assert req.approved is False
 
-    def test_resolve_already_resolved_returns_none(self, store):
+    def test_approval_store_unit_resolve_already_resolved_returns_none(self, store):
         req = _create_req(store)
         store.resolve(req.request_id, approved=True, resolver_id=2, resolver_name="Bob")
         result = store.resolve(req.request_id, approved=False, resolver_id=3, resolver_name="Carol")
@@ -170,14 +170,14 @@ class TestEmergencyStop:
         set_emergency_stop(False)
         assert is_emergency_stopped() is False
 
-    def test_toggle_multiple_times(self):
+    def test_approval_store_unit_toggle_multiple_times(self):
         for expected in [True, False, True, False]:
             set_emergency_stop(expected)
             assert is_emergency_stopped() == expected
 
 
 class TestIsAuthorizedApprover:
-    def test_returns_bool(self):
+    def test_approval_store_unit_returns_bool(self):
         assert isinstance(is_authorized_approver(1), bool)
 
     def test_unknown_user_not_authorized_when_list_configured(self, monkeypatch):

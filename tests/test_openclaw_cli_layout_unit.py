@@ -118,14 +118,14 @@ def test_single_line_excerpt_fits():
     assert mod._single_line_excerpt_layout("Hello", max_chars=20) == "Hello"
 
 
-def test_single_line_excerpt_truncates():
+def test_openclaw_cli_layout_unit_single_line_excerpt_truncates():
     long = "word " * 50
     result = mod._single_line_excerpt_layout(long, max_chars=30)
     assert result.endswith("…")
     assert len(result) <= 31  # max_chars + ellipsis char
 
 
-def test_single_line_excerpt_collapses_whitespace():
+def test_openclaw_cli_layout_unit_single_line_excerpt_collapses_whitespace():
     text = "Hello   world\n  extra"
     result = mod._single_line_excerpt_layout(text, max_chars=200)
     assert "\n" not in result
@@ -178,13 +178,13 @@ def test_format_elapsed_compact_layout_invalid():
 # _format_collaboration_entry_layout
 # ---------------------------------------------------------------------------
 
-def test_format_collaboration_entry_basic():
+def test_openclaw_cli_layout_unit_format_collaboration_entry_basic():
     entry = {"actor": "alice", "summary": "Approved PR"}
     result = mod._format_collaboration_entry_layout(entry)
     assert result == "alice: Approved PR"
 
 
-def test_format_collaboration_entry_with_tags():
+def test_openclaw_cli_layout_unit_format_collaboration_entry_with_tags():
     entry = {"actor": "bob", "summary": "Merged", "tags": ["deploy", "prod"]}
     result = mod._format_collaboration_entry_layout(entry)
     assert "#deploy" in result

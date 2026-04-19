@@ -31,7 +31,7 @@ class TestCompactionPriority:
         high = _compaction_priority("b", {"access_count": 10})
         assert low < high
 
-    def test_empty_meta_does_not_raise(self):
+    def test_vector_store_compaction_unit_empty_meta_does_not_raise(self):
         result = _compaction_priority("doc1", {})
         assert isinstance(result, tuple)
 
@@ -58,13 +58,13 @@ class TestRetentionWindowSeconds:
     def test_long_is_24_hours(self):
         assert _retention_window_seconds("long") == 24 * 3600
 
-    def test_none_defaults_to_standard(self):
+    def test_vector_store_compaction_unit_none_defaults_to_standard(self):
         assert _retention_window_seconds(None) == _retention_window_seconds("standard")
 
     def test_unknown_class_defaults_to_standard(self):
         assert _retention_window_seconds("unknown") == _retention_window_seconds("standard")
 
-    def test_case_insensitive(self):
+    def test_vector_store_compaction_unit_case_insensitive(self):
         assert _retention_window_seconds("SHORT") == 0
         assert _retention_window_seconds("Long") == 24 * 3600
 
@@ -118,7 +118,7 @@ class TestGetDecayedDocuments:
 
 class TestMarkDecayed:
     @pytest.mark.asyncio
-    async def test_returns_zero_for_empty_list(self):
+    async def test_vector_store_compaction_unit_returns_zero_for_empty_list(self):
         result = await mark_decayed("memories", [])
         assert result == 0
 

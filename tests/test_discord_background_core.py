@@ -58,17 +58,17 @@ class TestParseHealActions:
         assert actions[0][0] == "copilot_fix_pending"
         assert "check container logs" in actions[0][1]
 
-    def test_fix_qbit_download_path(self):
+    def test_discord_background_core_fix_qbit_download_path(self):
         analysis = "SELF_HEAL: fix_qbit_download_path"
         actions = mod._parse_heal_actions(analysis)
         assert actions == [("fix_qbit_download_path", "")]
 
-    def test_fix_arr_remote_path(self):
+    def test_discord_background_core_fix_arr_remote_path(self):
         analysis = "SELF_HEAL: fix_arr_remote_path"
         actions = mod._parse_heal_actions(analysis)
         assert actions == [("fix_arr_remote_path", "")]
 
-    def test_auto_cleanup_disk(self):
+    def test_discord_background_core_auto_cleanup_disk(self):
         analysis = "SELF_HEAL: auto_cleanup_disk"
         actions = mod._parse_heal_actions(analysis)
         assert actions == [("auto_cleanup_disk", "")]
@@ -76,7 +76,7 @@ class TestParseHealActions:
     def test_no_directives(self):
         assert mod._parse_heal_actions("everything looks fine") == []
 
-    def test_empty_string(self):
+    def test_discord_background_core_empty_string(self):
         assert mod._parse_heal_actions("") == []
 
     def test_copilot_fix_without_prompt_ignored(self):
@@ -261,7 +261,7 @@ class TestSendMorningBriefing:
         return ch
 
     @pytest.mark.asyncio
-    async def test_happy_path_sends_embed(self, monkeypatch):
+    async def test_discord_background_core_happy_path_sends_embed(self, monkeypatch):
         channel = self._make_channel()
         bot = self._make_bot(channel)
         # Patch on bg_briefing where ALERT_CHANNEL_ID and helpers are defined
@@ -281,7 +281,7 @@ class TestSendMorningBriefing:
         assert "Morning Briefing" in call_kwargs["embed"].title
 
     @pytest.mark.asyncio
-    async def test_no_alert_channel_id_returns_early(self, monkeypatch):
+    async def test_discord_background_core_no_alert_channel_id_returns_early(self, monkeypatch):
         bot = self._make_bot(channel=None)
         monkeypatch.setattr(briefing_mod, "ALERT_CHANNEL_ID", 0)
 
@@ -290,7 +290,7 @@ class TestSendMorningBriefing:
         bot.get_channel.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_channel_not_found_returns_early(self, monkeypatch):
+    async def test_discord_background_core_channel_not_found_returns_early(self, monkeypatch):
         bot = self._make_bot(channel=None)  # get_channel returns None
         monkeypatch.setattr(briefing_mod, "ALERT_CHANNEL_ID", 456)
 
@@ -350,7 +350,7 @@ class TestSendEveningDigest:
         return ch
 
     @pytest.mark.asyncio
-    async def test_happy_path_sends_embed(self, monkeypatch):
+    async def test_discord_background_core_happy_path_sends_embed_v2(self, monkeypatch):
         channel = self._make_channel()
         bot = self._make_bot(channel)
         monkeypatch.setattr(briefing_mod, "ALERT_CHANNEL_ID", 789)
@@ -366,7 +366,7 @@ class TestSendEveningDigest:
         assert "Digest" in call_kwargs["embed"].title
 
     @pytest.mark.asyncio
-    async def test_no_alert_channel_id_returns_early(self, monkeypatch):
+    async def test_discord_background_core_no_alert_channel_id_returns_early_v2(self, monkeypatch):
         bot = self._make_bot(channel=None)
         monkeypatch.setattr(briefing_mod, "ALERT_CHANNEL_ID", 0)
 
@@ -375,7 +375,7 @@ class TestSendEveningDigest:
         bot.get_channel.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_channel_not_found_returns_early(self, monkeypatch):
+    async def test_discord_background_core_channel_not_found_returns_early_v2(self, monkeypatch):
         bot = self._make_bot(channel=None)
         monkeypatch.setattr(briefing_mod, "ALERT_CHANNEL_ID", 999)
 

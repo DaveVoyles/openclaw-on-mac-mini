@@ -6,7 +6,7 @@ import webhook_formatter as mod
 
 
 class TestFormatSonarr:
-    def test_download_event(self):
+    def test_webhook_formatter_download_event(self):
         payload = {
             "eventType": "Download",
             "series": {"title": "Breaking Bad"},
@@ -41,7 +41,7 @@ class TestFormatSonarr:
 
 
 class TestFormatRadarr:
-    def test_download_event(self):
+    def test_webhook_formatter_download_event_v2(self):
         payload = {
             "eventType": "Download",
             "movie": {"title": "Inception", "year": 2010},

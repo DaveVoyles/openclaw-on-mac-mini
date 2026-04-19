@@ -19,7 +19,7 @@ def fresh_profiler():
 
 
 class TestProfilerInit:
-    def test_initial_state_not_profiling(self, fresh_profiler):
+    def test_profiler_initial_state_not_profiling(self, fresh_profiler):
         assert fresh_profiler._is_profiling is False
         assert fresh_profiler._cpu_profiler is None
         assert fresh_profiler._profile_start_time is None
@@ -33,7 +33,7 @@ class TestStartCpuProfiling:
         assert fresh_profiler._profile_start_time is not None
         fresh_profiler.stop_cpu_profiling()
 
-    def test_double_start_raises(self, fresh_profiler):
+    def test_profiler_double_start_raises(self, fresh_profiler):
         fresh_profiler.start_cpu_profiling()
         with pytest.raises(RuntimeError, match="already active"):
             fresh_profiler.start_cpu_profiling()
@@ -63,7 +63,7 @@ class TestStopCpuProfiling:
         assert fresh_profiler._cpu_profiler is None
         assert fresh_profiler._profile_start_time is None
 
-    def test_stop_without_start_raises(self, fresh_profiler):
+    def test_profiler_stop_without_start_raises(self, fresh_profiler):
         with pytest.raises(RuntimeError, match="No active profiling"):
             fresh_profiler.stop_cpu_profiling()
 
@@ -79,11 +79,11 @@ class TestStopCpuProfiling:
 
 
 class TestGetCpuStatsDict:
-    def test_returns_empty_when_not_profiling(self, fresh_profiler):
+    def test_profiler_returns_empty_when_not_profiling(self, fresh_profiler):
         result = fresh_profiler.get_cpu_stats_dict()
         assert result == {}
 
-    def test_returns_dict_while_profiling(self, fresh_profiler):
+    def test_profiler_returns_dict_while_profiling(self, fresh_profiler):
         fresh_profiler.start_cpu_profiling()
         _ = [i ** 2 for i in range(100)]
         result = fresh_profiler.get_cpu_stats_dict()
@@ -104,11 +104,11 @@ class TestGetCpuStatsDict:
 
 
 class TestGenerateFlameGraphData:
-    def test_returns_empty_when_not_profiling(self, fresh_profiler):
+    def test_profiler_returns_empty_when_not_profiling_v2(self, fresh_profiler):
         result = fresh_profiler.generate_flame_graph_data()
         assert result == {}
 
-    def test_returns_dict_while_profiling(self, fresh_profiler):
+    def test_profiler_returns_dict_while_profiling_v2(self, fresh_profiler):
         fresh_profiler.start_cpu_profiling()
         _ = sorted([3, 1, 2])
         result = fresh_profiler.generate_flame_graph_data()

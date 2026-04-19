@@ -78,7 +78,7 @@ def test_record_api_call(collector):
     assert len(collector._api_history) == 1
 
 
-def test_get_stats(collector):
+def test_metrics_collector_get_stats(collector):
     """Test getting aggregated statistics."""
     # Record some commands
     for i in range(10):

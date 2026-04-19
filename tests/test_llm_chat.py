@@ -95,7 +95,7 @@ class TestNeedsTools:
         "https://example.com",
         "check zillow listings",
     ])
-    def test_tool_queries_detected(self, query):
+    def test_llm_chat_tool_queries_detected(self, query):
         assert llm._needs_tools(query) is True
 
     @pytest.mark.parametrize("query", [

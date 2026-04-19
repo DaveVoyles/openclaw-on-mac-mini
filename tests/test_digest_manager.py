@@ -31,7 +31,7 @@ def temp_prefs_dir(tmp_path, monkeypatch):
 class TestDigestManager:
     """Test DigestManager class."""
 
-    def test_init(self, manager):
+    def test_digest_manager_init(self, manager):
         """Test DigestManager initialization."""
         assert isinstance(manager, DigestManager)
 

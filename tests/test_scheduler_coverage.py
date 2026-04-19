@@ -71,7 +71,7 @@ class TestParseUtc:
         result = _parse_utc(naive)
         assert result.tzinfo is datetime.timezone.utc
 
-    def test_aware_datetime_converted_to_utc(self):
+    def test_scheduler_coverage_aware_datetime_converted_to_utc(self):
         aware = "2024-01-15T10:30:00+05:00"
         result = _parse_utc(aware)
         assert result.tzinfo is datetime.timezone.utc

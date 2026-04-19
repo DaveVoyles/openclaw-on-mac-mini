@@ -67,7 +67,7 @@ def _make_attachment(filename="test.txt", content=b"Sample content for review"):
 
 # ── __init__ ──────────────────────────────────────────────────────────────────
 
-def test_init():
+def test_review_cog_init():
     cog = _make_cog()
     assert cog.bot is not None
 

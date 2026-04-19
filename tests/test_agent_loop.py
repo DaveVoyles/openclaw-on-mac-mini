@@ -105,7 +105,7 @@ class TestCreatePlan:
 
 class TestReadPlan:
     @pytest.mark.asyncio
-    async def test_returns_error_for_missing_plan(self):
+    async def test_agent_loop_returns_error_for_missing_plan(self):
         result = await agent_loop.read_plan("nonexistent-001")
         assert "❌" in result
 
@@ -134,7 +134,7 @@ class TestUpdatePlanStep:
         assert "❌" in result
 
     @pytest.mark.asyncio
-    async def test_missing_plan_returns_error(self):
+    async def test_agent_loop_missing_plan_returns_error(self):
         result = await agent_loop.update_plan_step("ghost-001", 1, "done")
         assert "❌" in result
 
@@ -186,7 +186,7 @@ class TestAdjustPlan:
         assert "❌" in result
 
     @pytest.mark.asyncio
-    async def test_missing_plan_returns_error(self):
+    async def test_agent_loop_missing_plan_returns_error_v2(self):
         result = await agent_loop.adjust_plan("ghost-001", "add_step", "X")
         assert "❌" in result
 
@@ -211,7 +211,7 @@ class TestCancelPlan:
         assert plan.steps[1].status == "pending"
 
     @pytest.mark.asyncio
-    async def test_missing_plan_returns_error(self):
+    async def test_agent_loop_missing_plan_returns_error_v3(self):
         result = await agent_loop.cancel_plan("ghost-001")
         assert "❌" in result
 
@@ -243,7 +243,7 @@ class TestResumePlan:
         assert "⚠️" in result
 
     @pytest.mark.asyncio
-    async def test_missing_plan_returns_error(self):
+    async def test_agent_loop_missing_plan_returns_error_v4(self):
         result = await agent_loop.resume_plan("ghost-001")
         assert "❌" in result
 
@@ -265,7 +265,7 @@ class TestListPlansSkill:
 
 class TestExecutePlan:
     @pytest.mark.asyncio
-    async def test_returns_error_for_missing_plan(self):
+    async def test_agent_loop_returns_error_for_missing_plan_v2(self):
         result = await agent_loop.execute_plan("ghost-001")
         assert "❌" in result
 
@@ -315,7 +315,7 @@ class TestExecutePlan:
         assert "test-001" in result
 
     @pytest.mark.asyncio
-    async def test_handles_llm_timeout(self, monkeypatch):
+    async def test_agent_loop_handles_llm_timeout(self, monkeypatch):
         """Timeout on LLM call marks step as failed; multi-step plan stays interrupted."""
         import asyncio as _asyncio
         from unittest.mock import patch

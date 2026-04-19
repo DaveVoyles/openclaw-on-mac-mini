@@ -80,7 +80,7 @@ class TestLoadTasks:
         second = mc._load_tasks()
         assert first is second  # Same object reference = cached
 
-    def test_returns_empty_when_file_missing(self, tmp_path, monkeypatch):
+    def test_mission_control_returns_empty_when_file_missing(self, tmp_path, monkeypatch):
         monkeypatch.setattr(mc, "TASKS_FILE", tmp_path / "nonexistent.json")
         # Also clear candidates that might point to a real file
         mc._tasks_cache = None

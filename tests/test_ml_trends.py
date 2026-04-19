@@ -79,7 +79,7 @@ def test_ml_trend_skills_registered():
     assert "detect_anomalies" in ML_TREND_SKILLS
 
 
-def test_skills_are_callables():
+def test_ml_trends_skills_are_callables():
     """Verify ML trend skills are callable."""
     for skill_name, skill_func in ML_TREND_SKILLS.items():
         assert callable(skill_func), f"{skill_name} is not callable"

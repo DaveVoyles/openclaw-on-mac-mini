@@ -271,12 +271,12 @@ class TestStats:
 
 
 class TestIdGeneration:
-    def test_content_id_is_deterministic(self):
+    def test_memory_manager_content_id_is_deterministic(self):
         id1 = memory_manager._content_id("same content")
         id2 = memory_manager._content_id("same content")
         assert id1 == id2
 
-    def test_content_id_differs_for_different_content(self):
+    def test_memory_manager_content_id_differs_for_different_content(self):
         id1 = memory_manager._content_id("content A")
         id2 = memory_manager._content_id("content B")
         assert id1 != id2

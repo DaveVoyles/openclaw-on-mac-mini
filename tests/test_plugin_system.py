@@ -139,7 +139,7 @@ class TestPluginAPI:
     def test_skill_registration(self, plugin_api):
         """Test skill registration."""
 
-        async def test_skill(param: str) -> str:
+        async def test_plugin_system_skill(param: str) -> str:
             return f"Result: {param}"
 
         # Register skill
@@ -156,7 +156,7 @@ class TestPluginAPI:
     def test_skill_registration_conflict(self, plugin_api):
         """Test skill name conflict detection."""
 
-        async def test_skill():
+        async def test_plugin_system_skill_v2():
             pass
 
         # Register once
@@ -169,7 +169,7 @@ class TestPluginAPI:
     def test_skill_unregistration(self, plugin_api):
         """Test skill unregistration."""
 
-        async def test_skill():
+        async def test_plugin_system_skill_v3():
             pass
 
         # Register and unregister
@@ -249,7 +249,7 @@ class TestPluginAPI:
         # Logger should be named after plugin
         assert "test-plugin" in plugin_api.logger.name
 
-    def test_has_permission(self, plugin_api):
+    def test_plugin_system_has_permission(self, plugin_api):
         """Test permission checking."""
         # Empty manifest permissions should not silently grant capabilities.
         assert not plugin_api.has_permission("network")

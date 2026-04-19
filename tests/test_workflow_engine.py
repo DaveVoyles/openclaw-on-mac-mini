@@ -236,7 +236,7 @@ tasks:
             engine._build_dag(workflow)
 
     @pytest.mark.asyncio
-    async def test_execute_task_success(self, engine):
+    async def test_workflow_engine_execute_task_success(self, engine):
         mock_skill = AsyncMock(return_value="Success")
         engine.register_skills({"test_action": mock_skill})
 

@@ -86,12 +86,12 @@ def test_separator_fill_default():
     assert s == "─" * 10
 
 
-def test_separator_fill_high_contrast():
+def test_openclaw_cli_render_unit_separator_fill_high_contrast():
     s = mod._separator_fill(10, high_contrast=True)
     assert s == "=" * 10
 
 
-def test_separator_fill_plain_mode():
+def test_openclaw_cli_render_unit_separator_fill_plain_mode():
     s = mod._separator_fill(10, plain_mode=True)
     assert s == "=" * 10
 
@@ -267,7 +267,7 @@ def test_clean_sources_bare_url():
     assert any("openai.com" in url for _, url in result)
 
 
-def test_clean_sources_deduplicates():
+def test_openclaw_cli_render_unit_clean_sources_deduplicates():
     sources = "- https://example.com\n- https://example.com"
     result = mod._clean_sources_for_display(sources)
     urls = [url for _, url in result]

@@ -28,13 +28,13 @@ class TestNormalizeText:
     def test_collapses_internal_whitespace(self):
         assert _normalize_text("hello   world\t\nnow") == "hello world now"
 
-    def test_empty_string_returns_empty(self):
+    def test_memory_helpers_unit_empty_string_returns_empty(self):
         assert _normalize_text("") == ""
 
     def test_none_treated_as_empty(self):
         assert _normalize_text(None) == ""  # type: ignore[arg-type]
 
-    def test_single_word(self):
+    def test_memory_helpers_unit_single_word(self):
         assert _normalize_text("hello") == "hello"
 
 
@@ -43,7 +43,7 @@ class TestNormalizeText:
 # ---------------------------------------------------------------------------
 
 class TestMessageText:
-    def test_joins_string_parts(self):
+    def test_memory_helpers_unit_joins_string_parts(self):
         msg = {"parts": ["hello", "world"]}
         assert _message_text(msg) == "hello world"
 
@@ -111,7 +111,7 @@ class TestMessageSalienceScore:
         score_at_10 = _message_salience_score(msg, 10)
         assert score_at_6 == score_at_10
 
-    def test_long_text_adds_bonus(self):
+    def test_memory_helpers_unit_long_text_adds_bonus(self):
         short = self._msg("Short message")
         long = self._msg("x" * 161)
         assert _message_salience_score(long, 0) > _message_salience_score(short, 0)
@@ -125,7 +125,7 @@ class TestExtractKeyTopics:
     def test_empty_messages_returns_empty(self):
         assert _extract_key_topics([]) == []
 
-    def test_stopwords_excluded(self):
+    def test_memory_helpers_unit_stopwords_excluded(self):
         msgs = [{"parts": ["this that from with your"]}]
         topics = _extract_key_topics(msgs)
         for stopword in _TOPIC_STOPWORDS:
@@ -209,13 +209,13 @@ class TestRelativeAge:
     def test_zero_seconds_is_just_now(self):
         assert _relative_age(0) == "just now"
 
-    def test_minutes(self):
+    def test_memory_helpers_unit_minutes(self):
         assert _relative_age(120) == "2m ago"
 
-    def test_hours(self):
+    def test_memory_helpers_unit_hours(self):
         assert _relative_age(3600 * 3) == "3h ago"
 
-    def test_days(self):
+    def test_memory_helpers_unit_days(self):
         assert _relative_age(3600 * 24 * 2) == "2d ago"
 
     def test_exactly_one_minute(self):
@@ -239,7 +239,7 @@ class TestThreadNameRe:
     def test_rejects_space(self):
         assert not _THREAD_NAME_RE.match("my thread")
 
-    def test_rejects_empty(self):
+    def test_memory_helpers_unit_rejects_empty(self):
         assert not _THREAD_NAME_RE.match("")
 
     def test_rejects_too_long(self):

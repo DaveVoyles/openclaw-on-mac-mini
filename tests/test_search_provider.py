@@ -53,7 +53,7 @@ class TestSearchStats:
         s.record_failure()
         assert s.success_rate == pytest.approx(2 / 3)
 
-    def test_avg_latency(self):
+    def test_search_provider_avg_latency(self):
         s = mod.SearchStats(provider="test")
         s.record_success(100.0)
         s.record_success(200.0)

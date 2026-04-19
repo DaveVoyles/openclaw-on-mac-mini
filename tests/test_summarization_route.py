@@ -11,7 +11,7 @@ from model_routing_policy import SummarizationRouteDecision, select_summarizatio
 # ---------------------------------------------------------------------------
 
 class TestSelectSummarizationRoute:
-    def test_prefers_copilot_when_available(self):
+    def test_summarization_route_prefers_copilot_when_available(self):
         result = select_summarization_route(copilot_available=True)
         assert isinstance(result, SummarizationRouteDecision)
         assert result.provider == "copilot"
@@ -22,7 +22,7 @@ class TestSelectSummarizationRoute:
         assert result.provider == "gemini"
         assert "unavailable" in result.reason.lower()
 
-    def test_returns_frozen_dataclass(self):
+    def test_summarization_route_returns_frozen_dataclass(self):
         result = select_summarization_route(copilot_available=True)
         with pytest.raises((AttributeError, TypeError)):
             result.provider = "other"  # type: ignore[misc]
@@ -54,7 +54,7 @@ class TestSummarizeConversationRouting:
         assert result == "Copilot summary."
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_gemini_when_copilot_returns_none(self):
+    async def test_summarization_route_falls_back_to_gemini_when_copilot_returns_none(self):
         from unittest.mock import MagicMock
 
         from llm.chat import summarize_conversation

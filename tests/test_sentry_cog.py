@@ -78,7 +78,7 @@ _SAMPLE_ISSUES = [
 
 # ── __init__ ──────────────────────────────────────────────────────────────────
 
-def test_init():
+def test_sentry_cog_init():
     cog = _make_cog()
     assert cog.bot is not None
 

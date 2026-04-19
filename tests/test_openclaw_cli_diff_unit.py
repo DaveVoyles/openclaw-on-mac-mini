@@ -41,7 +41,7 @@ def test_multiline_diff_roundtrip():
     assert result == diff
 
 
-def test_empty_string_returns_empty():
+def test_openclaw_cli_diff_unit_empty_string_returns_empty():
     assert _render_diff_ansi("") == ""
 
 

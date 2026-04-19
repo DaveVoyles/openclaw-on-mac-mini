@@ -166,7 +166,7 @@ class TestClassifyAskFailure:
     def test_timeout_in_message(self):
         assert _classify_ask_failure("request timed out") == "timeout"
 
-    def test_rate_limit_429(self):
+    def test_quality_helpers_coverage_rate_limit_429(self):
         assert _classify_ask_failure("error 429 from api") == "rate_limit"
 
     def test_rate_limit_quota(self):
@@ -181,10 +181,10 @@ class TestClassifyAskFailure:
     def test_provider_openai(self):
         assert _classify_ask_failure("openai connection refused") == "provider"
 
-    def test_general_fallback(self):
+    def test_quality_helpers_coverage_general_fallback(self):
         assert _classify_ask_failure("something weird happened") == "general"
 
-    def test_empty_message(self):
+    def test_quality_helpers_coverage_empty_message(self):
         assert _classify_ask_failure("") == "general"
 
     def test_routing_notes_factor_in(self):
@@ -269,7 +269,7 @@ class TestExtractDistinctSourceDomains:
         assert "nytimes.com" in domains
         assert "espn.com" in domains
 
-    def test_strips_www(self):
+    def test_quality_helpers_coverage_strips_www(self):
         domains = _extract_distinct_source_domains("https://www.google.com/search")
         assert "google.com" in domains
 
@@ -320,16 +320,16 @@ class TestExtractReportedEvidenceCompleteness:
 # ---------------------------------------------------------------------------
 
 class TestExtractRequestedItemCount:
-    def test_no_count_returns_none(self):
+    def test_quality_helpers_coverage_no_count_returns_none(self):
         assert _extract_requested_item_count("what happened today?") is None
 
-    def test_top_n_stories(self):
+    def test_quality_helpers_coverage_top_n_stories(self):
         assert _extract_requested_item_count("give me top 5 stories") == 5
 
-    def test_bare_count(self):
+    def test_quality_helpers_coverage_bare_count(self):
         assert _extract_requested_item_count("10 headlines from this week") == 10
 
-    def test_capped_at_25(self):
+    def test_quality_helpers_coverage_capped_at_25(self):
         assert _extract_requested_item_count("top 99 stories") == 25
 
     def test_minimum_1(self):
@@ -428,7 +428,7 @@ class TestSafeScoreAnswerQuality:
         assert result["status"] == "medium"
         assert "error" in result
 
-    def test_low_evidence_emits_metric(self):
+    def test_quality_helpers_coverage_low_evidence_emits_metric(self):
         metric_calls = []
         with patch.object(mod, "_record_quality_metric", side_effect=lambda e, **_: metric_calls.append(e)):
             _safe_score_answer_quality("x", final_meta={"evidence_completeness": 0.3})
@@ -440,7 +440,7 @@ class TestSafeScoreAnswerQuality:
 # ---------------------------------------------------------------------------
 
 class TestBuildCoverageSummaryForEmbed:
-    def test_none_meta_returns_none(self):
+    def test_quality_helpers_coverage_none_meta_returns_none(self):
         assert _build_coverage_summary_for_embed(None) is None
 
     def test_no_answer_quality_returns_none(self):
@@ -487,7 +487,7 @@ class TestBuildCoverageSummaryForEmbed:
 # ---------------------------------------------------------------------------
 
 class TestBuildAskRecoveryBlock:
-    def test_none_meta_returns_none(self):
+    def test_quality_helpers_coverage_none_meta_returns_none_v2(self):
         assert _build_ask_recovery_block(None) is None
 
     def test_high_quality_returns_none(self):

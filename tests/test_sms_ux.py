@@ -24,7 +24,7 @@ class TestNormalizePhoneNumber:
     def test_valid_e164_accepted(self):
         assert normalize_phone_number("+15551234567") == "+15551234567"
 
-    def test_strips_whitespace(self):
+    def test_sms_ux_strips_whitespace(self):
         assert normalize_phone_number("  +15551234567  ") == "+15551234567"
 
     def test_removes_spaces(self):
@@ -65,7 +65,7 @@ class TestValidateSmsBody:
     def test_valid_body_returned(self):
         assert validate_sms_body("Hello!") == "Hello!"
 
-    def test_strips_whitespace(self):
+    def test_sms_ux_strips_whitespace_v2(self):
         assert validate_sms_body("  hi  ") == "hi"
 
     def test_empty_raises(self):
@@ -134,7 +134,7 @@ class TestFormatSmsError:
         result = format_sms_error(RuntimeError("boom"))
         assert "SMS failed" in result or "❌" in result
 
-    def test_returns_string(self):
+    def test_sms_ux_returns_string(self):
         result = format_sms_error(Exception("test"))
         assert isinstance(result, str)
 

@@ -154,7 +154,7 @@ class TestContextLastNoBlock:
             result = cmd_core._cmd_context(_ctx(args="last"))
         return out.getvalue()
 
-    def test_returns_continue(self):
+    def test_w27_grounding_inspection_returns_continue(self):
         m = _mock_cli(last_grounding_block=None)
         with patch.object(cmd_core, "_get_cli_mod", return_value=m), \
              patch("builtins.print"):
@@ -194,7 +194,7 @@ class TestContextLastWithBlock:
             result = cmd_core._cmd_context(_ctx(args="last"))
         return out.getvalue()
 
-    def test_returns_continue(self):
+    def test_w27_grounding_inspection_returns_continue_v2(self):
         m = _mock_cli(last_grounding_block=self._SAMPLE_BLOCK)
         with patch.object(cmd_core, "_get_cli_mod", return_value=m), \
              patch("builtins.print"):

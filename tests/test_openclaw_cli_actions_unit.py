@@ -147,19 +147,19 @@ def test_risk_level_from_name_case_insensitive():
 # atomic_write
 # ---------------------------------------------------------------------------
 
-def test_atomic_write_creates_file(tmp_path):
+def test_openclaw_cli_actions_unit_atomic_write_creates_file(tmp_path):
     target = tmp_path / "out.txt"
     atomic_write(target, "hello")
     assert target.read_text() == "hello"
 
 
-def test_atomic_write_creates_parent_dirs(tmp_path):
+def test_openclaw_cli_actions_unit_atomic_write_creates_parent_dirs(tmp_path):
     target = tmp_path / "nested" / "dir" / "out.txt"
     atomic_write(target, "data")
     assert target.read_text() == "data"
 
 
-def test_atomic_write_overwrites_existing(tmp_path):
+def test_openclaw_cli_actions_unit_atomic_write_overwrites_existing(tmp_path):
     target = tmp_path / "file.txt"
     atomic_write(target, "v1")
     atomic_write(target, "v2")

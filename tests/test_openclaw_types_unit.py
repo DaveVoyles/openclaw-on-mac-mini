@@ -59,7 +59,7 @@ class TestTypeAliases:
         fp: FilePath = "/tmp/file.txt"
         assert key and url and fp
 
-    def test_callback_aliases(self):
+    def test_openclaw_types_unit_callback_aliases(self):
         from openclaw_types import AsyncCallback, AsyncCallbackWithResult, ErrorHandler
         assert isinstance(ErrorHandler, str)
         assert isinstance(AsyncCallback, str)
