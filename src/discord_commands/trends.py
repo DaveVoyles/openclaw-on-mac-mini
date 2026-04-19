@@ -9,8 +9,8 @@ from discord.ext import commands
 from audit import audit_log
 
 
-def _register_trend_commands(bot: commands.Bot) -> None:
-    """Register trend tracking commands."""
+def _register_trend_management_commands(bot: commands.Bot) -> None:
+    """Register commands for managing tracked topics (track/untrack)."""
 
     @bot.tree.command(name="track", description="Start tracking a topic for trends")
     @discord.app_commands.describe(
@@ -59,6 +59,10 @@ def _register_trend_commands(bot: commands.Bot) -> None:
             await interaction.response.send_message(
                 f"❌ {result.get('message', 'Unknown error')}", ephemeral=True
             )
+
+
+def _register_trend_view_commands(bot: commands.Bot) -> None:
+    """Register read-only trend viewing commands."""
 
     @bot.tree.command(name="trending", description="Show trending topics")
     @discord.app_commands.describe(
@@ -330,3 +334,9 @@ def _register_trend_commands(bot: commands.Bot) -> None:
             await interaction.response.send_message(
                 f"❌ {result.get('message', 'Unknown error')}", ephemeral=True
             )
+
+
+def _register_trend_commands(bot: commands.Bot) -> None:
+    """Register all trend tracking commands (orchestrator)."""
+    _register_trend_management_commands(bot)
+    _register_trend_view_commands(bot)
