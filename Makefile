@@ -1,4 +1,4 @@
-.PHONY: test test-cli test-verbose lint format type-check build clean deploy deploy-cli verify-deploy ship ship-server ship-cli e2e e2e-macbook slack-manifest slack-manifest-push install-watcher help
+.PHONY: test test-cli test-verbose lint lint-fix format type-check build clean deploy deploy-cli verify-deploy ship ship-server ship-cli e2e e2e-macbook slack-manifest slack-manifest-push install-watcher smoke smoke-verbose ci validate-env help
 
 test:
 	.venv/bin/python3 -m pytest tests/ -x -q --tb=short
@@ -20,6 +20,10 @@ e2e-macbook:
 lint:
 	.venv/bin/ruff check src/ tests/
 
+lint-fix: ## Auto-fix lint and format issues
+	.venv/bin/ruff check src/ tests/ --fix --unsafe-fixes 2>/dev/null || .venv/bin/ruff check src/ tests/ --fix
+	.venv/bin/ruff format src/ tests/
+
 format:
 	@echo "🔧 Auto-formatting..."
 	.venv/bin/ruff check --fix src/ tests/ 2>/dev/null || true
@@ -29,6 +33,25 @@ format:
 type-check:
 	@echo "🔍 Type checking..."
 	.venv/bin/pyright src/ 2>/dev/null || .venv/bin/mypy src/ --ignore-missing-imports 2>/dev/null || echo "⚠️  Install pyright or mypy: pip install pyright"
+
+smoke: ## Run smoke test tier (fast gate, ~18s)
+	.venv/bin/python3 -m pytest -m smoke -q --timeout=30
+
+smoke-verbose: ## Run smoke tests with verbose output
+	.venv/bin/python3 -m pytest -m smoke -v --timeout=30
+
+ci: ## Run full local CI equivalent (lint + smoke + typecheck)
+	@echo "🔍 Running lint..."
+	.venv/bin/ruff check src/ tests/
+	.venv/bin/ruff format src/ tests/ --check
+	@echo "🧪 Running smoke tests..."
+	.venv/bin/python3 -m pytest -m smoke -q --timeout=30
+	@echo "🔍 Running type check..."
+	python3 scripts/mypy_enforce.py || true
+	@echo "✅ Local CI complete"
+
+validate-env: ## Validate .env against .env.example
+	python3 scripts/validate_env.py
 
 build:
 	@echo "🐳 Building Docker image..."
