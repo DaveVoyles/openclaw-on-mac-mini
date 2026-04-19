@@ -51,6 +51,7 @@ services:
     # Port mappings
     ports:
       - "8765:8765"  # Health check / Web UI
+      - "8080:8080"  # Upload server / OAuth callbacks
 
     # Environment variables
     env_file:

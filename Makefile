@@ -90,6 +90,7 @@ slack-manifest-push:
 	python3 scripts/update_slack_manifest.py --push
 
 
+clean:
 	@echo "🧹 Cleaning..."
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name '*.pyc' -delete 2>/dev/null || true
