@@ -76,6 +76,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/health` endpoint enhanced with DB + vector store subsystem checks ([1123d39](../../commit/1123d39))
 - `timeout=10` added to all `sqlite3.connect()` calls across 18 files ([1123d39](../../commit/1123d39))
 
+### 🔧 Code Quality — Wave 9 & 10 Tech Debt (April 2026)
+- Converted 7 repeated test groups to `@pytest.mark.parametrize` (−43L) ([ef68544](../../commit/ef68544))
+- Removed 3 unused test packages: `pytest-html`, `pytest-json-report`, `pytest-metadata` ([75d551a](../../commit/75d551a))
+- Added 31 unit tests for `slack_bot.py` coverage gaps ([9d41f29](../../commit/9d41f29))
+- Fixed 22 auto-fixable ruff violations (I001/F401/F811) across 15 files via `ruff --fix` ([4826c7a](../../commit/4826c7a))
+- Fixed F821 undefined name violations: `Dict→dict` in `alert_patreon.py`, corrected test function references in `test_performance_monitor.py` and `test_plugin_system.py` ([09f9bad](../../commit/09f9bad))
+- Added return type annotations to 13 functions across `bg_tasks.py`, `bg_monitoring.py`, `bg_briefing.py` ([3698231](../../commit/3698231))
+- Added 23 unit tests for `scripts/validate_env.py` and `scripts/validate_schema.py` ([ba2b0a9](../../commit/ba2b0a9))
+
 ---
 
 ### Added — Wave 10 External Integrations (April 2026)
