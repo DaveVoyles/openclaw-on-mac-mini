@@ -292,6 +292,7 @@ class TestChatModelPreference:
 
         with (
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.COPILOT_AVAILABLE", True),
             patch(
                 "model_router.classify_query",
                 return_value=SimpleNamespace(model_type="copilot", model="", reason="test"),
@@ -320,6 +321,7 @@ class TestChatModelPreference:
 
         with (
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.COPILOT_AVAILABLE", True),
             patch(
                 "model_router.classify_query",
                 return_value=SimpleNamespace(model_type="copilot", model="", reason="test"),
@@ -350,6 +352,7 @@ class TestChatModelPreference:
 
         with (
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.COPILOT_AVAILABLE", True),
             patch.object(model_routing_policy.cfg, "routing_profile", "gemini-first"),
             patch("answer_policy.is_low_quality", return_value=False),
             patch("llm.providers.chat_openai", new_callable=AsyncMock) as mock_openai,
@@ -384,6 +387,7 @@ class TestChatModelPreference:
 
         with (
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.COPILOT_AVAILABLE", True),
             patch("model_router.is_ollama_alive", new_callable=AsyncMock, return_value=True),
             patch.object(model_routing_policy.cfg, "routing_profile", "balanced"),
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value="Hello from Gemma!"),
@@ -407,6 +411,7 @@ class TestChatModelPreference:
         mock_model = MagicMock()
         with (
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.COPILOT_AVAILABLE", True),
             patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value="One moment while I look that up."),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
             patch.object(
@@ -430,6 +435,7 @@ class TestChatModelPreference:
 
         with (
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.COPILOT_AVAILABLE", True),
             patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value="Copilot direct response"),
         ):
             text, _hist, model = await llm.chat("hello", model_preference="copilot")
@@ -624,6 +630,7 @@ class TestChatStreamModelPreference:
             ),
             patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.COPILOT_AVAILABLE", True),
             patch(
                 "model_router.classify_query",
                 return_value=SimpleNamespace(model_type="copilot", model="", reason="test"),
@@ -662,6 +669,7 @@ class TestChatStreamModelPreference:
             ),
             patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.COPILOT_AVAILABLE", True),
             patch(
                 "model_router.classify_query",
                 return_value=SimpleNamespace(model_type="copilot", model="", reason="test"),
@@ -835,6 +843,7 @@ class TestChatStreamModelPreference:
             ),
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value=None),
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.COPILOT_AVAILABLE", True),
             patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value="Recovered through Copilot."),
         ):
             mock_rl.check.return_value = True
@@ -876,6 +885,7 @@ class TestChatStreamModelPreference:
             ),
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value=None),
             patch("llm.providers.COPILOT_PROXY_ENABLED", False),
+            patch("llm.providers.COPILOT_AVAILABLE", False),
             patch.object(
                 chat_module, "_get_tool_declarations", return_value=[{"name": "generate_sports_watch_report"}]
             ),
@@ -930,6 +940,7 @@ class TestChatStreamModelPreference:
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value=None),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.COPILOT_AVAILABLE", True),
             patch(
                 "model_routing_policy.select_web_search_route",
                 return_value=SimpleNamespace(prefer_search=False, reason="test"),
@@ -974,6 +985,7 @@ class TestChatStreamModelPreference:
             ),
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, side_effect=local_timeout),
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.COPILOT_AVAILABLE", True),
             patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value="Recovered through Copilot."),
         ):
             mock_rl.check.return_value = True
@@ -1015,6 +1027,7 @@ class TestChatStreamModelPreference:
             ),
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value=None),
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.COPILOT_AVAILABLE", True),
             patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value=fallback_reply),
         ):
             mock_rl.check.return_value = True

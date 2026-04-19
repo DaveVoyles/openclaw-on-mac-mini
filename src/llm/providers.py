@@ -61,6 +61,20 @@ COPILOT_PROXY_URL: str = os.getenv("COPILOT_PROXY_URL", "")
 COPILOT_PROXY_ENABLED: bool = COPILOT_PROXY_URL != ""
 _proxy_healthy: bool = False  # set by check_proxy_health() at startup
 
+# GitHub Models API — available when GITHUB_TOKEN is set (no proxy required).
+# Endpoint: https://models.inference.ai.azure.com/v1 (OpenAI-compatible)
+# Requires the token to have `models:read` scope (GitHub Enterprise / Copilot Business).
+# Override with GITHUB_MODELS_ENABLED=false to disable even when a token is present.
+_GITHUB_TOKEN: str = os.getenv("GITHUB_TOKEN", "")
+_GITHUB_MODELS_OVERRIDE: str = os.getenv("GITHUB_MODELS_ENABLED", "").lower()
+GITHUB_MODELS_BASE_URL: str = "https://models.inference.ai.azure.com/v1"
+GITHUB_MODELS_ENABLED: bool = (
+    bool(_GITHUB_TOKEN) if _GITHUB_MODELS_OVERRIDE == "" else _GITHUB_MODELS_OVERRIDE == "true"
+)
+
+# Umbrella flag: True if any copilot-class endpoint is available.
+COPILOT_AVAILABLE: bool = COPILOT_PROXY_ENABLED or GITHUB_MODELS_ENABLED
+
 _DEFAULT_CHAIN: list[str] = ["copilot", "openai", "anthropic"]
 PROVIDER_FALLBACK_CHAIN: list[str] = [
     p.strip() for p in os.getenv("PROVIDER_FALLBACK_CHAIN", "copilot,openai,anthropic").split(",") if p.strip()
@@ -359,13 +373,14 @@ async def chat_openai(
     if _is_open("openai"):
         return None
     api_key = os.getenv("OPENAI_API_KEY", "")
-    if not api_key and not COPILOT_PROXY_ENABLED:
+    if not api_key and not COPILOT_AVAILABLE:
         return None
 
     model = model or os.getenv("OPENAI_MODEL", "gpt-4o")
 
-    # Use proxy only when enabled *and* currently healthy; otherwise fall back to direct OpenAI.
+    # Priority: proxy (if healthy) → GitHub Models (if token present) → direct OpenAI.
     use_proxy = COPILOT_PROXY_ENABLED and _proxy_healthy
+    use_github_models = GITHUB_MODELS_ENABLED and not use_proxy
 
     try:
         messages = [{"role": "system", "content": system_prompt}]
@@ -376,13 +391,18 @@ async def chat_openai(
                 messages.append({"role": role, "content": content})
         messages.append({"role": "user", "content": message})
 
-        # Use Copilot proxy if available and healthy, otherwise direct OpenAI
         if use_proxy:
             base_url = COPILOT_PROXY_URL.rstrip("/")
             proxy_token = os.getenv("COPILOT_PROXY_TOKEN", api_key or "")
             headers = {"Content-Type": "application/json"}
             if proxy_token:
                 headers["Authorization"] = f"Bearer {proxy_token}"
+        elif use_github_models:
+            base_url = GITHUB_MODELS_BASE_URL
+            headers = {
+                "Authorization": f"Bearer {_GITHUB_TOKEN}",
+                "Content-Type": "application/json",
+            }
         else:
             base_url = "https://api.openai.com/v1"
             headers = {
@@ -424,7 +444,7 @@ async def chat_openai(
                 await _spending.record_copilot(model=model)
             except (ImportError, AttributeError):
                 pass
-        elif COPILOT_PROXY_ENABLED:
+        elif COPILOT_AVAILABLE:
             from spending import tracker as spending_tracker
 
             await spending_tracker.record_copilot(model=model)
@@ -464,7 +484,7 @@ async def chat_openai_vision(
     import base64
 
     api_key = os.getenv("OPENAI_API_KEY", "")
-    if not api_key and not COPILOT_PROXY_ENABLED:
+    if not api_key and not COPILOT_AVAILABLE:
         return None
 
     model = model or os.getenv("OPENAI_MODEL", "gpt-4o")
@@ -480,12 +500,20 @@ async def chat_openai_vision(
 
     messages = [{"role": "user", "content": user_content}]
 
-    if COPILOT_PROXY_ENABLED:
+    use_proxy = COPILOT_PROXY_ENABLED and _proxy_healthy
+    use_github_models = GITHUB_MODELS_ENABLED and not use_proxy
+    if use_proxy:
         base_url = COPILOT_PROXY_URL.rstrip("/")
         proxy_token = os.getenv("COPILOT_PROXY_TOKEN", api_key or "")
         headers = {"Content-Type": "application/json"}
         if proxy_token:
             headers["Authorization"] = f"Bearer {proxy_token}"
+    elif use_github_models:
+        base_url = GITHUB_MODELS_BASE_URL
+        headers = {
+            "Authorization": f"Bearer {_GITHUB_TOKEN}",
+            "Content-Type": "application/json",
+        }
     else:
         base_url = "https://api.openai.com/v1"
         headers = {
@@ -526,9 +554,9 @@ async def chat_anthropic(
     max_tokens: int = 2000,
 ) -> Optional[str]:
     """Send a message via Anthropic's API. Returns response text or None."""
-    # When Copilot proxy is available, route Claude calls through it
-    # (the proxy serves Claude models in OpenAI-compatible format)
-    if COPILOT_PROXY_ENABLED:
+    # When a copilot-class endpoint is available, route Claude calls through it
+    # (proxy and GitHub Models both serve Claude models in OpenAI-compatible format)
+    if COPILOT_AVAILABLE:
         return await chat_openai(
             message,
             history,
@@ -1058,10 +1086,11 @@ async def _stream_openai(
     temperature: float,
     max_tokens: int,
 ) -> AsyncGenerator[str, None]:
-    """Yield text chunks from OpenAI / Copilot-proxy streaming API (SSE)."""
+    """Yield text chunks from OpenAI / Copilot-proxy / GitHub Models streaming API (SSE)."""
     global _proxy_healthy  # noqa: PLW0603
     api_key = os.getenv("OPENAI_API_KEY", "")
     use_proxy = COPILOT_PROXY_ENABLED and _proxy_healthy
+    use_github_models = GITHUB_MODELS_ENABLED and not use_proxy
 
     if provider == "copilot" or use_proxy:
         base_url = COPILOT_PROXY_URL.rstrip("/")
@@ -1069,6 +1098,13 @@ async def _stream_openai(
         headers: dict[str, str] = {"Content-Type": "application/json", "Accept": "text/event-stream"}
         if proxy_token:
             headers["Authorization"] = f"Bearer {proxy_token}"
+    elif use_github_models:
+        base_url = GITHUB_MODELS_BASE_URL
+        headers = {
+            "Authorization": f"Bearer {_GITHUB_TOKEN}",
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+        }
     else:
         if not api_key:
             return
@@ -1128,10 +1164,10 @@ async def _stream_anthropic(
 ) -> AsyncGenerator[str, None]:
     """Yield text chunks from Anthropic streaming API (SSE).
 
-    When a Copilot proxy is configured, routes through it (OpenAI-compat)
-    instead of calling Anthropic directly.
+    When a copilot-class endpoint is configured (proxy or GitHub Models),
+    routes through it (OpenAI-compat) instead of calling Anthropic directly.
     """
-    if COPILOT_PROXY_ENABLED:
+    if COPILOT_AVAILABLE:
         async for chunk in _stream_openai(
             "copilot",
             prompt,

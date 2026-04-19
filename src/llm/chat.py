@@ -325,9 +325,9 @@ async def _try_copilot_proxy_reply(
     model_override: str | None = None,
     trace: RequestTrace | None = None,
 ) -> tuple[str, list[dict], str] | None:
-    from llm.providers import COPILOT_PROXY_ENABLED, call_provider_stream, chat_openai
+    from llm.providers import COPILOT_AVAILABLE, call_provider_stream, chat_openai
 
-    if not COPILOT_PROXY_ENABLED:
+    if not COPILOT_AVAILABLE:
         return None
 
     _provider_stream_enabled = os.getenv("PROVIDER_STREAM", "").strip() == "1"
@@ -434,9 +434,9 @@ async def _stream_copilot_chunks(
     when complete.  Yields nothing if the proxy is disabled or all candidates fail so the
     caller can fall through to the next provider naturally.
     """
-    from llm.providers import COPILOT_PROXY_ENABLED, call_provider_stream
+    from llm.providers import COPILOT_AVAILABLE, call_provider_stream
 
-    if not COPILOT_PROXY_ENABLED:
+    if not COPILOT_AVAILABLE:
         return
 
     system_prompt = _load_system_prompt()
@@ -796,10 +796,10 @@ async def _try_coding_route(
     if model_preference != "auto" or recalled_context:
         return
     try:
-        from llm.providers import COPILOT_PROXY_ENABLED
+        from llm.providers import COPILOT_AVAILABLE
         from model_routing_policy import select_coding_route
 
-        if not COPILOT_PROXY_ENABLED:
+        if not COPILOT_AVAILABLE:
             return
         coding_route = select_coding_route(cleaned_user_message)
         if not coding_route.matches:
@@ -866,7 +866,7 @@ async def _route_by_preference(
     # Multi-model routing (Phase 8)
     if model_preference == "auto":
         try:
-            from llm.providers import COPILOT_PROXY_ENABLED, chat_anthropic, chat_openai
+            from llm.providers import COPILOT_AVAILABLE, chat_anthropic, chat_openai
             from model_router import classify_query, is_ollama_alive
 
             _ollama_up = await is_ollama_alive()
@@ -874,7 +874,7 @@ async def _route_by_preference(
                 cleaned_user_message,
                 has_openai_key=bool(os.getenv("OPENAI_API_KEY")),
                 has_anthropic_key=bool(os.getenv("ANTHROPIC_API_KEY")),
-                copilot_available=COPILOT_PROXY_ENABLED,
+                copilot_available=COPILOT_AVAILABLE,
                 needs_tools=_needs_tools(cleaned_user_message),
                 ollama_alive=_ollama_up,
                 routing_profile=routing_profile,
@@ -1481,10 +1481,10 @@ async def _chat_try_coding_fast_path(
     if model_preference != "auto" or recalled_context:
         return None
     try:
-        from llm.providers import COPILOT_PROXY_ENABLED
+        from llm.providers import COPILOT_AVAILABLE
         from model_routing_policy import select_coding_route
 
-        if COPILOT_PROXY_ENABLED:
+        if COPILOT_AVAILABLE:
             coding_route = select_coding_route(cleaned_user_message)
             if coding_route.matches:
                 result = await _try_copilot_proxy_reply(
@@ -1518,7 +1518,7 @@ async def _chat_try_auto_routing(
     try:
         import os
 
-        from llm.providers import COPILOT_PROXY_ENABLED, chat_anthropic, chat_openai
+        from llm.providers import COPILOT_AVAILABLE, chat_anthropic, chat_openai
         from model_router import classify_query, is_ollama_alive
 
         _ollama_up = await is_ollama_alive()
@@ -1526,7 +1526,7 @@ async def _chat_try_auto_routing(
             cleaned_user_message,
             has_openai_key=bool(os.getenv("OPENAI_API_KEY")),
             has_anthropic_key=bool(os.getenv("ANTHROPIC_API_KEY")),
-            copilot_available=COPILOT_PROXY_ENABLED,
+            copilot_available=COPILOT_AVAILABLE,
             needs_tools=_needs_tools(cleaned_user_message),
             ollama_alive=_ollama_up,
             routing_profile=routing_profile,
@@ -1812,9 +1812,9 @@ async def chat(
     # Copilot is available, retry once with Copilot before returning.
     try:
         from answer_policy import is_low_quality, record_quality_retry
-        from llm.providers import COPILOT_PROXY_ENABLED
+        from llm.providers import COPILOT_AVAILABLE
 
-        if is_low_quality(text) and COPILOT_PROXY_ENABLED:
+        if is_low_quality(text) and COPILOT_AVAILABLE:
             log.info("Quality retry gate triggered — Gemini reply too short/vague, trying Copilot")
             record_quality_retry()
             print("↺ Auto-retried: quality gate triggered — trying a higher-quality provider", flush=True)
@@ -1842,9 +1842,9 @@ def is_configured() -> bool:
     Checks Gemini, local LLM, and Copilot proxy so Copilot-only
     deployments are not incorrectly blocked with "LLM not configured".
     """
-    from llm.providers import COPILOT_PROXY_ENABLED  # local import avoids circular deps
+    from llm.providers import COPILOT_AVAILABLE  # local import avoids circular deps
 
-    return bool(GOOGLE_API_KEY) or LOCAL_LLM_ENABLED or COPILOT_PROXY_ENABLED
+    return bool(GOOGLE_API_KEY) or LOCAL_LLM_ENABLED or COPILOT_AVAILABLE
 
 
 def apply_repair_transparency_footer(text: str, *, repair_result: dict) -> str:
@@ -1937,10 +1937,10 @@ async def summarize_conversation(history: list[dict]) -> str:
     )
 
     try:
-        from llm.providers import COPILOT_PROXY_ENABLED, chat_openai
+        from llm.providers import COPILOT_AVAILABLE, chat_openai
         from model_routing_policy import select_summarization_route
 
-        route = select_summarization_route(copilot_available=COPILOT_PROXY_ENABLED)
+        route = select_summarization_route(copilot_available=COPILOT_AVAILABLE)
         log.debug("Conversation summary route: %s (%s)", route.provider, route.reason)
 
         if route.provider == "copilot":
