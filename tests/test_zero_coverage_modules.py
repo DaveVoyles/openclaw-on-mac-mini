@@ -680,17 +680,13 @@ class TestParseTimeExpression:
         ts = parse_time_expression("at 2:45pm")
         assert ts is not None
 
-    def test_invalid_expression(self):
-        ts = parse_time_expression("tomorrow morning")
-        assert ts is None
-
-    def test_invalid_empty(self):
-        ts = parse_time_expression("  ")
-        assert ts is None
-
-    def test_invalid_garbage(self):
-        ts = parse_time_expression("xyz abc 123")
-        assert ts is None
+    @pytest.mark.parametrize("expr", [
+        "tomorrow morning",
+        "  ",
+        "xyz abc 123",
+    ])
+    def test_invalid_expressions(self, expr):
+        assert parse_time_expression(expr) is None
 
 
 # =============================================================================

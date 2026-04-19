@@ -193,32 +193,26 @@ def test_status_family_case_insensitive():
 # _status_text
 # ---------------------------------------------------------------------------
 
-def test_status_text_complete():
-    assert sd._status_text("done") == "COMPLETE"
-
-
-def test_status_text_error():
-    assert sd._status_text("failed") == "ERROR"
-
-
-def test_status_text_unknown():
-    assert sd._status_text("xyz_unknown") == "STATUS"
+@pytest.mark.parametrize("status,expected", [
+    ("done", "COMPLETE"),
+    ("failed", "ERROR"),
+    ("xyz_unknown", "STATUS"),
+])
+def test_status_text(status, expected):
+    assert sd._status_text(status) == expected
 
 
 # ---------------------------------------------------------------------------
 # _status_style
 # ---------------------------------------------------------------------------
 
-def test_status_style_complete():
-    assert sd._status_style("complete") == "green"
-
-
-def test_status_style_error():
-    assert sd._status_style("error") == "bold red"
-
-
-def test_status_style_unknown():
-    assert sd._status_style("xyz_unknown") == "dim"
+@pytest.mark.parametrize("status,expected", [
+    ("complete", "green"),
+    ("error", "bold red"),
+    ("xyz_unknown", "dim"),
+])
+def test_status_style(status, expected):
+    assert sd._status_style(status) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -677,21 +671,14 @@ def test_session_mood_snapshot_retrying():
 # ---------------------------------------------------------------------------
 
 
-def test_estimate_token_count_basic():
-    text = "a" * 400
-    assert sd._estimate_token_count(text) == 100
-
-
-def test_estimate_token_count_empty():
-    assert sd._estimate_token_count("") == 0
-
-
-def test_estimate_token_count_none():
-    assert sd._estimate_token_count(None) == 0
-
-
-def test_estimate_token_count_short():
-    assert sd._estimate_token_count("hi") == 0
+@pytest.mark.parametrize("text,expected", [
+    ("a" * 400, 100),
+    ("", 0),
+    (None, 0),
+    ("hi", 0),
+])
+def test_estimate_token_count(text, expected):
+    assert sd._estimate_token_count(text) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -834,16 +821,6 @@ def test_display_watch_retry_delay_total_with_entries():
 # ---------------------------------------------------------------------------
 
 
-def test_status_emoji_complete():
-    result = sd._status_emoji("complete")
-    assert result != ""
-
-
-def test_status_emoji_error():
-    result = sd._status_emoji("error")
-    assert result != ""
-
-
-def test_status_emoji_unknown():
-    result = sd._status_emoji("xyz_unknown")
-    assert result != ""
+@pytest.mark.parametrize("status", ["complete", "error", "xyz_unknown"])
+def test_status_emoji(status):
+    assert sd._status_emoji(status) != ""

@@ -1,6 +1,8 @@
 """Unit tests for openclaw_cli_session_cmds helpers."""
 from __future__ import annotations
 
+import pytest
+
 from openclaw_cli_session_cmds import (
     _build_event_label,
     _build_handoff_check_lines,
@@ -15,50 +17,20 @@ from openclaw_cli_session_cmds import (
 # _format_elapsed_compact
 # ---------------------------------------------------------------------------
 
-def test_elapsed_compact_zero():
-    assert _format_elapsed_compact(0) == "0.0s"
-
-
-def test_elapsed_compact_sub_second():
-    assert _format_elapsed_compact(0.5) == "0.5s"
-
-
-def test_elapsed_compact_seconds():
-    result = _format_elapsed_compact(45)
-    assert result == "45s"
-
-
-def test_elapsed_compact_short_seconds():
-    result = _format_elapsed_compact(5)
-    assert result == "5.0s"
-
-
-def test_elapsed_compact_minutes():
-    result = _format_elapsed_compact(90)
-    assert result == "1m 30s"
-
-
-def test_elapsed_compact_full_minutes():
-    result = _format_elapsed_compact(120)
-    assert result == "2m"
-
-
-def test_elapsed_compact_hours():
-    result = _format_elapsed_compact(3600)
-    assert result == "1h"
-
-
-def test_elapsed_compact_hours_and_minutes():
-    result = _format_elapsed_compact(3660)
-    assert result == "1h 1m"
-
-
-def test_elapsed_compact_invalid():
-    assert _format_elapsed_compact("bad") == "0s"
-
-
-def test_elapsed_compact_none():
-    assert _format_elapsed_compact(None) == "0s"
+@pytest.mark.parametrize("seconds,expected", [
+    (0, "0.0s"),
+    (0.5, "0.5s"),
+    (45, "45s"),
+    (5, "5.0s"),
+    (90, "1m 30s"),
+    (120, "2m"),
+    (3600, "1h"),
+    (3660, "1h 1m"),
+    ("bad", "0s"),
+    (None, "0s"),
+], ids=["zero", "sub_second", "seconds", "short_seconds", "minutes", "full_minutes", "hours", "hours_and_minutes", "invalid", "none"])
+def test_elapsed_compact(seconds, expected):
+    assert _format_elapsed_compact(seconds) == expected
 
 
 # ---------------------------------------------------------------------------

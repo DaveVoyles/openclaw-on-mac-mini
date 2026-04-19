@@ -12,17 +12,14 @@ from utils.time import (
 
 
 class TestParseDuration:
-    def test_parse_seconds(self):
-        assert parse_duration("30s") == 30
-
-    def test_parse_minutes(self):
-        assert parse_duration("5m") == 300
-
-    def test_parse_hours(self):
-        assert parse_duration("2h") == 7200
-
-    def test_parse_days(self):
-        assert parse_duration("1d") == 86400
+    @pytest.mark.parametrize("expr,expected", [
+        ("30s", 30),
+        ("5m", 300),
+        ("2h", 7200),
+        ("1d", 86400),
+    ])
+    def test_parse_unit(self, expr, expected):
+        assert parse_duration(expr) == expected
 
     def test_parse_combined(self):
         assert parse_duration("1h 30m") == 5400

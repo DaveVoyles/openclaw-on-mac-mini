@@ -139,3 +139,18 @@ docker compose down
 | [CHANGELOG.md](CHANGELOG.md) | Release history |
 
 User-facing guides live at `/parents-guide`, `/webui-guide`, and `/onboarding` on the server.
+
+---
+
+## Developer Tools
+
+| Command | Purpose |
+|---------|---------|
+| `make help` | Show all available make targets |
+| `make smoke` | Fast smoke test gate (~18s) |
+| `make lint-fix` | Auto-fix lint violations |
+| `make validate-env` | Validate .env against .env.example |
+| `pre-commit install` | Install git hooks (ruff, mypy, schema check) |
+
+See [docs/API.md](docs/API.md) for HTTP endpoint reference.
+See [docs/TESTING.md](docs/TESTING.md) for test suite structure.
