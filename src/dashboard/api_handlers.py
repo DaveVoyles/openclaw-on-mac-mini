@@ -1338,14 +1338,16 @@ async def api_status_handler(request):
         # Map status to dashboard format
         from patreon_monitor import PatreonHealthStatus
 
-        # Base status response
+        # Base status response — fields live in health.metadata, not as direct attributes
+        meta = health.metadata
+        api_data_cached = meta.get("api_data") or {}
         patreon_data = {
-            "cookie_age_hours": health.cookie_age_hours if health.cookie_age_hours is not None else -1,
-            "hours_since_download": health.hours_since_download if health.hours_since_download is not None else -1,
-            "downloaded_count": health.downloaded_count,
-            "total_count": health.total_count,
-            "pending_count": health.pending_count,
-            "auto_recovery_active": health.auto_recovery_active,
+            "cookie_age_hours": meta.get("cookie_age_hours", -1),
+            "hours_since_download": meta.get("hours_since_download", -1),
+            "downloaded_count": api_data_cached.get("downloaded", meta.get("downloaded_count", 0)),
+            "total_count": api_data_cached.get("total", meta.get("total_count", 0)),
+            "pending_count": api_data_cached.get("pending", meta.get("pending_count", 0)),
+            "auto_recovery_active": meta.get("auto_recovery_active", False),
         }
 
         if health.status == PatreonHealthStatus.OK:
