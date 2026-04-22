@@ -271,3 +271,61 @@ def _isolate_environ_and_modules():
             del sys.modules[mod_name]
         except KeyError:
             pass  # Already removed
+
+
+@pytest.fixture(autouse=True, scope="function")
+def _isolate_metrics_collector():
+    """Reset metrics collector singleton state before and after tests.
+
+    The metrics_collector module uses a module-level singleton (_collector).
+    In parallel test execution, this singleton can retain state from previous tests.
+    This fixture ensures each test gets a clean collector state.
+
+    Addresses intermittent failures in:
+    - test_metrics_collector.py::test_record_command
+    """
+    try:
+        import metrics_collector
+        # Reset singleton BEFORE test runs
+        metrics_collector._collector = None
+    except (ImportError, AttributeError):
+        pass
+
+    yield
+
+    # Clean up after test as well
+    try:
+        import metrics_collector
+        metrics_collector._collector = None
+    except ImportError:
+        pass
+
+
+@pytest.fixture(autouse=True, scope="function")
+def _isolate_trace_context():
+    """Reset trace context state before and after tests.
+
+    The trace_context module uses contextvars.ContextVar for storing trace state.
+    In parallel pytest-xdist workers, context vars should be isolated, but explicit
+    cleanup between tests ensures no state leakage.
+
+    Addresses intermittent failures in:
+    - test_trace_context.py::TestTraceContext::test_trace_context_sets_and_clears
+    """
+    try:
+        import trace_context
+        # Reset context BEFORE test runs
+        if hasattr(trace_context, '_current_trace'):
+            trace_context._current_trace.set(None)
+    except (ImportError, AttributeError):
+        pass
+
+    yield
+
+    # Reset trace context after test completes as well
+    try:
+        import trace_context
+        if hasattr(trace_context, '_current_trace'):
+            trace_context._current_trace.set(None)
+    except ImportError:
+        pass
