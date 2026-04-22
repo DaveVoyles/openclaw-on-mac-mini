@@ -105,7 +105,7 @@ def _clear_module_caches():
                         import warnings
 
                         warnings.warn(f"Failed to clear cache {attr} on {mod_name}: {e}")
-    
+
     # Also clear cached lazy-loaded exports from llm.__init__ to avoid stale cache
     # This ensures __getattr__ is called again for lazy-loaded attributes
     if "llm" in sys.modules:
@@ -170,7 +170,7 @@ def _trigger_lazy_llm_loads():
 @pytest.fixture(autouse=True, scope="function")
 def _ensure_event_loop_for_slack_bot():
     """Ensure event loop is available for tests that import slack_bot.
-    
+
     slack_bot.py calls asyncio.ensure_future() at import time to register
     async handlers. In pytest-xdist workers, we need to ensure an event loop
     is set up before slack_bot is imported for the first time.
@@ -188,7 +188,7 @@ def _ensure_event_loop_for_slack_bot():
             asyncio.set_event_loop(loop)
     except Exception:
         pass  # If anything fails, just continue
-    
+
     yield
 
 
@@ -235,7 +235,6 @@ def _isolate_environ_and_modules():
     - test_slack_bot.py::TestCalendarCommand::test_slack_bot_has_calendar_handler
     - test_model_selection.py::TestChatModelPreference::test_chat_local_preference_success
     """
-    import copy
     import os
 
     # Save initial GOOGLE_OAUTH state (these are the keys manipulated by calendar tests)
