@@ -105,6 +105,18 @@ def _clear_module_caches():
                         import warnings
 
                         warnings.warn(f"Failed to clear cache {attr} on {mod_name}: {e}")
+    
+    # Also clear cached lazy-loaded exports from llm.__init__ to avoid stale cache
+    # This ensures __getattr__ is called again for lazy-loaded attributes
+    if "llm" in sys.modules:
+        try:
+            llm_mod = sys.modules["llm"]
+            # Only remove attributes that are in _LAZY_EXPORTS to avoid breaking the module
+            from llm import _LAZY_EXPORTS
+            for attr_name in _LAZY_EXPORTS.keys():
+                llm_mod.__dict__.pop(attr_name, None)
+        except Exception:
+            pass  # If cleanup fails, continue
 
 
 # Disabled for pytest-asyncio compatibility with pytest>=8
@@ -155,6 +167,31 @@ def _trigger_lazy_llm_loads():
         pass  # If skills import fails, that's OK; tests will handle their own imports
 
 
+@pytest.fixture(autouse=True, scope="function")
+def _ensure_event_loop_for_slack_bot():
+    """Ensure event loop is available for tests that import slack_bot.
+    
+    slack_bot.py calls asyncio.ensure_future() at import time to register
+    async handlers. In pytest-xdist workers, we need to ensure an event loop
+    is set up before slack_bot is imported for the first time.
+    """
+    import asyncio
+    try:
+        # Try to get current loop, if it doesn't exist create one
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                raise RuntimeError("Event loop is closed")
+        except RuntimeError:
+            # No event loop or it's closed, create a new one
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+    except Exception:
+        pass  # If anything fails, just continue
+    
+    yield
+
+
 @pytest.fixture(autouse=True)
 def reset_emergency_stop():
     """Reset the global emergency-stop flag before and after each test.
@@ -183,3 +220,55 @@ def sched(tmp_path):
     temp_file = tmp_path / "schedules.json"
     with patch.object(scheduler_module, "SCHEDULE_FILE", temp_file):
         yield TaskScheduler()
+
+
+@pytest.fixture(autouse=True, scope="function")
+def _isolate_environ_and_modules():
+    """Isolate environment variables and sys.modules state per test.
+
+    This fixture ensures that:
+    1. Each test starts with a clean GOOGLE_OAUTH environment
+    2. sys.modules modifications by calendar_skills/slack_bot don't pollute other tests
+    3. State between parallel workers doesn't interfere
+
+    Addresses flaky tests in:
+    - test_slack_bot.py::TestCalendarCommand::test_slack_bot_has_calendar_handler
+    - test_model_selection.py::TestChatModelPreference::test_chat_local_preference_success
+    """
+    import copy
+    import os
+
+    # Save initial GOOGLE_OAUTH state (these are the keys manipulated by calendar tests)
+    oauth_keys = [
+        "GOOGLE_OAUTH_CLIENT_ID",
+        "GOOGLE_OAUTH_CLIENT_SECRET",
+        "GOOGLE_OAUTH_REFRESH_TOKEN",
+    ]
+    saved_oauth = {k: os.environ.get(k) for k in oauth_keys}
+    saved_modules = frozenset(sys.modules.keys())
+
+    yield
+
+    # Restore only the GOOGLE_OAUTH keys to prevent calendar_skills state pollution
+    for k in oauth_keys:
+        if saved_oauth[k] is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = saved_oauth[k]
+
+    # Remove only skill module root names that were newly imported during the test.
+    # Only remove the top-level module, not submodules or core packages.
+    # This is conservative to avoid breaking lazy loading or module relationships.
+    skill_modules = {"calendar_skills", "slack_bot", "dropbox_sync"}
+    modules_to_clean = []
+    for mod_name in list(sys.modules.keys()):
+        if mod_name not in saved_modules:
+            # Only remove the exact skill module names, not submodules
+            if mod_name in skill_modules:
+                modules_to_clean.append(mod_name)
+
+    for mod_name in modules_to_clean:
+        try:
+            del sys.modules[mod_name]
+        except KeyError:
+            pass  # Already removed

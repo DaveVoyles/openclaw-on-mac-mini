@@ -5,8 +5,6 @@ from collections.abc import Awaitable, Callable
 from aiohttp import web
 
 from .api_handlers import (
-    api_docker_action_handler,
-    api_docker_logs_handler,
     api_agent_ask_handler,
     api_agent_ask_stream_handler,
     api_agent_session_detail_handler,
@@ -20,6 +18,8 @@ from .api_handlers import (
     api_channel_profile_recommendations_handler,
     api_config_status_handler,
     api_dashboard_handler,
+    api_docker_action_handler,
+    api_docker_logs_handler,
     api_dream_health_handler,
     api_errors_handler,
     api_goals_handler,
