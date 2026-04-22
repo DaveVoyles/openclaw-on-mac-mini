@@ -200,7 +200,8 @@ async def test_rate_limit_exceeded(client, api_key):
     assert resp.status == 429
 
     data = await resp.json()
-    assert "Rate limit" in data["error"]
+    assert data["error"] == "RATE_LIMITED"
+    assert "Rate limit" in data["message"]
 
 
 @pytest.mark.asyncio
