@@ -452,6 +452,117 @@ def _require_api_action_auth(request: web.Request) -> web.Response | None:
 
 
 # ---------------------------------------------------------------------------
+# Dashboard Session Auth (UI login — protects pages, not APIs)
+# ---------------------------------------------------------------------------
+
+import secrets
+import hashlib
+
+DASHBOARD_USERNAME = _web_cfg.dashboard_username
+DASHBOARD_PASSWORD = _web_cfg.dashboard_password
+_SESSION_TOKENS: dict[str, float] = {}  # token -> expiry timestamp
+_SESSION_TIMEOUT_SECONDS = 86400  # 24 hours
+
+
+def _generate_session_token() -> str:
+    """Generate a cryptographically secure session token."""
+    return secrets.token_urlsafe(32)
+
+
+def _validate_session_token(token: str | None) -> bool:
+    """Check if session token is valid and not expired."""
+    if not token or token not in _SESSION_TOKENS:
+        return False
+    expiry = _SESSION_TOKENS[token]
+    if time.time() > expiry:
+        _SESSION_TOKENS.pop(token, None)
+        return False
+    return True
+
+
+def _create_session(response: web.Response) -> str:
+    """Create a new session token and set cookie on response."""
+    token = _generate_session_token()
+    expiry = time.time() + _SESSION_TIMEOUT_SECONDS
+    _SESSION_TOKENS[token] = expiry
+
+    response.set_cookie(
+        "session_token",
+        token,
+        max_age=_SESSION_TIMEOUT_SECONDS,
+        httponly=True,
+        secure=True,  # HTTPS only
+        samesite="Strict",
+    )
+    return token
+
+
+async def _login_handler(request: web.Request) -> web.Response:
+    """Handle POST /login — authenticate user and create session."""
+    if request.method == "GET":
+        # Redirect GET /login to dashboard (already has login page)
+        return web.HTTPFound("/")
+
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response(
+            {"error": "INVALID_REQUEST", "message": "Invalid JSON"},
+            status=400,
+        )
+
+    username = data.get("username", "").strip()
+    password = data.get("password", "").strip()
+
+    # Validate credentials
+    if not DASHBOARD_USERNAME or not DASHBOARD_PASSWORD:
+        log.error("Dashboard auth required but OPENCLAW_DASHBOARD_USERNAME/PASSWORD not configured")
+        return web.json_response(
+            {"error": "INTERNAL_ERROR", "message": "Dashboard auth not configured"},
+            status=503,
+        )
+
+    # Timing-safe comparison
+    username_match = hmac.compare_digest(
+        username.encode() if username else b"",
+        DASHBOARD_USERNAME.encode(),
+    )
+    password_match = hmac.compare_digest(
+        password.encode() if password else b"",
+        DASHBOARD_PASSWORD.encode(),
+    )
+
+    if not (username_match and password_match):
+        log.warning("Failed login attempt")
+        return web.json_response(
+            {"error": "UNAUTHORIZED", "message": "Invalid credentials"},
+            status=401,
+        )
+
+    # Credentials valid — create session
+    response = web.json_response({"status": "success", "message": "Login successful"})
+    _create_session(response)
+    return response
+
+
+def _require_session(handler):
+    """Decorator to require valid session for handler.
+
+    Redirects to login page if session is missing or invalid.
+    """
+    from functools import wraps
+
+    @wraps(handler)
+    async def middleware(request: web.Request):
+        session_token = request.cookies.get("session_token")
+        if not _validate_session_token(session_token):
+            return web.HTTPFound("/login")
+        return await handler(request)
+
+    return middleware
+
+
+# ---------------------------------------------------------------------------
 # Granular health-check endpoints
 # ---------------------------------------------------------------------------
 
@@ -829,7 +940,18 @@ async def start_health_server(bot) -> web.AppRunner:
     app = web.Application()
     app["bot"] = bot
 
-    setup_dashboard(app, require_action_auth=_require_api_action_auth)
+    # Only enable session auth if both username and password are configured
+    page_auth = _require_session if (DASHBOARD_USERNAME and DASHBOARD_PASSWORD) else None
+
+    setup_dashboard(
+        app,
+        require_action_auth=_require_api_action_auth,
+        require_session=page_auth,
+    )
+
+    # Dashboard authentication endpoints
+    app.router.add_post("/api/login", _login_handler)
+
     app.router.add_get("/health", _health_handler)
     app.router.add_get("/health/llm", _health_llm_handler)
     app.router.add_get("/health/llm/circuit", _health_llm_circuit_handler)

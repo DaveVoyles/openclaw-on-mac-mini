@@ -52,6 +52,7 @@ from .api_handlers import (
 from .html_handlers import (
     dashboard_handler,
     guide_handler,
+    login_handler,
     onboarding_handler,
     openclaw_cli_download_handler,
     openclaw_cli_installer_handler,
@@ -68,8 +69,15 @@ def setup_dashboard(
     app: web.Application,
     *,
     require_action_auth: Callable[[web.Request], web.Response | None] | None = None,
+    require_session: Callable[[Callable], Callable] | None = None,
 ) -> None:
-    """Register all dashboard routes on the given aiohttp application."""
+    """Register all dashboard routes on the given aiohttp application.
+
+    Args:
+        app: aiohttp Application instance
+        require_action_auth: Optional callback to auth API write actions
+        require_session: Optional decorator to require valid session for page routes
+    """
 
     def action(handler: Callable[[web.Request], Awaitable[web.StreamResponse]]):
         if require_action_auth is None:
@@ -83,20 +91,27 @@ def setup_dashboard(
 
         return _authed
 
-    app.router.add_get("/", dashboard_handler)
-    app.router.add_get("/dashboard", dashboard_handler)
-    app.router.add_get("/tech-guide", guide_handler)
+    def page(handler: Callable[[web.Request], Awaitable[web.StreamResponse]]):
+        """Wrap page handler with session auth if available."""
+        if require_session is None:
+            return handler
+        return require_session(handler)
+
+    app.router.add_get("/", page(dashboard_handler))
+    app.router.add_get("/login", login_handler)
+    app.router.add_get("/dashboard", page(dashboard_handler))
+    app.router.add_get("/tech-guide", page(guide_handler))
     app.router.add_get("/guide", lambda r: web.HTTPMovedPermanently("/tech-guide"))
-    app.router.add_get("/terminal", terminal_handler)
-    app.router.add_get("/onboarding", onboarding_handler)
-    app.router.add_get("/parents-guide", parents_guide_handler)
-    app.router.add_get("/webui-guide", webui_guide_handler)
-    app.router.add_get("/install", openclaw_cli_installer_handler)
-    app.router.add_get("/install-remote", openclaw_cli_remote_installer_handler)
-    app.router.add_get("/install.ps1", openclaw_cli_windows_installer_handler)
-    app.router.add_get("/downloads/openclaw_cli.py", openclaw_cli_download_handler)
-    app.router.add_get("/downloads/openclaw-cli-support/{name}", openclaw_cli_support_download_handler)
-    app.router.add_get("/downloads/openclaw-cli-installer.sh", openclaw_cli_installer_handler)
+    app.router.add_get("/terminal", page(terminal_handler))
+    app.router.add_get("/onboarding", page(onboarding_handler))
+    app.router.add_get("/parents-guide", page(parents_guide_handler))
+    app.router.add_get("/webui-guide", page(webui_guide_handler))
+    app.router.add_get("/install", page(openclaw_cli_installer_handler))
+    app.router.add_get("/install-remote", page(openclaw_cli_remote_installer_handler))
+    app.router.add_get("/install.ps1", page(openclaw_cli_windows_installer_handler))
+    app.router.add_get("/downloads/openclaw_cli.py", page(openclaw_cli_download_handler))
+    app.router.add_get("/downloads/openclaw-cli-support/{name}", page(openclaw_cli_support_download_handler))
+    app.router.add_get("/downloads/openclaw-cli-installer.sh", page(openclaw_cli_installer_handler))
 
     app.router.add_get("/api/dashboard", api_dashboard_handler)
     app.router.add_get("/api/runs", api_runs_handler)

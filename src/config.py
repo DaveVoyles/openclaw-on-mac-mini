@@ -119,6 +119,10 @@ class _Config:
     # -- Copilot Proxy (Phase 8 enhancement) -----------------------------------
     copilot_proxy_url: str = os.getenv("COPILOT_PROXY_URL", "")
     copilot_proxy_enabled: bool = bool(os.getenv("COPILOT_PROXY_URL", ""))
+
+    # -- Dashboard Authentication (UI login + API token) -------------------------
+    dashboard_username: str = os.getenv("OPENCLAW_DASHBOARD_USERNAME", "")
+    dashboard_password: str = os.getenv("OPENCLAW_DASHBOARD_PASSWORD", "")
     dashboard_api_token: str = os.getenv("DASHBOARD_API_TOKEN", "")
     dashboard_api_auth_required: bool = os.getenv("DASHBOARD_API_AUTH_REQUIRED", "true").lower() == "true"
     webhook_require_auth: bool = os.getenv("WEBHOOK_REQUIRE_AUTH", "true").lower() == "true"
