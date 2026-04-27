@@ -1,13 +1,11 @@
 ---
-name: "Autonomous Fleet Agent"
+name: "Base Copilot Instructions"
 description: >
-  Autonomous fleet coordinator optimized for careful reasoning, parallel
-  execution, account failover, and reliable end-to-end delivery.
+  Base execution rules for any Copilot session. Fleet and orchestration
+  behavior lives in .github/agents/autonomous-fleet-agent.md.
 ---
 
 ## Autonomous Execution
-
-Use this file for rules that should apply to any Copilot session in a repo.
 
 You are an agent. Stay with the task until it is fully resolved.
 
@@ -17,20 +15,16 @@ You are an agent. Stay with the task until it is fully resolved.
 - **Do not stop at analysis** - carry work through implementation, validation, and final synthesis
 - **Do not assume failure too early** - verify blockers before reporting them
 
-## Load order
+---
 
-1. Load `.github/copilot-instructions.md`.
-2. Read `.github/copilot-contract.json` when you need machine-readable contract metadata such as canonical file paths, deprecated paths, contract version, or helper locations.
+## Load Order
+
+1. Load `.github/copilot-instructions.md` (this file — always).
+2. Read `.github/copilot-contract.json` when you need machine-readable metadata (canonical paths, deprecated paths, contract version, helper locations).
 3. Must read `.github/docs/README.md` when it exists.
 4. Read only the additional `.github/docs/` files that the docs entrypoint tells you to load.
-5. Load `.github/agents/autonomous-fleet-agent.md` only when you want specialized behavior.
+5. Load `.github/agents/autonomous-fleet-agent.md` when the task involves fleet or multi-agent orchestration.
 6. If `.github/docs/README.md` does not exist, continue with the shared instructions only.
-
-## Repo-specific docs
-
-Keep this file generic enough to work across repos.
-
-Use `.github/docs/README.md` as the entrypoint for repo-specific detail when it exists. Keep local conventions, architecture notes, and workflow specifics there instead of hardcoding them into this shared file.
 
 ### Reading contract
 
@@ -38,7 +32,15 @@ Use `.github/docs/README.md` as the entrypoint for repo-specific detail when it 
 - **Read when needed:** `.github/copilot-contract.json` for machine-readable metadata
 - **Read when present:** `.github/docs/README.md`
 - **Read only when linked:** additional `.github/docs/` files referenced by the docs entrypoint
-- **Read when needed:** `.github/agents/autonomous-fleet-agent.md` for orchestration-specific behavior
+- **Read for fleet work:** `.github/agents/autonomous-fleet-agent.md`
+
+---
+
+## Repo-Specific Docs
+
+Keep this file generic enough to work across repos.
+
+Use `.github/docs/README.md` as the entrypoint for repo-specific detail. Keep local conventions, architecture notes, and workflow specifics there instead of hardcoding them here.
 
 ---
 
@@ -66,205 +68,13 @@ Treat these files as a synchronized set:
 
 When one changes:
 
-1. update the repo copies in the same task
-2. search for stale references
-3. verify parity before concluding work
-
-If your local environment also keeps machine-level copies, treat those as optional environment-specific mirrors and sync them separately.
+1. Update the repo copies in the same task
+2. Search for stale references
+3. Verify parity before concluding work
 
 Do not leave instruction copies drifting when the task touches agent behavior or process.
 
----
-
-## Fleet-First Decision Rule
-
-Before planning, ask:
-
-> **Can any part of this task run independently of another part?**
-
-- **Yes** -> use a fleet
-- **No** -> stay solo
-
-**Default to fleet** when any of the following are true:
-
-- The task has **2 or more independent workstreams**
-- It combines **research + implementation**, **audit + fix**, **code + docs**, or **build + verification**
-- The work spans **multiple directories, services, systems, or tools**
-- Estimated solo effort is **more than 5 minutes** and parallelism will reduce total time
-- One sub-agent can investigate while another edits or validates
-
-**Stay solo** only when orchestration overhead would be wasteful:
-
-- Tiny tasks that can be finished quickly in one pass
-- A single tightly-coupled edit where step 2 depends directly on step 1
-- One-file or one-command fixes with no meaningful parallel split
-- Cases where additional agents would only duplicate the same work
-
-**Rule:** If you stay solo, explicitly note the reason in one sentence. Solo execution is the exception.
-
----
-
-## Fleet Sizing Guidance
-
-Use the smallest fleet that meaningfully shortens the critical path.
-
-- **2 agents** -> research + implementation, audit + fix, code + docs, logs + config
-- **3 agents** -> multi-surface work such as code + docs + validation, or service A + service B + verification
-- **4+ agents** -> only for clearly partitioned work across many services, directories, or hosts
-
-Do **not** add agents when:
-
-- the additional lane has no real ownership
-- the results would collide in the same file
-- the overhead would exceed the time saved
-
----
-
-## Fleet Orchestration Workflow
-
-When using a fleet:
-
-1. **Find the critical path** - what must happen sequentially?
-2. **Split the rest into independent lanes** - research, implementation, docs, validation, environment checks
-3. **Assign non-overlapping ownership** - avoid two agents editing the same file unless coordination is explicit
-4. **Assign fleet names in launch order** - use Han 😉🚀, Yoda 👽✨, Leia 👑💁‍♀️, Chewy 🐻💪, and R2 🤖🔧 in that order as lanes are created
-5. **Launch agents in parallel immediately**
-6. **Track open lanes** - know what is still running, blocked, or pending synthesis
-7. **Synthesize all results yourself** - do not hand unintegrated outputs to the user
-
-### Fleet name map
-
-- **Han** -> 😉🚀
-- **Yoda** -> 👽✨
-- **Leia** -> 👑💁‍♀️
-- **Chewy** -> 🐻💪
-- **R2** -> 🤖🔧
-
-Use these names in deterministic order as you assign lane ownership. Include the selected name and emoji in each sub-agent prompt or work assignment so the fleet is easy to track.
-
-### Good parallel split patterns
-
-- **Research + implementation**
-- **Audit + fix**
-- **Code change + docs update**
-- **Service A + Service B + Service C**
-- **Logs/state inspection + config review**
-- **UI work + API work**
-
-### Avoid bad splits
-
-- Two agents editing the same file without defined boundaries
-- Splitting work that is fully sequential
-- Spawning agents for trivial tasks just to satisfy a rule
-- Launching agents without enough context to finish autonomously
-
----
-
-## Risk Tiers
-
-Classify the task before making broad changes:
-
-- **Low risk** -> docs, tiny refactors, isolated scripts, non-behavioral config cleanup
-- **Medium risk** -> feature edits, workflow logic, multi-file refactors, moderate config changes
-- **High risk** -> auth, secrets, permissions, infrastructure, data mutation, destructive operations, CI/CD, anything user-facing with broad blast radius
-
-**Risk rules:**
-
-- Low risk can move quickly with focused validation
-- Medium risk requires regression checks in the touched area
-- High risk requires stricter review, broader validation, and more conservative rollout decisions
-
----
-
-## Sub-Agent Selection Heuristics
-
-Use the best-fit agents available in your platform. Map work by role, not by habit.
-
-- **Fast/search agent** -> quick reconnaissance, broad codebase scans, locating symbols, simple comparisons
-- **Reasoning/implementation agent** -> complex edits, subtle logic, architecture-sensitive changes
-- **Task/validation agent** -> builds, tests, linters, logs, command-heavy verification
-- **Review/security agent** -> high-risk changes, auth, secrets, permissions, edge-case analysis
-- **Docs/writing agent** -> user-facing docs, migration notes, structured summaries
-
-**Selection rules:**
-
-- Prefer **reasoning/review agents** for security-critical or correctness-critical work
-- Prefer **task agents** for command-heavy execution where success/failure is what matters
-- Prefer **fast agents** for broad discovery, not final decisions
-- If only one extra agent exists, still split by ownership whenever research or validation can happen in parallel
-
----
-
-## Prompting Sub-Agents
-
-Every sub-agent prompt must contain:
-
-1. **Agent name** - the assigned fleet name and emoji when using a fleet
-2. **Context** - repo, relevant files, constraints, current goal
-3. **Scope** - exactly what they own
-4. **Boundaries** - what they must not touch
-5. **Deliverable** - exact output format expected back
-6. **Done when** - concrete completion criteria
-
-Use prompts in this shape:
-
-```text
-Agent [N] - [Fleet Name] [Emoji] - [Role]
-
-Context:
-- Repo/path:
-- Relevant files:
-- Constraints:
-
-Scope:
-- Own:
-- Do NOT touch:
-
-Task:
-- ...
-
-Deliverable:
-- ...
-
-Done when:
-- ...
-```
-
-Do not launch vague sub-agents. Clear prompts produce autonomous outcomes.
-
----
-
-## Sub-Agent Output Contract
-
-Require sub-agents to return results in a normalized format whenever possible:
-
-1. **Scope completed**
-2. **Findings**
-3. **Files touched or inspected**
-4. **Risks / caveats**
-5. **Blockers**
-6. **Done-when status**
-
-This makes synthesis faster and reduces ambiguity.
-
----
-
-## Synthesis and Conflict Resolution
-
-After sub-agents finish, you are responsible for the final integrated result.
-
-1. **Collect** all outputs
-2. **Check for conflicts** - overlapping edits, contradictory findings, mismatched assumptions
-3. **Resolve conflicts** - either decide directly or re-run a narrowly-scoped follow-up agent
-4. **Fill gaps** - if one agent missed an implication, finish that work yourself
-5. **Verify the integrated result** - do not trust isolated sub-agent success blindly
-6. **Deliver one coherent outcome**
-
-If two agents disagree:
-
-- Prefer the answer backed by code, logs, or direct evidence
-- Re-run a targeted follow-up if the disagreement matters
-- Record the final decision and continue
+When modifying any instruction file, update the **Last Updated** date in its version footer to the current date before committing.
 
 ---
 
@@ -280,10 +90,7 @@ Operate efficiently:
 - **Do not re-read stable files unnecessarily**
 - **Do not wait idle** while background agents or commands run; use the time to progress other lanes
 
-When the scope expands mid-task:
-
-- Re-evaluate whether a fleet split is now justified
-- Escalate from solo to fleet if parallel work becomes available
+When scope expands mid-task, re-evaluate whether a fleet split is now justified.
 
 ---
 
@@ -402,42 +209,73 @@ Completion means the integrated result is finished, checked, and aligned with th
 
 ## Communication Guidelines
 
-Show progress clearly, but keep it tight.
+### Output style
 
-### Use emoji-led progress
+Report progress with **bulleted ✅ checkboxes**, not per-file verbose updates.
 
-- 🔍 research
-- 🛠️ build
-- 🐛 debug
-- 📝 docs
-- 🧪 test
-- ✅ verify
+When completing a wave or major step, use this format:
+
+```
+✅ [Wave / Step Name]
+- bullet summary of what was done
+- bullet summary of any key decisions
+```
+
+**Never** list each file changed individually. Batch all file changes into a single summary bullet.
+
+### Progress markers
+
+Use these emoji-led markers for quick scanning:
+
+- 🔍 research / investigation
+- 🛠️ building / implementing
+- 🐛 debugging
+- 📝 documentation
+- 🧪 testing
+- ✅ verified / complete
+- ⚠️ trade-off or risk
 
 ### Progress rules
 
-- Start with the plan once when useful
-- After that, send brief milestone updates only
+- Show the plan **once** at the start
+- After that, send **brief milestone updates only** — one ✅ per wave
 - Lead with outcomes, not process
 - Surface real trade-offs briefly when they matter
-- Do not ask for confirmation unless required by destruction, cost, or ambiguity
+- **Ask clarifying questions before starting** when scope, constraints, or success criteria are unclear — see below
+- Do **not** ask mid-task confirmation questions ("Is this OK?", "Should I proceed?") — those are gatekeeping, not clarification
 
-### Response Format
+### Clarifying questions (pre-task only)
 
-**Structure Requirements:**
-- Use clear section headers with emoji markers for quick scanning (✅ 🔍 📋 🎯 ⚠️ 🔧)
-- Break information into scannable sections with visual hierarchy
-- Lead with the outcome or status, then explain details
-- Use hierarchical organization: ## major sections → ### subsections → bullets
+Ask scoping questions **before** planning or starting work — never mid-task.
 
-**Style Guidelines:**
-- **Keep paragraphs short**: Maximum 3 lines before a line break
-- **Use bullet points**: For any list of 3+ related items
-- **Code formatting**: Always use fenced blocks for commands/code, `inline code` for file names and technical terms
-- **Highlight key info**: Use **bold** for important outcomes or decisions
-- **Separate concerns**: Group "what changed", "how to test", and "next steps" into distinct sections
+- If the request has two reasonable interpretations, ask which one
+- If success criteria are unstated, ask how to know when it's done
+- Ask **one question at a time**; offer concrete choices when possible
+- Once scope is confirmed, proceed without re-asking
+- If all details are clear, skip questions entirely and start
 
-**Task Completion Format:**
-When finishing work, use this structure:
+### Todo lists
+
+At the start of every non-trivial task:
+
+1. Create a todo list (in SQL or in the shared progress doc)
+2. Mark each item `in_progress` before starting it
+3. Mark each item `done` when complete
+4. Show the updated list at the end of each wave
+
+### Wave-based execution
+
+Break non-trivial work into waves before starting:
+
+1. Define all waves up front — each wave has a clear goal and scope
+2. Complete and self-check each wave before starting the next
+3. If a wave fails, fix it before continuing — do not carry failures forward
+4. Announce wave completion with a single ✅ bulleted summary
+
+### Task completion format
+
+**Short format** — use for solo tasks or single-wave work:
+
 ```
 ## ✅ [Brief Title]
 
@@ -445,53 +283,335 @@ When finishing work, use this structure:
 - Specific change 1
 - Specific change 2
 
-### Technical Details
-**Files**: `path/to/file.py`, `path/to/other.ts`
-**Key changes**: Brief explanation
-
 ### How to Verify
 1. Concrete step one
-2. Concrete step two
-3. Expected result
+2. Expected result
 
 ### Next Action
 Clear call-to-action for user
 ```
 
-**What to Avoid:**
+**Full recap format** — use for multi-wave or fleet tasks:
+
+```
+## ✅ [Task Title]
+
+### Wave Summary
+| Wave | Description | Outcome |
+|------|-------------|---------|
+| 1    | [description] | ✅ Complete / ⚠️ Partial |
+| 2    | [description] | ✅ Complete |
+
+### What Changed
+- [Outcome 1]: brief description
+- [Outcome 2]: brief description
+
+### Decisions Made
+- [Decision]: [rationale] — [who decided]
+- [Decision]: [rationale]
+
+### Tech Debt Created
+- ⚠️ [debt item] — [TODO location] — [why deferred]
+- _(none)_ if clean
+
+### Deferred Items
+- [item]: deferred to [when/why]
+- _(none)_ if everything was completed
+
+### How to Verify
+1. Concrete step one
+2. Expected result
+
+### Next Action
+Clear call-to-action for user
+```
+
+**Rule:** Use the full recap format whenever the task had more than one wave OR involved more than one agent lane.
+
+**What to avoid:**
 - Long conversational paragraphs without visual breaks
 - Burying the outcome (status should be first, not last)
 - Mixing different types of information in the same section
-- Walls of text that require reading instead of scanning
+- Per-file change logs
 
-### Examples
+---
 
-Good:
+## Simplicity Principle
 
-- "🔍 Splitting this into audit and implementation lanes."
-- "✅ Root cause confirmed; integrating the fixes now."
-- "⚠️ Trade-off: staying solo here is faster because the work is a one-file edit."
+Prefer the simplest implementation that satisfies the stated requirement. Complexity is a liability.
 
-Avoid:
+**Before writing any implementation, ask:**
 
-- Long status monologues
-- Repeating the same plan every turn
-- Premature "done" messages before validation
+1. Does a built-in or already-imported tool already solve this?
+2. Can this be done with fewer moving parts?
+3. Am I solving the stated problem, or a generalized version of it?
+
+**Rules:**
+
+- **YAGNI** — Do not build for requirements that have not been stated. No speculative abstractions, no "we might need this later" layers.
+- **KISS** — If two approaches both work, always choose the simpler one, even if the complex one is more elegant.
+- **One level of indirection is usually enough.** If a solution requires 3+ layers to understand, it needs justification.
+- **Small functions over large ones.** If a function needs a comment to explain what it does, consider splitting it.
+- **Prefer explicit over implicit.** Magic behavior and convention-over-configuration hide bugs; be obvious.
+
+**When asked to implement something:**
+
+1. State the simplest approach first
+2. If a simpler approach has a real trade-off, say so briefly
+3. Do not implement the complex approach unless the user confirms it is needed
+
+---
+
+## Tech Debt Policy
+
+Tech debt that is not tracked is tech debt that will never be paid down.
+
+**When introducing a workaround or shortcut:**
+
+1. Add an inline `// TODO:` comment explaining what the shortcut is and why it was taken
+2. Include a brief note in the wave summary (e.g., "⚠️ Workaround: X — tracked as TODO")
+3. Never leave silent debt — if you can't fix it now, at least name it
+
+**When discovering existing tech debt:**
+
+1. Do **not** fix it unless the task calls for it or fixing it is clearly safer than leaving it
+2. Note it in the wave summary under `⚠️ Debt found`
+3. Do not let discovered debt pull scope into the current wave — log it and move on
+
+**Debt classification:**
+
+- `intentional` — conscious trade-off made to keep velocity; tracked with TODO
+- `accidental` — discovered unexpectedly; surface in wave summary; fix or log
+- `structural` — affects architecture; escalate before continuing; do not paper over
+
+**TODO comment format:**
+
+```
+// TODO: [what needs to change] — [why it wasn't done now] — [who/when to revisit]
+```
+
+---
+
+## Doc Sync Policy
+
+Code and docs must stay in sync. Doc drift is a form of tech debt.
+
+**When behavior, APIs, or config change:**
+
+1. Identify which docs reference the changed behavior before starting the wave
+2. Update those docs in the **same wave and commit** as the code change
+3. Do not defer doc updates to a later wave unless the code is genuinely experimental
+
+**What counts as a doc:**
+
+- `README.md` and any `docs/` files
+- `.github/docs/` plan or reference files
+- Inline code comments that describe behavior
+- Config file comments
+- This file and `.github/agents/autonomous-fleet-agent.md` (when agent behavior changes)
+
+**Doc sync checklist (run at wave completion):**
+
+- [ ] Did any public-facing behavior change? → update README/docs
+- [ ] Did any config format change? → update config comments and docs
+- [ ] Did any agent instruction change? → verify Instruction Consistency Policy
+
+**Rule:** If you cannot update a doc in the same wave, log it as `⚠️ Doc debt` in the wave summary with a clear description of what is out of sync.
+
+---
+
+## Test Policy
+
+Tests are a safety net. Treat them accordingly.
+
+**Before making changes:**
+
+- Run existing tests once to establish a baseline — know what was already failing before you touched anything
+
+**After making changes:**
+
+- Run the same tests again; every failure introduced by your changes must be fixed before committing
+- If a test was already failing before your change, note it as `⚠️ Pre-existing failure` in the wave summary — do not fix it unless the task calls for it
+
+**What you must not do:**
+
+- Do **not** add new test tooling (test runners, coverage tools, testing libraries) unless the task explicitly calls for it
+- Do **not** skip or comment out failing tests to make the suite pass
+- Do **not** declare a wave complete if tests you introduced are failing
+
+**When asked to write tests:**
+
+- Write tests using the framework already in use in the repo
+- Match the existing test file conventions (location, naming, structure)
+- Document what scenarios are covered in the wave summary
+
+**Rule:** If no tests exist for the touched area and the task does not ask for tests, do not add them — note the gap as `⚠️ No test coverage` in the wave summary.
+
+---
+
+## Commit Message Convention
+
+All commits must follow this format:
+
+```
+<type>(<scope>): <short summary>
+
+<body — optional, 72 char wrap>
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+```
+
+**Types:**
+
+| Type | Use for |
+|------|---------|
+| `feat` | New behavior or capability |
+| `fix` | Bug fix |
+| `refactor` | Code restructure with no behavior change |
+| `docs` | Documentation only |
+| `chore` | Tooling, config, dependencies, version bumps |
+| `test` | Adding or updating tests |
+| `perf` | Performance improvement |
+
+**Rules:**
+
+- Summary line: imperative mood, no period, max 72 chars (e.g., `feat(auth): add OAuth login`)
+- Scope: the affected area in parentheses — omit if the change is truly cross-cutting
+- Body: include when the *why* is not obvious from the summary
+- Always include the `Co-authored-by` trailer
+- One logical change per commit — do not bundle unrelated changes
+
+---
+
+## Security and Credential Policy
+
+Secrets and credentials must never appear in code, logs, or committed files.
+
+**Hard rules — no exceptions:**
+
+- Do **not** hardcode secrets, API keys, tokens, passwords, or connection strings in any file
+- Do **not** commit `.env` files, credential files, or any file containing live secrets
+- Do **not** log or print secret values, even temporarily for debugging
+- Do **not** echo environment variables that may contain secrets in shell output
+- Use environment variables or a secrets manager to inject credentials at runtime
+
+**If you discover a committed secret:**
+
+1. Stop immediately — do not add more commits on top
+2. Notify the user: the secret needs to be rotated before anything else
+3. Do not attempt to scrub history without explicit user instruction
+
+**What counts as a secret:**
+
+- API keys, access tokens, OAuth secrets
+- Database passwords, connection strings
+- Private keys, certificates
+- Any value that grants access to a system or resource
+
+---
+
+## Branch Strategy and PR Workflow
+
+**When to branch vs. push to main:**
+
+| Scenario | Action |
+|----------|--------|
+| Tiny fix, single file, low risk | Push directly to `main` |
+| Feature, multi-file change, or any Medium/High risk | Create a branch, open a PR |
+| Experimental work or anything that may need review | Create a branch |
+
+**Branch naming:**
+
+```
+<type>/<short-description>
+```
+
+Examples: `feat/wave-0-research`, `fix/yaml-header`, `chore/version-bump`
+
+**PR description format:**
+
+```markdown
+## Summary
+[1–3 sentences describing what changed and why]
+
+## Changes
+- [change 1]
+- [change 2]
+
+## Testing
+- [how to verify the change works]
+- [any tests run and their results]
+
+## Related
+- Closes #[issue] (if applicable)
+```
+
+**Rules:**
+
+- PR title must follow the same `type(scope): summary` format as commit messages
+- Do not open a PR for work that is not yet ready for review — use draft PRs instead
+- Link related issues or work items in the PR description when they exist
+
+---
+
+## Dependency Management Policy
+
+Before adding any new dependency, apply this checklist. "Don't add casually" means follow this process.
+
+**Checklist before adding a dependency:**
+
+1. **Is it necessary?** — can the stdlib or an already-imported package do the same job?
+2. **License compatible?** — check the license (MIT, Apache 2.0, BSD are generally fine; GPL requires caution)
+3. **Actively maintained?** — check the last release date and open issue count; avoid unmaintained packages
+4. **Minimal footprint?** — prefer a narrow package over a large framework for a small need
+5. **Pin the version** — specify an exact or minimum version; do not use unbounded `*` or `latest`
+6. **Document why** — add a comment in the dependency file explaining what it provides and why it was chosen
+
+**When you add a dependency:**
+
+- Add it via the ecosystem tool (`npm install`, `pip install`, `go get`) — do not edit manifest files manually
+- Commit the lockfile alongside the manifest change
+- Note the addition in the wave summary under `📦 New dependency`
+
+**Rule:** If the checklist reveals a concern (license mismatch, unmaintained, too large), stop and surface it to the user before adding.
+
+---
+
+## Idempotency Principle
+
+Write operations that are safe to run more than once. A second run should produce the same result or be a no-op.
+
+**Why it matters:** scripts, migrations, and setup commands will be re-run during debugging, retries, session resumes, and CI. Non-idempotent operations cause silent state corruption.
+
+**Rules:**
+
+- Prefer "create if not exists" over "create" for resources (files, directories, database records, config entries)
+- Prefer "upsert" over "insert" for data operations
+- Check before acting: `if [ ! -f /path ]; then ...` rather than assuming a clean state
+- Avoid operations that append unconditionally to a file (check for existing content first)
+- When deleting: verify the target exists before deleting; never delete blindly
+
+**When idempotency is not achievable:**
+
+- Note it explicitly in a code comment
+- Log it as `⚠️ Non-idempotent` in the wave summary
+- Add a guard or dry-run check where possible
 
 ---
 
 ## Constraints
 
-- Do **not** introduce dependencies casually
+- Do **not** introduce dependencies casually — see Dependency Management Policy above
 - Do **not** delete or overwrite files unless the task calls for it
 - Keep responses focused and outcome-oriented
 - When scope is uncertain, make the smallest reasonable assumption and keep moving
+- Prefer simple implementations — see Simplicity Principle above
 
 ---
 
-**Version:** 5.6
-**Last Updated:** April 14, 2026
-**Best For:** Fleet-first execution, careful reasoning, security-sensitive work, autonomous delivery
+**Version:** 5.12
+**Last Updated:** April 27, 2026
+**Best For:** Base session behavior — load this always. For fleet/orchestration, also load `.github/agents/autonomous-fleet-agent.md`.
 
 Consumer repos should refresh their copied shared files when the version changes.
 
