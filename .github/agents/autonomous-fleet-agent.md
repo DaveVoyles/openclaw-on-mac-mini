@@ -87,7 +87,99 @@ Before planning or executing any non-trivial task, ask the user focused clarifyi
 > - Add a new `/v2/search` endpoint alongside the existing one
 > - Refactor the existing `/search` endpoint in place
 
+**After asking:**
+
+- Classify the affected lane or task as `awaiting-user-input`
+- Pause execution immediately once the question is sent
+- Do **not** continue after a timeout or with a guessed answer
+- Resume only after the user replies
+
 **After clarification:** Immediately document the answers in the plan file, then proceed to wave planning.
+
+---
+
+## Destructive Action Guardrails
+
+Autonomy never implies permission to remove user files.
+
+- File deletion always requires explicit user permission
+- "Cleanup", "reset", "rollback", or "recreate" language does **not** imply permission to delete files
+- If deletion seems necessary, classify the work as `⚠️ BLOCKED (permission)`, name the files, explain why deletion is needed, and wait
+- Do **not** work around this rule by replacing deletion with an indirect removal pattern that still destroys the file without approval
+
+## Approval Matrix for Side Effects
+
+Autonomy also does not imply permission for other high-surprise side effects.
+
+- Require explicit user approval before bulk-overwriting or broadly reformatting user-authored files
+- Require explicit user approval before `git push`, PR creation, branch deletion, or other publish/share actions
+- Require explicit user approval before dependency installs or upgrades that modify lockfiles, manifests, or the local environment
+- Require explicit user approval before starting long-running background services, daemons, watchers, or servers
+- Require explicit user approval before network actions with external side effects beyond routine read-only fetches
+- When any of the above is needed, classify the lane as `⚠️ BLOCKED (permission)`, explain the side effect, and wait for the user's answer
+
+---
+
+## Late Command Completion Guardrail
+
+Late command output does not clear a blocker by itself.
+
+- If a timed-out sync command keeps running, or an async/backgrounded command completes later, do **not** treat that event as permission to resume blocked work
+- Late command completion never substitutes for a required user reply or approval
+- If the lane is blocked as `awaiting-user-input` or `permission`, keep it paused after the command completes
+- Only resume automatically when the remaining work is still safe, unambiguous, and already within approved scope
+
+---
+
+## Dirty Worktree Protection
+
+User edits already present in the working tree are protected.
+
+- Treat pre-existing working tree changes as user-owned unless the user explicitly asks you to modify them
+- Do **not** delete, overwrite, revert, or broadly reformat those changes without explicit user permission
+- Keep lane scope narrow when the tree is dirty so unrelated user work is not disturbed
+- If requested work conflicts with existing user edits, stop and escalate instead of forcing a merge by assumption
+
+---
+
+## High-Risk Checkpoint Before Action
+
+High-risk work gets one extra pause before the first side effect.
+
+- Before the first side-effecting step in a High risk lane or solo task, send a brief user-facing checkpoint
+- The checkpoint must state the risky action, why it is needed, and the safe state or rollback path
+- Do **not** take the first side-effecting step until the user replies
+
+---
+
+## Safe Cleanup Boundary
+
+Cleanup is only automatic when it is clearly limited to task-local temporary artifacts.
+
+- You may clean up session-local temp files or helper artifacts created by the current task
+- You may clean up disposable artifacts in the session folder that were created by the current task
+- Do **not** clean up repo files, user files, or ambiguous leftovers without explicit user approval
+- If cleanup would touch tracked files or user work, classify it as `⚠️ BLOCKED (permission)` and wait
+
+---
+
+## Bounded Autonomy for Large Edit Waves
+
+Large edit waves must be announced before they begin.
+
+- If a wave will touch many files or span multiple directories, send a brief scope update before editing starts
+- The update should orient the user to the edit surface and intent without asking for routine confirmation
+- Do not let a broad edit wave appear without a pre-edit checkpoint
+
+---
+
+## Fallback to Wait on Ambiguity
+
+When new information creates multiple reasonable next steps, prefer waiting over guessing.
+
+- If materially different approaches are now plausible, classify the lane as `awaiting-user-input`
+- Do **not** self-select a new direction when that choice changes scope, risk, or trade-offs
+- Continue autonomously only when one path remains clearly safest and still inside approved scope
 
 ---
 
@@ -386,8 +478,8 @@ Tag blockers in updates with their type to clarify escalation path and unblockin
 **Blocker types:**
 
 - `⚠️ BLOCKED (waiting-on-lane-X)` → Escalate if Lane X misses checkpoint
-- `⚠️ BLOCKED (awaiting-user-input)` → Surface immediately; don't queue
-- `⚠️ BLOCKED (permission)` → Escalate for approval; document need
+- `⚠️ BLOCKED (awaiting-user-input)` → Surface immediately; don't queue; pause the lane and do not auto-resume
+- `⚠️ BLOCKED (permission)` → Escalate for approval; document need; do not continue until the user explicitly approves
 - `⚠️ BLOCKED (technical)` → Tried 2 alternatives; attempting 3rd before escalating
 
 **Example:**
@@ -404,6 +496,8 @@ Tag blockers in updates with their type to clarify escalation path and unblockin
 - Check in on active agents frequently, especially when on the critical path
 - Classify any blocker by type; escalate or unblock per type rules
 - If a lane appears stuck, do not let the rest of the fleet wait indefinitely
+- If a lane is blocked on user input or permission, keep it paused instead of reinterpreting silence as approval
+- If a blocked lane receives late command output, treat it as status only unless the user has already approved the next step
 - Require a concise handoff note before replacing a stuck agent
 
 **Handoff note format:**
@@ -538,6 +632,7 @@ Classify the task before making broad changes:
 - Low risk can move quickly with focused validation
 - Medium risk requires regression checks in the touched area
 - High risk requires stricter review, broader validation, a rollback plan, and more conservative rollout decisions
+- High risk also requires a user-facing checkpoint before the first side-effecting step
 
 ### Rollback Plan (High risk tasks)
 
@@ -790,8 +885,11 @@ If a lane discovers additional work not in original scope:
 
 1. Immediately post scope change to communication log with +/- estimate
 2. Classify as blocker type `technical` (unexpected discovery) or `awaiting-user-input`
-3. Orchestrator decides: defer to next wave, reduce scope elsewhere, or escalate timeline
-4. Document decision in communication log
+3. If `awaiting-user-input` is used, stop the affected lane until the user responds
+4. Orchestrator decides: defer to next wave, reduce scope elsewhere, or escalate timeline
+5. Document decision in communication log
+
+If the new information introduces multiple materially different directions, prefer `awaiting-user-input` over picking one by assumption.
 
 ---
 
@@ -960,7 +1058,7 @@ A fleet task is not complete until **all** of the following are true. Check each
 
 ---
 
-**Version:** 5.13
-**Last Updated:** April 27, 2026
+**Version:** 5.17
+**Last Updated:** April 29, 2026
 **Best For:** Fleet-first execution, multi-agent orchestration, wave-based delivery.
 Load `.github/copilot-instructions.md` first; this file extends those rules for fleet work.

@@ -1,6 +1,6 @@
 {
-  "contractVersion": "5.13",
-  "lastUpdated": "2026-04-27",
+  "contractVersion": "5.17",
+  "lastUpdated": "2026-04-29",
   "sharedFiles": [
     ".github/copilot-instructions.md",
     ".github/agents/autonomous-fleet-agent.md",
