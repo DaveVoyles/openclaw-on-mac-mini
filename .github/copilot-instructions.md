@@ -497,6 +497,80 @@ Code and docs must stay in sync. Doc drift is a form of tech debt.
 
 ---
 
+## Architectural Decision Records
+
+Record architecturally significant decisions using [MADR 4.0.0](https://adr.github.io/madr/) (Markdown Architectural Decision Records).
+
+**When to write an ADR:**
+
+- Technology choices (language, framework, database, cloud service)
+- Structural decisions (module boundaries, API shape, data model)
+- Process decisions (deployment strategy, branching model, testing approach)
+- Trade-off decisions where the rationale is not obvious from the code
+
+**When NOT to write an ADR:**
+
+- Trivial implementation choices that are easily reversible
+- Bug fixes or routine refactors with no design trade-off
+
+**Where to store ADRs:**
+
+- Place ADRs in `docs/decisions/` at the repo root
+- Create the folder when the first ADR is needed — do not create it speculatively
+- Name files `NNNN-title-with-dashes.md` (e.g., `0001-use-postgresql-for-persistence.md`)
+- Number sequentially starting from `0001`
+
+**MADR minimal template:**
+
+```markdown
+# {Short title of solved problem and solution}
+
+## Context and Problem Statement
+
+{Describe the context and problem in 2–3 sentences. Frame as a question when possible.}
+
+## Decision Drivers
+
+* {Driver 1, e.g., a quality attribute, constraint, or force}
+* {Driver 2}
+
+## Considered Options
+
+* {Option 1}
+* {Option 2}
+* {Option 3}
+
+## Decision Outcome
+
+Chosen option: "{Option N}", because {justification}.
+
+### Consequences
+
+* Good, because {positive consequence}
+* Bad, because {negative consequence}
+```
+
+For decisions that need more detail (pros/cons per option, confirmation criteria, stakeholder metadata), use the [full MADR 4.0.0 template](https://github.com/adr/madr/blob/develop/template/adr-template.md).
+
+**ADR lifecycle:**
+
+| Status | Meaning |
+|--------|---------|
+| `proposed` | Under discussion, not yet agreed |
+| `accepted` | Agreed and active |
+| `deprecated` | No longer relevant but kept for history |
+| `superseded by ADR-NNNN` | Replaced by a newer decision |
+
+Set the status in the YAML front matter: `status: "accepted"`.
+
+**Integration with other policies:**
+
+- **Doc Sync Policy** — when a code change invalidates an existing ADR, update or supersede the ADR in the same wave and commit
+- **Simplicity Principle** — use the minimal template above by default; escalate to the full template only when the decision has multiple viable options with non-obvious trade-offs
+- **Commit convention** — use `docs(adr): add ADR for {topic}` for ADR-only commits
+
+---
+
 ## Test Policy
 
 Tests are a safety net. Treat them accordingly.
@@ -697,8 +771,8 @@ Write operations that are safe to run more than once. A second run should produc
 
 ---
 
-**Version:** 5.17
-**Last Updated:** April 29, 2026
+**Version:** 5.18
+**Last Updated:** May 14, 2026
 **Best For:** Base session behavior — load this always. For fleet/orchestration, also load `.github/agents/autonomous-fleet-agent.md`.
 
 Consumer repos should refresh their copied shared files when the version changes.

@@ -1058,7 +1058,7 @@ A fleet task is not complete until **all** of the following are true. Check each
 
 ---
 
-**Version:** 5.17
-**Last Updated:** April 29, 2026
+**Version:** 5.18
+**Last Updated:** May 14, 2026
 **Best For:** Fleet-first execution, multi-agent orchestration, wave-based delivery.
 Load `.github/copilot-instructions.md` first; this file extends those rules for fleet work.
