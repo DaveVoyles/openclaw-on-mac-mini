@@ -18,6 +18,45 @@ You are an agent. Stay with the task until it is fully resolved.
 
 ---
 
+## Planning Mode
+
+When the session is operating in **planning mode**, the deliverable is a written plan — not an implemented change. Planning mode trades execution for autonomy on research: the agent works independently to produce a complete, reviewable plan and stops at the implementation boundary.
+
+**In planning mode, the agent MUST:**
+
+- Work autonomously to research, investigate, and draft the plan without mid-task gatekeeping
+- Read files and folders in the repo freely — these are read-only research actions
+- Fetch public documentation, READMEs, package pages, issue trackers, and other public web resources freely — read-only network reads are allowed
+- Run read-only inspection commands (`git status`, `git log`, `git diff`, `ls`, `grep`, `cat`, `gh repo view`, `gh pr view`, `gh issue view`, etc.) without prompting
+- Use `view`, `grep`, `glob`, `web_fetch`, and equivalent read tools without prompting
+- Produce the plan as the final artifact — see Plan Documentation in the fleet agent file for location and format
+
+**In planning mode, the agent MUST NOT:**
+
+- Implement the plan — no file edits, creates, or deletes that change repo or user state (other than writing the plan file itself)
+- Run side-effecting commands — no installs, migrations, builds with side effects, service starts, `git commit`, `git push`, `gh pr create`, `gh issue create`, branch creation/deletion, or anything that mutates remote state
+- Make network calls with side effects — no `POST`/`PUT`/`PATCH`/`DELETE`, no API mutations, no ticket creation, no comments on issues or PRs
+- Ask the user mid-research for permission to read a file, list a folder, or fetch a public webpage — just do the read
+- Treat the Approval Matrix as a trigger for prompts during planning — those gates apply at the **execution** phase, after the plan is approved
+
+**Plan completion in planning mode:**
+
+1. Write the plan to the documented location (`.github/docs/` for repo-scoped work, session folder for session-scoped work)
+2. Present a brief summary of the plan to the user with a clear call-to-action ("Approve to implement?" or similar)
+3. Wait for the user's explicit approval before leaving planning mode
+4. Do **not** begin implementation until the user explicitly approves the plan — approval of the plan summary is approval to implement; silence is not
+
+**Exiting planning mode:**
+
+- Only the user can end planning mode. The agent does not promote itself from planning to executing
+- If the user approves the plan, switch to normal execution rules (the full Approval Matrix and risk checkpoints re-apply at execution time)
+- If the user requests changes to the plan, update the plan file and re-present the summary — still in planning mode
+- If the user asks a question during planning mode, answer it and stay in planning mode
+
+**Rule:** In planning mode, "ask before reading" is the wrong default. Read freely, plan thoroughly, and stop at the implementation boundary.
+
+---
+
 ## Load Order
 
 1. Load `.github/copilot-instructions.md` (this file — always).
@@ -771,8 +810,8 @@ Write operations that are safe to run more than once. A second run should produc
 
 ---
 
-**Version:** 5.18
-**Last Updated:** May 14, 2026
+**Version:** 5.19
+**Last Updated:** May 15, 2026
 **Best For:** Base session behavior — load this always. For fleet/orchestration, also load `.github/agents/autonomous-fleet-agent.md`.
 
 Consumer repos should refresh their copied shared files when the version changes.

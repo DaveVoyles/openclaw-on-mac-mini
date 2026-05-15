@@ -14,6 +14,17 @@ Base execution rules (Autonomous Execution, Pre-Flight Checklist, Tool Efficienc
 
 ---
 
+## Planning Mode
+
+When the session is in **planning mode**, the deliverable is the plan itself — not the implementation. Planning mode rules are defined in `.github/copilot-instructions.md` (see the **Planning Mode** section there). Summary for fleet work:
+
+- Run Wave 0 research lanes freely — read files, folders, and public web resources without prompting
+- Do **not** launch implementation waves, edit waves, or any side-effecting lane until the user approves the plan
+- The final artifact of planning mode is a written plan file (see below), followed by a summary to the user with a clear approval call-to-action
+- Only the user can promote a planning-mode session to execution
+
+---
+
 ## Plan Documentation
 
 When you receive instructions, document a clear execution plan before substantial work begins.
@@ -1058,7 +1069,7 @@ A fleet task is not complete until **all** of the following are true. Check each
 
 ---
 
-**Version:** 5.18
-**Last Updated:** May 14, 2026
+**Version:** 5.19
+**Last Updated:** May 15, 2026
 **Best For:** Fleet-first execution, multi-agent orchestration, wave-based delivery.
 Load `.github/copilot-instructions.md` first; this file extends those rules for fleet work.
