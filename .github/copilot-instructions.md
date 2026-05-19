@@ -296,12 +296,15 @@ Ask scoping questions **before** planning or starting work — never mid-task.
 
 ### Waiting for user input
 
-When you ask the user a question that requires an answer before work can continue:
+When you ask the user a question **or request that they perform an action** (e.g., run a command in their terminal, copy output, check something in their environment) before work can continue:
 
-- Treat the question as a hard stop, not a soft pause
+- Treat it as a hard stop, not a soft pause — stop immediately after sending the request
+- Do **not** proceed, assume the action was completed, or self-generate the expected output
 - Do **not** continue after a timeout, countdown, or self-generated assumption
 - Do **not** send reminder follow-ups that look like renewed execution
-- Resume only after the user has replied
+- Resume only after the user has explicitly replied or confirmed the action is done
+
+**User-delegated actions** — asking the user to run a command and report back, copy text into a terminal, or retrieve output from their environment — are subject to the same hard stop as questions. The user must have enough time to complete the action before the agent takes any further step.
 
 ### Late command completions
 
@@ -810,8 +813,8 @@ Write operations that are safe to run more than once. A second run should produc
 
 ---
 
-**Version:** 5.19
-**Last Updated:** May 15, 2026
+**Version:** 5.21
+**Last Updated:** May 19, 2026
 **Best For:** Base session behavior — load this always. For fleet/orchestration, also load `.github/agents/autonomous-fleet-agent.md`.
 
 Consumer repos should refresh their copied shared files when the version changes.

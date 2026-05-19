@@ -6,11 +6,43 @@ description: >
   Base execution rules (always-on) live in .github/copilot-instructions.md.
 ---
 
-## Role
+## What Is This?
 
-Use this file when orchestration is the main difference — deciding when to stay solo and when to split work across independent lanes.
+The Autonomous Fleet Agent coordinates **multiple AI sub-agents working in parallel** to complete complex tasks faster than a single agent working alone. Think of it as a project manager that splits work into independent lanes, assigns each lane to a specialist agent, monitors progress, and synthesizes results into one coherent deliverable.
 
-Base execution rules (Autonomous Execution, Pre-Flight Checklist, Tool Efficiency, Environment Bootstrap, Retry/Fallback, GitHub Account Failover, Verification, Post-Push, Stop-Conditions) live in `.github/copilot-instructions.md`. This file extends those rules for multi-agent work only.
+### When to use it
+
+- **Multi-file refactors** — e.g., rename a concept across services, tests, and docs simultaneously
+- **Research + implementation combos** — one agent investigates while another builds
+- **Cross-service changes** — independent edits to Service A, Service B, and shared config
+- **Audit + fix patterns** — one agent scans for problems, another fixes them
+- **Any task where parallelism saves meaningful time** (rough threshold: >5 min solo)
+
+### When NOT to use it
+
+- Single-file fixes or quick lookups (orchestration overhead > time saved)
+- Tightly sequential edits where step 2 depends entirely on step 1's output
+- One-command tasks (run a test, check a status, read a file)
+- Anything a solo agent can finish in under 2 minutes
+
+### Key benefits
+
+- **Faster throughput** — parallel lanes cut wall-clock time on multi-part tasks
+- **Structured quality gates** — mandatory plan review and code review for risky work
+- **Built-in progress tracking** — wave tables, checkpoints, communication logs
+- **Automatic recovery** — stuck agents are replaced without losing the wave
+- **Crash-safe** — plan files let any agent resume after an interruption
+
+### Key trade-offs
+
+- **Higher token cost** — multiple agents consume more resources than one
+- **Orchestration overhead** — planning, checkpointing, and synthesis add fixed cost
+- **Requires clear scope boundaries** — overlapping lanes cause merge conflicts
+- **Overkill for small tasks** — if the work is trivial, the ceremony slows you down
+
+### Relationship to copilot-instructions.md
+
+This file **extends** the base rules in `.github/copilot-instructions.md` — it does not replace them. The base file defines autonomous execution, retry logic, verification, commit conventions, and all non-fleet behavior. This file adds fleet-specific orchestration: wave planning, lane assignment, checkpoint cadence, stuck-agent recovery, and synthesis.
 
 ---
 
@@ -40,7 +72,10 @@ Every plan should capture:
 2. the current wave plan with t-shirt sizes and fleet names
 3. blocking dependencies between lanes
 4. checkpoints, validation steps, and current status
-5. handoff notes if a lane stalls or an agent is replaced
+5. the Validation Matrix and planned verification owner
+6. handoff notes if a lane stalls or an agent is replaced
+7. the Context Map for Medium or High risk work
+8. Lane Contracts for lanes that produce artifacts another lane consumes
 
 The plan exists so another agent can resume quickly after a crash, interruption, or handoff.
 
@@ -98,12 +133,15 @@ Before planning or executing any non-trivial task, ask the user focused clarifyi
 > - Add a new `/v2/search` endpoint alongside the existing one
 > - Refactor the existing `/search` endpoint in place
 
-**After asking:**
+**After asking or delegating an action to the user:**
 
 - Classify the affected lane or task as `awaiting-user-input`
-- Pause execution immediately once the question is sent
+- Pause execution immediately once the question or action request is sent
 - Do **not** continue after a timeout or with a guessed answer
+- Do **not** self-generate the output the user was asked to supply (e.g., assumed terminal output)
 - Resume only after the user replies
+
+**User-delegated actions** — asking the user to run a command and report back, copy text into a terminal, or retrieve output from their environment — are subject to the same hard stop as questions. Stop after sending the request; do not proceed until the user provides the result.
 
 **After clarification:** Immediately document the answers in the plan file, then proceed to wave planning.
 
@@ -228,8 +266,36 @@ For each wave:
 
 1. Identify the outcomes that can be completed independently
 2. Assign each outcome a t-shirt size before creating lanes
-3. Keep lane sizes close so one lane does not dominate the critical path
-4. Launch the wave only after lane boundaries, sizes, and dependencies are clear
+3. For Medium or High risk work, build the Context Map before assigning lanes
+4. Keep lane sizes close so one lane does not dominate the critical path
+5. Launch the wave only after lane boundaries, sizes, dependencies, and handoff contracts are clear
+
+### Context Map
+
+For Medium or High risk work, create a Context Map in the plan file before the first implementation wave. The map makes the investigation boundary explicit so lanes do not miss adjacent files or repeat each other's work.
+
+```markdown
+## Context Map
+
+### Primary files
+- [file or component]: [why it is directly in scope]
+
+### Secondary files
+- [file or component]: [why it may be affected or must be checked]
+
+### Tests and validation
+- [command, test file, or manual check]: [what it proves]
+
+### Existing patterns
+- [pattern, helper, convention, or similar implementation]: [where to follow it]
+
+### Change sequence
+1. [research or preparation step]
+2. [implementation step]
+3. [validation and synthesis step]
+```
+
+**Context Map gate:** Do not launch Medium or High risk implementation lanes until the Context Map identifies the primary files, secondary files, tests or validation, relevant patterns, and intended change sequence. Update the map when Wave 0 research changes the plan.
 
 **Sizing scale:**
 
@@ -266,7 +332,9 @@ Before finalizing the wave plan, verify coverage across available agent types:
 ☐ Research covered?    → assign an explore lane if codebase or problem space is not fully understood
 ☐ Implementation?      → assign general-purpose lane(s) for complex edits
 ☐ Validation covered?  → assign a task lane for builds, tests, linters
-☐ Plan reviewed?       → schedule a rubber-duck pass before Wave 1 if risk is Medium or High
+☐ Matrix complete?     → document happy path, boundary, negative/error, concurrency/idempotency, and specialist checks
+☐ Context Map ready?   → required before Medium or High risk implementation lanes launch
+☐ Plan reviewed?       → schedule a Rubber Duck Review pass before Wave 1 if risk is Medium or High
 ☐ Code reviewed?       → schedule a code-review pass before final commit if risk is Medium or High
 ```
 
@@ -320,6 +388,22 @@ Make lane dependencies explicit in wave tables to identify blockers that hold up
 - If Lane 1 misses checkpoint, escalate immediately; Lane 2 is now unblockable
 
 **Critical path rule:** Track the longest dependency chain. Prioritize check-ins on critical path lanes first.
+
+### Lane Contracts
+
+When one lane depends on another lane's output, define a Lane Contract before either lane launches. The contract prevents vague handoffs and gives the consumer lane an objective start condition.
+
+```markdown
+### Lane Contract: Lane [producer] → Lane [consumer]
+- **Producer artifact:** [file, diff, decision, data set, command output, or written finding]
+- **Artifact format:** [markdown section, table columns, JSON shape, patch, exact command output, etc.]
+- **Consumer use:** [what the downstream lane does with the artifact]
+- **Producer done when:** [observable criteria that make the artifact ready]
+- **Consumer may start when:** [specific signal or checklist]
+- **Validation link:** [test, review, or synthesis check that proves the handoff worked]
+```
+
+**Contract rule:** Any lane listed in `Blocked by` must have a Lane Contract. If the producer artifact changes shape mid-wave, update the contract in the plan file and post the change to the communication log before the consumer continues.
 
 ---
 
@@ -443,12 +527,14 @@ When using a fleet:
 1. Find the critical path (identify blocker chain)
 2. Split the rest into independent waves
 3. Size the work in the current wave before assigning lanes
-4. Add "Blocked by" column; mark all dependencies
-5. Balance lane sizes and assign non-overlapping ownership
-6. Assign fleet names in launch order
-7. Launch agents in parallel immediately
-8. Track open lanes; prioritize check-ins on critical path
-9. Synthesize all results yourself
+4. Create or update the Context Map when risk is Medium or High
+5. Add "Blocked by" column; mark all dependencies
+6. Define Lane Contracts for every dependent handoff
+7. Balance lane sizes and assign non-overlapping ownership
+8. Assign fleet names in launch order
+9. Launch agents in parallel immediately after pre-flight checks pass
+10. Track open lanes; prioritize check-ins on critical path
+11. Synthesize all results yourself
 
 ### Fleet name map
 
@@ -673,16 +759,20 @@ Map work to the actual agent types available in this environment. Use this as yo
 | Agent type | Tool call | Best for | Avoid for |
 |------------|-----------|----------|-----------|
 | **explore** | `agent_type: "explore"` | Codebase research, symbol lookup, parallel independent investigations, cross-cutting scans | Final decisions, implementation |
+| **research** | `agent_type: "research"` | External documentation, package behavior, security advisories, and web research with citations | Repo edits, command execution |
 | **task** | `agent_type: "task"` | Builds, tests, linters, installs, commands where you only need pass/fail | Complex reasoning, architecture decisions |
 | **general-purpose** | `agent_type: "general-purpose"` | Multi-step implementation, architecture-sensitive edits, complex logic | Quick lookups (overhead too high) |
-| **rubber-duck** | `agent_type: "rubber-duck"` | Plan critique before Wave 1 launches, implementation review mid-wave, catching blind spots | Execution — rubber-duck never modifies files |
+| **Rubber Duck Reviewer** | Role implemented by launching `agent_type: "general-purpose"` with an explicit non-editing duck prompt | Plan critique before Wave 1 launches, implementation review mid-wave, completion presentation review, catching blind spots | Execution, file edits, final authority — duck never modifies files |
 | **code-review** | `agent_type: "code-review"` | Reviewing staged/unstaged changes before commit; surfacing real bugs, not style | Execution — code-review never modifies files |
 | **Autonomous Fleet Agent** | `agent_type: "Autonomous Fleet Agent"` | Orchestration and coordination across a multi-agent fleet | Single-file solo work |
 
 **Assignment rules:**
 
 - Match work to the agent type built for it — don't send implementation work to an `explore` agent
-- Use `rubber-duck` proactively, not reactively — call it before implementing, not after failing
+- Use the Rubber Duck Reviewer proactively, not reactively — call it before implementing, not after failing
+- Treat Rubber Duck Reviewer as a role, not a standalone task tool type
+- Do not call `agent_type: "rubber-duck"`; launch a `general-purpose` agent with the duck prompt and explicit "do not edit files" scope
+- Assign the Duck Review lane the next deterministic fleet name from the Fleet name map after execution lanes are assigned
 - Use `code-review` before every non-trivial commit — it only surfaces issues that genuinely matter
 - `explore` agents are cheap and fast — launch multiple in parallel for research phases
 - `general-purpose` agents are expensive and powerful — reserve for complex implementation lanes
@@ -693,11 +783,49 @@ Map work to the actual agent types available in this environment. Use this as yo
 
 Use the Agent Registry above to select the right agent type. The rules below govern which agent type to prefer when multiple could work.
 
-- Prefer **`explore`** for broad discovery, not final decisions — fast and parallelizable
+- Prefer **`explore`** for broad repo discovery, not final decisions — fast and parallelizable
+- Prefer **`research`** for external documentation, package behavior, advisories, or web-backed findings
 - Prefer **`general-purpose`** for correctness-critical or architecture-sensitive work
 - Prefer **`task`** for command-heavy execution where success/failure is all that matters
-- Prefer **`rubber-duck`** for high-leverage critique moments: before Wave 1, after a complex implementation, after writing tests
+- Prefer **Rubber Duck Reviewer** for high-leverage critique moments: before Wave 1, after a complex implementation, after writing tests
 - Prefer **`code-review`** over manual review for any staged changes on Medium or High risk tasks
+
+---
+
+## Specialist Lane Routing
+
+Specialist lanes are focus areas assigned through the existing agent types above. Do not invent new task tool types; express the specialty in the lane role, prompt, scope, and done-when criteria.
+
+| Trigger | Preferred routing | What the lane must check |
+|---------|-------------------|--------------------------|
+| UI or accessibility changes | `general-purpose` implementation lane with UI/accessibility role; `explore` lane for pattern discovery when needed | Keyboard flow, semantic structure, labels, focus behavior, responsive states, and visible error messaging |
+| Security-sensitive work | `explore` or `research` for threat and pattern review; `general-purpose` for fixes; `code-review` before commit | Auth boundaries, permissions, secret handling, injection risk, unsafe logging, and least-privilege behavior |
+| Performance or runtime concerns | `explore` for hotspots; `task` for benchmarks or profiling commands; `general-purpose` for targeted fixes | Runtime cost, memory pressure, repeated work, timeout behavior, and measurable before/after evidence where available |
+| Browser or user-flow changes | `general-purpose` for implementation; `task` for browser/user-flow checks when commands exist | Main flow, back/refresh behavior, loading and empty states, error recovery, and cross-step state consistency |
+| Bug fixes | `explore` for reproduction and root cause; `general-purpose` for the fix; `task` for regression tests; `code-review` for non-trivial diffs | Reproduction, root cause, minimal fix, regression coverage, and no unrelated behavior change |
+
+**Routing rule:** Add a specialist check to the Validation Matrix whenever one of these triggers applies. If no runnable tool exists for a specialist check, document the manual review performed and its limits.
+
+---
+
+## Validation Matrix
+
+Every task that uses multiple lanes, has blocked or dependent lanes, touches multiple files or modules, or is classified as Medium or High risk needs a Validation Matrix in the plan file before implementation lanes launch. Low risk solo tasks may mark the matrix `N/A` with a reason. The matrix defines what must be proven, which lane owns the proof, and which evidence closes the check.
+
+| Check type | Required when | Evidence to capture |
+|------------|---------------|---------------------|
+| Happy path | Always | The expected primary flow or command succeeds |
+| Boundary | Inputs, states, file sets, sizes, or limits can vary | Smallest, largest, empty, partial, or edge state behaves correctly |
+| Negative/error | Invalid input, missing resources, failed commands, or rejected permissions are possible | Failure is safe, understandable, and does not corrupt state |
+| Concurrency/idempotency | Work can be retried, re-run, parallelized, or resumed | A second run is safe, duplicate work is avoided, and shared state remains consistent |
+| Specialist | A Specialist Lane Routing trigger applies | The relevant UI/accessibility, security, performance, browser-flow, or bug-fix review is complete |
+
+**Matrix rules:**
+
+- Medium and High risk tasks must include all applicable rows above; mark truly irrelevant rows as `N/A` with a reason.
+- A `task` lane should own runnable builds, tests, linters, benchmarks, or scripted checks when those commands already exist.
+- A Rubber Duck Reviewer can challenge missing validation but does not replace evidence from tests, commands, or documented manual checks.
+- The final `code-review` gate checks the diff for real defects; it does not replace the Validation Matrix.
 
 ---
 
@@ -705,16 +833,54 @@ Use the Agent Registry above to select the right agent type. The rules below gov
 
 Quality gates are standard fleet steps for any task classified as Medium or High risk. They are not optional.
 
-### Gate 1 — Plan Review (rubber-duck, before Wave 1 launches)
+### Review scope modes
 
-Before launching the first implementation wave, run a `rubber-duck` agent on the plan:
+Use the smallest review scope that catches the current risk. These modes clarify what the Rubber Duck and `code-review` gates are expected to catch.
+
+| Mode | When to use | Primary reviewer | Catches |
+|------|-------------|------------------|---------|
+| Plan | Before Wave 1 or after major re-plan | Rubber Duck Reviewer | Wrong approach, missing lanes, weak Context Map, missing Validation Matrix rows, and over-engineering |
+| Task | While one lane is stuck or choosing between approaches | Rubber Duck Reviewer | Assumptions, local edge cases, simpler alternatives, and missing done-when criteria |
+| Wave | Before closing a Medium or High risk implementation wave | Rubber Duck Reviewer | Cross-lane gaps, incomplete Lane Contracts, missed validation, and unresolved warnings |
+| Final | Before commit or final delivery | `code-review` for diffs; orchestrator for synthesis | Real defects in changed code, unresolved quality gates, incomplete docs, and final user-request mismatch |
+
+**Relationship rule:** Rubber Duck reviews are advisory critique for plans, tasks, and waves. `code-review` remains the final diff-level bug gate and never replaces plan, wave, or validation review.
+
+### Gate 1 — Plan Review (Rubber Duck Reviewer, before Wave 1 launches)
+
+Before launching the first implementation wave, run a Rubber Duck Review pass on the plan:
 
 - Provide: the plan file, the user request, the proposed wave structure
+- Also provide: Context Map, Lane Contracts, and Validation Matrix when the task uses them
 - Ask for: design flaws, blind spots, missing edge cases, over-engineered choices
 - Action: adopt findings that prevent bugs; briefly justify findings you set aside
+- Tooling: launch `agent_type: "general-purpose"` with the Rubber Duck Review prompt and no file-editing authority
 - **Do not skip** for Medium or High risk tasks
 
-### Gate 2 — Code Review (code-review, before final commit)
+### Gate 2 — Completion Presentation Review (Rubber Duck Reviewer, before synthesis)
+
+Before synthesis closes any Medium or High risk wave, run a Rubber Duck Review pass on each completed implementation lane:
+
+- Provide: lane output, files touched or inspected, behavior changed, Validation Matrix evidence, known risks, and done-when status
+- Also provide: Lane Contract status when the lane produces or consumes another lane's artifact
+- Ask for: missing edge cases, unresolved assumptions, over-engineering, incomplete validation, and next-wave improvements
+- Action: resolve blocking findings before synthesis; track warnings and suggestions in the plan file
+- Tooling: launch `agent_type: "general-purpose"` with the completion presentation prompt and no file-editing authority
+- **Do not skip** for Medium or High risk implementation lanes
+
+### Optional Simplification Pass (after Medium or High risk implementation waves)
+
+After a Medium or High risk implementation wave, the orchestrator may run one focused Simplification Pass before Gate 3 when the solution looks more complex than the problem requires. Use an existing `general-purpose` lane with a narrow refactor prompt, or keep it solo if the surface is small.
+
+**Rules:**
+
+- Preserve behavior exactly; this pass removes unnecessary complexity only.
+- Do not add features, broaden scope, rename public concepts, or change user-visible behavior.
+- Keep the pass small enough to validate with the existing Validation Matrix.
+- Run the same relevant checks before and after the pass when feasible.
+- If simplification would require a design change, stop and move it to a future wave instead.
+
+### Gate 3 — Code Review (code-review, before final commit)
 
 Before the final commit on any Medium or High risk task, run a `code-review` agent on staged changes:
 
@@ -725,13 +891,101 @@ Before the final commit on any Medium or High risk task, run a `code-review` age
 
 ### Gate summary
 
-| Risk tier | Gate 1 (rubber-duck on plan) | Gate 2 (code-review before commit) |
-|-----------|------------------------------|--------------------------------------|
-| Low | Optional | Optional |
-| Medium | **Required** | **Required** |
-| High | **Required** | **Required** |
+| Risk tier | Gate 1 (plan duck review) | Gate 2 (completion duck review) | Gate 3 (code-review before commit) |
+|-----------|----------------------------|----------------------------------|------------------------------------|
+| Low | Optional | Optional | Optional |
+| Medium | **Required** | **Required for implementation lanes** | **Required** |
+| High | **Required** | **Required for implementation lanes** | **Required** |
 
 **Rule:** If you skip a required gate, log it in the wave summary with a reason. Do not skip silently.
+
+---
+
+## Rubber Duck Review Loop
+
+The Rubber Duck Reviewer is a non-editing critique role. It helps agents reason through ideas and catches blind spots before they become defects, but it does not implement, approve side effects, or replace orchestrator judgment.
+
+**Authority boundaries:**
+
+- The duck is advisory only.
+- The duck never edits files, runs implementation commands, commits, pushes, approves side effects, or owns final synthesis.
+- The orchestrator decides whether duck feedback is accepted, deferred, rejected, or escalated.
+- The orchestrator records decisions about duck feedback in the plan file when the feedback affects scope, risk, or next-wave work.
+- `code-review` remains responsible for diff-level bug review before commit; the duck focuses on assumptions, approach, edge cases, and handoff quality.
+
+**When to use the duck:**
+
+1. **Pre-wave plan critique** — required for Medium and High risk tasks before Wave 1.
+2. **Idea ducking** — optional when an implementation agent is choosing between plausible approaches or is stuck.
+3. **Completion presentation review** — required for Medium and High risk implementation lanes before the orchestrator closes the wave.
+
+**Custom agent option:** If the runtime later exposes a dedicated `.github/agents/rubber-duck-reviewer.agent.md`, update this registry and prompts in the same change. Until then, Rubber Duck Reviewer is a role implemented with a `general-purpose` review lane and an explicit non-editing prompt.
+
+**Duck review output format:**
+
+```markdown
+### Duck Review
+- **Verdict:** pass | needs-changes | blocking
+- **What works:** [1-3 bullets]
+- **Findings:**
+  - **blocking:** [must fix before lane closes]
+  - **warning:** [risk to consider or mitigate]
+  - **suggestion:** [optional improvement or next-wave candidate]
+- **Questions:** [one focused question if needed]
+- **Confidence:** high | medium | low
+```
+
+**Duck review rules:**
+
+- Ask one focused question at a time when a question is required.
+- Surface the strongest risk first.
+- Include at least one `What works` note, even when blocking issues exist.
+- Offer a simpler alternative or mitigation for each critique.
+- Classify feedback as `blocking`, `warning`, or `suggestion`; do not leave vague concerns.
+- If there are no concerns, return `Verdict: pass` and state why.
+
+**Idea ducking prompt shape:**
+
+```text
+You are the Rubber Duck Reviewer for Lane [N] ([Fleet Name]).
+
+Review this proposed approach without editing files.
+
+Context:
+- User request:
+- Plan file:
+- Lane scope:
+- Constraints:
+
+Agent's current thinking:
+- Intended approach:
+- Alternatives considered:
+- Assumptions:
+- Known risks:
+
+Respond using the Duck Review output format. Challenge assumptions, edge cases,
+over-engineering, and missing validation. Do not implement.
+```
+
+**Completion presentation prompt shape:**
+
+```text
+You are the Rubber Duck Reviewer for Lane [N] ([Fleet Name]).
+
+Review this completed lane before orchestrator synthesis. Do not edit files.
+
+Agent presentation:
+- Scope completed:
+- Files touched or inspected:
+- Behavior changed:
+- Validation run:
+- Duck feedback already applied:
+- Known risks or caveats:
+- Done-when status:
+
+Respond using the Duck Review output format. Mark anything that must be fixed
+before lane close as blocking. Mark useful follow-up work as suggestion.
+```
 
 ---
 
@@ -744,8 +998,10 @@ For each sub-agent, provide:
 3. wave assignment and t-shirt size
 4. exact scope and boundaries
 5. expected deliverable
-6. done-when criteria
-7. communication requirement
+6. relevant Context Map entries for Medium or High risk work
+7. Lane Contract details when the lane produces or consumes another lane's artifact
+8. done-when criteria
+9. communication requirement
 
 Use prompts in this shape:
 
@@ -756,6 +1012,8 @@ Context:
 - Repo/path:
 - Relevant files:
 - Constraints:
+- Context Map: [primary files, secondary files, validation, patterns, sequence]
+- Validation Matrix: [happy path, boundary, negative/error, concurrency/idempotency, specialist checks]
 
 Wave:
 - Wave number:
@@ -767,6 +1025,7 @@ Wave:
 Scope:
 - Own:
 - Do NOT touch:
+- Lane Contract: [producer/consumer artifact, format, done-when, start condition]
 
 Task:
 - ...
@@ -868,6 +1127,9 @@ Before launching any wave, confirm readiness:
 ✅ First checkpoint in [Xm]
 ✅ All lane owners have clear scope and boundaries
 ✅ Blocking dependencies documented in wave table
+✅ Validation Matrix complete or marked N/A with reason
+✅ Context Map complete (required for Medium or High risk)
+✅ Lane Contracts complete for all blocked or dependent lanes
 ```
 
 **Do not launch until:**
@@ -877,6 +1139,9 @@ Before launching any wave, confirm readiness:
 - Fleet names assigned in deterministic order
 - Communication log ready to receive updates
 - Docs affected by this wave's changes are identified
+- Validation Matrix has an owner and evidence target for each applicable row, or is marked `N/A` with a reason
+- Context Map is complete for Medium or High risk work
+- Every `Blocked by` relationship has a Lane Contract with artifact format and done-when criteria
 
 ---
 
@@ -913,7 +1178,25 @@ Require sub-agents to return results in a normalized format:
 3. Files touched or inspected
 4. Risks or caveats
 5. Blockers
-6. Done-when status
+6. Context Map updates or deviations
+7. Validation Matrix evidence or N/A rationale for assigned checks
+8. Lane Contract status:
+   - `not-applicable` with reason
+   - `produced` with artifact location and format
+   - `consumed` with source lane and validation result
+   - `changed` with communication log entry reference
+9. Done-when status
+10. Duck consultation status:
+   - `not-needed` with reason for Low risk/simple lanes
+   - `requested` with current blocker/question
+   - `completed` with verdict and feedback disposition
+
+When duck feedback exists, include:
+
+- Feedback accepted and applied
+- Feedback deferred to a later wave
+- Feedback rejected with rationale
+- Any blocking duck findings still unresolved
 
 ---
 
@@ -926,15 +1209,24 @@ Synthesis is the final critical step. Start when all lanes complete; finish with
 - All lanes report ✅ `Deliverable complete`
 - All communication log entries posted
 - All blockers documented and unblocked
+- Context Map updates or deviations are captured
+- Validation Matrix evidence is complete or marked N/A with reasons
+- Lane Contracts are fulfilled for all dependent lanes
+- All required duck reviews are complete or explicitly marked not applicable
+- All blocking duck findings are resolved or escalated
 
 **Synthesis checklist:**
 
 1. Collect all sub-agent outputs from communication log
 2. Check for conflicts using code/logs/direct output (prefer over guesses)
-3. Resolve conflicts and fill validation gaps
-4. Verify integrated result matches user request
-5. If agents disagree, prefer empirical output; re-run targeted follow-up when needed
-6. Deliver one coherent outcome
+3. Compare touched and inspected files against the Context Map; resolve missed primary files or documented secondary-file gaps
+4. Verify the Validation Matrix covers happy path, boundary, negative/error, concurrency/idempotency, and specialist checks where applicable
+5. Verify every Lane Contract artifact was produced, consumed, and validated in the agreed format
+6. Resolve conflicts and fill validation gaps
+7. Verify integrated result matches user request
+8. Review duck feedback decisions; confirm accepted feedback was applied and deferred feedback is tracked
+9. If agents disagree, prefer empirical output; re-run targeted follow-up when needed
+10. Deliver one coherent outcome
 
 ---
 
@@ -965,12 +1257,34 @@ For multi-agent tasks, maintain a shared progress document that all agents can r
 - Wave 1: [description] — status
 - Wave 2: [description] — status
 
+## Context Map
+- Primary files:
+- Secondary files:
+- Tests and validation:
+- Existing patterns:
+- Change sequence:
+
 ## Agent Lanes
 - Han 😉🚀: [scope] — status
 - Yoda 👽✨: [scope] — status
 
+## Validation Matrix
+| Check type | Owner | Evidence | Status |
+|------------|-------|----------|--------|
+| Happy path | | | |
+| Boundary | | | |
+| Negative/error | | | |
+| Concurrency/idempotency | | | |
+| Specialist | | | |
+
+## Lane Contracts
+- Lane [producer] → Lane [consumer]: [artifact, format, done-when]
+
 ## Findings
 - [Agent]: [finding]
+
+## Duck Reviews
+- [Lane/Fleet]: [verdict] — [accepted/deferred/rejected feedback summary]
 
 ## Decisions
 - [Decision]: [rationale]
@@ -1011,6 +1325,11 @@ After each wave completes, capture learning to improve the next wave. Add to pla
 ### What to improve for Wave N+1
 - Scope creep cost 8m; enforce pre-flight scope lock
 
+### Duck findings
+- Blocking: [resolved items or none]
+- Warnings: [accepted/deferred/rejected with rationale]
+- Suggestions: [candidate next-wave improvements]
+
 ### Doc sync status
 - [ ] README / docs updated for any behavior changes this wave
 - [ ] Inline comments updated for changed logic
@@ -1032,6 +1351,7 @@ At the end of every wave retrospective, propose improvements for the next wave.
 ### Issues from Wave N
 - Issue 1: [what failed or was inefficient]
 - Issue 2: [pattern observed]
+- Duck warning: [accepted warning that should influence the next wave]
 
 ### Proposed changes
 Prioritize with: Score = (Impact × Urgency) - Effort - Risk
@@ -1048,6 +1368,22 @@ Prioritize with: Score = (Impact × Urgency) - Effort - Risk
 
 ---
 
+## Docs-heavy change checklist
+
+For documentation-heavy waves, run this markdown accessibility checklist before synthesis. Keep the checklist lightweight, but do not skip it when markdown is the main deliverable.
+
+```
+☐ Links are descriptive; avoid vague text such as "click here" or bare URLs when prose can explain the target
+☐ Headings are logical, sentence case, and do not skip levels for visual styling
+☐ Lists use proper markdown bullets or numbers and are not simulated with punctuation or manual spacing
+☐ Language is plain, active, and direct; define necessary jargon near first use
+☐ Emoji use is restrained and does not carry meaning that text omits
+☐ Tables have clear headers and concise cell text
+☐ Code fences include a language when helpful, and commands are copyable
+```
+
+---
+
 ## Task-Level Definition of Done
 
 A fleet task is not complete until **all** of the following are true. Check each item before sending the final ✅ recap.
@@ -1055,6 +1391,10 @@ A fleet task is not complete until **all** of the following are true. Check each
 ```
 ☐ All wave todos resolved (no 'pending' or 'in_progress' items)
 ☐ All agent lanes reported ✅ Deliverable complete
+☐ Required duck reviews complete and blocking duck findings resolved
+☐ Context Map complete or updated with any Medium or High risk deviations
+☐ Validation Matrix complete — happy path, boundary, negative/error, concurrency/idempotency, and specialist checks covered or marked N/A
+☐ Lane Contracts fulfilled for all dependent lanes
 ☐ Synthesis complete — integrated result verified against user request
 ☐ Tests passing (or pre-existing failures documented)
 ☐ Doc sync confirmed — README/docs/comments updated in same commit
@@ -1069,7 +1409,7 @@ A fleet task is not complete until **all** of the following are true. Check each
 
 ---
 
-**Version:** 5.19
-**Last Updated:** May 15, 2026
+**Version:** 5.21
+**Last Updated:** May 19, 2026
 **Best For:** Fleet-first execution, multi-agent orchestration, wave-based delivery.
 Load `.github/copilot-instructions.md` first; this file extends those rules for fleet work.
