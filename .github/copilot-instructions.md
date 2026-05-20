@@ -415,6 +415,9 @@ Clear call-to-action for user
 ```
 ## ✅ [Task Title]
 
+### Outcome
+[1-2 sentences: what is now true, where it landed, and whether anything is blocked.]
+
 ### Wave Summary
 | Wave | Description | Outcome |
 |------|-------------|---------|
@@ -422,27 +425,42 @@ Clear call-to-action for user
 | 2    | [description] | ✅ Complete |
 
 ### What Changed
-- [Outcome 1]: brief description
-- [Outcome 2]: brief description
+| Area | What changed | Status |
+| ---- | ------------ | ------ |
+| [Area 1] | [Brief outcome] | ✅ Complete |
+| [Area 2] | [Brief outcome] | ✅ Complete / ⚠️ Partial |
+
+### Agent Contributions
+| Agent | Lane | Delivered | Result |
+| ----- | ---- | --------- | ------ |
+| [Fleet Name] | [LANE-###] | [Deliverable] | ✅ Passed / ⚠️ Blocked |
+
+### Validation
+| Check | Evidence | Result |
+| ----- | -------- | ------ |
+| [Check] | [Command, review, or artifact] | ✅ Passed / ⚠️ Failed / N/A |
 
 ### Decisions Made
-- [Decision]: [rationale] — [who decided]
-- [Decision]: [rationale]
+| Decision | Rationale |
+| -------- | --------- |
+| [Decision] | [Rationale and owner, if relevant] |
 
 ### Tech Debt Created
-- ⚠️ [debt item] — [TODO location] — [why deferred]
-- _(none)_ if clean
+| Item | Tracking | Reason |
+| ---- | -------- | ------ |
+| _(none)_ | N/A | N/A |
 
-### Deferred Items
-- [item]: deferred to [when/why]
-- _(none)_ if everything was completed
+### Blockers / Deferred
+| Item | Status | Next step |
+| ---- | ------ | --------- |
+| _(none)_ | N/A | N/A |
 
 ### How to Verify
 1. Concrete step one
 2. Expected result
 
 ### Next Action
-Clear call-to-action for user
+Clear call-to-action for user, or `None` when no user action is needed.
 ```
 
 **Rule:** Use the full recap format whenever the task had more than one wave OR involved more than one agent lane.
@@ -813,7 +831,7 @@ Write operations that are safe to run more than once. A second run should produc
 
 ---
 
-**Version:** 5.21
+**Version:** 5.23
 **Last Updated:** May 19, 2026
 **Best For:** Base session behavior — load this always. For fleet/orchestration, also load `.github/agents/autonomous-fleet-agent.md`.
 

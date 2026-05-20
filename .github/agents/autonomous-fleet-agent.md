@@ -76,6 +76,7 @@ Every plan should capture:
 6. handoff notes if a lane stalls or an agent is replaced
 7. the Context Map for Medium or High risk work
 8. Lane Contracts for lanes that produce artifacts another lane consumes
+9. deterministic IDs for requirements, assumptions, lanes, validation checks, risks, and ADR decisions when the work is Medium or High risk
 
 The plan exists so another agent can resume quickly after a crash, interruption, or handoff.
 
@@ -297,6 +298,27 @@ For Medium or High risk work, create a Context Map in the plan file before the f
 
 **Context Map gate:** Do not launch Medium or High risk implementation lanes until the Context Map identifies the primary files, secondary files, tests or validation, relevant patterns, and intended change sequence. Update the map when Wave 0 research changes the plan.
 
+### Deterministic planning IDs
+
+Medium and High risk fleet plans must use stable IDs so requirements, assumptions, lanes, validation evidence, and decisions can be referenced without ambiguity.
+
+| Prefix | Use for | Example |
+|--------|---------|---------|
+| `REQ-###` | User requirements and acceptance criteria | `REQ-001: Preserve existing CLI behavior` |
+| `ASM-###` | Explicit assumptions used to proceed | `ASM-001: Existing test command remains authoritative` |
+| `LANE-###` | Agent lane identifiers | `LANE-002: QA sign-off lane` |
+| `VAL-###` | Validation Matrix checks and evidence rows | `VAL-003: negative/error path` |
+| `EVD-###` | Evidence Ledger entries not tied to one validation check | `EVD-001: vendor API version source` |
+| `RISK-###` | Known risks and mitigations | `RISK-001: shared instruction drift` |
+| `ADR-###` | Architecture decision records or N/A rationale | `ADR-001: no ADR needed; docs-only gate update` |
+
+**ID rules:**
+
+- IDs are local to the plan unless an ADR file is created.
+- Do not renumber IDs after they appear in a lane prompt, evidence ledger, or decision log.
+- Low risk solo work may skip IDs with a one-line `N/A` reason.
+- If a requirement or assumption changes mid-wave, add a new ID and mark the old one superseded; do not rewrite history silently.
+
 **Sizing scale:**
 
 - **S**: quick lookup, narrow audit, or a single focused edit
@@ -450,7 +472,7 @@ The orchestrator must keep the user informed at key moments. These are user-faci
 | Before Wave 1 launches | Wave plan summary (wave table + fleet names) |
 | After each wave completes | ✅ brief bulleted outcome — what was done, any decisions made |
 | When escalation is needed | ⚠️ escalation block (see Orchestrator Decision Authority) |
-| At task completion | Final ✅ summary (see Task Completion Format in `copilot-instructions.md`) |
+| At task completion | Final ✅ outcome dashboard with tables for completed work, agent contributions, validation, decisions, blockers/deferred items, and next action |
 
 **Wave launch update format:**
 
@@ -477,6 +499,55 @@ Next: Wave [N+1] — [one-line description]
 - Never send per-agent or per-file updates to the user; those belong in the communication log
 - One update per wave boundary (launch + complete), plus escalations
 - If a wave has a blocker that the user must resolve, surface it immediately — don't wait for the wave to end
+- When listing active or background agents for the user, use a markdown table by default so status is easy to scan.
+
+**Background agent status format:**
+
+```markdown
+| Agent | Lane | Current work | Status | Blocker / next step |
+| ----- | ---- | ------------ | ------ | ------------------- |
+| Han 😉🚀 | LANE-001 | Audit shared docs | Running | Next checkpoint in 5m |
+| Yoda 👽✨ | LANE-002 | Validate prompt changes | Complete | Findings ready for synthesis |
+```
+
+**Fleet completion dashboard format:**
+
+Use this dashboard for multi-agent or multi-wave completion summaries. Keep it outcome-first and table-driven so the user can quickly see what changed, who contributed, how it was verified, and what remains blocked.
+
+```markdown
+## ✅ [Task Complete]: [Outcome]
+
+### Outcome
+[1-2 sentences: what is now true, where it landed, and whether anything is blocked.]
+
+### Work Completed
+| Area | What changed | Status |
+| ---- | ------------ | ------ |
+| [Area] | [Outcome] | ✅ Complete |
+
+### Agent Contributions
+| Agent | Lane | Delivered | Result |
+| ----- | ---- | --------- | ------ |
+| [Fleet Name] | [LANE-###] | [Deliverable] | ✅ Passed |
+
+### Validation
+| Check | Evidence | Result |
+| ----- | -------- | ------ |
+| [Check] | [Command, review, or artifact] | ✅ Passed |
+
+### Decisions
+| Decision | Rationale |
+| -------- | --------- |
+| [Decision] | [Why this was chosen] |
+
+### Blockers / Deferred
+| Item | Status | Next step |
+| ---- | ------ | --------- |
+| _(none)_ | N/A | N/A |
+
+### Next Action
+[Only include a user action when one is required; otherwise say `None`.]
+```
 
 ---
 
@@ -803,8 +874,36 @@ Specialist lanes are focus areas assigned through the existing agent types above
 | Performance or runtime concerns | `explore` for hotspots; `task` for benchmarks or profiling commands; `general-purpose` for targeted fixes | Runtime cost, memory pressure, repeated work, timeout behavior, and measurable before/after evidence where available |
 | Browser or user-flow changes | `general-purpose` for implementation; `task` for browser/user-flow checks when commands exist | Main flow, back/refresh behavior, loading and empty states, error recovery, and cross-step state consistency |
 | Bug fixes | `explore` for reproduction and root cause; `general-purpose` for the fix; `task` for regression tests; `code-review` for non-trivial diffs | Reproduction, root cause, minimal fix, regression coverage, and no unrelated behavior change |
+| User-facing Medium or High risk changes | QA sign-off lane using `task` for runnable checks or `general-purpose` with a non-editing QA prompt | Happy path, error states, edge cases, obvious performance symptoms, accessibility basics, and bug reports with evidence |
 
 **Routing rule:** Add a specialist check to the Validation Matrix whenever one of these triggers applies. If no runnable tool exists for a specialist check, document the manual review performed and its limits.
+
+### QA sign-off lane
+
+QA sign-off lanes test and report; they do not fix implementation code. Use them when user-facing behavior, release readiness, or regression risk matters enough that the implementer should not be the only verifier.
+
+**QA lane rules:**
+
+- QA may run tests, builds, browser checks, or manual verification steps already within task scope.
+- QA may edit test files only when the lane is explicitly assigned test-authoring scope.
+- QA must not fix application behavior directly; return a bug report or sign-off disposition instead.
+- QA sign-off does not replace `code-review`; it provides behavior evidence for the Validation Matrix.
+
+**QA output format:**
+
+```markdown
+### QA Sign-off
+- **Verdict:** pass | fail | blocked
+- **Checks run:** [commands or manual checks]
+- **Coverage:** [happy path, error states, edge cases, accessibility, performance symptoms]
+- **Bugs found:**
+  - **severity:** blocker | major | minor
+  - **repro:** [steps]
+  - **expected:** [expected result]
+  - **actual:** [actual result]
+  - **evidence:** [log, screenshot path, command output, or file reference]
+- **Sign-off notes:** [limits or caveats]
+```
 
 ---
 
@@ -827,11 +926,43 @@ Every task that uses multiple lanes, has blocked or dependent lanes, touches mul
 - A Rubber Duck Reviewer can challenge missing validation but does not replace evidence from tests, commands, or documented manual checks.
 - The final `code-review` gate checks the diff for real defects; it does not replace the Validation Matrix.
 
+### Evidence ledger
+
+Use an Evidence Ledger when the plan relies on external documentation, package behavior, platform limits, benchmark numbers, security or compliance claims, compatibility claims, or manual verification.
+
+| Evidence ID | Supports | Source or command | Owner | Result | Limits |
+|-------------|----------|-------------------|-------|--------|--------|
+| `VAL-001` or `EVD-001` | `REQ-001` | `[command, file, URL, or review note]` | `[lane]` | pass/fail/unknown | `[what this does not prove]` |
+
+**Evidence rules:**
+
+- Capture evidence for claims that affect implementation decisions or user-facing behavior.
+- Prefer official docs, repository files, tests, commands, or direct tool output over memory.
+- Mark unverifiable claims as `unknown` or `blocked`; do not treat plausible claims as verified.
+- Keep the Validation Matrix as the list of required checks; use the Evidence Ledger as the source index that proves or limits those checks.
+
 ---
 
 ## Quality Gates
 
 Quality gates are standard fleet steps for any task classified as Medium or High risk. They are not optional.
+
+### Governance review trigger
+
+Governance review is required for High risk fleet work and for changes that affect agent instructions, tool permissions, credentials, automation policy, side-effect rules, or cross-agent authority. Governance review is about authority and safety boundaries; it is not a substitute for Rubber Duck critique, QA sign-off, or `code-review`.
+
+**Governance checklist:**
+
+```markdown
+☐ Lane trust boundaries are explicit
+☐ Allowed and disallowed side effects are documented per lane
+☐ Ambiguous high-impact actions fail closed and escalate to the user
+☐ Required human approval gates are preserved
+☐ Audit notes for overrides, skipped gates, and escalations are append-only
+☐ No lane can override orchestrator or user approval rules
+```
+
+If governance review blocks the task, stop the affected lane and resolve the authority issue before implementation continues.
 
 ### Review scope modes
 
@@ -880,6 +1011,36 @@ After a Medium or High risk implementation wave, the orchestrator may run one fo
 - Run the same relevant checks before and after the pass when feasible.
 - If simplification would require a design change, stop and move it to a future wave instead.
 
+### Prompt and instruction validation loop
+
+When a task changes `.github/copilot-instructions.md`, `.github/agents/autonomous-fleet-agent.md`, skills, reusable prompts, or other agent-facing instructions, add a prompt-validation lane before final review.
+
+**Prompt-validation checklist:**
+
+```markdown
+☐ Role boundaries are clear and do not conflict with existing instructions
+☐ Tool names and agent types are supported by the current runtime
+☐ Required output formats are deterministic enough for another agent to follow
+☐ Approval gates, secret handling, and dirty-worktree rules remain intact
+☐ Failure and blocked states are explicit
+☐ At least one representative scenario was checked against the revised instruction
+```
+
+Iterate up to three focused validation cycles. If ambiguity remains after that, record the residual risk and escalate instead of adding more instructions.
+
+### Quality Playbook escalation mode
+
+For release-critical, security-sensitive, migration-heavy, or defect-heavy work, the orchestrator may escalate to a Quality Playbook wave. Split quality work into separate lanes when the surface is large enough:
+
+1. explore the risk surface
+2. generate or identify validation cases
+3. review implementation and contracts
+4. audit security, reliability, and edge cases
+5. reconcile findings against scope
+6. verify fixes and evidence
+
+Use this mode only when ordinary Validation Matrix, QA sign-off, Rubber Duck, and `code-review` gates are insufficient for the risk level.
+
 ### Gate 3 — Code Review (code-review, before final commit)
 
 Before the final commit on any Medium or High risk task, run a `code-review` agent on staged changes:
@@ -891,11 +1052,11 @@ Before the final commit on any Medium or High risk task, run a `code-review` age
 
 ### Gate summary
 
-| Risk tier | Gate 1 (plan duck review) | Gate 2 (completion duck review) | Gate 3 (code-review before commit) |
-|-----------|----------------------------|----------------------------------|------------------------------------|
-| Low | Optional | Optional | Optional |
-| Medium | **Required** | **Required for implementation lanes** | **Required** |
-| High | **Required** | **Required for implementation lanes** | **Required** |
+| Risk tier | Governance | Gate 1 (plan duck review) | Gate 2 (completion duck review) | QA sign-off | Prompt validation | Evidence / ADR | Gate 3 (code-review before commit) |
+|-----------|------------|----------------------------|----------------------------------|-------------|-------------------|----------------|------------------------------------|
+| Low | Triggered only | Optional | Optional | Triggered only | Triggered only | Triggered only | Optional |
+| Medium | Triggered only | **Required** | **Required for implementation lanes** | Triggered for user-facing behavior | Triggered for instruction changes | Triggered by claims or architecture decisions | **Required** |
+| High | **Required** | **Required** | **Required for implementation lanes** | Triggered for user-facing behavior | Triggered for instruction changes | Triggered by claims or architecture decisions | **Required** |
 
 **Rule:** If you skip a required gate, log it in the wave summary with a reason. Do not skip silently.
 
@@ -1001,7 +1162,8 @@ For each sub-agent, provide:
 6. relevant Context Map entries for Medium or High risk work
 7. Lane Contract details when the lane produces or consumes another lane's artifact
 8. done-when criteria
-9. communication requirement
+9. deterministic IDs for relevant requirements, assumptions, risks, validation checks, and lane contracts
+10. communication requirement
 
 Use prompts in this shape:
 
@@ -1014,6 +1176,9 @@ Context:
 - Constraints:
 - Context Map: [primary files, secondary files, validation, patterns, sequence]
 - Validation Matrix: [happy path, boundary, negative/error, concurrency/idempotency, specialist checks]
+- Evidence Ledger: [required evidence IDs or N/A]
+- Requirement IDs: [REQ-###]
+- Assumption IDs: [ASM-### or N/A]
 
 Wave:
 - Wave number:
@@ -1043,6 +1208,25 @@ Done when:
 - ...
 - All updates posted to communication log
 - Deliverable passes handoff contract
+```
+
+### PR comment and review-response mode
+
+When a fleet is responding to PR comments, code-review findings, or Rubber Duck blocking feedback, constrain the response lane to the requested issue.
+
+**Review-response rules:**
+
+- Address only the requested review issue and directly matching instances in the changed scope.
+- Do not perform opportunistic refactors or unrelated cleanup.
+- Add or update tests when the comment changes behavior and relevant test coverage exists.
+- If the reviewer is wrong or the request conflicts with scope, document the rationale instead of forcing a change.
+- Return one disposition per comment or finding.
+
+```markdown
+| Comment or finding ID | Disposition | Files changed or rationale | Validation |
+|-----------------------|-------------|----------------------------|------------|
+| `COMMENT-001` | fixed | `[files]` | `[check/evidence]` |
+| `COMMENT-002` | rejected | `[why]` | `N/A` |
 ```
 
 ---
@@ -1130,6 +1314,10 @@ Before launching any wave, confirm readiness:
 ✅ Validation Matrix complete or marked N/A with reason
 ✅ Context Map complete (required for Medium or High risk)
 ✅ Lane Contracts complete for all blocked or dependent lanes
+✅ Governance review status recorded when triggered
+✅ QA sign-off owner assigned when user-facing Medium or High risk behavior changes
+✅ Evidence Ledger owner assigned when external or unverifiable claims affect the plan
+✅ ADR trigger evaluated for architecture-sensitive work
 ```
 
 **Do not launch until:**
@@ -1142,6 +1330,8 @@ Before launching any wave, confirm readiness:
 - Validation Matrix has an owner and evidence target for each applicable row, or is marked `N/A` with a reason
 - Context Map is complete for Medium or High risk work
 - Every `Blocked by` relationship has a Lane Contract with artifact format and done-when criteria
+- Requirement, assumption, lane, validation, risk, and ADR IDs are assigned when required
+- Prompt-validation and governance-review triggers are evaluated for instruction or automation changes
 
 ---
 
@@ -1167,6 +1357,12 @@ If a lane discovers additional work not in original scope:
 
 If the new information introduces multiple materially different directions, prefer `awaiting-user-input` over picking one by assumption.
 
+### ADR trigger
+
+Create or update an Architectural Decision Record when a fleet decision changes architecture, module boundaries, public APIs, data models, deployment strategy, testing strategy, toolchain, or agent/process authority. If no ADR is needed for Medium or High risk work, record `ADR: N/A` with a one-line rationale in the plan.
+
+ADR decisions should reference the relevant `REQ-###`, `RISK-###`, and `LANE-###` IDs when available. `ADR-###` is a plan-local reference; if an ADR file is created, use the repository's ADR filename convention and link the plan-local ID to that file.
+
 ---
 
 ## Sub-Agent Output Contract
@@ -1187,9 +1383,18 @@ Require sub-agents to return results in a normalized format:
    - `changed` with communication log entry reference
 9. Done-when status
 10. Duck consultation status:
-   - `not-needed` with reason for Low risk/simple lanes
-   - `requested` with current blocker/question
-   - `completed` with verdict and feedback disposition
+    - `not-needed` with reason for Low risk/simple lanes
+    - `requested` with current blocker/question
+    - `completed` with verdict and feedback disposition
+11. Evidence Ledger updates:
+    - evidence IDs produced or consumed
+    - source, command, or file reference
+    - limits or unverifiable claims
+12. QA sign-off status when assigned:
+    - `pass`
+    - `fail` with bug report
+    - `blocked` with exact blocker
+13. Review-response dispositions when addressing comments or findings
 
 When duck feedback exists, include:
 
@@ -1214,6 +1419,7 @@ Synthesis is the final critical step. Start when all lanes complete; finish with
 - Lane Contracts are fulfilled for all dependent lanes
 - All required duck reviews are complete or explicitly marked not applicable
 - All blocking duck findings are resolved or escalated
+- Required governance, QA, prompt-validation, evidence, and ADR-trigger checks are complete or explicitly marked not applicable
 
 **Synthesis checklist:**
 
@@ -1225,8 +1431,10 @@ Synthesis is the final critical step. Start when all lanes complete; finish with
 6. Resolve conflicts and fill validation gaps
 7. Verify integrated result matches user request
 8. Review duck feedback decisions; confirm accepted feedback was applied and deferred feedback is tracked
-9. If agents disagree, prefer empirical output; re-run targeted follow-up when needed
-10. Deliver one coherent outcome
+9. Check Evidence Ledger entries against Validation Matrix rows and mark unverifiable claims
+10. Confirm ADR, governance, QA, prompt-validation, review-response, and onboarding artifact triggers were handled or marked `N/A`
+11. If agents disagree, prefer empirical output; re-run targeted follow-up when needed
+12. Deliver one coherent outcome
 
 ---
 
@@ -1303,6 +1511,12 @@ For multi-agent tasks, maintain a shared progress document that all agents can r
 - **Each agent** appends findings and status to the communication log before returning
 - **Orchestrator** reads all agent updates before synthesis
 
+### Onboarding artifact trigger
+
+When a fleet change introduces a new workflow, architecture path, repository convention, or recurring operational process, decide whether a future agent or human would benefit from an onboarding artifact.
+
+Acceptable artifacts include a short docs section, architecture map, code-tour outline, runbook update, or handoff note. Keep this optional and proportional; do not create onboarding artifacts for small or obvious changes.
+
 ---
 
 ## Wave Retrospective
@@ -1334,6 +1548,7 @@ After each wave completes, capture learning to improve the next wave. Add to pla
 - [ ] README / docs updated for any behavior changes this wave
 - [ ] Inline comments updated for changed logic
 - [ ] Agent instruction files updated if agent behavior changed
+- [ ] Onboarding artifact created or marked N/A for new workflows
 
 ### Decision log
 - ✅ Logged scope additions as blocker type technical
@@ -1392,8 +1607,15 @@ A fleet task is not complete until **all** of the following are true. Check each
 ☐ All wave todos resolved (no 'pending' or 'in_progress' items)
 ☐ All agent lanes reported ✅ Deliverable complete
 ☐ Required duck reviews complete and blocking duck findings resolved
+☐ Required governance review complete or marked N/A with reason
+☐ Required QA sign-off complete or marked N/A with reason
+☐ Required prompt-validation complete or marked N/A with reason
 ☐ Context Map complete or updated with any Medium or High risk deviations
 ☐ Validation Matrix complete — happy path, boundary, negative/error, concurrency/idempotency, and specialist checks covered or marked N/A
+☐ Evidence Ledger complete for claims that require verification
+☐ ADR trigger evaluated and ADR created/updated or marked N/A
+☐ Review-comment dispositions complete when responding to comments or findings
+☐ Onboarding artifact trigger evaluated for new workflows
 ☐ Lane Contracts fulfilled for all dependent lanes
 ☐ Synthesis complete — integrated result verified against user request
 ☐ Tests passing (or pre-existing failures documented)
@@ -1409,7 +1631,7 @@ A fleet task is not complete until **all** of the following are true. Check each
 
 ---
 
-**Version:** 5.21
+**Version:** 5.23
 **Last Updated:** May 19, 2026
 **Best For:** Fleet-first execution, multi-agent orchestration, wave-based delivery.
 Load `.github/copilot-instructions.md` first; this file extends those rules for fleet work.
