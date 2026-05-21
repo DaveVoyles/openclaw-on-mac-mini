@@ -19,7 +19,7 @@
 | If you want to… | Go to |
 |---|---|
 | Expose a new Python function to the LLM | [§1 Add a skill](#1-add-a-skill) + [§4 Tool declaration](#4-tool-declaration-and-routing) |
-| Add a `/slash` command | [§2 Discord command](#2-add-a-discord-command-cog-or-discord_commands-module) |
+| Add a `/slash` command | [§2 Slack slash command](#2-add-a-slack-slash-command) |
 | Wire a new LLM provider or model | [§3 LLM provider](#3-add-an-llm-provider-or-model) |
 | Add a `/api/...` endpoint or dashboard page | [§5 Dashboard / API](#5-add-a-dashboard-surface-or-api-endpoint) |
 | Run something periodically in the background | [§6 Background loop](#6-add-a-background-loop) or [§7 Scheduled job](#7-add-a-scheduled-cron-job) |
@@ -105,61 +105,50 @@ A **skill** is an async Python function the LLM can invoke as a tool. There are 
 
 ---
 
-## 2. Add a Discord command (cog or `discord_commands` module)
+## 2. Add a Slack slash command
 
-Both patterns coexist in the codebase. Pick by stickiness:
+> **Discord was removed in May 2026.** The previous "cog" / `discord_commands` patterns are gone. All user-facing commands now live in `src/slack_bot.py`. Recipe §10 below covers the lighter-weight `/host <subcommand>` pattern; use this section for genuinely new top-level commands.
 
-| Pattern | When to use | Where it lives |
-|---|---|---|
-| **Cog** | Stateful, grouped feature with multiple related commands or its own background work | `src/cogs/*.py` (40 cogs today) |
-| **`discord_commands` module** | Lightweight commands attached to a global registry | `src/discord_commands/<group>.py` (21 modules today) |
+### Recipe
 
-Both are loaded from `src/bot.py` at startup; the `discord_commands` package exposes `register_commands(bot)` (`src/discord_commands/__init__.py:43-67`).
+1. **Define the handler** in `src/slack_bot.py`:
 
-### Cog recipe
+   ```python
+   @app.command("/mything")
+   async def _handle_mything(ack, body, say):
+       await ack()
+       user_id = body.get("user_id", "")
+       if user_id not in _incident_allowed_user_ids():
+           await say(":no_entry: Not authorized.")
+           return
+       text = (body.get("text") or "").strip()
+       try:
+           # ... do work ...
+           await say(f":white_check_mark: Done: {text}")
+       except Exception as exc:
+           log.exception("/mything failed")
+           await say(f":x: {exc}")
+   ```
 
-```python
-# src/cogs/my_cog.py
-from discord import app_commands
-from discord.ext import commands
+2. **Register the command in Slack** by editing the `MANIFEST` constant in `scripts/update_slack_manifest.py` (add a `command`, `description`, `usage_hint`, `should_escape` block under `features.slash_commands`).
 
-from cog_helpers import audit_log, require_auth  # auth + audit shared helpers
-from discord_error import build_error_embed       # uniform error embeds
-from discord_progress import ProgressTracker      # long-running interactions
+3. **Push the manifest** to Slack:
 
-class MyCog(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
+   ```bash
+   make slack-manifest-push    # rotates SLACK_CONFIG_TOKEN automatically
+   make slack-manifest-check   # confirm in-sync
+   ```
 
-    @app_commands.command(name="mything", description="Do my thing")
-    @require_auth                           # gate by ALLOWED_USER_IDS
-    async def mything(self, interaction):
-        await interaction.response.defer()
-        tracker = ProgressTracker()
-        try:
-            await tracker.start(interaction, "Working…", steps=2)
-            # ... do work ...
-            await tracker.update("Finishing…", step=1)
-            # ... do work ...
-            await tracker.done("Done.")
-            audit_log(interaction.user, "/mything", "completed")
-        except Exception as e:
-            embed = build_error_embed(e, context="/mything")
-            await interaction.followup.send(embed=embed, ephemeral=True)
+4. **Write a test** in `tests/test_slack_*.py` mirroring existing patterns.
 
-async def setup(bot):
-    await bot.add_cog(MyCog(bot))
-```
+5. **Deploy:** `cd ~/openclaw && git rev-parse --short HEAD > src/_git_sha.txt && cd ~/docker-stack/openclaw && docker compose up -d --build openclaw`.
 
-The cog is auto-discovered by name — check `src/cogs/__init__.py` for the loader pattern in use (and add a matching entry there if explicit registration is required).
+### Conventions
 
-### Conventions every cog must follow
-
-- **Errors** — `build_error_embed(e, context="/cmd")` from `src/discord_error.py`. Always `ephemeral=True`.
-- **Progress** — `ProgressTracker` from `src/discord_progress.py` for anything > ~2s.
-- **Audit** — `audit_log(user, action, status)` from `src/cog_helpers.py` for state-changing or privileged commands.
-- **Permissions** — `require_auth` from `src/cog_helpers.py`; service-level allowlists via `is_service_allowed()`.
-- **Alerts (not in cogs, but adjacent)** — never `channel.send()` directly for monitoring. Use `send_severity_alert()` from `src/alert_manager.py` (severity routing: DEBUG/INFO log-only, WARNING → channel, CRITICAL → channel + DM).
+- **Auth gate:** call `_incident_allowed_user_ids()` (or your own allowlist helper) at the top of every privileged handler.
+- **Long-running work:** spawn an async task and post incremental updates back to the thread. See `start_session()` in `src/host_bridge.py` for the canonical streaming pattern.
+- **Errors:** post user-visible messages with `:x:` prefix; log the exception with `log.exception(...)` so it's captured in `docker logs openclaw`.
+- **Audit:** add an entry via `audit_event(...)` from `src/audit.py` for state-changing or privileged commands.
 
 ---
 
@@ -228,7 +217,7 @@ skills.SKILLS dict     →  tool_router shortlists by keyword
 
 ## 5. Add a dashboard surface or API endpoint
 
-The dashboard is an aiohttp app hosted out of `src/discord_web.py` and wired up in `src/dashboard/`.
+The dashboard is an aiohttp app in `src/dashboard/`. With Discord removed, the slack bot's health server (`src/slack_bot.py::_start_health_server()`) is what currently runs on port 8765. The full dashboard wire-up (login/session middleware, etc.) lived in the deleted `src/discord_web.py`; if you need it, lift the routes from git history (commit `ae0004d` had them) into a new Slack-bot-hosted aiohttp app.
 
 | File | Role |
 |---|---|
@@ -236,27 +225,30 @@ The dashboard is an aiohttp app hosted out of `src/discord_web.py` and wired up 
 | `src/dashboard/api_handlers.py` | JSON `/api/...` handlers |
 | `src/dashboard/html_handlers.py` | HTML page handlers + CLI download endpoints |
 | `src/dashboard/helpers.py` | Shared helpers |
-| `src/discord_web.py` | aiohttp server, login/logout, session middleware (`_require_session`, `_require_api_action_auth`) |
+| `src/slack_bot.py::_start_health_server` | Minimal aiohttp server hosting `/health` on :8765 — extend here to add more routes |
 
 ### Recipe
 
-1. **JSON endpoint:** add `async def <name>_api(request): ...` in `api_handlers.py`. Register it in `routes.py` (`app.router.add_get("/api/<name>", <name>_api)`).
-2. **HTML page:** add `async def <name>_page(request): ...` in `html_handlers.py` and register it. Use the shared layout helpers.
-3. **State-changing action:** wrap the route through the `action()` helper in `routes.py` (lines 82–93) which enforces `_require_api_action_auth()` — bearer token / `X-OpenClaw-Token` with `hmac.compare_digest`.
-4. **Page-level auth:** session middleware in `_require_session()` (`src/discord_web.py:548-562`) redirects unauthenticated requests to `/login`. Credentials come from `OPENCLAW_DASHBOARD_USERNAME` / `OPENCLAW_DASHBOARD_PASSWORD` (set in deploy `.env`, loaded by `src/config.py`).
+1. **JSON endpoint:** add `async def <name>_api(request): ...` in `api_handlers.py`. Wire it into `_start_health_server()` in `slack_bot.py` with `app.router.add_get(...)`.
+2. **HTML page:** same pattern; render via `html_handlers.py`.
+3. **State-changing action:** wrap with a bearer-token guard (`OPENCLAW_API_TOKEN`). The previous `_require_api_action_auth()` helper was in `discord_web.py`; reimplement in a Slack-owned module if you need it.
+
+> **Tech debt:** the full dashboard surface is currently degraded post-Discord-removal. Only `/health` runs out of the box. Restoring `/dashboard`, `/api/*`, login, etc. is a future cleanup task.
 
 ---
 
 ## 6. Add a background loop
 
-> **Important:** `src/discord_background.py` is now a re-export shim. The real loops live in:
->
-> | Module | Loops it owns |
-> |---|---|
-> | `src/bg_briefing.py` | `morning_briefing_loop`, `evening_digest_loop` |
-> | `src/bg_monitoring.py` | `error_monitor_loop`, container health monitor, resource monitor |
-> | `src/bg_healing.py` | `audit_writer_loop`, `background_cleanup_loop`, `proactive_insight_loop`, self-healing |
-> | `src/bg_tasks.py` | supervisor — start/stop/restart/backoff, loop registry |
+The real loops live in:
+
+| Module | Loops it owns |
+|---|---|
+| `src/bg_briefing.py` | `morning_briefing_loop`, `evening_digest_loop` |
+| `src/bg_monitoring.py` | `error_monitor_loop`, container health monitor, resource monitor |
+| `src/bg_healing.py` | `audit_writer_loop`, `background_cleanup_loop`, `proactive_insight_loop`, self-healing |
+| `src/bg_tasks.py` | supervisor — start/stop/restart/backoff, loop registry |
+
+> **Note:** `src/discord_background.py` was deleted in May 2026 along with the Discord bot. The supervisor in `bg_tasks.py` is still present but no longer wired to a Discord client; loops that posted to Discord channels are dormant. Migrating these to Slack output (via `slack_sdk` client from `slack_bot.py`) is a future task.
 
 ### Recipe
 
@@ -363,16 +355,16 @@ Pick the store by data shape:
 
 | Store | Use when | Where it lives | Example |
 |---|---|---|---|
-| **JSON file** | Lightweight runtime state; human-inspectable | `data/*.json` | `data/onboarding_seen.json` (`src/bot.py:168-187`), `MEMORY_DIR/schedules.json` (`src/scheduler.py`) |
+| **JSON file** | Lightweight runtime state; human-inspectable | `data/*.json` | `MEMORY_DIR/schedules.json` (`src/scheduler.py`) |
 | **SQLite** | Threaded, indexed, transactional | `src/thread_store.py` (threads/messages, WAL mode), `src/scheduler_advanced.py` (cron history) | `ThreadStore` in `src/thread_store.py` |
 | **ChromaDB** | Semantic search / recall | `src/vector_store*.py` (6 modules — client, config, scope, compaction, memory, hub) | `VectorStore.search()` |
 | **Obsidian vault (Markdown)** | Long-form human-readable artifacts | `src/obsidian_writer.py` writes `data/vault/...` | `save_to_vault()` |
-| **Audit log** | Append-only audit trail | `src/audit.py::audit_event()` | every cog uses `audit_log` from `cog_helpers.py` |
+| **Audit log** | Append-only audit trail | `src/audit.py::audit_event()` | privileged Slack handlers in `src/slack_bot.py` |
 
 **Rules:**
 
 - Keep persistence behind the owning module. Don't write JSON/SQLite/Chroma directly from unrelated code.
-- If the new store needs health visibility, add a check in `src/discord_web.py` health/metrics surface or in `src/tool_health.py`.
+- If the new store needs health visibility, extend `src/slack_bot.py::_start_health_server()` `/health` payload or `src/tool_health.py`.
 - Anything sensitive (tokens, keys) — never in `data/`. Use `.env` / secrets, loaded via `src/config.py`.
 
 ---
@@ -433,9 +425,9 @@ Phone users want one-tap operations. Typing `/copilot diagnose why plex can't fi
 | JSON parsing of LLM output | `src/json_utils.{validate_json, repair_json, extract_json}` |
 | Tracing | `src/trace_context` (correlation IDs propagate across loops) |
 | Rate limiting | `src/llm_ratelimit.RateLimiter` (sliding window + jittered backoff) |
-| Errors in cogs | `src/discord_error.build_error_embed()` |
-| Progress in cogs | `src/discord_progress.ProgressTracker` |
-| Alerts | `src/alert_manager.send_severity_alert()` |
+| Slack message errors | `:x: <msg>` prefix + `log.exception(...)`; ephemeral if appropriate |
+| Long-running Slack work | Async task + incremental thread updates (see `start_session()` in `src/host_bridge.py`) |
+| Alerts | `src/alert_manager.send_severity_alert()` (Discord output paths dormant post-removal; logging still works) |
 
 ---
 

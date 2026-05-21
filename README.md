@@ -1,6 +1,6 @@
 # OpenClaw 🤖
 
-Personal AI assistant running on a home Mac Mini server. Ask it anything via Slack or Discord — it can draft emails, do research, summarize documents, search your files, and more.
+Personal AI assistant running on a home Mac Mini server. Ask it anything via Slack — it can draft emails, do research, summarize documents, search your files, and more.
 
 Runs on a **Mac Mini M4 Pro** alongside a Synology NAS and a 20+ container Docker stack.
 
@@ -11,7 +11,9 @@ Runs on a **Mac Mini M4 Pro** alongside a Synology NAS and a 20+ container Docke
 | **Web Chat**      | [chat.davevoyles.synology.me](https://chat.davevoyles.synology.me) |
 | **Health**        | `https://openclaw.davevoyles.synology.me/health`             |
 | **LLM**           | Gemini 2.5 Flash (primary) + Ollama `gemma4:e4b` (local)    |
-| **Interfaces**    | Slack bot · Discord bot · Web UI · CLI                       |
+| **Interfaces**    | Slack bot · Web UI · CLI                                     |
+
+> **Note (May 2026):** Discord support was removed. Slack is now the sole chat interface. See [docs/AGENT-GUIDE.md](docs/AGENT-GUIDE.md) for architecture details.
 
 ---
 
@@ -30,21 +32,20 @@ Runs on a **Mac Mini M4 Pro** alongside a Synology NAS and a 20+ container Docke
 
 | Interface | How to access | Best for |
 |-----------|--------------|----------|
-| **Slack** | DM `@OpenClaw` or use `/chat` | Day-to-day queries, file sharing, slash commands |
+| **Slack** | DM `@OpenClaw` or use slash commands | Day-to-day queries, file sharing, remote Mac Mini control |
 | **Web Chat** | [chat.davevoyles.synology.me](https://chat.davevoyles.synology.me) | Long conversations, rich formatting |
-| **Discord** | Slash commands in your server | Shared/group use, notifications |
 | **CLI** | `openclaw` (after install) | Power users, scripting |
 
 ### Key Slack commands
 
 ```
+/copilot <prompt>   Run Copilot CLI on the Mac Mini in a threaded session
+/host <subcommand>  Quick-action shortcuts (status, logs, restart, plex-fix, …)
+/incident           Declare and track an incident
 /chat <question>    Ask anything
 /research <topic>   Web search + summary
 /filesearch <term>  Search uploaded files
-/simple on|off      Toggle plain-English replies
 /digest             Summary of today's activity
-/email              Gmail integration
-/clawbox            Dropbox integration
 /help               Full command list
 ```
 
@@ -55,9 +56,8 @@ Runs on a **Mac Mini M4 Pro** alongside a Synology NAS and a 20+ container Docke
 ```mermaid
 flowchart LR
     U[User] --> SL[Slack]
-    U --> DC[Discord]
     U --> WEB[Web UI]
-    SL & DC & WEB --> BOT[OpenClaw Server\nsrc/]
+    SL & WEB --> BOT[OpenClaw Server\nsrc/slack_bot.py]
     BOT --> ORCH[Orchestrator]
     ORCH --> LLM[Gemini 2.5 Flash]
     ORCH --> LOCAL[Ollama gemma4:e4b]
@@ -86,12 +86,11 @@ curl -s https://openclaw.davevoyles.synology.me/health | python3 -m json.tool
 
 | Key | Required | Description |
 |-----|----------|-------------|
-| `DISCORD_BOT_TOKEN` | Yes | From Discord Developer Portal |
-| `DISCORD_GUILD_ID` | Yes | Right-click server → Copy ID |
-| `ALLOWED_USER_IDS` | Yes | Comma-separated Discord user IDs |
-| `GEMINI_API_KEY` | Yes | Google AI Studio |
-| `SLACK_BOT_TOKEN` | Yes | Slack app OAuth token |
+| `SLACK_BOT_TOKEN` | Yes | Slack app OAuth token (`xoxb-…`) |
+| `SLACK_APP_TOKEN` | Yes | Slack app-level token for Socket Mode (`xapp-…`) |
 | `SLACK_SIGNING_SECRET` | Yes | Slack app signing secret |
+| `OPENCLAW_HOST_BRIDGE_ALLOWED_USERS` | Yes | Comma-separated Slack user IDs allowed to run `/copilot` and `/host` |
+| `GEMINI_API_KEY` | Yes | Google AI Studio |
 | `GMAIL_CREDENTIALS_FILE` | No | Gmail OAuth JSON |
 | `DROPBOX_APP_KEY` | No | Dropbox API app key |
 
@@ -120,7 +119,7 @@ docker compose down
 ## Security
 
 - Container: `read_only`, `cap_drop: ALL`, `no-new-privileges`
-- Whitelisted Discord user IDs only
+- Whitelisted Slack user IDs only (`OPENCLAW_HOST_BRIDGE_ALLOWED_USERS`)
 - All actions logged to `data/audit/YYYY-MM-DD.jsonl`
 - Resource limits: 2 GB RAM, 2 CPU cores
 - Destructive commands require button-click approval

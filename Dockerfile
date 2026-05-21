@@ -101,4 +101,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 
 EXPOSE 8765
 
-CMD ["python", "src/bot.py"]
+CMD ["python", "src/slack_bot.py"]

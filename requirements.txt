@@ -1,7 +1,15 @@
-# OpenClaw Discord Bot - Dependencies
-# Phase 1: Foundation
+# OpenClaw Slack Bot - Dependencies
+# Discord support was removed in 2026-05; Slack is the sole user interface.
 
-# Discord bot framework
+# Slack bot framework (Socket Mode + slash commands)
+slack-bolt>=1.18.0
+slack-sdk>=3.27.0
+
+# discord.py kept temporarily for ~14 shared utility modules that still
+# `import discord` at module top (alert_manager, quality_helpers,
+# bot_formatting, permissions, etc.). The Discord bot itself is gone;
+# these are dormant code paths. TODO: scrub remaining `import discord`
+# statements and remove this dependency.
 discord.py~=2.7.1
 
 # Google Gemini AI SDK (new unified SDK)
@@ -46,7 +54,7 @@ aiofiles~=24.1
 # Interactive REPL input with richer completion/history
 prompt_toolkit~=3.0
 
-# SMS provider integration (Discord one-tap SMS)
+# SMS provider integration (Twilio one-tap SMS)
 twilio~=9.3.0
 
 # Workflow DAG execution (Phase 3 automation)

@@ -5984,13 +5984,92 @@ async def create_slack_handler() -> Any | None:  # type: ignore[return]
 
 async def start_slack_bot() -> None:
     """Create the Socket Mode handler and run until the process exits."""
+    # Start the HTTP health server first so docker healthchecks pass even if
+    # Slack auth/socket setup takes a moment.
+    await _start_health_server()
+
     handler = await create_slack_handler()
     if handler is None:
         log.warning("Slack bot not started (disabled or misconfigured)")
+        # Keep the process alive so the health server stays up and the
+        # container doesn't crash-loop. Useful when Slack creds are missing.
+        await asyncio.Event().wait()
         return
 
     log.info("Starting Slack Socket Mode bot…")
     await handler.start_async()
+
+
+# ---------------------------------------------------------------------------
+# Health server (port 8765) — replaces discord_web.start_health_server
+# ---------------------------------------------------------------------------
+
+_HEALTH_RUNNER: Any = None
+
+
+def _read_git_sha() -> str:
+    """Return short HEAD SHA from src/_git_sha.txt or 'unknown'."""
+    sha_file = Path(__file__).parent / "_git_sha.txt"
+    if sha_file.exists():
+        try:
+            return sha_file.read_text().strip() or "unknown"
+        except OSError:
+            pass
+    return "unknown"
+
+
+async def _start_health_server() -> None:
+    """Start a minimal aiohttp server on :8765 exposing /health.
+
+    Slack-only replacement for the previous Discord-coupled health server.
+    Contract: `/health` returns JSON with `status`, `uptime_seconds`, `git_sha`,
+    matching what docker-compose healthcheck + Uptime Kuma probe expect.
+    """
+    global _HEALTH_RUNNER, _BOT_START_TIME
+
+    if _BOT_START_TIME == 0.0:
+        _BOT_START_TIME = time.monotonic()
+
+    from aiohttp import web
+
+    async def health(_req: "web.Request") -> "web.Response":
+        uptime_s = time.monotonic() - _BOT_START_TIME
+        checks: dict[str, str] = {}
+        try:
+            import sqlite3
+
+            from thread_store import DB_PATH as _db_path
+
+            conn = sqlite3.connect(str(_db_path), timeout=2)
+            conn.execute("SELECT 1")
+            conn.close()
+            checks["db"] = "ok"
+        except Exception:
+            checks["db"] = "error"
+
+        overall = "healthy" if checks.get("db") == "ok" else "degraded"
+        return web.json_response(
+            {
+                "status": overall,
+                "uptime_seconds": round(uptime_s, 1),
+                "interface": "slack",
+                "git_sha": _read_git_sha(),
+                "checks": checks,
+                "ts": time.time(),
+            }
+        )
+
+    app = web.Application()
+    app.router.add_get("/health", health)
+    app.router.add_get("/", health)
+
+    port = int(os.getenv("HEALTH_PORT", "8765"))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    _HEALTH_RUNNER = runner
+    log.info("Health server listening on :%d/health", port)
 
 
 # ---------------------------------------------------------------------------
@@ -6000,4 +6079,8 @@ async def start_slack_bot() -> None:
 if __name__ == "__main__":
     import asyncio
 
+    logging.basicConfig(
+        level=os.getenv("LOG_LEVEL", "INFO"),
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
     asyncio.run(start_slack_bot())

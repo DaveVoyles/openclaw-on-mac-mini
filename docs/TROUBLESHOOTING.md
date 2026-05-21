@@ -256,42 +256,6 @@ After deploying, commands may take up to 1 hour to sync globally.
 
 ---
 
-## `CommandLimitReached` in logs (Discord 100-command cap)
-
-Discord enforces a hard limit of **100 global slash commands** per bot. With 40+ cogs this repo can exceed that cap. When it does, you'll see lines like:
-
-```
-Failed to load cog cogs.translate_cog: Extension 'cogs.translate_cog' raised an error: CommandLimitReached
-```
-
-The affected cog (alphabetically last to load) is silently dropped — its commands never register.
-
-**Fix:** opt out of cogs you don't use via `DISCORD_DISABLED_COGS` in `.env`:
-
-```bash
-# names without the _cog.py suffix, comma-separated
-DISCORD_DISABLED_COGS=translate,dream,interview,poll
-```
-
-Then `docker compose up -d --force-recreate openclaw`. Check logs for `Skipped N cog(s) via DISCORD_DISABLED_COGS` to confirm.
-
-**Diagnose how many commands each cog adds:**
-
-```bash
-docker exec openclaw python -c "
-import importlib, pkgutil, cogs
-for m in pkgutil.iter_modules(cogs.__path__):
-    if not m.name.endswith('_cog'): continue
-    mod = importlib.import_module(f'cogs.{m.name}')
-    n = sum(1 for _ in dir(mod) if 'command' in _.lower())
-    print(f'{m.name}: ~{n} attrs')
-"
-```
-
-Or simply `grep -c "@app_commands.command\|@discord.app_commands.command" src/cogs/*_cog.py | sort -t: -k2 -n`.
-
----
-
 ## Rate Limiting
 
 ### Check current status

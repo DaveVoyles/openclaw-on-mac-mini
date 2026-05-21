@@ -15,17 +15,19 @@
 ## Architecture in 30 Seconds
 
 ```
-Discord user ─► src/bot.py ─► src/ask_orchestrator.py ─► src/llm/chat.py
-                                                                 │
-                       ┌─────────────────────────────────────────┤
-                       ▼                                         ▼
-            src/tool_router.py                           src/llm_tools.py
-       (shortlists tools by intent)                  (executes tool calls)
-                                                                 │
-                                                                 ▼
-                                           skills/*.py  +  src/*_skills.py
-                                              (the SKILLS registry)
+Slack user ─► /slash command ─► src/slack_bot.py ─► src/ask_orchestrator.py ─► src/llm/chat.py
+                                                                                         │
+                              ┌──────────────────────────────────────────────────────────┤
+                              ▼                                                          ▼
+                    src/tool_router.py                                          src/llm_tools.py
+              (shortlists tools by intent)                                   (executes tool calls)
+                                                                                         │
+                                                                                         ▼
+                                                                   skills/*.py  +  src/*_skills.py
+                                                                       (the SKILLS registry)
 ```
+
+> **Discord is gone (2026-05).** `src/bot.py`, `src/cogs/`, `src/discord_commands/`, and `src/discord_*.py` have been deleted. **Slack is the sole interface.** Entry point is `src/slack_bot.py` (CMD in Dockerfile). Any doc still referring to a Discord bot, cogs, or `src/bot.py` is stale.
 
 > **LLM monolith is gone.** `src/llm.py` was split into the `src/llm/` package (`chat.py`, `context.py`, `providers.py`, `tool_execution.py`, …) plus `src/llm_client.py` for Gemini infra. Any doc that still says `src/llm.py` is stale.
 
@@ -35,10 +37,10 @@ Discord user ─► src/bot.py ─► src/ask_orchestrator.py ─► src/llm/cha
 - **Source:** `~/openclaw/` — application code (separate Git repo from docker-stack)
 - **Deploy config:** `~/docker-stack/openclaw/docker-compose.yml`
 - **Dashboard:** `http://192.168.1.93:8765/dashboard`
-- **Health:** `http://192.168.1.93:8765/health`
+- **Health:** `http://192.168.1.93:8765/health` (Slack-native, no Discord)
 
-**Code shape (2026-05-21):**
-- `src/*.py` — 180 modules, plus subpackages `src/llm/` (10), `src/cogs/` (40 cogs), `src/discord_commands/` (21 modules), `src/dashboard/` (4), `src/plugin_system/` (4), `src/api/`, `src/builders/`, `src/exporters/`, `src/utils/`, `src/templates/`
+**Code shape (2026-05-21, post-Discord removal):**
+- `src/*.py` — ~95 modules (110 fewer since Discord removal), plus subpackages `src/llm/` (10), `src/dashboard/` (4), `src/plugin_system/` (4), `src/api/`, `src/exporters/`, `src/utils/`, `src/templates/`
 - `skills/` — 22 `*.py` modules + 12+ ClawHub skill bundle directories
 - `config/tools.yaml` — 118 function-calling tool declarations
 
@@ -205,61 +207,13 @@ Slash commands, OAuth scopes, and event subscriptions live in `scripts/update_sl
 
 ---
 
-## Discord Cog Guidance (W1–W14)
+## Removed: Discord Cog Guidance
 
-### Error Handling in Cogs
+This section previously documented patterns for Discord cogs (W1–W14). **Discord was removed in May 2026.** All cogs, `discord_error.py`, `discord_progress.py`, and the Discord bot entry (`src/bot.py`) have been deleted. Slack-equivalent patterns:
 
-Use `build_error_embed(e, context='/cmd-name')` from `discord_error.py` for **all** Discord cog error responses. Always pass `ephemeral=True` so errors are visible only to the invoking user.
-
-```python
-from src.discord_error import build_error_embed
-
-@app_commands.command()
-async def my_command(self, interaction: discord.Interaction):
-    try:
-        ...
-    except Exception as e:
-        embed = build_error_embed(e, context="/my-command")
-        await interaction.followup.send(embed=embed, ephemeral=True)
-```
-
-`classify_error(exc)` maps the exception to an `ERROR_CATEGORIES` key so the embed colour and title are consistent across all cogs.
-
-### Progress Indicators for Long-Running Commands
-
-For cog commands that may take more than ~2 seconds, use `ProgressTracker` from `discord_progress.py` to show a live-updating embed instead of leaving Discord's "thinking…" spinner running indefinitely.
-
-```python
-from src.discord_progress import ProgressTracker
-
-@app_commands.command()
-async def slow_command(self, interaction: discord.Interaction):
-    await interaction.response.defer()
-    tracker = ProgressTracker()
-    await tracker.start(interaction, "Running analysis…", steps=3)
-    await tracker.update("Fetching data…", step=1)
-    # … do work …
-    await tracker.update("Processing results…", step=2)
-    # … do work …
-    await tracker.done("Analysis complete.")
-```
-
-### Alert Routing
-
-Use `send_severity_alert()` from `alert_manager.py` for **all** monitoring alerts instead of posting directly to a channel. Severity routing:
-
-| Severity | Destination |
-| --- | --- |
-| `DEBUG` / `INFO` | Log only (no Discord message) |
-| `WARNING` | Configured alert channel |
-| `CRITICAL` | Alert channel **+** DM to bot owner |
-
-```python
-from src.alert_manager import send_severity_alert
-
-await send_severity_alert("WARNING", "Disk usage high", "Usage at 85%", service="nas")
-await send_severity_alert("CRITICAL", "Container down", "openclaw container exited", service="openclaw")
-```
+- **Error handling:** Slack handlers in `src/slack_bot.py` use `say(...)` with formatted error text or upload an error file. There is no `build_error_embed` equivalent — Slack messages are markdown/Block Kit.
+- **Progress indicators:** the `/copilot` host bridge already streams progress via Slack thread updates (`src/host_bridge.py`); use the same pattern for new long-running commands.
+- **Alert routing:** `alert_manager.send_severity_alert()` still exists but its Discord output paths are dormant. Long-term: route alerts via Slack DMs to `SLACK_NOTIFY_USER_ID`. Until then, alerts log only.
 
 ### Memory Recall — Domain Guard
 
