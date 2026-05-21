@@ -570,8 +570,6 @@ from skills.news_skills import NEWS_SKILLS
 from skills.sports_skills import SPORTS_SKILLS
 from skills.trakt_skills import TRAKT_SKILLS
 from skills.weather_skills import WEATHER_SKILLS
-from src.correlation_engine import CORRELATION_SKILLS
-from src.ml_trends import ML_TREND_SKILLS
 
 for skill in NEWS_SKILLS:
     SKILLS[skill["name"]] = skill["function"]
@@ -585,11 +583,9 @@ for skill in FINANCE_SKILLS:
 for skill in WEATHER_SKILLS:
     SKILLS[skill["name"]] = skill["function"]
 
-# Phase 3: Trakt.tv, Health, ML Trends, Correlation
+# Phase 3: Trakt.tv, Health
 SKILLS.update(TRAKT_SKILLS)
 SKILLS.update(HEALTH_SKILLS)
-SKILLS.update(ML_TREND_SKILLS)
-SKILLS.update(CORRELATION_SKILLS)
 
 # Worker sub-agent (autonomous task delegation)
 from worker_agent import WORKER_SKILLS
