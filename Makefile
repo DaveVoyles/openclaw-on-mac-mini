@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: test test-cli test-verbose lint lint-fix format type-check build clean deploy deploy-cli verify-deploy ship ship-server ship-cli e2e e2e-macbook slack-manifest slack-manifest-push install-watcher smoke smoke-verbose ci validate-env help
+.PHONY: test test-cli test-verbose lint lint-fix format type-check build clean deploy deploy-cli verify-deploy ship ship-server ship-cli e2e e2e-macbook slack-manifest slack-manifest-push slack-manifest-check install-watcher smoke smoke-verbose ci validate-env help
 
 help:  ## Show available targets and descriptions
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -117,9 +117,13 @@ slack-manifest:  ## Copy Slack manifest to clipboard + open browser
 	@echo "   After saving, update SLACK_BOT_TOKEN in .env if Slack issues a new token."
 	python3 scripts/update_slack_manifest.py --browser
 
-slack-manifest-push:  ## Push Slack manifest via API (needs SLACK_CONFIG_TOKEN in .env)
-	@echo "📋 Pushing Slack manifest via API (requires SLACK_CONFIG_TOKEN in .env)..."
+slack-manifest-push:  ## Push Slack manifest via API (auto-rotates SLACK_CONFIG_TOKEN)
+	@echo "📋 Pushing Slack manifest via API (auto-rotates expired tokens)..."
 	python3 scripts/update_slack_manifest.py --push
+
+slack-manifest-check:  ## Compare in-repo manifest to deployed (exit 2 on drift)
+	@echo "🔍 Checking Slack manifest drift..."
+	python3 scripts/update_slack_manifest.py --check
 
 clean:  ## Remove __pycache__, .pyc, and build caches
 	@echo "🧹 Cleaning..."

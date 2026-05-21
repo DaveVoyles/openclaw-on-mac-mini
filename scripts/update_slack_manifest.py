@@ -25,6 +25,7 @@ import argparse
 import json
 import os
 import sys
+import urllib.parse
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -201,7 +202,7 @@ MANIFEST: dict = {
             {
                 "command": "/copilot-sessions",
                 "description": "List your active and recent Copilot sessions",
-                "usage_hint": "",
+                "usage_hint": "(no arguments)",
                 "should_escape": False,
             },
             {
@@ -225,6 +226,7 @@ MANIFEST: dict = {
         ],
     },
     "oauth_config": {
+        "pkce_enabled": False,
         "scopes": {
             "bot": [
                 "app_mentions:read",
@@ -260,6 +262,7 @@ MANIFEST: dict = {
             ]
         },
         "interactivity": {"is_enabled": True},
+        "is_mcp_enabled": False,
         "org_deploy_enabled": False,
         "socket_mode_enabled": True,
         "token_rotation_enabled": False,
@@ -285,7 +288,83 @@ def _load_dotenv() -> None:
             os.environ.setdefault(key, value)
 
 
-def _push_manifest(app_id: str, config_token: str) -> None:
+def _rotate_config_token(refresh_token: str) -> tuple[str, str] | None:
+    """Exchange a refresh token for a fresh (access, refresh) pair.
+
+    Slack config tokens expire after 12 hours. ``tooling.tokens.rotate`` accepts
+    a long-lived refresh token and returns a new short-lived access token plus a
+    new refresh token. Returns None on failure.
+    """
+    req = urllib.request.Request(
+        f"https://slack.com/api/tooling.tokens.rotate?refresh_token={urllib.parse.quote(refresh_token)}",
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    try:
+        with urllib.request.urlopen(req) as resp:
+            body = json.loads(resp.read().decode())
+    except urllib.error.URLError as exc:
+        print(f"❌ Token rotate network error: {exc}", file=sys.stderr)
+        return None
+    if not body.get("ok"):
+        print(f"❌ Token rotate failed: {body.get('error','unknown')}", file=sys.stderr)
+        return None
+    return body.get("token", ""), body.get("refresh_token", "")
+
+
+def _persist_tokens(access: str, refresh: str) -> None:
+    """Write rotated tokens back to .env in-place (preserves other vars)."""
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if not env_path.exists():
+        env_path.touch()
+    lines = env_path.read_text().splitlines()
+    have_access = have_refresh = False
+    out: list[str] = []
+    for ln in lines:
+        if ln.startswith("SLACK_CONFIG_TOKEN="):
+            out.append(f"SLACK_CONFIG_TOKEN={access}")
+            have_access = True
+        elif ln.startswith("SLACK_CONFIG_REFRESH_TOKEN="):
+            out.append(f"SLACK_CONFIG_REFRESH_TOKEN={refresh}")
+            have_refresh = True
+        else:
+            out.append(ln)
+    if not have_access:
+        out.append(f"SLACK_CONFIG_TOKEN={access}")
+    if not have_refresh:
+        out.append(f"SLACK_CONFIG_REFRESH_TOKEN={refresh}")
+    env_path.write_text("\n".join(out) + "\n")
+    os.environ["SLACK_CONFIG_TOKEN"] = access
+    os.environ["SLACK_CONFIG_REFRESH_TOKEN"] = refresh
+    print("🔄 Rotated SLACK_CONFIG_TOKEN; .env updated.")
+
+
+def _fetch_manifest(app_id: str, config_token: str) -> dict | None:
+    """GET the currently-deployed manifest for drift detection."""
+    req = urllib.request.Request(
+        f"https://slack.com/api/apps.manifest.export?app_id={urllib.parse.quote(app_id)}",
+        method="POST",
+        headers={"Authorization": f"Bearer {config_token}"},
+    )
+    try:
+        with urllib.request.urlopen(req) as resp:
+            body = json.loads(resp.read().decode())
+    except urllib.error.URLError as exc:
+        print(f"❌ Network error: {exc}", file=sys.stderr)
+        return None
+    if not body.get("ok"):
+        print(f"❌ Slack API error fetching manifest: {body.get('error','unknown')}", file=sys.stderr)
+        return None
+    raw = body.get("manifest")
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+    return raw if isinstance(raw, dict) else None
+
+
+def _push_manifest(app_id: str, config_token: str) -> dict | None:
     manifest_json = json.dumps(MANIFEST)
     payload = json.dumps({"app_id": app_id, "manifest": manifest_json}).encode()
 
@@ -316,6 +395,112 @@ def _push_manifest(app_id: str, config_token: str) -> None:
         sys.exit(1)
 
     print("✅ Manifest updated successfully.")
+    return body
+
+
+def _resolve_config_token() -> str | None:
+    """Return a usable access token, rotating via refresh if needed."""
+    token = os.environ.get("SLACK_CONFIG_TOKEN", "").strip()
+    refresh = os.environ.get("SLACK_CONFIG_REFRESH_TOKEN", "").strip()
+    if token and not token.startswith("xoxe.xoxp-..."):
+        return token
+    if refresh:
+        print("🔄 No usable SLACK_CONFIG_TOKEN; rotating from refresh token…")
+        pair = _rotate_config_token(refresh)
+        if pair:
+            new_access, new_refresh = pair
+            _persist_tokens(new_access, new_refresh)
+            return new_access
+    return None
+
+
+def _push_with_auto_rotate(app_id: str) -> None:
+    """Push manifest; if the call fails with token_expired/invalid_auth, rotate and retry once."""
+    token = _resolve_config_token()
+    if not token:
+        print(
+            "❌ SLACK_CONFIG_TOKEN missing/invalid and no SLACK_CONFIG_REFRESH_TOKEN to rotate.\n"
+            "   Add both to .env:\n"
+            "     SLACK_CONFIG_TOKEN=xoxe.xoxp-...\n"
+            "     SLACK_CONFIG_REFRESH_TOKEN=xoxe-...\n"
+            "   Generate at https://api.slack.com/apps → 'App Configuration Tokens'",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    print(f"🚀 Pushing manifest to Slack app {app_id}…")
+    manifest_json = json.dumps(MANIFEST)
+    payload = json.dumps({"app_id": app_id, "manifest": manifest_json}).encode()
+
+    def _do_push(tok: str) -> dict:
+        req = urllib.request.Request(
+            "https://slack.com/api/apps.manifest.update",
+            data=payload,
+            headers={
+                "Content-Type": "application/json; charset=utf-8",
+                "Authorization": f"Bearer {tok}",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read().decode())
+
+    try:
+        body = _do_push(token)
+    except urllib.error.URLError as exc:
+        print(f"❌ Network error: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if not body.get("ok") and body.get("error") in ("token_expired", "invalid_auth"):
+        refresh = os.environ.get("SLACK_CONFIG_REFRESH_TOKEN", "").strip()
+        if not refresh:
+            print(f"❌ Slack API error: {body.get('error')} and no refresh token available", file=sys.stderr)
+            sys.exit(1)
+        print("🔄 Access token expired; rotating and retrying…")
+        pair = _rotate_config_token(refresh)
+        if not pair:
+            sys.exit(1)
+        _persist_tokens(*pair)
+        try:
+            body = _do_push(pair[0])
+        except urllib.error.URLError as exc:
+            print(f"❌ Network error on retry: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+    if not body.get("ok"):
+        msg = f"❌ Slack API error: {body.get('error','unknown')}"
+        if body.get("detail"):
+            msg += f"\n   {body['detail']}"
+        if body.get("errors"):
+            msg += f"\n   {json.dumps(body['errors'], indent=2)}"
+        print(msg, file=sys.stderr)
+        sys.exit(1)
+
+    print("✅ Manifest updated successfully.")
+
+
+def _check_drift(app_id: str) -> int:
+    """Compare in-repo manifest to deployed. Return 0 if in-sync, 2 if drift."""
+    token = _resolve_config_token()
+    if not token:
+        print("❌ Need SLACK_CONFIG_TOKEN (or refresh) to compare deployed manifest.", file=sys.stderr)
+        return 1
+    deployed = _fetch_manifest(app_id, token)
+    if deployed is None:
+        return 1
+    local = json.loads(json.dumps(MANIFEST, sort_keys=True))
+    remote = json.loads(json.dumps(deployed, sort_keys=True))
+    if local == remote:
+        print("✅ In-repo manifest matches deployed Slack app.")
+        return 0
+    print("⚠️  Manifest drift detected. Diff (local → deployed):")
+    import difflib
+    a = json.dumps(local, indent=2, sort_keys=True).splitlines()
+    b = json.dumps(remote, indent=2, sort_keys=True).splitlines()
+    for line in difflib.unified_diff(b, a, fromfile="deployed", tofile="in-repo", lineterm=""):
+        print(line)
+    print("\nRun `make slack-manifest-push` to deploy in-repo manifest.")
+    return 2
 
 
 # ── Entry point ──────────────────────────────────────────────────────────────
@@ -363,6 +548,11 @@ def main() -> None:
         help="Copy JSON to clipboard and open browser (recommended — no token needed).",
     )
     group.add_argument("--push", action="store_true", help="Push manifest to Slack API.")
+    group.add_argument(
+        "--check",
+        action="store_true",
+        help="Compare in-repo manifest to deployed (CI drift check). Exit 2 on drift.",
+    )
     args = parser.parse_args()
 
     if args.print:
@@ -373,31 +563,22 @@ def main() -> None:
         _browser_workflow()
         return
 
-    # --push
     _load_dotenv()
     app_id = os.environ.get("SLACK_APP_ID", "")
-    config_token = os.environ.get("SLACK_CONFIG_TOKEN", "")
-
     if not app_id or app_id.startswith("A..."):
         print(
             "❌ SLACK_APP_ID not set. Add it to .env:\n"
-            "   SLACK_APP_ID=A0123456789\n"
+            "   SLACK_APP_ID=A0ATR6KFXNJ\n"
             "   (Find it at https://api.slack.com/apps → Your app → App ID)",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    if not config_token or config_token.startswith("xoxe.xoxp-..."):
-        print(
-            "❌ SLACK_CONFIG_TOKEN not set. Add it to .env:\n"
-            "   SLACK_CONFIG_TOKEN=xoxe.xoxp-...\n"
-            "   (Generate at https://api.slack.com/apps → App Config Tokens → needs app_configurations:write)",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    if args.check:
+        sys.exit(_check_drift(app_id))
 
-    print(f"🚀 Pushing manifest to Slack app {app_id}...")
-    _push_manifest(app_id, config_token)
+    # --push
+    _push_with_auto_rotate(app_id)
 
 
 if __name__ == "__main__":
