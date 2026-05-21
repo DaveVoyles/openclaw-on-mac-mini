@@ -436,9 +436,23 @@ class OpenClawBot(commands.Bot):
     async def setup_hook(self) -> None:
         """Load cogs dynamically, register commands, and sync on startup."""
         cogs_dir = Path(__file__).parent / "cogs"
+        # Discord caps slash commands at 100 globally. With 40+ cogs, you may need
+        # to opt out of some. Set DISCORD_DISABLED_COGS=cog_a,cog_b in .env to skip
+        # them (name without the `_cog.py` suffix, or the full `cogs.foo_cog` path).
+        disabled_raw = os.getenv("DISCORD_DISABLED_COGS", "")
+        disabled = {
+            name.strip().removeprefix("cogs.").removesuffix("_cog")
+            for name in disabled_raw.split(",")
+            if name.strip()
+        }
         loaded: list[str] = []
+        skipped: list[str] = []
         for cog_file in sorted(cogs_dir.glob("*_cog.py")):
             if cog_file.name.startswith("_"):
+                continue
+            short = cog_file.stem.removesuffix("_cog")
+            if short in disabled:
+                skipped.append(cog_file.stem)
                 continue
             module = f"cogs.{cog_file.stem}"
             try:
@@ -447,6 +461,8 @@ class OpenClawBot(commands.Bot):
                 log.info("Loaded cog: %s", module)
             except (commands.ExtensionError, ImportError) as e:
                 log.error("Failed to load cog %s: %s", module, e)
+        if skipped:
+            log.info("Skipped %d cog(s) via DISCORD_DISABLED_COGS: %s", len(skipped), ", ".join(skipped))
         log.info("Loaded %d cogs: %s", len(loaded), ", ".join(loaded))
 
         if DISCORD_GUILD_ID:

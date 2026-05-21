@@ -377,6 +377,52 @@ Pick the store by data shape:
 
 ---
 
+## 10. Add a `/host` quick-action shortcut
+
+`/host <subcommand> [args]` wraps vetted Copilot prompts so a phone user can dispatch the most common operations without typing a freeform prompt. All shortcuts route through the `/copilot` session machinery in `src/host_bridge.py` — they inherit threaded replies, owner checks, the per-user concurrency cap, and the idle timeout.
+
+### Recipe
+
+1. **Edit the registry** in `src/host_bridge_shortcuts.py`:
+
+   ```python
+   SHORTCUTS["uptime"] = Shortcut(
+       name="uptime",
+       description="Show host uptime + load average",
+       prompt_template="Run `uptime` on this Mac Mini and explain load.",
+       usage="/host uptime",
+   )
+   ```
+
+2. **Args?** Set `requires_arg=True` and add a `{placeholder}` to `prompt_template`. Then extend `_format_prompt()` with a branch that binds the placeholder — see how `logs`, `restart`, and `git` already do it.
+
+3. **Validate user input.** `_safe()` strips shell metachars; never trust positional args verbatim. Clamp numerics like `logs` does (`max(1, min(n, 5000))`).
+
+4. **Add a test** in `tests/test_host_bridge_shortcuts.py`:
+
+   ```python
+   def test_uptime(self) -> None:
+       r = resolve("uptime")
+       assert isinstance(r, ResolvedShortcut)
+       assert "uptime" in r.prompt
+   ```
+
+5. **Update the help text test** (`test_all_expected_shortcuts_present`) — the set must include your new shortcut.
+
+6. **No Slack manifest change needed.** `/host` is one registered slash command; subcommands are dispatched in-process by `resolve()`.
+
+### Why this exists
+
+Phone users want one-tap operations. Typing `/copilot diagnose why plex can't find files on disk and check if NAS mounts dropped` from a phone is painful; `/host plex-fix` is two seconds. Shortcuts are the "speed-dial" layer on top of the Phase 3 host bridge.
+
+### Files involved
+
+- `src/host_bridge_shortcuts.py` — pure data registry + `shlex` resolver (no I/O, no Slack imports — unit-testable)
+- `src/slack_bot.py` — `@app.command("/host")` handler resolves the shortcut and calls the same `start_session()` flow as `/copilot`
+- `tests/test_host_bridge_shortcuts.py` — happy path, error paths, arg validation, scrubbing
+
+---
+
 ## Cross-cutting conventions
 
 | Concern | The one right way |

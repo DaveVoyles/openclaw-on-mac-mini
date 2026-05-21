@@ -152,6 +152,44 @@ print('Firecrawl:', sp['firecrawl']['calls'], 'calls')
 
 ---
 
+## Slack Surface — `/copilot` host bridge + `/host` shortcuts
+
+OpenClaw's primary remote interface is Slack. Two complementary slash command families bridge Slack to the Mac Mini host:
+
+### `/copilot` family — interactive Copilot CLI sessions over SSH PTY
+
+Routed by `src/slack_bot.py` through `src/host_bridge.py` (SessionManager + Session) which opens an `asyncssh` PTY to `davevoyles@host.docker.internal` and runs `copilot --allow-all-tools`. Each session is a Slack thread; replies in the thread become the next stdin turn.
+
+| Command | What it does |
+|---|---|
+| `/copilot <prompt>` | Open a thread, spawn a long-lived `copilot` process on the host, post stdout chunks back to the thread |
+| `/copilot-sessions` | List your active + recent sessions |
+| `/copilot-cancel <id>` | SIGINT (Ctrl-C) the current turn of a session |
+| `/copilot-end <id>` | End a session and close the host process |
+| `/copilot-attach <id>` | Show session details (channel, idle time, last activity) |
+
+**Owner-gated** via `OPENCLAW_HOST_BRIDGE_ALLOWED_USERS` (CSV of Slack user IDs). Per-user cap: 3 active sessions. Idle timeout: 10 min. Session registry persisted to `~/openclaw/data/host_bridge/sessions.json`.
+
+### `/host` family — quick-action shortcuts
+
+Defined in `src/host_bridge_shortcuts.py` (pure data registry). Each subcommand maps to a vetted Copilot prompt and routes through the same `/copilot` session machinery (threaded, owner-gated, etc.).
+
+| Command | Purpose |
+|---|---|
+| `/host status` | `docker ps` + `brew services list` + top CPU/mem |
+| `/host logs <svc> [n]` | Tail container logs (default 200, max 5000) |
+| `/host restart <svc>` | `docker restart` — or AppleScript for Plex native app |
+| `/host disk` | `df -h` + `du -sh ~/docker-stack/*` |
+| `/host net` | Ping NAS + Traefik + Plex web |
+| `/host plex-fix` | Diagnose & resolve Plex "media not found" issues |
+| `/host git <args>` | `git -C ~/docker-stack <args>` |
+
+### Manifest deployment
+
+Slash commands, OAuth scopes, and event subscriptions live in `scripts/update_slack_manifest.py` (`MANIFEST` constant). Deploy with `make slack-manifest-push` — auto-rotates the 12h `SLACK_CONFIG_TOKEN` via the refresh token. `make slack-manifest-check` performs drift detection against the live workspace.
+
+---
+
 ## How to Add a New Skill
 
 1. Write the async function in the appropriate `skills/*.py` file
