@@ -1,5 +1,5 @@
 # OpenClaw CLI — Module Dependency Map
-<!-- Updated: 2026-04-18 -->
+<!-- Updated: 2026-05-21 -->
 
 
 Reference for understanding which modules depend on which, to prevent circular imports and guide where new code should live.
@@ -143,7 +143,7 @@ openclaw_cli.py (orchestrator — imports everything)
 ---
 
 ### `openclaw_cli.py`
-**Role:** Main REPL, command dispatch, CLI argument parsing (~13,300 lines). Imports all submodules above.
+**Role:** Main REPL, command dispatch, CLI argument parsing (~6,663 lines as of 2026-05-21). Imports all submodules above.
 
 **Imports from CLI modules:** All of the above — see graph at the top.
 

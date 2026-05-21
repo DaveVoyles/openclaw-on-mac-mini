@@ -4,7 +4,7 @@ title: OpenClaw - Autonomous AI Agent
 ---
 
 # 🦅 OpenClaw
-<!-- Updated: 2026-04-18 -->
+<!-- Updated: 2026-05-21 -->
 
 
 > **Autonomous AI agent with Discord interface - Production-ready infrastructure**
@@ -44,6 +44,16 @@ docker-compose -f docker-compose.prod.yml up -d
 ## 📚 Core Documentation
 
 <div class="docs-grid">
+  <div class="doc-card">
+    <h3>🧩 <a href="AGENT-EXTENSION-GUIDE.html">Agent Extension Guide</a></h3>
+    <p>Step-by-step recipes for adding skills, commands, providers, dashboard endpoints, background loops, plugins, schedules, and persistence. Start here when extending OpenClaw.</p>
+  </div>
+
+  <div class="doc-card">
+    <h3>🔎 <a href="AUDIT-REPORT.html">Latest Doc Audit</a></h3>
+    <p>2026-05-21 doc-vs-code reconciliation. Verified ground-truth counts, dead-ref list, and follow-up actions.</p>
+  </div>
+
   <div class="doc-card">
     <h3>🙋 <a href="PARENTS-GUIDE.html">Non-Technical User Guide</a></h3>
     <p>Getting started with OpenClaw — no tech knowledge needed. Browser, Slack, files, and plain-language mode.</p>

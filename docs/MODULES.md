@@ -1,10 +1,38 @@
 # OpenClaw — Source Modules Reference
-<!-- Updated: 2026-04-18 -->
+<!-- Updated: 2026-05-21 -->
 
 
-Quick reference for all source files. Consult this before exploring the codebase.
+Quick reference for source files. Consult this before exploring the codebase.
 
-## Core Modules (src/\*.py) — 149 files
+> ⚠️ **Maintenance note (2026-05-21):** The per-file tables below are point-in-time snapshots and drift quickly as the codebase grows. The **headline counts** in this section were re-verified on 2026-05-21; the per-file rows further down are partly stale and are flagged in [`AUDIT-REPORT.md`](AUDIT-REPORT.md). For the canonical extension recipes, use [`AGENT-EXTENSION-GUIDE.md`](AGENT-EXTENSION-GUIDE.md). For a refreshed package overview, see [`ARCHITECTURE.md`](ARCHITECTURE.md) § "Source layout".
+
+## Verified counts (2026-05-21)
+
+| Surface | Count |
+|---|---|
+| `src/*.py` files | 180 |
+| `src/cogs/*.py` | 40 |
+| `src/discord_commands/*.py` (package) | 21 |
+| `src/llm/*.py` (package, replaced old `src/llm.py`) | 10 |
+| `src/dashboard/*.py` | 4 |
+| `src/plugin_system/*.py` | 4 |
+| `skills/*.py` | 22 |
+| `skills/<bundle>/` (ClawHub bundles with `SKILL.md`) | 12+ |
+| `config/tools.yaml` declarations | 118 |
+| `src/bot.py` lines | 966 |
+| `src/openclaw_cli.py` lines | 6,663 |
+| `skills/__init__.py` lines (unified `SKILLS` registry) | 823 |
+
+> **Dead references — do not edit these into new docs:**
+> - `src/llm.py` — replaced by `src/llm/` package + `src/llm_client.py`
+> - `src/memory_manager.py` — replaced by the `src/memory_*.py` family (9 modules)
+> - `src/autonomous_skills.py` — replaced by `skills/autonomous-loop/` bundle + `src/agent_loop.py`
+> - `src/discord_commands.py` (single file) — now a **package** at `src/discord_commands/`
+> - `src/discord_background.py` is a **re-export shim** — see `src/bg_briefing.py`, `src/bg_monitoring.py`, `src/bg_healing.py`, `src/bg_tasks.py`
+
+---
+
+## Core Modules (src/\*.py) — 180 files
 
 | File                    | Purpose                                                                  | Key Exports                                                          |
 | ----------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------- |
@@ -13,8 +41,8 @@ Quick reference for all source files. Consult this before exploring the codebase
 | `analyzer.py`           | AI-powered container log analysis using Gemini                           | `analyze_logs()`                                                     |
 | `approvals.py`          | Security & approval workflows with Discord UI                            | `ApprovalStore`, `ApprovalRequest`, `RiskLevel`                      |
 | `audit.py`              | Audit event recording helpers                                            | `audit_event()`                                                      |
-| `autonomous_skills.py`  | Task planning via planning-with-files skill                              | `init_planning_files()`                                              |
-| `bot.py`                | Core Discord bot — init, auth, `/ask` command (1,146 lines, split from 3,084) | `OpenClawBot`, `/ask` handler                                        |
+| `autonomous_skills.py`  | _Removed._ Replaced by `skills/autonomous-loop/` bundle + `src/agent_loop.py` | (see `agent_loop.py`)                                                |
+| `bot.py`                | Core Discord bot — init, auth, `/ask` command (966 lines)                | `OpenClawBot`, `/ask` handler                                        |
 | `calendar_skills.py`    | Google Calendar API integration (read/create events)                     | `get_calendar_events()`, `create_calendar_event()`                   |
 | `cog_helpers.py`        | Shared utilities for cogs (audit_log, service_allowed)                   | `audit_log()`, `is_service_allowed()`                                |
 | `code_sandbox.py`       | Sandboxed Python code execution in ephemeral Docker container            | `execute_python_code()`                                              |
@@ -29,20 +57,20 @@ Quick reference for all source files. Consult this before exploring the codebase
 | `goal_tracker.py`       | Auto-tracked goals extracted from conversations (188 lines)              | `GoalTracker` class, `extract_goals()`                               |
 | `http_session.py`       | Shared aiohttp session manager                                           | `SessionManager` class                                               |
 | `image_gen.py`          | Image generation and analysis utilities (91 lines)                       | `generate_image()`, `analyze_image()`                                |
-| `llm.py`                | Gemini + Ollama hybrid LLM dispatcher — public API facade (1,098 lines) | `chat()`, `chat_deep()`, `_gemini_chat()`                            |
+| `llm.py`                | _Removed._ Replaced by `src/llm/` package: `chat.py` (dispatcher), `context.py`, `providers.py`, `tool_execution.py`, `telemetry.py`, etc. | (see `src/llm/chat.py`) |
 | `llm_client.py`         | Gemini client wrapper, model config, system prompt loading (257 lines)   | `get_model()`, `load_system_prompt()`, `MODEL_CONFIG`                |
 | `llm_tools.py`          | Tool execution engine, function calling loop (275 lines)                 | `execute_tool_call()`, `run_function_calling_loop()`                 |
 | `llm_patterns.py`       | Regex patterns for query classification, hallucination detection (194 lines) | `needs_tools()`, `is_hallucination()`, `TOOL_PATTERNS`           |
 | `llm_ratelimit.py`      | Sliding-window rate limiter with jittered backoff (82 lines)             | `RateLimiter` class (per-minute, per-hour)                           |
 | `maintenance_skills.py` | 4:00 AM automated maintenance (backups, updates)                         | `run_maintenance()`, `update_skills()`, `backup_to_nas()`            |
 | `memory.py`             | Per-user conversation context + named thread persistence                 | `ConversationStore`, `Thread` class                                  |
-| `memory_manager.py`     | Memory lifecycle management — decay, consolidation, cleanup (199 lines)  | `MemoryManager` class                                                |
+| `memory_manager.py`     | _Removed._ Replaced by the `src/memory_*.py` family (9 modules — `memory.py`, `memory_consolidation.py`, `memory_decay.py`, etc.) | (see `memory.py`, `memory_consolidation.py`) |
 | `mission_control.py`    | Kanban-style task management (get/update/complete tasks)                 | `get_mission_tasks()`, `update_mission_task()`                       |
 | `monitor_skills.py`     | URL content change detection + monitoring                                | `snapshot_url()`, `check_url_for_changes()`                          |
 | `nas.py`                | Synology DSM REST API queries (storage, health, alerts)                  | `get_nas_storage_health()`, `get_nas_alerts()`                       |
 | `network.py`            | Network status, Tailscale VPN, DNS, speed test                           | `get_network_status()`, `get_tailscale_status()`, `run_speed_test()` |
 | `obsidian_writer.py`    | Markdown + YAML frontmatter writer to Obsidian vault                     | `save_to_vault()`, `build_frontmatter()`                             |
-| `openclaw_cli.py`       | Terminal REPL entry point (~4,654 lines after TD-34 extraction): `run_chat()`, `main()`, shims to extracted handler modules | `main()`, `invoke_openclaw()`, `run_chat()`                          |
+| `openclaw_cli.py`       | Terminal REPL entry point (~6,663 lines): `run_chat()`, `main()`, shims to extracted handler modules | `main()`, `invoke_openclaw()`, `run_chat()`                          |
 | `openclaw_cli_actions.py` | CLI shell execution, risk-aware approvals, and diffable file edits                | `run_shell_command()`, `request_cli_approval()`, `replace_text_in_file()` |
 | `openclaw_cli_cli_parser.py` | Extracted CLI argument parser (TD-34). Pure function, no side effects.      | `build_parser()`                                                     |
 | `openclaw_cli_help.py`  | Extracted chat-help renderer (TD-34). Generates the `/help` command table from the command registry | `print_chat_help()`                                                  |
@@ -69,53 +97,99 @@ Quick reference for all source files. Consult this before exploring the codebase
 | `json_utils.py`         | JSON validation, repair, and extraction for robust tool result parsing   | `validate_json()`, `repair_json()`, `extract_json()`                 |
 | `ollama_tools.py`       | Ollama native tool calling protocol for local Gemma model                | `ollama_chat_with_tools()`, `OLLAMA_TOOL_DECLARATIONS`               |
 | `model_router.py`       | Multi-model query classification and routing (Gemini/GPT-4o/Claude/Gemma) | `classify_query()`, `route_to_model()`, `MODEL_CONFIGS`            |
-| `discord_commands.py`   | Slash commands extracted from bot.py (1,130 lines)                       | `register_commands(bot)`                                             |
-| `discord_background.py` | Background loop tasks (702 lines) (audit writer, cleanup, briefing, proactive, error monitor, container health alerts) | `start_background_tasks(bot)`                                       |
+| `discord_commands/` (package) | Slash command groups (21 submodules — admin, agent, code, comms, context_menus, conversation, feedback, media, monitoring, patreon, plugins, providers, routing, safety, schedule, skills, system, trends, uptime_kuma, utility) | `register_commands(bot)` in `src/discord_commands/__init__.py` |
+| `discord_background.py` | **Re-export shim.** Real loops live in `src/bg_briefing.py`, `src/bg_monitoring.py`, `src/bg_healing.py`, `src/bg_tasks.py` | `start_background_tasks(bot)` (from `bg_tasks`) |
 | `discord_error.py`      | Shared Discord error formatting — classifies exceptions and builds uniform error embeds | `build_error_embed()`, `classify_error()`, `ERROR_CATEGORIES`        |
 | `discord_progress.py`   | Live-updating Discord progress embeds for long-running cog commands      | `ProgressTracker` class (`start()`, `update()`, `done()`)            |
-| `discord_web.py`        | aiohttp health/metrics/smoke/webhook web server (332 lines)              | `create_web_app(bot)`                                                |
+| `discord_web.py`        | aiohttp health/metrics/smoke/webhook web server + dashboard host + session auth | `create_web_app(bot)`, `setup_dashboard()`, `_require_session()` |
 | `fact_extractor.py`     | Automatic fact extraction from conversations for long-term memory        | `extract_facts()`, `should_store()`, `deduplicate()`                 |
 
-## Cog Modules (src/cogs/\*.py) — 7 cogs, 36 commands
+### Background loop modules (replaced the old single `discord_background.py`)
 
-| File               | Commands                                                                 | Purpose                             |
-| ------------------ | ------------------------------------------------------------------------ | ----------------------------------- |
-| `analytics_cog.py` | `/spending`, `/auditlog`, `/audit-summary`                               | Budget tracking and audit trail     |
-| `docker_cog.py`    | `/containers`, `/status`, `/logs`, `/system`, `/dockerstats`, `/restart` | Docker container management         |
-| `dream_cog.py`     | `/dream`, `/memory-health`, `/memory-export`                             | Auto-Dream cognitive memory system  |
-| `media_cog.py`     | `/search`, `/queue`, `/recent`, `/health`, `/nowplaying`, `/watch`       | \*arr stack + Plex media management |
+| File | Loops it owns |
+|---|---|
+| `bg_briefing.py`  | `morning_briefing_loop`, `evening_digest_loop` |
+| `bg_monitoring.py`| `error_monitor_loop`, container health monitor, resource monitor |
+| `bg_healing.py`   | `audit_writer_loop`, `background_cleanup_loop`, `proactive_insight_loop`, self-healing |
+| `bg_tasks.py`     | supervisor — start/stop/restart with exponential backoff; loop factory registry |
+
+## Source subpackages (src/)
+
+These directories hold their own focused modules in addition to the top-level `src/*.py` files:
+
+| Package | Files | Purpose |
+|---|---|---|
+| `src/llm/` | `chat.py`, `context.py`, `context_limits.py`, `provider_plugin.py`, `providers.py`, `response.py`, `startup.py`, `telemetry.py`, `tool_execution.py`, `trace.py` | LLM routing, streaming, tool loop, telemetry. Replaced the old `src/llm.py` monolith. |
+| `src/cogs/` | 40 cogs | Discord cog layer (slash commands, stateful features) |
+| `src/discord_commands/` | 21 submodules | Standalone slash-command registry, loaded via `register_commands(bot)` |
+| `src/dashboard/` | `routes.py`, `api_handlers.py`, `html_handlers.py`, `helpers.py` | Dashboard pages and `/api/...` endpoints; mounted by `src/discord_web.py` |
+| `src/plugin_system/` | `plugin_api.py`, `plugin_base.py`, `plugin_loader.py`, `plugin_registry.py` | Dynamic plugin loading + enable/disable persistence |
+| `src/api/` | `export.py`, `workflow_api.py` | HTTP API surface for exports and workflow operations |
+| `src/exporters/` | `csv_exporter.py`, `json_exporter.py`, `parquet_exporter.py` | Data export formats |
+| `src/builders/` | `embed_builder.py` | Embed/UI construction helpers |
+| `src/utils/` | (helpers) | Shared utilities |
+| `src/templates/` | (templates) | Built-in templates |
+
+## Cog Modules (src/cogs/\*.py) — 40 cogs
+
+> ⚠️ The exhaustive cog inventory (with all 40 cog command lists) is not maintained here by hand. See [`AGENT-EXTENSION-GUIDE.md § 2`](AGENT-EXTENSION-GUIDE.md#2-add-a-discord-command-cog-or-discord_commands-module) for the cog vs `discord_commands/` decision tree, and grep `src/cogs/*.py` for `@app_commands.command` to enumerate the live command set.
+>
+> The high-traffic cogs are listed below; the full 40-file list is available with `ls src/cogs/*.py`.
+
+| File               | Commands (verified)                                                       | Purpose                             |
+| ------------------ | ------------------------------------------------------------------------- | ----------------------------------- |
+| `analytics_cog.py` | `/spending`, `/auditlog`, `/audit-summary`                                | Budget tracking and audit trail     |
+| `docker_cog.py`    | `/containers`, `/status`, `/logs`, `/system`, `/dockerstats`, `/restart`  | Docker container management         |
+| `dream_cog.py`     | `/dream`, `/memory-health`, `/memory-export`                              | Auto-Dream cognitive memory system  |
+| `media_cog.py`     | `/search`, `/queue`, `/recent`, `/health`, `/nowplaying`, `/watch`        | \*arr stack + Plex media management |
 | `memory_cog.py`    | `/remember`, `/recall`, `/goals`, `/memory-stats`, `/memory-refresh`, `/rules`, `/profile`, `/profile-edit`, `/export-conversations` | Memory, profiles, and learned rules |
-| `network_cog.py`   | `/network`, `/tailscale`, `/speedtest`                                   | Network diagnostics and VPN status  |
+| `network_cog.py`   | `/network`, `/tailscale`, `/speedtest`                                    | Network diagnostics and VPN status  |
 | `research_cog.py`  | `/websearch`, `/browse`, `/research`, `/research-search`, `/sources`, `/compare` | Web search, browsing, deep research |
+| `channel_profile_cog.py` | `/show`, `/recommendations`, `/recommendation-action`, `/set`, `/clear` | Per-channel profile defaults |
+| `decision_cog.py`  | `/poll`, `/recent`, `/summary`                                            | Decision polls + summaries |
+| `notify_cog.py`    | `/show`, `/mute`, `/unmute`, `/filter`, `/block`, `/unblock`, `/dm`       | Notification preferences |
+| `rss_cog.py`       | `/list`, `/fetch`, `/search`, `/digest`                                   | RSS feeds + digests |
+| `sms_cog.py`       | `/config`, `/status`, `/send`, `/test`                                    | Discord → SMS UX |
+| `poll_cog.py`      | `/poll`                                                                   | Generic polls |
+| `reminder_cog.py`  | `/timer`                                                                  | Countdown reminder |
+| `perf_cog.py`      | `/perf`                                                                   | System perf |
+| `translate_cog.py` | `/translate`                                                              | Translation |
+| `interview_cog.py` | `/interview`                                                              | Interview flow |
+| _(others)_ | _calendar, context, digest, dns, doc, email, expense, gdoc, github, habit, imagine, imdb, incident, journal, nas, note, notion, ntfy, reports, review, sentry, todo_ | Domain-specific groups — see source for commands |
 
 ## Configuration Files (config/)
 
 | File                 | Purpose                                                                                                             |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `config.yaml`        | Main bot config (LLM models, security settings, routing keywords, Docker stack refs, channel roles, vault settings) |
+| `env_schema.yaml`    | Env var schema + validation metadata                                                                                |
 | `permissions.yaml`   | Role-based access control + per-service restart permissions                                                         |
-| `tools.yaml`         | 106 Gemini function-calling tool declarations (externalized from llm.py)                                            |
+| `tools.yaml`         | **118 Gemini function-calling tool declarations** (externalized from the old `llm.py`)                              |
 | `prompts/system.txt` | System prompt for conversational LLM mode                                                                           |
 
 ## Skills Directory (skills/)
 
-The `skills/` package contains the core skill modules plus 13 ClawHub skill bundles.
+The `skills/` package contains **22 skill modules** (`skills/*.py`) plus **12+ ClawHub skill bundle directories** (each with its own `SKILL.md`).
 
-### Skill Modules (skills/\*.py) — 4 files
+### Skill Modules (skills/\*.py) — 22 files
 
-`advanced_skills.py` was split into focused modules for maintainability:
+`advanced_skills.py` was split into focused modules for maintainability. Notable modules:
 
-| File                  | Lines | Purpose                                                          | Key Exports                                   |
-| --------------------- | ----- | ---------------------------------------------------------------- | --------------------------------------------- |
-| `__init__.py`         | —     | Core Docker & system monitoring skills + unified registry        | `ALL_SKILLS` dict                             |
-| `advanced_skills.py`  | 280   | Orchestration glue — re-exports from sub-modules, reporting      | `ADVANCED_SKILLS` dict                        |
-| `search_skills.py`    | 525   | Web search providers (Perplexity, Firecrawl, Tavily, DDG, Bing) with retry logic | `SEARCH_SKILLS` dict         |
-| `media_skills.py`     | 480   | \*arr services, Plex, download clients                           | `MEDIA_SKILLS` dict                           |
-| `web_skills.py`       | 274   | URL browsing, content extraction, multi-source comparison        | `WEB_SKILLS` dict                             |
+| File                  | Purpose                                                          | Key Exports                                   |
+| --------------------- | ---------------------------------------------------------------- | --------------------------------------------- |
+| `__init__.py`         | Unified `SKILLS` registry (823 lines)                            | `SKILLS` dict                                 |
+| `advanced_skills.py`  | Orchestration glue — re-exports from sub-modules                 | `ADVANCED_SKILLS` dict                        |
+| `search_skills.py`    | Web search providers (Perplexity, Firecrawl, Tavily, DDG, Bing) with retry logic | `SEARCH_SKILLS` dict         |
+| `media_skills.py`     | \*arr services, Plex, download clients                           | `MEDIA_SKILLS` dict                           |
+| `web_skills.py`       | URL browsing, content extraction, multi-source comparison        | `WEB_SKILLS` dict                             |
+| `reporting_skills.py` | Recap/report generation (sports, finance, news, weather, entertainment) | `REPORTING_SKILLS` dict              |
+| `news_skills.py`, `finance_skills.py`, `sports_skills.py`, `weather_skills.py`, `health_skills.py`, `digest_skills.py`, `trend_skills.py`, `synthesis_skills.py`, `polygon_skills.py`, `trakt_skills.py`, `browser_skills.py`, `patreon_skills.py`, `smart_media_skills.py`, `screenshot_skill.py`, `ocr_skill.py`, `recap_templates.py` | Domain-specific skill bundles | (per-module registry dict) |
 
 ### ClawHub Bundles
 
-13 ClawHub skill bundles installed. See `docs/SERVICES.md` for the full table with versions and API keys.
+12+ ClawHub skill bundles installed under `skills/<name>/`, each with its own `SKILL.md` and `plugin/` directory: `autonomous-loop`, `free-web-search`, `git-essentials`, `mission-control`, `multi-search-engine`, `ontology`, `openclaw-tavily-search`, `planning-with-files`, `proactive-agent`, `self-improving`, `skill-vetter`, `weather`, `webfetch-md`.
+
+See `docs/SERVICES.md` for the table with versions and API keys.
 
 ## Test Files (tests/)
 

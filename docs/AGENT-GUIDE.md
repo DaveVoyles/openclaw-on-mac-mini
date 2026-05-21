@@ -1,32 +1,46 @@
 # OpenClaw — Agent Quick Reference
-<!-- Updated: 2026-04-18 -->
+<!-- Updated: 2026-05-21 -->
 
 
 **Read this first.** 30-second orientation before touching anything.
 
 > **Planning rule:** for future improvements or the next CLI UX wave, read [`docs/PRODUCT-ROADMAP.md`](PRODUCT-ROADMAP.md) first and use scoped docs only for implementation detail.
+>
+> **Extending the system?** Jump to [`docs/AGENT-EXTENSION-GUIDE.md`](AGENT-EXTENSION-GUIDE.md) — concrete, code-verified recipes for adding skills, commands, providers, dashboard endpoints, background loops, plugins, schedules, and persistence.
+>
+> **Recent audit:** See [`docs/AUDIT-REPORT.md`](AUDIT-REPORT.md) for the 2026-05-21 doc-vs-code reconciliation. The numbers below were refreshed in that audit.
 
 ---
 
 ## Architecture in 30 Seconds
 
 ```
-Discord user → src/bot.py → src/ask_orchestrator.py → src/llm/chat.py
-                                                              ↓
-                                           src/tool_router.py (shortlists tools)
-                                                              ↓
-                                           src/llm_tools.py (executes tools)
-                                                              ↓
-                                                 skills/*.py (skill functions)
+Discord user ─► src/bot.py ─► src/ask_orchestrator.py ─► src/llm/chat.py
+                                                                 │
+                       ┌─────────────────────────────────────────┤
+                       ▼                                         ▼
+            src/tool_router.py                           src/llm_tools.py
+       (shortlists tools by intent)                  (executes tool calls)
+                                                                 │
+                                                                 ▼
+                                           skills/*.py  +  src/*_skills.py
+                                              (the SKILLS registry)
 ```
 
+> **LLM monolith is gone.** `src/llm.py` was split into the `src/llm/` package (`chat.py`, `context.py`, `providers.py`, `tool_execution.py`, …) plus `src/llm_client.py` for Gemini infra. Any doc that still says `src/llm.py` is stale.
+
 **Where things run:**
-- **Mac Mini M4** (192.168.1.93) — 18 Docker containers via OrbStack, all source code
+- **Mac Mini M4** (192.168.1.93) — Docker containers via OrbStack, all source code
 - **NAS** (192.168.1.8) — Storage only (SMB + NFS mounts for media)
-- **Source:** `~/openclaw/` — application code
+- **Source:** `~/openclaw/` — application code (separate Git repo from docker-stack)
 - **Deploy config:** `~/docker-stack/openclaw/docker-compose.yml`
 - **Dashboard:** `http://192.168.1.93:8765/dashboard`
 - **Health:** `http://192.168.1.93:8765/health`
+
+**Code shape (2026-05-21):**
+- `src/*.py` — 180 modules, plus subpackages `src/llm/` (10), `src/cogs/` (40 cogs), `src/discord_commands/` (21 modules), `src/dashboard/` (4), `src/plugin_system/` (4), `src/api/`, `src/builders/`, `src/exporters/`, `src/utils/`, `src/templates/`
+- `skills/` — 22 `*.py` modules + 12+ ClawHub skill bundle directories
+- `config/tools.yaml` — 118 function-calling tool declarations
 
 ---
 
@@ -39,7 +53,7 @@ Discord user → src/bot.py → src/ask_orchestrator.py → src/llm/chat.py
    cd ~/docker-stack/openclaw && docker compose up -d --build
    ```
 
-3. **`worker_agent.py` bypasses the router.** It uses the raw Gemini SDK directly (not `chat()`). Don't add routing logic expecting it to flow through `src/llm/chat.py`.
+3. **`src/discord_background.py` is a re-export shim.** Real loop logic lives in `src/bg_briefing.py`, `src/bg_monitoring.py`, `src/bg_healing.py`, and `src/bg_tasks.py` (supervisor with backoff/restart). Register new loops in `src/bg_tasks.py::_build_background_task_factories()`.
 
 4. **Tests use xdist by default.** `pyproject.toml` forces `-n auto --dist loadfile`. Run single-process with:
    ```bash
@@ -62,13 +76,13 @@ Discord user → src/bot.py → src/ask_orchestrator.py → src/llm/chat.py
 
 ---
 
-## Module Structure (post-TD-7 through TD-34)
+## CLI Module Structure (post-TD-7 through TD-34)
 
-The CLI monolith has been split into focused modules:
+The CLI monolith was split into focused modules. (`openclaw_cli.py` is currently 6,663 lines — further extraction is ongoing.)
 
 | Module | Responsibility |
 |--------|---------------|
-| `openclaw_cli.py` | Main REPL, command dispatch shims, ~4,654 lines |
+| `openclaw_cli.py` | Main REPL, command dispatch shims, ~6,663 lines |
 | `openclaw_cli_cli_parser.py` | `build_parser()` — extracted CLI argument parser (TD-34) |
 | `openclaw_cli_help.py` | `print_chat_help()` — extracted help renderer (TD-34) |
 | `openclaw_cli_ui_core.py` | ANSI palette, TTY detection |
@@ -100,7 +114,7 @@ See `docs/DEPENDENCY_MAP.md` for the full dependency graph and circular import p
 | `skills/__init__.py` | `SKILLS` dict — the skill registry. New skills go here. |
 | `skills/reporting_skills.py` | All Perplexity direct-return skills (news, sports, weather, finance, entertainment) |
 | `src/spending.py` | Cost tracking for Gemini, Perplexity, Firecrawl, Copilot |
-| `config/tools.yaml` | Gemini tool declarations (84 tools). Add new tools here + in `skills/__init__.py` |
+| `config/tools.yaml` | Gemini tool declarations (118 tools as of 2026-05-21). Add new tools here + in `skills/__init__.py` |
 | `src/config.py` | Centralized config — all env vars flow through here |
 
 ---

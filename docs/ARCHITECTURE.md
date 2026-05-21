@@ -1,15 +1,35 @@
 # OpenClaw — Architecture Diagram
-<!-- Updated: 2026-04-18 -->
+<!-- Updated: 2026-05-21 -->
 
 
 This diagram shows how all services, APIs, and components interconnect. Use it to understand data flow before adding new integrations.
 
 Key architectural patterns:
-- **Cogs** (`src/cogs/`) register as Discord command groups and feed into `bot.py`
+- **Cogs** (`src/cogs/`, **40 cogs**) register as Discord command groups and feed into `bot.py`
 - **Worker agents** are spawned from LLM tool calls via `spawn_worker()` and run their own tool loop
 - **Agent plans** are persisted as Markdown in `data/plans/` via `agent_loop.py`
 - **Proactive loops** (`monitor_skills.py`, `rss_skills.py`) run on the scheduler and alert on changes
 - **Mission Control** (`mission_control.py`) acts as a Kanban store backed by `data/tasks.json`
+
+## Source layout (2026-05-21)
+
+| Surface | Count | Notes |
+|---|---|---|
+| `src/*.py` | 180 | Top-level modules |
+| `src/llm/` | 10 | LLM runtime package — replaces the old `src/llm.py` monolith |
+| `src/cogs/` | 40 | Discord cogs |
+| `src/discord_commands/` | 21 | Slash-command groups (replaces the old single `discord_commands.py`) |
+| `src/dashboard/` | 4 | Dashboard routes/handlers; mounted by `src/discord_web.py` |
+| `src/plugin_system/` | 4 | Plugin API + loader + registry |
+| `skills/*.py` | 22 | Skill registry modules; canonical `SKILLS` dict in `skills/__init__.py` |
+| `skills/<bundle>/` | 12+ | ClawHub skill bundles (each has `SKILL.md`) |
+| `config/tools.yaml` | 118 | Function-calling tool declarations |
+| `src/bot.py` | 966 lines | |
+| `src/openclaw_cli.py` | 6,663 lines | |
+
+> **Note:** `src/discord_background.py` is a re-export shim. The real background loop logic lives in `src/bg_briefing.py`, `src/bg_monitoring.py`, `src/bg_healing.py`, and `src/bg_tasks.py` (the supervisor). Register new loops in `src/bg_tasks.py::_build_background_task_factories()`.
+
+For step-by-step extension recipes (add a skill, command, LLM provider, dashboard endpoint, background loop, plugin, scheduled job, persistence), see [`AGENT-EXTENSION-GUIDE.md`](AGENT-EXTENSION-GUIDE.md).
 
 ---
 
@@ -117,9 +137,9 @@ graph TB
 
     %% ── Core Bot ────────────────────────────────────────────────
     subgraph OpenClaw ["🐾 OpenClaw (Docker Container)"]
-        Bot["bot.py\nCore: init, auth, /ask\n(1,146 lines)"]
-        DiscordCmds["src/discord_commands/\nSlash commands package"]
-        DiscordBG["discord_background.py\nBackground loops (702 lines)"]
+        Bot["bot.py\nCore: init, auth, /ask\n(966 lines)"]
+        DiscordCmds["src/discord_commands/\nSlash commands package (21 modules)"]
+        DiscordBG["discord_background.py\n(re-export shim)\nreal loops: bg_briefing/bg_monitoring/\nbg_healing/bg_tasks"]
         DiscordWeb["discord_web.py\nHealth/metrics server"]
         LLM["src/llm/chat.py\nLLM chat/stream entrypoint"]
         LLMClient["llm_client.py\nGemini client wrapper"]
@@ -168,7 +188,7 @@ graph TB
             LLMRateLimit
         end
 
-        subgraph Cogs ["📦 Discord Cogs (src/cogs/) — 17 cogs, 80+ commands"]
+        subgraph Cogs ["📦 Discord Cogs (src/cogs/) — 40 cogs"]
             DockerCog["docker_cog.py\n6 commands\n+ interactive select menus"]
             MediaCog["media_cog.py\n6 commands"]
             NetworkCog["network_cog.py\n3 commands"]
