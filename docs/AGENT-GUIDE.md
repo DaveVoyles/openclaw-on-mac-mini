@@ -38,10 +38,10 @@ Slack user ─► /slash command ─► src/slack_bot.py ─► src/ask_orchestr
 - **Deploy config:** `~/docker-stack/openclaw/docker-compose.yml`
 - **Health:** `http://192.168.1.93:8765/health` — only HTTP endpoint exposed (Slack-native, no dashboard)
 
-**Code shape (2026-05-22, post-debt cleanup):**
-- `src/*.py` — ~155 modules, plus subpackages `src/llm/` (10), `src/api/`, `src/exporters/`, `src/utils/`, `src/templates/`. The `src/dashboard/` and `src/plugin_system/` packages were removed in the Discord-removal debt cleanup; zero `import discord` lines remain and `discord.py` is no longer a dependency.
-- `skills/` — 22 `*.py` modules + 12+ ClawHub skill bundle directories
-- `config/tools.yaml` — 118 function-calling tool declarations
+**Code shape (2026-05-21, post-debt cleanup):**
+- `src/*.py` — ~145 modules, plus subpackages `src/llm/`, `src/builders/`, `src/utils/`, `src/plugin_system/`. The packages `src/api/`, `src/exporters/`, `src/dashboard/`, `src/cogs/`, and `src/discord_commands/` were removed during the Discord-removal debt cleanup; zero `import discord` lines remain and `discord.py` is no longer a dependency.
+- `skills/` — 36 modules; the central `SKILLS` dict registers 182 entries
+- `config/tools.yaml` — 113 function-calling tool declarations (a curated subset of `SKILLS` exposed to the LLM)
 
 ---
 

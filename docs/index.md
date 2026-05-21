@@ -7,7 +7,7 @@ title: OpenClaw - Autonomous AI Agent
 <!-- Updated: 2026-05-21 -->
 
 
-> **Autonomous AI agent with Discord interface - Production-ready infrastructure**
+> **Autonomous AI agent with Slack interface — Production-ready infrastructure**
 
 [![CI](https://github.com/DaveVoyles/openclaw-on-mac-mini/actions/workflows/ci.yml/badge.svg)](https://github.com/DaveVoyles/openclaw-on-mac-mini/actions/workflows/ci.yml)
 [![Security](https://github.com/DaveVoyles/openclaw-on-mac-mini/actions/workflows/security.yml/badge.svg)](https://github.com/DaveVoyles/openclaw-on-mac-mini/actions/workflows/security.yml)
@@ -38,7 +38,7 @@ docker-compose -f docker-compose.prod.yml up -d
 - **Semantic Memory** - ChromaDB vector store for intelligent context recall
 - **Task Scheduling** - Cron-based automated tasks and reminders
 - **Health Monitoring** - Self-healing with alerts and backup systems
-- **Discord Integration** - Rich UI with buttons, dropdowns, and interactive modals
+- **Slack Integration** — Slash commands, Block Kit messages, file alerts, and `/copilot` host-CLI sessions
 - **Production-Ready** - Multi-stage Docker, security scanning, automated releases
 
 ## 📚 Core Documentation
@@ -171,8 +171,8 @@ docker-compose -f docker-compose.prod.yml up -d
 ## 🛠️ Technology Stack
 
 - **Language**: Python 3.12
-- **Framework**: discord.py 2.7+
-- **AI**: Google Gemini (Flash 2.0, Pro 1.5)
+- **Framework**: slack-bolt (Socket Mode)
+- **AI**: Google Gemini (Flash 2.5 primary) + Ollama (local fallback)
 - **Memory**: ChromaDB vector store
 - **Infrastructure**: Docker, Docker Compose
 - **CI/CD**: GitHub Actions

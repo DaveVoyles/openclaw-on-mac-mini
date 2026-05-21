@@ -37,7 +37,7 @@ Follow [`docs/DEVELOPMENT.md`](DEVELOPMENT.md) to:
 
 | Surface | What it owns | Start reading here |
 | --- | --- | --- |
-| Discord bot + server | Slash commands, `/ask`, tools, scheduling, dashboard APIs | [`docs/AGENT-GUIDE.md`](AGENT-GUIDE.md), [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) |
+| Slack bot + server | Slash commands, `/chat`, tools, scheduling, `/health` | [`docs/AGENT-GUIDE.md`](AGENT-GUIDE.md), [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) |
 | CLI | Terminal client, routing, rendering, sessions, macros | [`docs/DEVELOPMENT.md`](DEVELOPMENT.md), [`docs/CLI_QUICKSTART.md`](CLI_QUICKSTART.md) |
 | Skills and extensions | Python skills, SKILL.md docs, plugins | [`docs/SKILL_DEVELOPMENT.md`](SKILL_DEVELOPMENT.md), [`docs/PLUGIN_DEVELOPMENT.md`](PLUGIN_DEVELOPMENT.md) |
 
@@ -47,7 +47,7 @@ Follow [`docs/DEVELOPMENT.md`](DEVELOPMENT.md) to:
 - **CLI change:** update `src/openclaw_cli*.py`, then run focused CLI tests.
 - **Skill change:** update a skill, register it, declare it in `config/tools.yaml`, and add tests.
 - **Plugin change:** update plugin code and plugin-focused tests.
-- **Bot/server change:** trace the request flow first so you know whether the edit belongs in routing, tool execution, or a cog.
+- **Bot/server change:** trace the request flow first so you know whether the edit belongs in routing, tool execution, or a skill.
 
 ### Step 4: Validate only what you touched
 
@@ -89,23 +89,23 @@ A good first contribution is a **small docs fix, focused test improvement, or is
 
 ## Architecture for contributors in 90 seconds
 
-### If you are changing the Discord or server experience
+### If you are changing the Slack or server experience
 
 The common request path is:
 
 ```
-Discord user → src/bot.py → src/ask_orchestrator.py → src/llm/chat.py
-                                               ↓
-                                    src/tool_router.py
-                                               ↓
-                                     src/llm_tools.py
-                                               ↓
-                                          skills/*.py
+Slack user → src/slack_bot.py → src/ask_executor.py → src/ask_orchestrator.py → src/llm/chat.py
+                                                                                       ↓
+                                                                            src/llm_tools.py
+                                                                                       ↓
+                                                                              SKILLS[tool_name]
+                                                                                       ↓
+                                                                       skills/*.py · src/*_skills.py
 ```
 
 Use this to decide whether your edit belongs in:
-- a command or interaction layer (`src/bot.py`, `src/discord_commands/`)
-- model/tool routing (`src/llm/chat.py`, `src/tool_router.py`)
+- a command or interaction layer (`src/slack_bot.py`)
+- model/tool routing (`src/llm/chat.py`, `src/ask_orchestrator.py`)
 - tool execution (`src/llm_tools.py`)
 - a capability implementation (`skills/*.py`, `src/*_skills.py`)
 
