@@ -3137,6 +3137,52 @@ def _register_core_handlers(app: Any) -> None:
         # Ignore bot messages, edited messages, and non-DM channels
         if event.get("bot_id") or event.get("subtype"):
             return
+
+        # --- Phase 3: route thread replies to active host Copilot sessions ---
+        # This runs BEFORE the channel-type guard so it works in both DMs and
+        # channels. We only act when the thread matches a registered session.
+        thread_ts_evt: str | None = event.get("thread_ts")
+        if thread_ts_evt:
+            try:
+                from host_bridge import get_session_manager
+                _mgr = get_session_manager()
+                _rec = _mgr.find_by_thread(event.get("channel", ""), thread_ts_evt)
+            except Exception:  # noqa: BLE001
+                _rec = None
+            if _rec is not None and _mgr.is_live(_rec.session_id):
+                _txt = (event.get("text") or "").strip()
+                _uid = event.get("user", "")
+                if not _txt:
+                    return
+                if _rec.slack_user != _uid:
+                    try:
+                        await client.chat_postEphemeral(
+                            channel=event.get("channel", ""), user=_uid,
+                            text="🙅 this Copilot session belongs to someone else",
+                        )
+                    except Exception:  # noqa: BLE001
+                        pass
+                    return
+                # React with ⏳ so the user knows it was accepted as a turn
+                try:
+                    await client.reactions_add(
+                        name="hourglass_flowing_sand",
+                        channel=event.get("channel", ""),
+                        timestamp=event.get("ts", ""),
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+                _err = await _mgr.send_turn(_rec.session_id, _txt, slack_user=_uid)
+                if _err:
+                    try:
+                        await client.chat_postMessage(
+                            channel=event.get("channel", ""), thread_ts=thread_ts_evt,
+                            text=f"❌ {_err}",
+                        )
+                    except Exception:  # noqa: BLE001
+                        pass
+                return  # do NOT fall through to LLM chat for session turns
+
         if event.get("channel_type") != "im":
             return
 
@@ -4975,17 +5021,51 @@ def _register_integration_handlers(app: Any) -> None:
         )
 
     # ------------------------------------------------------------------
-    # Handler: /copilot — Slack bridge to host Copilot CLI (Phase 2)
-    #
-    # HIGH-RISK: runs `copilot --allow-all-tools -p <prompt>` on the Mac Mini
-    # host as the davevoyles user via SSH (asyncssh). Identity-equivalent
-    # access — gated by OPENCLAW_HOST_BRIDGE_ALLOWED_USERS (CSV of Slack
-    # user IDs) and OPENCLAW_HOST_BRIDGE_ENABLED=true.
-    #
-    # Posts an ephemeral ack, then runs the bridge in a background task and
-    # replies in the original channel (in-thread when invoked from one) with
-    # the captured stdout + exit code. Output is secret-sanitised.
     # ------------------------------------------------------------------
+    # Handler: /copilot — Phase 3 threaded interactive sessions
+    #
+    # HIGH-RISK: opens a long-lived `copilot --allow-all-tools` process on
+    # the Mac Mini host via SSH. Each /copilot invocation creates a Slack
+    # thread; thread replies are routed as subsequent user turns to the same
+    # process. Identity-equivalent access to the host, owner-gated.
+    # ------------------------------------------------------------------
+
+    # --- chunk poster: invoked by SessionManager to stream stdout back ---
+    async def _copilot_chunk_poster(record: Any, chunk: str) -> None:
+        if not chunk or not chunk.strip():
+            return
+        # Slack message safety: keep code blocks, hard-cap length.
+        body = chunk
+        if len(body) > 3800:
+            body = body[:3800] + "\n…[truncated]"
+        try:
+            await app.client.chat_postMessage(
+                channel=record.slack_channel,
+                thread_ts=record.slack_thread_ts,
+                text=f"```\n{body}\n```",
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("/copilot chunk post failed: %s", exc)
+
+    async def _ensure_session_manager() -> Any:
+        """Lazy-init the host SessionManager exactly once per process."""
+        try:
+            from host_bridge import get_session_manager
+        except ImportError:
+            return None
+        mgr = get_session_manager()
+        if not getattr(mgr, "_started", False):
+            await mgr.start(_copilot_chunk_poster)
+        return mgr
+
+    def _copilot_owner_check(user_id: str) -> tuple[bool, str | None]:
+        raw_allow = os.getenv("OPENCLAW_HOST_BRIDGE_ALLOWED_USERS", "") or SLACK_NOTIFY_USER_ID
+        allowed = {p.strip() for p in raw_allow.split(",") if p.strip()}
+        if not allowed:
+            return False, "🛑 `/copilot` is not configured. Set `OPENCLAW_HOST_BRIDGE_ALLOWED_USERS`."
+        if user_id not in allowed:
+            return False, "🛑 You are not allowed to run `/copilot` on this workspace."
+        return True, None
 
     @app.command("/copilot")
     async def handle_slash_copilot(ack: Any, body: dict[str, Any], client: Any) -> None:
@@ -4994,30 +5074,23 @@ def _register_integration_handlers(app: Any) -> None:
         channel_id: str = body.get("channel_id", user_id)
         text: str = (body.get("text") or "").strip()
 
-        raw_allow = os.getenv("OPENCLAW_HOST_BRIDGE_ALLOWED_USERS", "") or SLACK_NOTIFY_USER_ID
-        allowed = {p.strip() for p in raw_allow.split(",") if p.strip()}
-        if not allowed:
-            await client.chat_postEphemeral(
-                channel=channel_id, user=user_id,
-                text="🛑 `/copilot` is not configured. Set `OPENCLAW_HOST_BRIDGE_ALLOWED_USERS`.",
-            )
-            return
-        if user_id not in allowed:
-            await client.chat_postEphemeral(
-                channel=channel_id, user=user_id,
-                text="🛑 You are not allowed to run `/copilot` on this workspace.",
-            )
+        ok, msg = _copilot_owner_check(user_id)
+        if not ok:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg or "🛑 forbidden")
             return
 
         if not text or text.lower() in {"help", "?"}:
             await client.chat_postEphemeral(
                 channel=channel_id, user=user_id,
                 text=(
-                    "🤖 *Copilot CLI bridge*\n"
-                    "• `/copilot <prompt>` — run `copilot --allow-all-tools -p` on the host\n"
-                    "• Default cwd: `/Users/davevoyles/docker-stack`\n"
-                    "• Timeout: 10 min. Output is captured and posted back.\n"
-                    "• Example: `/copilot diagnose why plex can't find files on disk`"
+                    "🤖 *Copilot CLI — interactive sessions*\n"
+                    "• `/copilot <prompt>` — open a thread, run `copilot --allow-all-tools` on the host\n"
+                    "• Reply in the thread to send another turn to the same session\n"
+                    "• `/copilot-cancel <id>` — SIGINT current turn (Ctrl-C)\n"
+                    "• `/copilot-end <id>` — end the session\n"
+                    "• `/copilot-sessions` — list your sessions\n"
+                    "• `/copilot-attach <id>` — show details and last activity\n"
+                    f"• Per-user cap: 3 active sessions. Idle timeout: {os.getenv('OPENCLAW_HOST_BRIDGE_IDLE_TIMEOUT_S','600')}s.\n"
                 ),
             )
             return
@@ -5029,59 +5102,180 @@ def _register_integration_handlers(app: Any) -> None:
             )
             return
 
-        try:
-            from host_bridge import run_copilot
-        except ImportError as exc:
+        mgr = await _ensure_session_manager()
+        if mgr is None:
             await client.chat_postEphemeral(
-                channel=channel_id, user=user_id,
-                text=f"❌ host_bridge module unavailable: `{exc}`",
+                channel=channel_id, user=user_id, text="❌ host_bridge module unavailable",
             )
             return
 
-        await client.chat_postEphemeral(
-            channel=channel_id, user=user_id,
-            text=f"🤖 Running on host… _prompt:_ `{text[:200]}`",
-        )
+        # Post the parent thread message and use its ts as the thread anchor.
+        try:
+            parent = await client.chat_postMessage(
+                channel=channel_id,
+                text=f"🤖 <@{user_id}> opened a Copilot session\n_prompt:_ `{text[:300]}`\n_reply in this thread to continue_",
+            )
+            thread_ts = parent.get("ts") or parent.get("message", {}).get("ts") or ""
+        except Exception as exc:  # noqa: BLE001
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id, text=f"❌ failed to open thread: `{exc}`",
+            )
+            return
 
         async def _bg() -> None:
             try:
-                result = await run_copilot(prompt=text, slack_user_id=user_id)
-            except Exception as exc:  # broad: ensure we always reply
-                log.warning("/copilot background task failed: %s", exc)
+                record, err = await mgr.start_session(
+                    slack_user=user_id,
+                    slack_channel=channel_id,
+                    slack_thread_ts=thread_ts,
+                    initial_prompt=text,
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.warning("/copilot start_session crashed: %s", exc)
                 try:
                     await client.chat_postMessage(
-                        channel=channel_id,
-                        text=f"❌ <@{user_id}> Copilot bridge crashed: `{exc}`",
+                        channel=channel_id, thread_ts=thread_ts,
+                        text=f"❌ session failed to start: `{exc}`",
                     )
                 except Exception:  # noqa: BLE001
                     pass
                 return
 
-            header_emoji = "✅" if result.success else "⚠️"
-            status_line = (
-                f"{header_emoji} <@{user_id}> Copilot finished "
-                f"(exit `{result.exit_code}`, {result.duration_s:.1f}s, session `{result.session_id}`)"
-            )
-            if result.error:
-                status_line += f"\n_error:_ `{result.error}`"
-
-            # Slack message hard limit is 40 000 chars; keep a safety margin.
-            body_text = result.stdout or "_(no stdout)_"
-            if result.stderr and not result.success:
-                body_text += "\n--- stderr ---\n" + result.stderr
-            MAX = 35000
-            if len(body_text) > MAX:
-                body_text = body_text[:MAX] + f"\n…[truncated; full transcript: `{result.transcript_path}`]"
+            if err or record is None:
+                try:
+                    await client.chat_postMessage(
+                        channel=channel_id, thread_ts=thread_ts,
+                        text=f"❌ {err or 'unknown error'}",
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+                return
 
             try:
                 await client.chat_postMessage(
-                    channel=channel_id,
-                    text=f"{status_line}\n```\n{body_text}\n```",
+                    channel=channel_id, thread_ts=thread_ts,
+                    text=(
+                        f"✅ session `{record.session_id}` open — "
+                        f"`/copilot-end {record.session_id}` to close, "
+                        f"`/copilot-cancel {record.session_id}` to Ctrl-C the current turn"
+                    ),
                 )
-            except Exception as exc:  # noqa: BLE001
-                log.warning("/copilot: posting result failed: %s", exc)
+            except Exception:  # noqa: BLE001
+                pass
 
         asyncio.create_task(_bg())
+
+    # ------------------------------------------------------------------
+    # Companion slash commands for Phase 3 session management
+    # ------------------------------------------------------------------
+
+    @app.command("/copilot-sessions")
+    async def handle_slash_copilot_sessions(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", user_id)
+        ok, msg = _copilot_owner_check(user_id)
+        if not ok:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg or "🛑 forbidden")
+            return
+        mgr = await _ensure_session_manager()
+        if mgr is None:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="❌ host_bridge unavailable")
+            return
+        rows = sorted(mgr.list_sessions(user_id), key=lambda r: -r.started_at)[:20]
+        if not rows:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="_no Copilot sessions on record_")
+            return
+        lines = ["🧵 *Your Copilot sessions:*"]
+        for r in rows:
+            live = "🟢" if mgr.is_live(r.session_id) else ("💀" if r.status == "crashed" else "⚫")
+            age = int(time.time() - r.started_at)
+            lines.append(
+                f"{live} `{r.session_id}` — {r.status} — turns:{r.turns} — age:{age}s — "
+                f"thread:<#{r.slack_channel}>"
+            )
+        await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines))
+
+    @app.command("/copilot-cancel")
+    async def handle_slash_copilot_cancel(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", user_id)
+        sid = (body.get("text") or "").strip().split()[0] if (body.get("text") or "").strip() else ""
+        ok, msg = _copilot_owner_check(user_id)
+        if not ok:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg or "🛑 forbidden")
+            return
+        if not sid:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="usage: `/copilot-cancel <session_id>`")
+            return
+        mgr = await _ensure_session_manager()
+        if mgr is None:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="❌ host_bridge unavailable")
+            return
+        err = await mgr.cancel(sid, slack_user=user_id)
+        if err:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ {err}")
+        else:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"⏹ SIGINT sent to `{sid}`")
+
+    @app.command("/copilot-end")
+    async def handle_slash_copilot_end(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", user_id)
+        sid = (body.get("text") or "").strip().split()[0] if (body.get("text") or "").strip() else ""
+        ok, msg = _copilot_owner_check(user_id)
+        if not ok:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg or "🛑 forbidden")
+            return
+        if not sid:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="usage: `/copilot-end <session_id>`")
+            return
+        mgr = await _ensure_session_manager()
+        if mgr is None:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="❌ host_bridge unavailable")
+            return
+        err = await mgr.end(sid, slack_user=user_id, reason="user_ended")
+        if err:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ {err}")
+        else:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"🛑 session `{sid}` ended")
+
+    @app.command("/copilot-attach")
+    async def handle_slash_copilot_attach(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", user_id)
+        sid = (body.get("text") or "").strip().split()[0] if (body.get("text") or "").strip() else ""
+        ok, msg = _copilot_owner_check(user_id)
+        if not ok:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg or "🛑 forbidden")
+            return
+        if not sid:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="usage: `/copilot-attach <session_id>`")
+            return
+        mgr = await _ensure_session_manager()
+        if mgr is None:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="❌ host_bridge unavailable")
+            return
+        rec = mgr.get_record(sid)
+        if rec is None or rec.slack_user != user_id:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="❌ session not found")
+            return
+        age = int(time.time() - rec.started_at)
+        idle = int(time.time() - rec.last_activity)
+        live = "🟢 live" if mgr.is_live(sid) else f"⚫ {rec.status}"
+        await client.chat_postEphemeral(
+            channel=channel_id, user=user_id,
+            text=(
+                f"📎 session `{sid}` — {live}\n"
+                f"• channel: <#{rec.slack_channel}> (thread `{rec.slack_thread_ts}`)\n"
+                f"• cwd: `{rec.cwd}` • turns: {rec.turns}\n"
+                f"• started: {age}s ago • idle: {idle}s\n"
+                f"• transcript: `{rec.transcript_path}`"
+            ),
+        )
 
     # ------------------------------------------------------------------
     # Handler: /incident — Slack bridge to Incident Copilot

@@ -198,6 +198,30 @@ MANIFEST: dict = {
                 "usage_hint": "<prompt> — e.g. diagnose why plex can't find files",
                 "should_escape": False,
             },
+            {
+                "command": "/copilot-sessions",
+                "description": "List your active and recent Copilot sessions",
+                "usage_hint": "",
+                "should_escape": False,
+            },
+            {
+                "command": "/copilot-cancel",
+                "description": "Send SIGINT (Ctrl-C) to the current turn of a Copilot session",
+                "usage_hint": "<session_id>",
+                "should_escape": False,
+            },
+            {
+                "command": "/copilot-end",
+                "description": "End a Copilot session and close the host process",
+                "usage_hint": "<session_id>",
+                "should_escape": False,
+            },
+            {
+                "command": "/copilot-attach",
+                "description": "Show details for a Copilot session (channel, transcript, idle)",
+                "usage_hint": "<session_id>",
+                "should_escape": False,
+            },
         ],
     },
     "oauth_config": {
@@ -209,6 +233,7 @@ MANIFEST: dict = {
                 "commands",
                 "files:read",
                 "files:write",
+                "groups:history",
                 "im:history",
                 "im:read",
                 "im:write",
@@ -228,6 +253,8 @@ MANIFEST: dict = {
                 "app_home_opened",
                 "app_mention",
                 "file_shared",
+                "message.channels",
+                "message.groups",
                 "message.im",
                 "reaction_added",
             ]
