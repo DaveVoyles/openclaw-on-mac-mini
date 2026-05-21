@@ -2351,3 +2351,98 @@ class TestDropboxOAuth:
             assert should_error  # config error path is taken when key is missing
         finally:
             sb._DROPBOX_APP_KEY = orig
+
+
+# ---------------------------------------------------------------------------
+# /incident bridge — unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestIncidentBridge(unittest.TestCase):
+    """Unit tests for the /incident Slack handler helpers."""
+
+    def setUp(self) -> None:
+        # Reset cache + env between tests
+        slack_bot._incident_actions_cache.clear()
+        self._orig_allowed = slack_bot.OPENCLAW_INCIDENT_ALLOWED_USERS
+        self._orig_notify = slack_bot.SLACK_NOTIFY_USER_ID
+
+    def tearDown(self) -> None:
+        slack_bot.OPENCLAW_INCIDENT_ALLOWED_USERS = self._orig_allowed
+        slack_bot.SLACK_NOTIFY_USER_ID = self._orig_notify
+        slack_bot._incident_actions_cache.clear()
+
+    def test_allowed_users_csv_parsed(self) -> None:
+        slack_bot.OPENCLAW_INCIDENT_ALLOWED_USERS = " U1 , U2 , ,U3 "
+        slack_bot.SLACK_NOTIFY_USER_ID = "UFALLBACK"
+        assert slack_bot._incident_allowed_user_ids() == {"U1", "U2", "U3"}
+
+    def test_allowed_users_falls_back_to_notify(self) -> None:
+        slack_bot.OPENCLAW_INCIDENT_ALLOWED_USERS = ""
+        slack_bot.SLACK_NOTIFY_USER_ID = "UFALLBACK"
+        assert slack_bot._incident_allowed_user_ids() == {"UFALLBACK"}
+
+    def test_allowed_users_empty_when_unconfigured(self) -> None:
+        slack_bot.OPENCLAW_INCIDENT_ALLOWED_USERS = ""
+        slack_bot.SLACK_NOTIFY_USER_ID = ""
+        assert slack_bot._incident_allowed_user_ids() == set()
+
+    def test_cache_put_and_get(self) -> None:
+        actions = [{"title": "restart sonarr", "executable": True}]
+        slack_bot._incident_cache_put(42, actions)
+        got = slack_bot._incident_cache_get(42)
+        assert got == actions
+        # Returned list is a copy — mutating shouldn't affect cache (stored snapshot is via list())
+        assert slack_bot._incident_cache_get(99) is None
+
+    def test_cache_expires(self) -> None:
+        actions = [{"title": "x", "executable": True}]
+        slack_bot._incident_cache_put(7, actions)
+        # Force expiry by rewriting the timestamp
+        ts, payload = slack_bot._incident_actions_cache[7]
+        slack_bot._incident_actions_cache[7] = (ts - slack_bot._INCIDENT_CACHE_TTL_S - 1, payload)
+        assert slack_bot._incident_cache_get(7) is None
+        assert 7 not in slack_bot._incident_actions_cache
+
+    def test_parse_int(self) -> None:
+        assert slack_bot._parse_int("42") == 42
+        assert slack_bot._parse_int(" 7 ") == 7
+        assert slack_bot._parse_int("abc") is None
+        assert slack_bot._parse_int("") is None
+
+    def test_parse_action_button_value_ok(self) -> None:
+        raw = json.dumps({"id": 11, "idx": 2})
+        assert slack_bot._parse_action_button_value(raw) == (11, 2)
+
+    def test_parse_action_button_value_bad(self) -> None:
+        assert slack_bot._parse_action_button_value("") is None
+        assert slack_bot._parse_action_button_value("not-json") is None
+        assert slack_bot._parse_action_button_value(json.dumps({"id": 5})) is None
+        assert slack_bot._parse_action_button_value(json.dumps({"idx": 1})) is None
+
+    def test_action_blocks_include_executable_buttons_only(self) -> None:
+        actions = [
+            {"title": "restart sonarr", "description": "d", "risk_level": "medium", "executable": True},
+            {"title": "check disk", "description": "d", "risk_level": "low", "executable": False},
+            {"title": "restart radarr", "description": "d", "risk_level": "high", "executable": True},
+        ]
+        blocks = slack_bot._incident_action_blocks(99, "summary", ["cause-1"], actions, "test-model")
+        # Find the actions block
+        action_block = next((b for b in blocks if b.get("type") == "actions"), None)
+        assert action_block is not None
+        # Only executable actions get buttons (2 of 3)
+        assert len(action_block["elements"]) == 2
+        # Button values encode the action index
+        values = [json.loads(el["value"]) for el in action_block["elements"]]
+        assert values[0] == {"id": 99, "idx": 0}
+        assert values[1] == {"id": 99, "idx": 2}
+        # High-risk button gets danger style
+        assert action_block["elements"][1]["style"] == "danger"
+        assert action_block["elements"][0]["style"] == "primary"
+
+    def test_action_blocks_render_without_actions(self) -> None:
+        # Recommendation-only or empty actions still produce a renderable card
+        blocks = slack_bot._incident_action_blocks(5, "", [], [], "model", error="timeout")
+        assert any(b.get("type") == "section" for b in blocks)
+        # No actions row when there are no executable items
+        assert not any(b.get("type") == "actions" for b in blocks)

@@ -1,6 +1,7 @@
 # Slack → OpenClaw → Copilot CLI bridge — Design Plan
 <!-- Created: 2026-05-21 -->
-<!-- Status: AWAITING USER APPROVAL — no implementation has started -->
+<!-- Updated: 2026-05-21 -->
+<!-- Status: Phase 1 IMPLEMENTED (commit pending). Phase 2 awaits user checkpoint. -->
 
 ## User request
 
@@ -226,13 +227,19 @@ tool access. The remaining risks the implementation must still mitigate:
 
 #### Open questions for the user
 
-1. **Which Slack user(s) should have access initially?** Default proposal: only the workspace owner's Slack user ID (set via `OPENCLAW_HOST_BRIDGE_ALLOWED_USERS`). Feature is disabled until this env var is non-empty.
-2. **Should `/copilot fix` require button approval every time, or allow a "trusted mode" for the owner?** Default proposal: button approval on first use per session; opt-in trusted mode via `/copilot-trust` for the owner (still audited, still revocable).
-3. **Default working directory for `copilot` invocations?** Default proposal: `$HOME` (`/Users/davevoyles`) — matches "exactly like I am now". User can override per call: `/copilot diagnose in:~/docker-stack ...`.
-4. **Output streaming cadence?** Default proposal: 2-second batched chunks, max 50 chunks per Slack thread; full unredacted transcript always available at `~/openclaw/data/audit/host_bridge/<id>.log`.
-5. **Should we also expose this via Discord, or Slack-only?** Default proposal: Slack-only initially since Slack is the user's primary interface. Discord can mirror later using the same `host_bridge.py` core.
-6. **Tool flags in fix mode.** Default proposal: pass `--allow-all-tools` (matches user's interactive experience). Alternative: explicit allowlist like `--allow-tool 'shell(docker *)' --allow-tool 'shell(osascript *)'`. The default matches stated intent; the alternative is safer.
-7. **Working directory for the SSH session.** `ssh ... cd "$dir" && /opt/homebrew/bin/copilot ...`. Default proposal: `$HOME`, configurable per call.
+> **All answered 2026-05-21 by Dave** — implementation locked to these values.
+
+1. **Which Slack user(s) should have access initially?** ✅ **`U0ATT7XTDGS` (Dave)** via `OPENCLAW_HOST_BRIDGE_ALLOWED_USERS=U0ATT7XTDGS`. Feature disabled until env var is non-empty.
+2. **Should `/copilot fix` require button approval every time?** ✅ **Yes — button approval on every call.** No trusted-mode toggle in Phase 2 v1.
+3. **Default working directory for `copilot` invocations?** ✅ **`/Users/davevoyles/docker-stack`** (user override per call via `in:<dir>`).
+4. **Output streaming cadence?** ✅ **2-second batched chunks, max 50 chunks per Slack thread**, full unredacted transcript at `~/openclaw/data/audit/host_bridge/<id>.log`.
+5. **Should we also expose this via Discord, or Slack-only?** ✅ **Slack-only.** No Discord parity ever — user explicitly stated Slack is the primary and exclusive interface.
+6. **Tool flags in fix mode.** ✅ **`--allow-all-tools`** — full parity with user's interactive `copilot` session.
+7. **Working directory for the SSH session.** ✅ Same as #3: `/Users/davevoyles/docker-stack` default, overridable per call.
+
+Additional Phase 2 defaults from this round:
+- **Per-call timeout:** 10 min default, configurable via `OPENCLAW_HOST_BRIDGE_TIMEOUT_S`.
+- **`/copilot` subcommands:** `diagnose <prompt>` (read-only, no approval), `fix <prompt>` (button approval per call), `status`, `kill <id>`.
 
 ## Decision tree (what runs when)
 

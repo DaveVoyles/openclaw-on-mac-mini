@@ -186,6 +186,12 @@ MANIFEST: dict = {
                 "usage_hint": "[list | archive <name>]",
                 "should_escape": False,
             },
+            {
+                "command": "/incident",
+                "description": "Incident Copilot: open, triage, and execute approved remediation actions",
+                "usage_hint": "start <title> | status <id> | resolve <id> [postmortem] | list | timeline <id>",
+                "should_escape": False,
+            },
         ],
     },
     "oauth_config": {

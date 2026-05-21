@@ -541,6 +541,223 @@ _DIGEST_PREFS_PATH = Path(__file__).parent.parent / "data" / "digest_prefs.json"
 _DIGEST_CHECK_INTERVAL: int = int(os.getenv("DIGEST_CHECK_INTERVAL", "3600"))  # check every hour
 _DIGEST_LOOKBACK_HOURS: int = int(os.getenv("DIGEST_LOOKBACK_HOURS", "24"))  # show files modified in last N hours
 
+# --- /incident: incident-copilot bridge (mirrors Discord IncidentCog) ---
+# Allowed users defaults to the proactive-alert owner when not explicitly set.
+OPENCLAW_INCIDENT_ALLOWED_USERS = os.getenv("OPENCLAW_INCIDENT_ALLOWED_USERS", "")
+# Cached action list per incident id; tuple of (created_at_monotonic, actions).
+# In-memory only — incidents themselves are durable in incident_store SQLite.
+_incident_actions_cache: dict[int, tuple[float, list[dict[str, Any]]]] = {}
+_INCIDENT_CACHE_TTL_S = int(os.getenv("OPENCLAW_INCIDENT_CACHE_TTL_S", "1800"))
+_INCIDENT_REPORT_TIMEOUT_S = int(os.getenv("OPENCLAW_INCIDENT_REPORT_TIMEOUT_S", "45"))
+
+
+def _incident_allowed_user_ids() -> set[str]:
+    """Resolve the set of Slack user IDs allowed to invoke /incident.
+
+    Falls back to SLACK_NOTIFY_USER_ID (the proactive-alert owner) when
+    OPENCLAW_INCIDENT_ALLOWED_USERS is unset. Returns empty set when neither
+    is configured — handler will refuse all callers in that case.
+    """
+    raw = OPENCLAW_INCIDENT_ALLOWED_USERS or SLACK_NOTIFY_USER_ID
+    return {part.strip() for part in raw.split(",") if part.strip()}
+
+
+def _incident_cache_put(incident_id: int, actions: list[dict[str, Any]]) -> None:
+    _incident_actions_cache[incident_id] = (time.monotonic(), list(actions))
+    # Opportunistic cleanup so the dict can't grow unboundedly across long uptimes.
+    cutoff = time.monotonic() - _INCIDENT_CACHE_TTL_S
+    stale = [k for k, (ts, _) in _incident_actions_cache.items() if ts < cutoff]
+    for k in stale:
+        _incident_actions_cache.pop(k, None)
+
+
+def _incident_cache_get(incident_id: int) -> list[dict[str, Any]] | None:
+    entry = _incident_actions_cache.get(incident_id)
+    if not entry:
+        return None
+    ts, actions = entry
+    if time.monotonic() - ts > _INCIDENT_CACHE_TTL_S:
+        _incident_actions_cache.pop(incident_id, None)
+        return None
+    return actions
+
+
+def _parse_int(value: str) -> int | None:
+    try:
+        return int(value.strip())
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
+def _incident_action_blocks(
+    incident_id: int,
+    summary: str,
+    causes: list[str],
+    actions: list[dict[str, Any]],
+    model_used: str,
+    error: str | None = None,
+) -> list[dict[str, Any]]:
+    """Build Slack Block Kit blocks for an incident Copilot report."""
+    blocks: list[dict[str, Any]] = []
+    header_lines = [f"🚨 *Incident #{incident_id}* — Copilot report (model: `{model_used}`)"]
+    if error:
+        header_lines.append(f"⚠️ _{error}_")
+    blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(header_lines)}})
+    if summary:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"*Summary:*\n{summary[:2800]}"}})
+    if causes:
+        cause_text = "\n".join(f"• {c}" for c in causes[:5])
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"*Suspected causes:*\n{cause_text}"}})
+    if actions:
+        action_lines = []
+        buttons: list[dict[str, Any]] = []
+        for idx, action in enumerate(actions[:3]):
+            title = str(action.get("title", "Action"))[:120]
+            desc = str(action.get("description", ""))[:200]
+            risk = str(action.get("risk_level", "high")).upper()
+            executable = bool(action.get("executable"))
+            tag = "🟢 executable" if executable else "ℹ️ recommendation"
+            action_lines.append(f"*{idx + 1}. {title}* — `{risk}` {tag}\n{desc}")
+            if executable:
+                buttons.append(
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": f"Run #{idx + 1}: {title[:60]}"},
+                        "style": "primary" if risk in {"LOW", "MEDIUM"} else "danger",
+                        "action_id": "incident_action_run",
+                        "value": json.dumps({"id": incident_id, "idx": idx}),
+                    }
+                )
+        if action_lines:
+            blocks.append(
+                {"type": "section", "text": {"type": "mrkdwn", "text": "*Proposed actions:*\n\n" + "\n\n".join(action_lines)}}
+            )
+        if buttons:
+            blocks.append({"type": "actions", "elements": buttons})
+    blocks.append(
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"`/incident status {incident_id}` · `/incident timeline {incident_id}` · `/incident resolve {incident_id}`",
+                }
+            ],
+        }
+    )
+    return blocks
+
+
+async def _run_incident_start(*, client: Any, channel_id: str, user_id: str, title: str) -> None:
+    """Create an incident, run the Copilot report, and post action buttons.
+
+    Shared between the /incident slash command and tests. Returns nothing;
+    user feedback is delivered via Slack messages.
+    """
+    from incident_copilot import generate_incident_report  # lazy
+    from incident_workflows import incident_store  # lazy
+
+    try:
+        incident = incident_store.create_incident(
+            title=title[:200],
+            severity="high",
+            description="",
+            channel_id=None,
+            channel_name=channel_id,
+            thread_id=None,
+            thread_name=None,
+            created_by=None,
+            created_by_name=user_id,
+        )
+    except Exception as exc:  # broad: surface to user
+        log.warning("/incident start: create_incident failed: %s", exc)
+        await client.chat_postEphemeral(
+            channel=channel_id, user=user_id, text=f"❌ Failed to create incident: `{exc}`"
+        )
+        return
+
+    incident_id = int(incident.get("id", 0))
+    stub_ts: str | None = None
+    try:
+        stub = await client.chat_postMessage(
+            channel=channel_id,
+            text=f"🚨 Incident #{incident_id} started — gathering telemetry and drafting Copilot actions…",
+        )
+        stub_ts = (stub or {}).get("ts")
+    except Exception as exc:  # broad: stub failure must not abort the report
+        log.warning("/incident start: stub chat_postMessage failed: %s", exc)
+
+    error: str | None = None
+    summary = ""
+    causes: list[str] = []
+    actions: list[dict[str, Any]] = []
+    model_used = "unknown"
+    try:
+        report = await asyncio.wait_for(
+            generate_incident_report(incident, requested_services=""),
+            timeout=_INCIDENT_REPORT_TIMEOUT_S,
+        )
+        summary = str(report.get("summary", "")).strip()
+        causes = [str(item) for item in report.get("suspected_causes", []) if str(item).strip()]
+        actions = [item for item in report.get("actions", []) if isinstance(item, dict)]
+        model_used = str(report.get("model_used", "unknown"))[:80]
+    except asyncio.TimeoutError:
+        error = "Incident Copilot timed out gathering telemetry."
+        model_used = "timeout"
+        log.warning("Incident Copilot timed out for incident #%s", incident_id)
+    except Exception as exc:  # broad: intentional
+        error = f"Incident Copilot was unavailable: {exc}"
+        model_used = "error"
+        log.warning("Incident Copilot failed for incident #%s: %s", incident_id, exc)
+
+    # Persist Copilot output to the incident timeline (parity with Discord cog).
+    try:
+        incident_store.append_event(
+            incident_id,
+            event_type="copilot_summary",
+            note=json.dumps({"summary": summary, "causes": causes, "model": model_used}),
+            actor_id=None,
+            actor_name=user_id,
+        )
+        incident_store.append_event(
+            incident_id,
+            event_type="copilot_actions",
+            note=json.dumps(
+                {
+                    "actions": [
+                        {k: a.get(k) for k in ("title", "command", "target", "risk_level", "executable")}
+                        for a in actions[:3]
+                    ]
+                }
+            ),
+            actor_id=None,
+            actor_name=user_id,
+        )
+    except Exception as exc:  # broad: telemetry failure must not break user flow
+        log.warning("/incident start: append_event failed: %s", exc)
+
+    _incident_cache_put(incident_id, actions)
+    blocks = _incident_action_blocks(incident_id, summary, causes, actions, model_used, error=error)
+    final_text = f"🚨 Incident #{incident_id}: {summary[:120] or title[:120]}"
+    try:
+        if stub_ts:
+            await client.chat_update(channel=channel_id, ts=stub_ts, text=final_text, blocks=blocks)
+        else:
+            await client.chat_postMessage(channel=channel_id, text=final_text, blocks=blocks)
+    except Exception as exc:  # broad: fall back to a plain post
+        log.warning("/incident start: chat_update failed (%s); posting fresh message", exc)
+        await client.chat_postMessage(channel=channel_id, text=final_text, blocks=blocks)
+
+
+def _parse_action_button_value(raw: str) -> tuple[int, int] | None:
+    """Parse the JSON `value` on an incident action button into (incident_id, idx)."""
+    try:
+        payload = json.loads(raw or "{}")
+        return int(payload["id"]), int(payload["idx"])
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        return None
+
+
 _CASUAL_TIPS = [
     "\n\n💡 _Tip: You can just talk to me naturally — no commands needed!_",
     "\n\n💡 _Tip: Drop a photo or file into Slack anytime and ask me about it._",
@@ -4757,6 +4974,188 @@ def _register_integration_handlers(app: Any) -> None:
             text=result,
         )
 
+    # ------------------------------------------------------------------
+    # Handler: /incident — Slack bridge to Incident Copilot
+    #
+    # Mirrors the Discord IncidentCog (src/cogs/incident_cog.py) by reusing
+    # the same shared incident_store + incident_copilot modules. Owner-only:
+    # access is gated by OPENCLAW_INCIDENT_ALLOWED_USERS (CSV of Slack user
+    # IDs), falling back to SLACK_NOTIFY_USER_ID.
+    #
+    # Subcommands:
+    #   /incident start <title>              — open incident + run Copilot
+    #   /incident status <id>                — show incident summary
+    #   /incident resolve <id> [postmortem]  — close incident
+    #   /incident list                       — recent incidents
+    #   /incident timeline <id>              — event timeline
+    # ------------------------------------------------------------------
+
+    @app.command("/incident")
+    async def handle_slash_incident(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id: str = body.get("user_id", "")
+        channel_id: str = body.get("channel_id", user_id)
+        text: str = (body.get("text") or "").strip()
+
+        allowed = _incident_allowed_user_ids()
+        if not allowed:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=(
+                    "🛑 `/incident` is not configured. Set `OPENCLAW_INCIDENT_ALLOWED_USERS` "
+                    "(or `SLACK_NOTIFY_USER_ID`) to a Slack user ID."
+                ),
+            )
+            return
+        if user_id not in allowed:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="🛑 You are not allowed to run `/incident` on this workspace.",
+            )
+            return
+
+        # Lazy imports — these modules pull in LLM/skills layers and we want
+        # slack_bot import to stay cheap when /incident isn't used.
+        try:
+            from incident_copilot import execute_incident_action, generate_incident_report  # noqa: F401
+            from incident_workflows import incident_store
+        except ImportError as exc:
+            log.warning("/incident: incident modules unavailable: %s", exc)
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=f"❌ Incident workflow not available: `{exc}`",
+            )
+            return
+
+        parts = text.split(None, 2)
+        sub = (parts[0].lower() if parts else "") or "help"
+        arg1 = parts[1] if len(parts) > 1 else ""
+        arg2 = parts[2] if len(parts) > 2 else ""
+
+        if sub in {"", "help"}:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=(
+                    "🚨 *Incident Copilot commands:*\n"
+                    "• `/incident start <title>` — open incident, run Copilot, post actions\n"
+                    "• `/incident status <id>` — show incident summary\n"
+                    "• `/incident resolve <id> [postmortem...]` — close incident\n"
+                    "• `/incident list` — recent incidents\n"
+                    "• `/incident timeline <id>` — event timeline"
+                ),
+            )
+            return
+
+        if sub == "list":
+            try:
+                rows = incident_store.list_recent(limit=10)
+            except Exception as exc:  # broad: surface to user
+                log.warning("/incident list failed: %s", exc)
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ {exc}")
+                return
+            if not rows:
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text="📭 No incidents recorded yet.")
+                return
+            lines = ["🚨 *Recent incidents:*"]
+            for inc in rows:
+                lines.append(
+                    f"• #{inc.get('id')} [{inc.get('status', 'open')}] "
+                    f"{inc.get('severity', '?')} — {(inc.get('title') or '')[:80]}"
+                )
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines))
+            return
+
+        if sub == "status":
+            inc_id = _parse_int(arg1)
+            if inc_id is None:
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id, text="Usage: `/incident status <id>`"
+                )
+                return
+            inc = incident_store.get_incident(inc_id)
+            if not inc:
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ Incident #{inc_id} not found.")
+                return
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=(
+                    f"🚨 *Incident #{inc['id']}* — `{inc.get('status', '?')}` / `{inc.get('severity', '?')}`\n"
+                    f"*Title:* {inc.get('title', '')}\n"
+                    f"*Description:* {(inc.get('description') or '_(none)_')[:1500]}\n"
+                    f"*Created:* {inc.get('created_at', '?')} by {inc.get('created_by_name', '?')}"
+                ),
+            )
+            return
+
+        if sub == "timeline":
+            inc_id = _parse_int(arg1)
+            if inc_id is None:
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id, text="Usage: `/incident timeline <id>`"
+                )
+                return
+            events = incident_store.get_timeline(inc_id, limit=20)
+            if not events:
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"📭 No events for incident #{inc_id}.")
+                return
+            lines = [f"🕒 *Timeline for incident #{inc_id}:*"]
+            for ev in events:
+                lines.append(
+                    f"• `{ev.get('created_at', '?')}` *{ev.get('event_type', '?')}* — "
+                    f"{(ev.get('note') or '')[:200]}"
+                )
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines[:25]))
+            return
+
+        if sub == "resolve":
+            inc_id = _parse_int(arg1)
+            if inc_id is None:
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id, text="Usage: `/incident resolve <id> [postmortem...]`"
+                )
+                return
+            try:
+                inc = incident_store.resolve_incident(
+                    inc_id,
+                    postmortem=arg2 or None,
+                    actor_id=None,
+                    actor_name=user_id,
+                )
+            except Exception as exc:  # broad: surface to user
+                log.warning("/incident resolve failed: %s", exc)
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ {exc}")
+                return
+            if not inc:
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ Incident #{inc_id} not found.")
+                return
+            _incident_actions_cache.pop(inc_id, None)
+            await client.chat_postMessage(
+                channel=channel_id,
+                text=f"✅ Incident #{inc['id']} resolved by <@{user_id}>.",
+            )
+            return
+
+        if sub == "start":
+            title = (arg1 + (" " + arg2 if arg2 else "")).strip()
+            if not title:
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id, text="Usage: `/incident start <title>`"
+                )
+                return
+            await _run_incident_start(client=client, channel_id=channel_id, user_id=user_id, title=title)
+            return
+
+        await client.chat_postEphemeral(
+            channel=channel_id,
+            user=user_id,
+            text=f"❓ Unknown subcommand `{sub}`. Try `/incident help`.",
+        )
+
 
 def _register_action_handlers(app: Any) -> None:
     """Register all @app.action handlers: file actions, retry/clarify, and Gmail summarize."""
@@ -4970,6 +5369,112 @@ def _register_action_handlers(app: Any) -> None:
             user=user_id,
             text=f"📧 *Email summary:*\n{summary}",
         )
+
+    # ------------------------------------------------------------------
+    # Handler: 🚨 Incident action — execute a Copilot-suggested action
+    #
+    # Mirrors the Discord IncidentActionView button flow. Identity-gated by
+    # OPENCLAW_INCIDENT_ALLOWED_USERS (or SLACK_NOTIFY_USER_ID). Actions are
+    # additionally gated server-side by incident_copilot.SAFE_RESTART_TARGETS.
+    # ------------------------------------------------------------------
+
+    @app.action("incident_action_run")
+    async def handle_incident_action_run(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = (body.get("user") or {}).get("id", "unknown")
+        channel_id = (body.get("channel") or {}).get("id", "") or (body.get("container") or {}).get("channel_id", "")
+        message_ts = (body.get("message") or {}).get("ts") or (body.get("container") or {}).get("message_ts", "")
+
+        allowed = _incident_allowed_user_ids()
+        if not allowed or user_id not in allowed:
+            await client.chat_postEphemeral(
+                channel=channel_id or user_id,
+                user=user_id,
+                text="🛑 You are not allowed to run incident actions on this workspace.",
+            )
+            return
+
+        actions_payload = body.get("actions") or [{}]
+        raw_value = (actions_payload[0] if actions_payload else {}).get("value", "")
+        parsed = _parse_action_button_value(raw_value)
+        if parsed is None:
+            await client.chat_postEphemeral(
+                channel=channel_id or user_id, user=user_id, text="❌ Malformed action button payload."
+            )
+            return
+        incident_id, action_idx = parsed
+
+        cached = _incident_cache_get(incident_id)
+        if not cached or action_idx < 0 or action_idx >= len(cached):
+            await client.chat_postEphemeral(
+                channel=channel_id or user_id,
+                user=user_id,
+                text=(
+                    f"⌛ Incident #{incident_id} actions are no longer cached "
+                    f"(TTL {_INCIDENT_CACHE_TTL_S}s). Re-run `/incident start <title>` to refresh."
+                ),
+            )
+            return
+        action = cached[action_idx]
+        if not action.get("executable"):
+            await client.chat_postEphemeral(
+                channel=channel_id or user_id, user=user_id, text="ℹ️ That action is recommendation-only."
+            )
+            return
+
+        try:
+            from incident_copilot import execute_incident_action
+            from incident_workflows import incident_store
+        except ImportError as exc:
+            await client.chat_postEphemeral(
+                channel=channel_id or user_id, user=user_id, text=f"❌ Incident modules unavailable: `{exc}`"
+            )
+            return
+
+        title = str(action.get("title", "action"))[:120]
+        command = str(action.get("command", ""))
+        target = str(action.get("target", ""))
+
+        try:
+            incident_store.append_event(
+                incident_id,
+                event_type="copilot_action_requested",
+                note=f"{command}:{target} requested by {user_id} via Slack",
+                actor_id=None,
+                actor_name=user_id,
+            )
+        except Exception as exc:  # broad: telemetry must not block execution
+            log.warning("incident_action_run: append_event(requested) failed: %s", exc)
+
+        try:
+            result = await execute_incident_action(action)
+        except Exception as exc:  # broad: surface to user
+            log.warning("incident_action_run: execute failed: %s", exc)
+            result = f"❌ Action failed: {exc}"
+
+        try:
+            incident_store.append_event(
+                incident_id,
+                event_type="copilot_action_executed",
+                note=f"{command}:{target} => {str(result)[:300]}",
+                actor_id=None,
+                actor_name=user_id,
+            )
+        except Exception as exc:  # broad
+            log.warning("incident_action_run: append_event(executed) failed: %s", exc)
+
+        reply_text = (
+            f"🚨 *Incident #{incident_id}* — action *{title}* executed by <@{user_id}>\n"
+            f"```\n{str(result)[:1800]}\n```"
+        )
+        try:
+            if channel_id and message_ts:
+                await client.chat_postMessage(channel=channel_id, thread_ts=message_ts, text=reply_text)
+            else:
+                await client.chat_postMessage(channel=channel_id or user_id, text=reply_text)
+        except Exception as exc:  # broad: fall back to ephemeral
+            log.warning("incident_action_run: chat_postMessage failed: %s", exc)
+            await client.chat_postEphemeral(channel=channel_id or user_id, user=user_id, text=reply_text)
 
 
 def create_slack_app() -> Any | None:  # type: ignore[return]

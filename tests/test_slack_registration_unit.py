@@ -25,9 +25,9 @@ SLACK_BOT_SRC = Path(__file__).parent.parent / "src" / "slack_bot.py"
 
 # Exact counts at authoring time — update intentionally when adding new handlers.
 EXPECTED_EVENT_COUNT = 5
-EXPECTED_COMMAND_COUNT = 25
-EXPECTED_ACTION_COUNT = 8
-EXPECTED_TOTAL_COUNT = EXPECTED_EVENT_COUNT + EXPECTED_COMMAND_COUNT + EXPECTED_ACTION_COUNT  # 38
+EXPECTED_COMMAND_COUNT = 26  # +1: /incident (Slack ↔ Incident Copilot bridge)
+EXPECTED_ACTION_COUNT = 9    # +1: incident_action_run
+EXPECTED_TOTAL_COUNT = EXPECTED_EVENT_COUNT + EXPECTED_COMMAND_COUNT + EXPECTED_ACTION_COUNT  # 40
 
 
 # ---------------------------------------------------------------------------
