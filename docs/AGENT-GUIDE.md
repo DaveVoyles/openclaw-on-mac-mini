@@ -36,11 +36,10 @@ Slack user ─► /slash command ─► src/slack_bot.py ─► src/ask_orchestr
 - **NAS** (192.168.1.8) — Storage only (SMB + NFS mounts for media)
 - **Source:** `~/openclaw/` — application code (separate Git repo from docker-stack)
 - **Deploy config:** `~/docker-stack/openclaw/docker-compose.yml`
-- **Dashboard:** `http://192.168.1.93:8765/dashboard`
-- **Health:** `http://192.168.1.93:8765/health` (Slack-native, no Discord)
+- **Health:** `http://192.168.1.93:8765/health` — only HTTP endpoint exposed (Slack-native, no dashboard)
 
-**Code shape (2026-05-21, post-Discord removal):**
-- `src/*.py` — ~95 modules (110 fewer since Discord removal), plus subpackages `src/llm/` (10), `src/dashboard/` (4), `src/plugin_system/` (4), `src/api/`, `src/exporters/`, `src/utils/`, `src/templates/`
+**Code shape (2026-05-22, post-debt cleanup):**
+- `src/*.py` — ~155 modules, plus subpackages `src/llm/` (10), `src/api/`, `src/exporters/`, `src/utils/`, `src/templates/`. The `src/dashboard/` and `src/plugin_system/` packages were removed in the Discord-removal debt cleanup; zero `import discord` lines remain and `discord.py` is no longer a dependency.
 - `skills/` — 22 `*.py` modules + 12+ ClawHub skill bundle directories
 - `config/tools.yaml` — 118 function-calling tool declarations
 
@@ -213,7 +212,7 @@ This section previously documented patterns for Discord cogs (W1–W14). **Disco
 
 - **Error handling:** Slack handlers in `src/slack_bot.py` use `say(...)` with formatted error text or upload an error file. There is no `build_error_embed` equivalent — Slack messages are markdown/Block Kit.
 - **Progress indicators:** the `/copilot` host bridge already streams progress via Slack thread updates (`src/host_bridge.py`); use the same pattern for new long-running commands.
-- **Alert routing:** `alert_manager.send_severity_alert()` still exists but its Discord output paths are dormant. Long-term: route alerts via Slack DMs to `SLACK_NOTIFY_USER_ID`. Until then, alerts log only.
+- **Alert routing:** `alert_manager.py` was deleted with the Discord cleanup; severity-aware alerting is currently log-only. Long-term: route alerts via Slack DMs to `SLACK_NOTIFY_USER_ID`. Until then, use `log.warning(...)` / `log.error(...)`.
 
 ### Memory Recall — Domain Guard
 

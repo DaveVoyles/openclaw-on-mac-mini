@@ -217,44 +217,42 @@ skills.SKILLS dict     →  tool_router shortlists by keyword
 
 ## 5. Add a dashboard surface or API endpoint
 
-The dashboard is an aiohttp app in `src/dashboard/`. With Discord removed, the slack bot's health server (`src/slack_bot.py::_start_health_server()`) is what currently runs on port 8765. The full dashboard wire-up (login/session middleware, etc.) lived in the deleted `src/discord_web.py`; if you need it, lift the routes from git history (commit `ae0004d` had them) into a new Slack-bot-hosted aiohttp app.
+The dashboard was removed in May 2026 along with the Discord bot. The slack bot's health server (`src/slack_bot.py::_start_health_server()`) is the only aiohttp app currently running on port 8765 — it serves `/health` and nothing else.
 
-| File | Role |
+If you need richer endpoints:
+
+| Option | When to use |
 |---|---|
-| `src/dashboard/routes.py` | `setup_dashboard(app, ...)` registers page + API routes (lines 68–170) |
-| `src/dashboard/api_handlers.py` | JSON `/api/...` handlers |
-| `src/dashboard/html_handlers.py` | HTML page handlers + CLI download endpoints |
-| `src/dashboard/helpers.py` | Shared helpers |
-| `src/slack_bot.py::_start_health_server` | Minimal aiohttp server hosting `/health` on :8765 — extend here to add more routes |
+| **Extend `_start_health_server()`** | Add a couple of JSON endpoints (`/metrics`, `/api/<thing>`). Cheapest path. |
+| **Stand up a separate aiohttp module** | More than a handful of routes, or you need middleware (auth, sessions, CORS). Import the slack bot for state. |
+| **Lift the deleted dashboard from git** | Commit `1dcc85d` removed `src/dashboard/` (api_handlers, html_handlers, routes, helpers). `_execute_agent_ask` was preserved separately in `src/ask_executor.py`. The rest can be salvaged from history if you really want the HTML UI back. |
 
 ### Recipe
 
-1. **JSON endpoint:** add `async def <name>_api(request): ...` in `api_handlers.py`. Wire it into `_start_health_server()` in `slack_bot.py` with `app.router.add_get(...)`.
-2. **HTML page:** same pattern; render via `html_handlers.py`.
-3. **State-changing action:** wrap with a bearer-token guard (`OPENCLAW_API_TOKEN`). The previous `_require_api_action_auth()` helper was in `discord_web.py`; reimplement in a Slack-owned module if you need it.
+1. **JSON endpoint:** in `slack_bot.py::_start_health_server()`, add `app.router.add_get("/api/<name>", <handler>)`. Define `async def <handler>(request): return web.json_response({...})`.
+2. **State-changing action:** guard with a bearer-token check (`OPENCLAw_API_TOKEN` env var) before mutating anything. There is no shared auth helper anymore — write the check inline (a few lines).
+3. **For the agent-ask flow** (LLM Q&A used by `/chat` etc.), call `ask_executor.execute_agent_ask(...)` directly — that is the only piece of the old dashboard kept alive.
 
-> **Tech debt:** the full dashboard surface is currently degraded post-Discord-removal. Only `/health` runs out of the box. Restoring `/dashboard`, `/api/*`, login, etc. is a future cleanup task.
+> **Status:** Only `/health` runs today. The Discord-era `/dashboard`, `/api/*`, and login surfaces are gone for good.
 
 ---
 
 ## 6. Add a background loop
 
-The real loops live in:
+There are **no background loops currently registered.** The entire `bg_*` family (`bg_briefing.py`, `bg_monitoring.py`, `bg_healing.py`, `bg_tasks.py`) was deleted in May 2026 — they were Discord-coupled and `slack_bot.py` never wired them up.
 
-| Module | Loops it owns |
+To add one today, you have two options:
+
+| Option | When to use |
 |---|---|
-| `src/bg_briefing.py` | `morning_briefing_loop`, `evening_digest_loop` |
-| `src/bg_monitoring.py` | `error_monitor_loop`, container health monitor, resource monitor |
-| `src/bg_healing.py` | `audit_writer_loop`, `background_cleanup_loop`, `proactive_insight_loop`, self-healing |
-| `src/bg_tasks.py` | supervisor — start/stop/restart/backoff, loop registry |
+| **`asyncio.create_task()` from `slack_bot.py`** | Simple periodic work — start it in `_start_bot()` after the Bolt app is up. Cheapest path. |
+| **Re-introduce a small supervisor** | If you need restart-on-failure, backoff, or a registry of loops. Lift the pattern (not the code) from git history (`bg_tasks.py::_run_supervised_background_task`). |
 
-> **Note:** `src/discord_background.py` was deleted in May 2026 along with the Discord bot. The supervisor in `bg_tasks.py` is still present but no longer wired to a Discord client; loops that posted to Discord channels are dormant. Migrating these to Slack output (via `slack_sdk` client from `slack_bot.py`) is a future task.
+### Recipe (simple `asyncio.create_task` approach)
 
-### Recipe
-
-1. **Implement the loop** as an async coroutine in the appropriate `bg_*.py` module (or a new one):
+1. Define the loop as a top-level async coroutine in a new module (e.g. `src/loops/my_loop.py`):
    ```python
-   async def my_loop(bot):
+   async def my_loop():
        while True:
            try:
                # ... do work ...
@@ -266,11 +264,13 @@ The real loops live in:
                await asyncio.sleep(BACKOFF_SECS)
    ```
 
-2. **Register it in the factory map** in `src/bg_tasks.py::_build_background_task_factories()` (lines 112–130). The supervisor wraps each loop with `_run_supervised_background_task()` (175–208) and restarts it via `_handle_background_task_done()` (133–163) with exponential backoff.
+2. Start it from `slack_bot.py::_start_bot()` after the Bolt app initializes:
+   ```python
+   from loops.my_loop import my_loop
+   asyncio.create_task(my_loop())
+   ```
 
-3. **Start it.** `start_background_tasks(bot)` (lines 222–243) launches all registered loops at bot startup.
-
-4. **Alert on failure conditions** via `src/alert_manager.send_severity_alert()` — never write to a channel directly.
+3. **Output to Slack** via the `slack_sdk` client already constructed in `slack_bot.py` — call `client.chat_postMessage(channel=..., text=...)`. Do not write to channels directly anywhere else.
 
 ---
 
@@ -307,45 +307,9 @@ Use `src/scheduler_advanced.py` (lines 90–260) when you need retry policy, eve
 
 ## 8. Add a plugin
 
-Plugins are optional capabilities discovered from `plugins/<name>/plugin.yaml` and loaded by `src/plugin_system/`.
-
-### What works today
-
-- Manifest discovery (`PluginLoader.discover_plugins()` — `plugin_loader.py:64-86`)
-- Manifest validation (`plugin_loader.py:88-137`) — required: `name`, `version`, `author`
-- Lifecycle: `on_load()` / `on_unload()` (`plugin_loader.py:330-395`)
-- **Skill registration** from inside plugins via `self.api.register_skill(name, fn)` (`plugin_api.py:131-145`) — the registered skill is callable just like any other skill
-- Enable / disable persisted in `data/plugin_state.json` (`src/plugin_system/plugin_registry.py:24-127`)
-- Reload, install, remove (`plugin_registry.py:24-260`)
-
-### What does NOT work today
-
-> **Discord command registration from plugins is logged but not wired.** See `src/plugin_system/plugin_api.py:147-150`. Treat plugins as **skill-only** for production use.
-
-### Recipe (real example: `plugins/examples/<name>/`)
-
-```
-plugins/<name>/
-├── plugin.yaml      # name, version, author (+ optional: description, homepage, repository, permissions, min_openclaw_version)
-└── main.py          # Plugin subclass with on_load / on_unload
-```
-
-```python
-# plugins/<name>/main.py
-from plugin_system import Plugin, PluginAPI
-
-class MyPlugin(Plugin):
-    async def on_load(self, api: PluginAPI):
-        api.register_skill("my_skill", self._my_skill)
-
-    async def _my_skill(self, query: str) -> str:
-        return f"hello {query}"
-
-    async def on_unload(self):
-        pass  # skills auto-unregister on unload
-```
-
-Discovery happens automatically when the bot starts; enable/disable state persists across restarts.
+> **Plugin system removed in May 2026.** The Discord-tightly-coupled `src/plugin_system/` package was deleted in the post-Discord-removal cleanup; it had no production callers. Skill registration today happens through `src/skill_registry.py` directly (see §1 *Add a skill*).
+>
+> If you need a runtime plugin loader again, the previous implementation lives in git history (commit prior to `1dcc85d`) — but rebuild it Slack-first, without `discord.Interaction` permission gating.
 
 ---
 
@@ -427,7 +391,7 @@ Phone users want one-tap operations. Typing `/copilot diagnose why plex can't fi
 | Rate limiting | `src/llm_ratelimit.RateLimiter` (sliding window + jittered backoff) |
 | Slack message errors | `:x: <msg>` prefix + `log.exception(...)`; ephemeral if appropriate |
 | Long-running Slack work | Async task + incremental thread updates (see `start_session()` in `src/host_bridge.py`) |
-| Alerts | `src/alert_manager.send_severity_alert()` (Discord output paths dormant post-removal; logging still works) |
+| Alerts | `log.warning(...)` / `log.error(...)` — Slack DM alerting via `SLACK_NOTIFY_USER_ID` is a TODO. `alert_manager.py` was deleted with the Discord cleanup. |
 
 ---
 

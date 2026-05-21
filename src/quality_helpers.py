@@ -20,8 +20,6 @@ import re
 import sys as _sys
 from typing import Any
 
-import discord
-
 from ask_orchestrator import (
     apply_repair_budget,
     get_latency_load_snapshot,
@@ -188,7 +186,8 @@ def _build_ask_failure_message(
             "• If this keeps failing, start an incident with `/incident start`",
         ],
     }.get(category, ["• Retry with a shorter prompt", "• Start `/incident` if failures continue"])
-    safe_question = discord.utils.escape_markdown(question)
+    # Escape Slack/markdown control chars so the recap renders as plain text.
+    safe_question = re.sub(r"([\\\*_`~|>])", r"\\\1", question)
     hints = "\n".join(hint_lines)
     return (
         f"❌ **{category_title}.** The `/ask` request could not complete (`model:{model_pref}`).\n\n"

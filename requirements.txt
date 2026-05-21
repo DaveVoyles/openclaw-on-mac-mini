@@ -5,13 +5,6 @@
 slack-bolt>=1.18.0
 slack-sdk>=3.27.0
 
-# discord.py kept temporarily for ~14 shared utility modules that still
-# `import discord` at module top (alert_manager, quality_helpers,
-# bot_formatting, permissions, etc.). The Discord bot itself is gone;
-# these are dormant code paths. TODO: scrub remaining `import discord`
-# statements and remove this dependency.
-discord.py~=2.7.1
-
 # Google Gemini AI SDK (new unified SDK)
 google-genai~=1.0
 

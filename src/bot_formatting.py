@@ -1,13 +1,13 @@
-"""Discord message formatting utilities for OpenClaw bot.
+"""Message formatting utilities for OpenClaw bot.
 
-Handles markdown conversion, table rendering, and message splitting for Discord embeds.
+Handles markdown conversion, table rendering, and message splitting.
+Originally Discord-specific; now Slack-first with table modes preserved
+for legacy callers.
 """
 
 import io
 import re
 from typing import Literal
-
-import discord
 
 from constants import EMBED_DESC_LIMIT, EMBED_SPLIT_LIMIT
 from copy_workflow_formatter import build_copy_workflow_payload
@@ -377,44 +377,6 @@ def split_response(text: str, limit: int = _EMBED_LIMIT) -> list[str]:
     if not chunks:
         return [""]
     return chunks
-
-
-def extract_file_attachment(text: str) -> tuple[discord.File, str] | None:
-    """If the response contains a large code block (>500 chars), extract it as a discord.File."""
-    matches = list(_CODE_BLOCK_RE.finditer(text))
-    if not matches:
-        return None
-
-    best = max(matches, key=lambda m: len(m.group(2)))
-    code = best.group(2).strip()
-    lang = (best.group(1) or "txt").lower()
-
-    if len(code) < 500:
-        return None
-
-    ext_map = {
-        "python": "py",
-        "py": "py",
-        "javascript": "js",
-        "js": "js",
-        "typescript": "ts",
-        "ts": "ts",
-        "json": "json",
-        "yaml": "yaml",
-        "yml": "yaml",
-        "html": "html",
-        "css": "css",
-        "sql": "sql",
-        "bash": "sh",
-        "sh": "sh",
-        "csv": "csv",
-        "markdown": "md",
-        "md": "md",
-    }
-    ext = ext_map.get(lang, "txt")
-
-    buffer = io.BytesIO(code.encode("utf-8"))
-    return discord.File(buffer, filename=f"openclaw_output.{ext}"), lang
 
 
 def build_copy_safe_text_bundle(text: str) -> str:

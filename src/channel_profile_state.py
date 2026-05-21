@@ -13,12 +13,10 @@ from dataclasses import field as dataclass_field
 from pathlib import Path
 from typing import Any
 
-from discord.ext import commands
-
 
 @dataclass
 class _InteractionState:
-    bot: commands.Bot | None = None
+    bot: Any | None = None
     channel_id: ContextVar[int | None] = dataclass_field(
         default_factory=lambda: ContextVar("openclaw_current_channel_id", default=None)
     )
@@ -771,15 +769,15 @@ def _reset_channel_profile_store_for_tests() -> None:
 # ---------------------------------------------------------------------------
 
 
-def set_bot(bot: commands.Bot) -> None:
-    """Register the live Discord bot instance for runtime helpers."""
+def set_bot(bot: Any) -> None:
+    """Register the live bot instance for runtime helpers (legacy hook)."""
     global _BOT
     _BOT = bot
     _INTERACTION_STATE.bot = bot
 
 
-def get_bot() -> commands.Bot | None:
-    """Return the active Discord bot instance if one has been registered."""
+def get_bot() -> Any | None:
+    """Return the active bot instance if one has been registered (legacy hook)."""
     return _INTERACTION_STATE.bot
 
 
