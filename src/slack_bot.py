@@ -2010,7 +2010,7 @@ async def _ask(
 ) -> str:
     """Route a prompt through OpenClaw's agent ask pipeline."""
     global _daily_query_count, _error_window, _last_alert_ts
-    from dashboard.api_handlers import _execute_agent_ask
+    from ask_executor import execute_agent_ask as _execute_agent_ask
 
     try:
         if simple:
