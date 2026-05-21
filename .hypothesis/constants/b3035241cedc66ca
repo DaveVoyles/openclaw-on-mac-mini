@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/vector_store.py
-# hypothesis_version: 6.151.10
-
-[0.0, 0.1, 0.9, 1.0, 2.0, 100, 200, 300, 500, 2000, 8000, 86400, '$and', '$lt', ',', '/memory/chromadb', '0.7', 'CHROMA_DIR', 'EMBEDDING_MODEL', '[Your Memory]', '_', 'access_count', 'added_at', 'collection', 'confidence', 'conversations', 'cosine', 'count', 'decayed', 'distance', 'distances', 'documents', 'embedding_function', 'fact', 'hnsw:space', 'id', 'ids', 'last_accessed', 'memories', 'metadata', 'metadatas', 'n_results', 'name', 'query', 'query_texts', 'report', 'research', 'similarity', 'source', 'sources', 'summary', 'tags', 'text', 'thread_name', 'type', 'user-explicit', 'user_id', 'where']

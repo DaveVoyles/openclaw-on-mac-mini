@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/skills/trend_skills.py
-# hypothesis_version: 6.151.10
-
-[-1.0, -0.5, -0.2, 0.0, 0.2, 0.5, 1.0, 2.0, 3.0, 10.0, 100, 168, 720, 3600, ' | ', '%', '+', '0%', '24h', '30d', '7d', 'API-Sports', 'All', 'Alpha Vantage', 'Finance', 'General', 'News', 'NewsAPI', 'Sports', 'analysis', 'articles', 'best', 'breaking_news', 'breakthrough', 'category', 'change_percent', 'chart', 'count', 'crash', 'created_at', 'current_volume', 'decline', 'down', 'drop', 'enabled', 'error', 'fail', 'gain', 'games', 'high', 'hours_ago', 'is_breakout', 'is_spike', 'is_trending', 'loss', 'low', 'message', 'ok', 'record', 'rise', 'sentiment', 'sentiment_change', 'sentiment_threshold', 'sources', 'spike_multiplier', 'spike_threshold', 'status', 'success', 'timeframe', 'topic', 'tracked_topics', 'trend_direction', 'trend_skills', 'trending_topics', 'up', 'velocity', 'volume', 'volume_change', 'win', 'worst', 'z_score']

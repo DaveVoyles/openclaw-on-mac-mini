@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/llm/chat.py
-# hypothesis_version: 6.151.10
-
-[0.2, 30.0, 200, 300, 'ANTHROPIC_API_KEY', 'Assistant', 'Deep research', 'LLM', 'LLM-escalate', 'LLM-retry', 'Model router: %s', 'OPENAI_API_KEY', 'User', 'anthropic', 'auto', 'gemini', 'local', 'model', 'model_name', 'model_used', 'needs_tools', 'none', 'ollama', 'openai', 'openclaw.llm', 'parts', 'role', 'routing_notes', 'search_web', 'unknown', 'updated_history', 'user']

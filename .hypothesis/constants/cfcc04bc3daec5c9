@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/alert_manager.py
-# hypothesis_version: 6.151.10
-
-[-0.3, 0.3, 2.0, 3600, ' | ', '%H:%M', '%Y-%m-%d %H:%M', ', ', '< 1 hour ago', 'BREAKOUT', 'Bearish', 'Bullish', 'Channel %d not found', 'Neutral', 'SENTIMENT', 'SPIKE', 'TRENDING', 'down', 'up', '↑', '→', '↓', '█', '░', '▒', '▓', '⚪', '❄️', '➡️', '🆕', '🆕 BREAKOUT', '💭', '📈', '📊', '🔥', '🔴', '🚨', '🚨 SPIKE DETECTED', '🟢']

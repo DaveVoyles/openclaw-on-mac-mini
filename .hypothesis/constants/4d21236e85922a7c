@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/memory.py
-# hypothesis_version: 6.151.10
-
-[0.0, 300, 1024, ' *(auto)*', '%Y-%m-%d %H:%M', '**Saved Threads**\n', '/memory', 'Bot', 'Conversation', 'User', '[^A-Za-z0-9_-]', '_', 'anthropic', 'auto', 'created_at', 'gemini', 'handover', 'handovers', 'history', 'just now', 'last_active', 'local', 'model', 'model_preference', 'name', 'no handover needed', 'openai', 'openclaw.memory', 'parts', 'preferences', 'role', 'saved_at', 'summaries', 'summarized', 'summary', 'threads', 'type', 'unknown', 'user', 'user_id', 'user_name', '☁️ Gemini (cloud)', '⚠️', '💬', '🔴', '🟢 OpenAI (GPT-4o)', '🟣 Anthropic (Claude)']

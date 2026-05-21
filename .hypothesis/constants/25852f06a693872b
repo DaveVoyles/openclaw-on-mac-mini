@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/discord_commands/agent.py
-# hypothesis_version: 6.151.10
-
-[100, 135, 200, 206, 235, 4096, ',', 'Tags', 'URL', 'Untitled Bookmark', '^#\\s+(.+)$', 'all', 'bookmark', 'cancel-plan', 'cancel_plan', 'http', 'openclaw', 'plan-detail', 'plan_detail', 'plans', 'resume-plan', 'resume_plan', 'tasks', 'uscs', 'weather', '⚠️ Plan Cancelled', '✅', '❌', '🌤️ Weather', '📋 Agent Plans', '📋 Mission Control', '📎 Bookmark Saved', '🔄 Plan Resumed']

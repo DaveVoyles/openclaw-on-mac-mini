@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/llm/context.py
-# hypothesis_version: 6.151.10
-
-[0.1, 300, 500, 80000, 400000, 500000, '\n- ', 'Assistant', 'Conversation | None', 'User', '[Active Rules]\n', 'default', 'gemini', 'max_chars', 'max_turns', 'model', 'ollama', 'openclaw.llm', 'parts', 'role', 'text', 'user']

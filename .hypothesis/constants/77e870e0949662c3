@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/llm/response.py
-# hypothesis_version: 6.151.10
-
-[30.0, 'Vision+Tools', 'gemini', 'image/gif', 'image/heic', 'image/heif', 'image/jpeg', 'image/png', 'image/webp', 'openclaw.llm']

@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/tool_health.py
-# hypothesis_version: 6.151.10
-
-[0.0, 1.0, 300, 'MEMORY_DIR', 'data/memory', 'failure', 'failures', 'is_open', 'openclaw.tool_health', 'seconds_until_retry', 'success', 'success_rate', 'tool_health.json', 'total']

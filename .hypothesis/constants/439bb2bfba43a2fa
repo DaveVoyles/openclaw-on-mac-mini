@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/analyzer.py
-# hypothesis_version: 6.151.10
-
-[100, 150, 200, '--tail', '--timestamps', 'OpenClaw Analyzer', 'analyze_logs', 'deprecated', 'docker', 'error', 'exception', 'fail', 'fatal', 'logs', 'openclaw.analyzer', 'panic', 'suggest_fixes', 'warn', 'warning']

@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/scheduler.py
-# hypothesis_version: 6.151.10
-
-[120, 300, 500, 3600, ' No active tasks.', '%A %H:%M', '%a %H:%M', ', ', '/memory', '0', '0 8 * * 0', 'ALERT_CHANNEL_ID', 'MEMORY_DIR', 'No response from LLM', 'No scheduled tasks.', 'OK', 'Scheduler started', 'critical', 'deep', 'error', 'exception', 'failed', 'fatal', 'gemini', 'list_scheduled_tasks', 'llm', 'manual', 'on demand', 'openclaw.scheduler', 'overdue', 'prompt job', 'prompt-job', 'query', 'sched-', 'schedules.json', 'soon', 'timeout', 'unreachable', 'warn', '{}', '⏸️', '⚠️', '✅', '❌']

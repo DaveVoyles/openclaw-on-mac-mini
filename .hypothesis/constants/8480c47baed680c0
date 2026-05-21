@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/network.py
-# hypothesis_version: 6.151.10
-
-[1000, 1024, '%{speed_download}', '--peers=false', '--self=true', '-4', '-W', '-c', '-o', '-s', '-w', '/dev/null', '/usr/bin/tailscale', '1', '2', 'curl', 'google.com', 'ip', 'network', 'openclaw.network', 'ping', 'status', 'unknown', '✅ DNS Resolution', '❌ DNS lookup failed']

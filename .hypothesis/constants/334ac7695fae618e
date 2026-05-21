@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/webhook_formatter.py
-# hypothesis_version: 6.151.10
-
-['\n⬆️ Quality upgrade', '*(no details)*', 'Account', 'Download', 'EpisodeFileDelete', 'Event', 'Grab', 'Lidarr', 'Metadata', 'MovieFileDelete', 'Radarr', 'Sonarr', 'Unknown', 'artist', 'category', 'episodeNumber', 'episodes', 'event', 'eventType', 'hash', 'isUpgrade', 'lidarr', 'movie', 'name', 'play', 'plex', 'qbittorrent', 'radarr', 'seasonNumber', 'series', 'sonarr', 'title', 'type', 'year', '▶️ Plex: Now Playing', '⬆️ Quality upgrade', '🔔 Webhook: Plex']

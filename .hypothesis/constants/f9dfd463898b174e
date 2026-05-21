@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/obsidian_writer.py
-# hypothesis_version: 6.151.10
-
-[500, '"', "'", '*.md', '-', '---', '.', '.index_state.json', '.tmp', '/vault', 'Analytics', 'Bookmarks', 'Journal', 'Notes', 'Research', 'Reviews', 'VAULT_DIR', 'Vault is empty.', '[^a-zA-Z0-9\\s-]', '\\s+', '^#\\s+(.+)$', '^---.*?---\\n', '^\\s+-\\s+(\\S+)', 'analytics', 'bookmark', 'index_vault_to_qmd', 'journal', 'list_vault', 'note', 'openclaw.obsidian', 'replace', 'research', 'review', 'save_to_vault', 'tags:', 'untitled', 'utf-8']

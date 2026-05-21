@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/decision_workflows.py
-# hypothesis_version: 6.151.10
-
-[0.0, 1.0, ',', ', ', '/memory/decisions.db', ':', 'DECISION_DB_PATH', 'applied_weight', 'eng', 'general', 'matched_role', 'option', 'option_index', 'options', 'options_json', 'participant_count', 'participants', 'participants_json', 'pm', 'qa', 'question', 'raw_totals', 'raw_totals_json', 'role_weights', 'role_weights_json', 'roles', 'user_id', 'user_name', 'weighted_totals', 'weighted_totals_json', 'winner_index', 'winner_option']

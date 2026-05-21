@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/bot_formatting.py
-# hypothesis_version: 6.151.10
-
-[500, 3900, '\n… (truncated)', '*', '\\1', '^(#{1,3})\\s+(.+)$', '```', '```ansi', 'bash', 'css', 'csv', 'html', 'javascript', 'js', 'json', 'markdown', 'md', 'py', 'python', 'sh', 'sql', 'ts', 'txt', 'typescript', 'utf-8', 'yaml', 'yml', '|', '|-: ', '…', '─', '│', '┼']

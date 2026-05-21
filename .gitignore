@@ -81,3 +81,10 @@ src/_git_sha.txt
 data/dashboard-v2/
 data/dashboard-auth/
 coverage.json
+
+# Runtime data (do not track)
+data/backups/
+data/chromadb/
+data/dream/index.json.bak
+data/slack_file_history.json
+data/user_dropbox_tokens.json

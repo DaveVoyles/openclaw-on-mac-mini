@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/discord_commands/safety.py
-# hypothesis_version: 6.151.10
-
-['activated', 'deactivate', 'estop', 'off', 'pending', 'resume', 'start', 'stop']

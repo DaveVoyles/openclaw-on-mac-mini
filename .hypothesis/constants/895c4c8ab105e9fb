@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/monitor_skills.py
-# hypothesis_version: 6.151.10
-
-[200, 300, 1900, '.tmp', '<[^>]*>', 'OpenClaw-Monitor/1.0', 'User-Agent', '\\s+', '^https?://', 'change_count', 'content_preview', 'hash', 'label', 'last_changed', 'last_checked', 'list_monitored_urls', 'monitor', 'never', 'openclaw.monitor', 'remove_url_monitor', 'replace', 'snapshot_url', 'url', 'url_snapshots.json', 'utf-8']

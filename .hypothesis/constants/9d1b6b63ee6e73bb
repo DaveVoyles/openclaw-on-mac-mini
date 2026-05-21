@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/llm/chat.py
-# hypothesis_version: 6.151.10
-
-[0.2, 30.0, 200, 300, ', ', 'ANTHROPIC_API_KEY', 'Assistant', 'Deep research', 'Intent bundle: ', 'LLM', 'LLM-escalate', 'LLM-retry', 'Model router: %s', 'OPENAI_API_KEY', 'Tool shortlist: ', 'User', 'anthropic', 'auto', 'bundles', 'caller-supplied', 'composed_intents', 'correction-shortlist', 'correction_ambiguous', 'correction_detected', 'correction_markers', 'correction_overrides', 'days', 'detail_level', 'emoji_level', 'fallback-full', 'gemini', 'hints', 'league', 'local', 'model', 'model_name', 'model_used', 'name', 'needs_tools', 'no-tools', 'none', 'ollama', 'openai', 'openclaw.llm', 'output_style', 'pack', 'pack-filter', 'parts', 'persona', 'platforms', 'report_topic', 'role', 'routing_notes', 'search_web', 'selected', 'services', 'shortlist', 'sport', 'strategy', 'style_controls', 'team', 'timeframe', 'top_score', 'unknown', 'updated_history', 'user', 'wwe_entities']

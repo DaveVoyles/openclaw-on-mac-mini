@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/gateway.py
-# hypothesis_version: 6.151.10
-
-[100, 400, 401, 404, 500, 1048576, '/', '?', 'Authorization', 'Content-Type', 'GET', 'Maton-Connection', 'OpenClaw', 'POST', '^[a-z0-9][a-z0-9-]*$', 'app', 'application/json', 'connection', 'connection_id', 'connections', 'create_google_doc', 'create_onedrive_file', 'documentId', 'gateway', 'gateway_request', 'index', 'insertText', 'last_updated_time', 'location', 'name', 'openclaw.gateway', 'requests', 'status', 'text', 'text/plain', 'title', 'url', 'utf-8', 'webUrl']

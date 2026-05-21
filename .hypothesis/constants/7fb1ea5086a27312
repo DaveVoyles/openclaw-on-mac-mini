@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/digest_manager.py
-# hypothesis_version: 6.151.10
-
-[0.3, 0.5, 0.7, 1.0, 3.0, 100, 200, '\n---', '*.json', '08:00', 'Monday', 'UTC', '[^\\w\\-]', '_', 'channels', 'concise', 'content', 'created_at', 'daily', 'delivery_day', 'delivery_time', 'dm', 'enabled', 'exclude', 'format', 'keywords', 'max_items', 'relevance', 'schedule', 'stocks', 'teams', 'timezone', 'title', 'topics', 'updated_at', 'user_id', 'user_id is required', '❌', '🔍 DIGEST PREVIEW']

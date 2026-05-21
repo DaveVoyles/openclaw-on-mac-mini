@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/approvals.py
-# hypothesis_version: 6.151.10
-
-[300, 'ACTIVATED', 'ApprovalView', 'Approved', 'CRITICAL', 'Denied', 'Details', 'Emergency stop %s', 'HIGH', 'LOW', 'MEDIUM', 'approve', 'approved', 'callback_error', 'callback_result', 'dashboard', 'deactivated', 'deny', 'display_name', 'expired_or_resolved', 'id', 'message', 'not_found', 'ok', 'openclaw.approvals', 'reason', 'request_id', 'user', '⚪', '✅', '✅ Approve', '❌', '❌ Deny', '🔴', '🟠', '🟡', '🟢']

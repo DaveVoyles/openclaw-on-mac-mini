@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/discord_commands/schedule.py
-# hypothesis_version: 6.151.10
-
-['Minute (0-59)', 'add', 'list', 'remove', 'schedule', 'schedule_add', 'schedule_remove', 'schedule_toggle', 'toggle', '⏸️', '✅', '❌ Provide a task_id.']

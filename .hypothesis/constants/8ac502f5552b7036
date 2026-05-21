@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/discord_commands/monitoring.py
-# hypothesis_version: 6.151.10
-
-[200, 1024, 86400, 3066993, 15158332, 15965202, ' · ', '*.jsonl', '/audit', 'AUDIT_DIR', 'Recent Incidents', 'Sparkline', 'Status Breakdown', 'Total Checks', 'Uptime', 'action', 'audit-export', 'audit_export', 'detail', 'health-trend', 'health_trend', 'openclaw', 'recent_incidents', 'result', 'status_counts', 'total_checks', 'ts', 'uptime_pct', 'user']

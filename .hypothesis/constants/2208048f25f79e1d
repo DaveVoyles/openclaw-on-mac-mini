@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/discord_commands/conversation.py
-# hypothesis_version: 6.151.10
-
-[100, '%Y-%m-%d', '**Keyword matches:**', 'Copilot Proxy', 'Local LLM', 'active', 'anthropic', 'archived', 'auto', 'clear', 'forget', 'forget_thread', 'gemini', 'local', 'message_count', 'metadata', 'model', 'model_set', 'name', 'openai', 'openclaw', 'pinned', 'resume', 'resume_thread', 'save', 'save_thread', 'set', 'show', 'similarity', 'status', 'text', 'thread_name', 'threads', 'threads-search', 'threads_search', 'title', 'unknown', 'updated_at', '▶️ Resume Thread', '☁️ Gemini (cloud)', '⚪ Local LLM disabled', '❌', '❌ Delete Failed', '❌ Resume Failed', '❌ Save Failed', '💬', '💾 Save Thread', '📌', '📦', '🗑️ Delete Thread', '🟢 OpenAI (GPT-4o)', '🟣 Anthropic (Claude)', '🤖 Model Preference']

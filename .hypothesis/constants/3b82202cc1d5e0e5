@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/mission_control.py
-# hypothesis_version: 6.151.10
-
-[0.0, 200, 300, '**Subtasks**:', '/app/data/tasks.json', '?', 'MC_TASKS_FILE', 'TASKS_FILE', 'Untitled', 'add_task_comment', 'backlog', 'bash', 'comment', 'comments', 'complete', 'complete_task', 'data', 'description', 'done', 'get_mission_tasks', 'get_task_detail', 'high', 'id', 'in_progress', 'low', 'mc-update.sh', 'medium', 'mission-control', 'openclaw', 'permanent', 'priority', 'review', 'scripts', 'skills', 'status', 'subtasks', 'tasks', 'tasks.json', 'title', 'unknown', 'update_task_status', 'utf-8', '…', '✅', '❓', '⬜', '👀', '📋', '🔁', '🔄', '🔴', '🟡', '🟢']

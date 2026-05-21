@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/image_gen.py
-# hypothesis_version: 6.151.10
-
-[200, 256, 1000, 1024, 1536, 'height', 'image_gen', 'negative_prompt', 'ok', 'openclaw.image_gen', 'prompt', 'seed', 'steps', 'width']

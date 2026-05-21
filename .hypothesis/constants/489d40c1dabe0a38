@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/code_sandbox.py
-# hypothesis_version: 6.151.10
-
-[384, 50000, '--cap-drop', '--cpus', '--memory', '--name', '--network', '--read-only', '--rm', '--security-opt', '--tmpfs', '-v', '.py', '/sandbox/code.py', '1.0', '256m', '30', 'ALL', 'No code provided.', 'SANDBOX_IMAGE', 'SANDBOX_MEM_LIMIT', 'SANDBOX_TIMEOUT', 'docker', 'kill', 'none', 'openclaw_sandbox_', 'python', 'python:3.12-slim', 'replace', 'run', 'w']

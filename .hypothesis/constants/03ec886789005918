@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/constants.py
-# hypothesis_version: 6.151.10
-
-[300, 500, 600, 1024, 1440, 2000, 3000, 3500, 3800, 4000, 7200, 8000, 8765, 11434, 50000, '21', 'EVENING_DIGEST_HOUR']

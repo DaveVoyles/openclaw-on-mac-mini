@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/skills/news_skills.py
-# hypothesis_version: 6.151.10
-
-[100, 200, 429, 3600, '%Y-%m-%d', 'How to sort results', 'News category', 'apiKey', 'articles', 'business', 'category', 'country', 'default', 'description', 'en', 'entertainment', 'enum', 'error', 'from', 'from_date', 'function', 'general', 'health', 'integer', 'language', 'message', 'name', 'news_by_source', 'news_skills', 'newsapi', 'object', 'pageSize', 'page_size', 'parameters', 'popularity', 'properties', 'publishedAt', 'q', 'query', 'relevancy', 'required', 'science', 'search_news', 'sortBy', 'sort_by', 'source_id', 'sources', 'sports', 'status', 'string', 'technology', 'to', 'to_date', 'top_headlines', 'type', 'us']

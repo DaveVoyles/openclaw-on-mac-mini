@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/skills/web_skills.py
-# hypothesis_version: 6.151.10
-
-[200, 403, 429, 600, 1024, 1900, 6000, 7000, 8192, 20000, '\n… (truncated)', 'Accept', 'Content-Length', 'User-Agent', 'X-No-Cache', 'browse_url', 'compare_sources', 'http', 'http://', 'https', 'https://', 'networkidle', 'openclaw.web_skills', 'replace', 'text/markdown', 'true', 'utf-8', 'web_skills']

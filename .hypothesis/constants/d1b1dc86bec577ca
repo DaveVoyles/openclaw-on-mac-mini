@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/trace_context.py
-# hypothesis_version: 6.151.10
-
-['%(levelname)s', '-', 'TraceContext | None', 'current_trace', 'no-trace', 'openclaw', 'trace_cmd', 'trace_id', 'trace_user']

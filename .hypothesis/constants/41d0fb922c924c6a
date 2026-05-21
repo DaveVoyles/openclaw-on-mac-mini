@@ -1,4 +1,0 @@
-# file: /Users/davevoyles/openclaw/src/llm_patterns.py
-# hypothesis_version: 6.151.10
-
-[0.2, 0.5, 100, 'LGTM', '⚠️', '❌']
