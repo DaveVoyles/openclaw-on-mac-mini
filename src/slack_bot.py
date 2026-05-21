@@ -5119,10 +5119,16 @@ def _register_integration_handlers(app: Any) -> None:
                     channel=channel_id, user=user_id, text="Usage: `/incident resolve <id> [postmortem...]`"
                 )
                 return
+            existing = incident_store.get_incident(inc_id)
+            if not existing:
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ Incident #{inc_id} not found.")
+                return
             try:
                 inc = incident_store.resolve_incident(
                     inc_id,
-                    postmortem=arg2 or None,
+                    summary=str(existing.get("summary") or existing.get("title") or "Resolved via Slack"),
+                    action_items=existing.get("action_items") or [],
+                    postmortem_notes=(arg2 or "").strip(),
                     actor_id=None,
                     actor_name=user_id,
                 )
