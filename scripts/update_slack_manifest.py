@@ -192,6 +192,12 @@ MANIFEST: dict = {
                 "usage_hint": "start <title> | status <id> | resolve <id> [postmortem] | list | timeline <id>",
                 "should_escape": False,
             },
+            {
+                "command": "/copilot",
+                "description": "Run host Copilot CLI (--allow-all-tools) over SSH; owner-only",
+                "usage_hint": "<prompt> — e.g. diagnose why plex can't find files",
+                "should_escape": False,
+            },
         ],
     },
     "oauth_config": {

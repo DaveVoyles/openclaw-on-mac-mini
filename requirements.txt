@@ -80,3 +80,4 @@ kaleido~=0.2.1               # Chart export (PNG/SVG)
 matplotlib~=3.8
 dropbox~=12.0.2              # Dropbox API for folder watch and file access
 google-api-python-client~=2.100  # Google Calendar + Gmail API
+asyncssh==2.18.0

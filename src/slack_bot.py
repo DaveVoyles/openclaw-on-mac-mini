@@ -4975,6 +4975,115 @@ def _register_integration_handlers(app: Any) -> None:
         )
 
     # ------------------------------------------------------------------
+    # Handler: /copilot — Slack bridge to host Copilot CLI (Phase 2)
+    #
+    # HIGH-RISK: runs `copilot --allow-all-tools -p <prompt>` on the Mac Mini
+    # host as the davevoyles user via SSH (asyncssh). Identity-equivalent
+    # access — gated by OPENCLAW_HOST_BRIDGE_ALLOWED_USERS (CSV of Slack
+    # user IDs) and OPENCLAW_HOST_BRIDGE_ENABLED=true.
+    #
+    # Posts an ephemeral ack, then runs the bridge in a background task and
+    # replies in the original channel (in-thread when invoked from one) with
+    # the captured stdout + exit code. Output is secret-sanitised.
+    # ------------------------------------------------------------------
+
+    @app.command("/copilot")
+    async def handle_slash_copilot(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id: str = body.get("user_id", "")
+        channel_id: str = body.get("channel_id", user_id)
+        text: str = (body.get("text") or "").strip()
+
+        raw_allow = os.getenv("OPENCLAW_HOST_BRIDGE_ALLOWED_USERS", "") or SLACK_NOTIFY_USER_ID
+        allowed = {p.strip() for p in raw_allow.split(",") if p.strip()}
+        if not allowed:
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id,
+                text="🛑 `/copilot` is not configured. Set `OPENCLAW_HOST_BRIDGE_ALLOWED_USERS`.",
+            )
+            return
+        if user_id not in allowed:
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id,
+                text="🛑 You are not allowed to run `/copilot` on this workspace.",
+            )
+            return
+
+        if not text or text.lower() in {"help", "?"}:
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id,
+                text=(
+                    "🤖 *Copilot CLI bridge*\n"
+                    "• `/copilot <prompt>` — run `copilot --allow-all-tools -p` on the host\n"
+                    "• Default cwd: `/Users/davevoyles/docker-stack`\n"
+                    "• Timeout: 10 min. Output is captured and posted back.\n"
+                    "• Example: `/copilot diagnose why plex can't find files on disk`"
+                ),
+            )
+            return
+
+        if os.getenv("OPENCLAW_HOST_BRIDGE_ENABLED", "false").lower() != "true":
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id,
+                text="🛑 Host bridge disabled. Set `OPENCLAW_HOST_BRIDGE_ENABLED=true` and redeploy.",
+            )
+            return
+
+        try:
+            from host_bridge import run_copilot
+        except ImportError as exc:
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id,
+                text=f"❌ host_bridge module unavailable: `{exc}`",
+            )
+            return
+
+        await client.chat_postEphemeral(
+            channel=channel_id, user=user_id,
+            text=f"🤖 Running on host… _prompt:_ `{text[:200]}`",
+        )
+
+        async def _bg() -> None:
+            try:
+                result = await run_copilot(prompt=text, slack_user_id=user_id)
+            except Exception as exc:  # broad: ensure we always reply
+                log.warning("/copilot background task failed: %s", exc)
+                try:
+                    await client.chat_postMessage(
+                        channel=channel_id,
+                        text=f"❌ <@{user_id}> Copilot bridge crashed: `{exc}`",
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+                return
+
+            header_emoji = "✅" if result.success else "⚠️"
+            status_line = (
+                f"{header_emoji} <@{user_id}> Copilot finished "
+                f"(exit `{result.exit_code}`, {result.duration_s:.1f}s, session `{result.session_id}`)"
+            )
+            if result.error:
+                status_line += f"\n_error:_ `{result.error}`"
+
+            # Slack message hard limit is 40 000 chars; keep a safety margin.
+            body_text = result.stdout or "_(no stdout)_"
+            if result.stderr and not result.success:
+                body_text += "\n--- stderr ---\n" + result.stderr
+            MAX = 35000
+            if len(body_text) > MAX:
+                body_text = body_text[:MAX] + f"\n…[truncated; full transcript: `{result.transcript_path}`]"
+
+            try:
+                await client.chat_postMessage(
+                    channel=channel_id,
+                    text=f"{status_line}\n```\n{body_text}\n```",
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.warning("/copilot: posting result failed: %s", exc)
+
+        asyncio.create_task(_bg())
+
+    # ------------------------------------------------------------------
     # Handler: /incident — Slack bridge to Incident Copilot
     #
     # Mirrors the Discord IncidentCog (src/cogs/incident_cog.py) by reusing
