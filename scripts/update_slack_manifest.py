@@ -223,6 +223,12 @@ MANIFEST: dict = {
                 "usage_hint": "<session_id>",
                 "should_escape": False,
             },
+            {
+                "command": "/host",
+                "description": "Quick-action shortcuts: status, logs, restart, disk, net, plex-fix, git",
+                "usage_hint": "status | logs <svc> [n] | restart <svc> | disk | net | plex-fix | git <args>",
+                "should_escape": False,
+            },
         ],
     },
     "oauth_config": {

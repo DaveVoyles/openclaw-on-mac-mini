@@ -5278,7 +5278,114 @@ def _register_integration_handlers(app: Any) -> None:
         )
 
     # ------------------------------------------------------------------
-    # Handler: /incident — Slack bridge to Incident Copilot
+    # Phase 5 — /host quick-action shortcuts
+    # Wraps vetted Copilot prompts ("show docker ps", "tail logs", "diagnose
+    # plex") in one-word subcommands so phone users can dispatch the most
+    # common operations without typing a full prompt. Each shortcut routes
+    # through the same Phase 3 session machinery as /copilot.
+    # ------------------------------------------------------------------
+
+    @app.command("/host")
+    async def handle_slash_host(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id: str = body.get("user_id", "")
+        channel_id: str = body.get("channel_id", user_id)
+        text: str = (body.get("text") or "").strip()
+
+        ok, msg = _copilot_owner_check(user_id)
+        if not ok:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg or "🛑 forbidden")
+            return
+
+        try:
+            from host_bridge_shortcuts import ResolvedShortcut, resolve
+        except ImportError:
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id,
+                text="❌ host_bridge_shortcuts module unavailable",
+            )
+            return
+
+        result = resolve(text)
+        if not isinstance(result, ResolvedShortcut):
+            # ShortcutError — message is already user-safe (help or error).
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=result.message)
+            return
+
+        if os.getenv("OPENCLAW_HOST_BRIDGE_ENABLED", "false").lower() != "true":
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id,
+                text="🛑 Host bridge disabled. Set `OPENCLAW_HOST_BRIDGE_ENABLED=true` and redeploy.",
+            )
+            return
+
+        mgr = await _ensure_session_manager()
+        if mgr is None:
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id, text="❌ host_bridge module unavailable",
+            )
+            return
+
+        try:
+            parent = await client.chat_postMessage(
+                channel=channel_id,
+                text=(
+                    f"🤖 <@{user_id}> ran `/host {result.raw_text}`\n"
+                    f"_shortcut:_ `{result.name}` — reply in this thread to continue"
+                ),
+            )
+            thread_ts = parent.get("ts") or parent.get("message", {}).get("ts") or ""
+        except Exception as exc:  # noqa: BLE001
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id, text=f"❌ failed to open thread: `{exc}`",
+            )
+            return
+
+        async def _bg() -> None:
+            try:
+                record, err = await mgr.start_session(
+                    slack_user=user_id,
+                    slack_channel=channel_id,
+                    slack_thread_ts=thread_ts,
+                    initial_prompt=result.prompt,
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.warning("/host start_session crashed: %s", exc)
+                try:
+                    await client.chat_postMessage(
+                        channel=channel_id, thread_ts=thread_ts,
+                        text=f"❌ session failed to start: `{exc}`",
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+                return
+
+            if err or record is None:
+                try:
+                    await client.chat_postMessage(
+                        channel=channel_id, thread_ts=thread_ts,
+                        text=f"❌ {err or 'unknown error'}",
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+                return
+
+            try:
+                await client.chat_postMessage(
+                    channel=channel_id, thread_ts=thread_ts,
+                    text=(
+                        f"✅ session `{record.session_id}` open — "
+                        f"`/copilot-end {record.session_id}` to close, "
+                        f"`/copilot-cancel {record.session_id}` to Ctrl-C the current turn"
+                    ),
+                )
+            except Exception:  # noqa: BLE001
+                pass
+
+        asyncio.create_task(_bg())
+
+    # ------------------------------------------------------------------
+    # /incident — incident-response slash command.
     #
     # Mirrors the Discord IncidentCog (src/cogs/incident_cog.py) by reusing
     # the same shared incident_store + incident_copilot modules. Owner-only:
