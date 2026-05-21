@@ -13,7 +13,7 @@ Use this deep dive alongside [ARCHITECTURE](ARCHITECTURE.md), [LLM-ROUTING](LLM-
 | Layer | Primary modules | Resilience behavior |
 | --- | --- | --- |
 | LLM provider calls | `src/llm/providers.py`, `src/llm/chat.py`, `src/model_routing_policy.py` | Retries transient HTTP failures, opens provider circuit breakers, walks a fallback chain, and falls back to Gemini when non-Gemini routing yields no usable reply. |
-| Background supervision | `src/bg_tasks.py`, `src/bg_monitoring.py`, `src/bg_healing.py`, `src/bg_briefing.py` | Supervises long-lived loops, records failures, and restarts crashed loops with per-task exponential backoff. |
+| Background supervision | `src/slack_bot.py` (inline `asyncio.create_task` background loops such as `_digest_loop`, `_file_alert_loop`), `src/health_checker.py`, `src/health_history.py` | Long-lived loops run as tasks owned by the Slack Bolt process; failures are recorded by the health checker. |
 | Health and self-healing | `src/health_checker.py`, `src/health_history.py`, `src/openclaw_cli_health.py` | Distinguishes `healthy` / `degraded` / `unhealthy`, records history, and exposes operator-facing status summaries. |
 | CLI UX safeguards | `src/openclaw_cli.py`, `src/openclaw_cli_router.py`, `src/openclaw_cli_health.py`, `src/openclaw_cli_sessions.py` | Converts connection failures into actionable hints, keeps routing logic isolated from UI, and preserves session/watch state on disk. |
 
@@ -47,29 +47,19 @@ That means routing failures degrade into a slower or more expensive answer path 
 
 ## Background-loop recovery
 
-`src/bg_tasks.py` owns background-task lifecycle rather than letting each loop self-manage.
+Background loops live inline in `src/slack_bot.py` (started as `asyncio.create_task` during Bolt startup). They no longer share a dedicated supervisor module.
 
-- `start_background_tasks()` registers all factories once and starts a supervised task per loop.
-- `_run_supervised_background_task()` wraps each loop with trace context and metrics emission.
-- `_handle_background_task_done()` treats both crashes and unexpected clean exits as restart-worthy.
-- `_BackoffTracker` increases restart delays across `5s → 15s → 60s → 300s` and resets after 30 minutes of clean runtime.
-- `stop_background_tasks()` cancels all tasks coherently during shutdown.
+- Each loop wraps its body in `try/except` and logs failures via the standard logger.
+- The Slack Bolt process restarts in Docker on crash, which restarts all loops; there is no in-process restart with exponential backoff today.
+- `src/health_checker.py` and `src/health_history.py` track outcomes for observability.
 
-This creates a strict boundary: individual loops focus on business logic; supervisor code decides restart policy.
+> Historical note: a dedicated `bg_tasks.py` supervisor with `5s → 15s → 60s → 300s` backoff existed during the Discord-era architecture; it was removed when the Discord runtime was dropped.
 
 ## Monitoring and self-healing behaviors
 
-### Error monitor
-
-`src/bg_monitoring.py:error_monitor_loop()` skips optional scans when active conversation count is high, reducing user-facing contention. When error patterns are severe enough, it can:
-
-- post alerts,
-- run diagnosis and fix workflows when quota allows,
-- record incidents for later analysis.
-
 ### Container health
 
-`container_health_loop()` combines state-change detection with bounded remediation:
+`src/health_checker.py` combines state-change detection with bounded remediation:
 
 - alerts only on unhealthy/exited state transitions,
 - tracks consecutive failures per container,

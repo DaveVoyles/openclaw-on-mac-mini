@@ -201,7 +201,7 @@ The rules engine (`src/rules_engine.py`) learns from corrections:
 
 ## 🎯 Memory Manager
 
-`src/memory_manager.py` provides a unified facade over all memory backends:
+`src/memory.py` provides the central interface across memory backends:
 
 | Method | Description |
 |--------|-------------|

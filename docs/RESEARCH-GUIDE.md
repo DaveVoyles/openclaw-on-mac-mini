@@ -236,6 +236,6 @@ When `REFLECTION_ENABLED=true` (default), OpenClaw self-evaluates complex respon
 | `src/scheduler.py` | Scheduled task system (`TaskScheduler` class) |
 | `src/goal_tracker.py` | Automatic goal detection and tracking |
 | `src/agent_loop.py` | Persistent plan engine with parallel workers |
-| `src/bot.py` | Morning briefing, proactive monitoring, slash commands |
-| `src/llm.py` | Self-reflection logic (`_reflect_on_response`) |
+| `src/slack_bot.py` | Morning briefing, proactive monitoring, slash commands |
+| `src/llm/chat.py` | Self-reflection logic (`_reflect_on_response`) |
 | `skills/advanced_skills.py` | `search_web()` — Tavily + DuckDuckGo fallback |

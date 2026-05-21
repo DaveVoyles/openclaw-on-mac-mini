@@ -144,7 +144,24 @@ docker-compose -f docker-compose.prod.yml up -d
   </div>
 </div>
 
-## 📊 Statistics
+## 🧩 Subsystem Reference
+
+Deep-dive docs for individual subsystems. Linked here so they don't drift orphaned from the rest of the docs set.
+
+- [**Memory System**](MEMORY-SYSTEM.html) — Multi-layer memory: facts, profiles, QMD, vector store, rules engine
+- [**Research & Autonomous Features**](RESEARCH-GUIDE.html) — `/research`, agent loop, goal tracker, scheduled briefings
+- [**Personalized Digests**](PERSONALIZED_DIGESTS.html) — Per-user digest delivery via `digest_manager` + `scheduler`
+- [**Weekly Recap Engine**](WEEKLY_RECAP_ENGINE.html) — News, finance, and sports recap aggregator
+- [**Recap Templates**](RECAP-TEMPLATES.html) — Topic templates feeding the recap engine
+- [**Data Synthesis**](DATA_SYNTHESIS.html) — Multi-source synthesis (NewsAPI + API-Sports + Alpha Vantage)
+- [**Async Patterns**](ASYNC_PATTERNS.html) — How the CLI bridges sync invocation to async server I/O
+
+## 📜 Roadmaps & History
+
+- [**Tech Debt Audit (TD-1 → TD-7)**](tech_debt.html) — Shipped CLI refactor waves with commit SHAs
+- [**UX Improvements Roadmap**](UX_IMPROVEMENTS.html) — Shipped CLI/UX wave history (Wave 1 → 19+)
+
+
 
 <div class="stats-grid">
   <div class="stat-card">
