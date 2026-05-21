@@ -13,13 +13,53 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from alert_manager import render_text_chart
 from config import cfg
 from http_session import SessionManager
 
 # Import news and finance skills for data collection
 from skills import finance_skills, news_skills, sports_skills
 from trend_tracker import get_tracker
+
+
+def render_text_chart(topic: str, category: str = "", hours: int = 24, width: int = 40) -> str:
+    """Render a simple ASCII/emoji chart of volume over time for a topic."""
+    tracker = get_tracker()
+    points = tracker.get_trend(topic, category, hours)
+
+    if not points:
+        return f"📊 No data for {topic}"
+
+    hourly_volumes: dict[int, int] = {}
+    for point in points:
+        hour = int(point.timestamp // 3600) * 3600
+        hourly_volumes[hour] = hourly_volumes.get(hour, 0) + point.volume
+
+    if not hourly_volumes:
+        return f"📊 No data for {topic}"
+
+    sorted_hours = sorted(hourly_volumes.keys())
+    volumes = [hourly_volumes[h] for h in sorted_hours]
+
+    max_vol = max(volumes) if volumes else 1
+    scaled = [int((v / max_vol) * width) for v in volumes]
+
+    lines = [f"📊 **{topic}** — Last {hours}h", ""]
+    blocks = ["░", "▒", "▓", "█"]
+
+    for hour, vol, scale in zip(sorted_hours, volumes, scaled):
+        dt = datetime.fromtimestamp(hour)
+        hour_str = dt.strftime("%H:%M")
+        full_blocks = scale // len(blocks)
+        partial = scale % len(blocks)
+        bar = "█" * full_blocks
+        if partial > 0 and full_blocks < width:
+            bar += blocks[partial - 1]
+        lines.append(f"{hour_str} │{bar:<{width}} {vol}")
+
+    lines.append("")
+    lines.append(f"Max: {max_vol} | Avg: {sum(volumes) // len(volumes)}")
+
+    return "\n".join(lines)
 
 log = logging.getLogger("openclaw.trend_skills")
 

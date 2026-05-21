@@ -21,15 +21,8 @@ if str(_src) not in sys.path:
 
 # ---------------------------------------------------------------------------
 # Module imports under test
-# Pre-import real patreon modules so they land in sys.modules before
-# patreon_scheduled is loaded — this prevents test_zero_coverage_modules.py
-# from ever installing stubs that would pollute test_patreon_monitor.py.
 # ---------------------------------------------------------------------------
-import alert_patreon  # noqa: F401 — side-effect: populates sys.modules
 import openclaw_types
-import patreon_monitor as _patreon_monitor_real  # noqa: F401
-import patreon_recovery  # noqa: F401
-import patreon_scheduled
 import profiler as profiler_mod
 import reminder_manager as rm_mod
 from openclaw_types import (
@@ -45,7 +38,6 @@ from openclaw_types import (
     UserPreferences,
     WeatherData,
 )
-from patreon_scheduled import PATREON_MONITORING_TASK, scheduled_patreon_health_check
 from profiler import Profiler, get_profiler, profile_memory
 from reminder_manager import Reminder, ReminderManager, parse_time_expression
 
@@ -685,169 +677,3 @@ class TestParseTimeExpression:
     def test_invalid_expressions(self, expr):
         assert parse_time_expression(expr) is None
 
-
-# =============================================================================
-# patreon_scheduled.py
-# =============================================================================
-
-
-def _make_patreon_mocks(
-    health_status="healthy",
-    issues=None,
-    recovery_success=False,
-    recovery_result=True,
-    alert_sent=False,
-):
-    """Build standard mock objects for patreon health-check tests."""
-    health = MagicMock()
-    health.status.value = health_status
-    health.message = f"Status: {health_status}"
-    health.issues = issues or []
-
-    checker = MagicMock()
-    checker.check_health = AsyncMock(return_value=health)
-
-    recovery = MagicMock()
-    recovery.action.value = "restart"
-    recovery.success = recovery_success
-
-    recovery_mgr = MagicMock()
-    recovery_mgr.attempt_recovery = AsyncMock(return_value=recovery if recovery_result else None)
-
-    alert_mgr = MagicMock()
-    alert_mgr.send_alert_if_needed = AsyncMock(return_value=alert_sent)
-
-    return checker, recovery_mgr, alert_mgr, health, recovery
-
-
-class TestScheduledPatreonHealthCheck:
-    @pytest.mark.asyncio
-    async def test_success_no_client(self):
-        checker, recovery_mgr, alert_mgr, health, _ = _make_patreon_mocks(recovery_result=None)
-        with (
-            patch.object(patreon_scheduled, "get_patreon_checker", return_value=checker),
-            patch.object(patreon_scheduled, "get_recovery_manager", return_value=recovery_mgr),
-            patch.object(patreon_scheduled, "get_alert_manager", return_value=alert_mgr),
-        ):
-            result = await scheduled_patreon_health_check()
-
-        assert result["success"] is True
-        assert result["status"] == "healthy"
-        assert result["alert_sent"] is False
-        assert result["recovery_attempted"] is False
-        assert "timestamp" in result
-
-    @pytest.mark.asyncio
-    async def test_success_with_discord_client(self):
-        checker, recovery_mgr, alert_mgr, health, _ = _make_patreon_mocks(recovery_result=None, alert_sent=True)
-        mock_client = MagicMock()
-        with (
-            patch.object(patreon_scheduled, "get_patreon_checker", return_value=checker),
-            patch.object(patreon_scheduled, "get_recovery_manager", return_value=recovery_mgr),
-            patch.object(patreon_scheduled, "get_alert_manager", return_value=alert_mgr),
-        ):
-            result = await scheduled_patreon_health_check(discord_client=mock_client, alert_channel_id=99)
-
-        assert result["success"] is True
-        assert result["alert_sent"] is True
-        alert_mgr.send_alert_if_needed.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_recovery_attempted_and_failed(self):
-        checker, recovery_mgr, alert_mgr, health, recovery = _make_patreon_mocks(
-            health_status="degraded",
-            issues=["Issue1"],
-            recovery_success=False,
-        )
-        with (
-            patch.object(patreon_scheduled, "get_patreon_checker", return_value=checker),
-            patch.object(patreon_scheduled, "get_recovery_manager", return_value=recovery_mgr),
-            patch.object(patreon_scheduled, "get_alert_manager", return_value=alert_mgr),
-        ):
-            result = await scheduled_patreon_health_check()
-
-        assert result["recovery_attempted"] is True
-        assert result["recovery_success"] is False
-
-    @pytest.mark.asyncio
-    async def test_recovery_attempted_and_succeeded(self):
-        """When recovery succeeds the function sleeps 5s then re-checks health."""
-        checker, recovery_mgr, alert_mgr, health, recovery = _make_patreon_mocks(
-            health_status="degraded",
-            issues=["Issue1"],
-            recovery_success=True,
-        )
-        with (
-            patch.object(patreon_scheduled, "get_patreon_checker", return_value=checker),
-            patch.object(patreon_scheduled, "get_recovery_manager", return_value=recovery_mgr),
-            patch.object(patreon_scheduled, "get_alert_manager", return_value=alert_mgr),
-            patch("asyncio.sleep", new_callable=AsyncMock),
-        ):
-            result = await scheduled_patreon_health_check()
-
-        assert result["recovery_attempted"] is True
-        assert result["recovery_success"] is True
-        # check_health called at least twice (initial + post-recovery)
-        assert checker.check_health.call_count >= 2
-
-    @pytest.mark.asyncio
-    async def test_uses_cfg_alert_channel(self):
-        """Falls back to cfg.alert_channel_id when no explicit channel given."""
-        checker, recovery_mgr, alert_mgr, health, _ = _make_patreon_mocks(recovery_result=None, alert_sent=True)
-        mock_client = MagicMock()
-        with (
-            patch.object(patreon_scheduled, "get_patreon_checker", return_value=checker),
-            patch.object(patreon_scheduled, "get_recovery_manager", return_value=recovery_mgr),
-            patch.object(patreon_scheduled, "get_alert_manager", return_value=alert_mgr),
-            patch.object(patreon_scheduled, "cfg", MagicMock(alert_channel_id=555)),
-        ):
-            result = await scheduled_patreon_health_check(discord_client=mock_client)
-
-        assert result["success"] is True
-        alert_mgr.send_alert_if_needed.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_zero_coverage_modules_exception_returns_failure_dict(self):
-        checker = MagicMock()
-        checker.check_health = AsyncMock(side_effect=RuntimeError("network error"))
-        with patch.object(patreon_scheduled, "get_patreon_checker", return_value=checker):
-            result = await scheduled_patreon_health_check()
-
-        assert result["success"] is False
-        assert "network error" in result["error"]
-        assert "timestamp" in result
-
-    def test_monitoring_task_config(self):
-        assert PATREON_MONITORING_TASK["name"] == "patreon_health_check"
-        assert PATREON_MONITORING_TASK["function"] is scheduled_patreon_health_check
-        assert "schedule" in PATREON_MONITORING_TASK
-        assert PATREON_MONITORING_TASK["retry_on_failure"] is True
-        assert PATREON_MONITORING_TASK["max_retries"] == 3
-
-    @pytest.mark.asyncio
-    async def test_issues_count_in_result(self):
-        issues = [MagicMock(), MagicMock(), MagicMock()]
-        checker, recovery_mgr, alert_mgr, health, _ = _make_patreon_mocks(issues=issues, recovery_result=None)
-        with (
-            patch.object(patreon_scheduled, "get_patreon_checker", return_value=checker),
-            patch.object(patreon_scheduled, "get_recovery_manager", return_value=recovery_mgr),
-            patch.object(patreon_scheduled, "get_alert_manager", return_value=alert_mgr),
-        ):
-            result = await scheduled_patreon_health_check()
-
-        assert result["issues_count"] == 3
-
-    @pytest.mark.asyncio
-    async def test_alert_user_id_used(self):
-        checker, recovery_mgr, alert_mgr, health, _ = _make_patreon_mocks(recovery_result=None, alert_sent=False)
-        mock_client = MagicMock()
-        with (
-            patch.object(patreon_scheduled, "get_patreon_checker", return_value=checker),
-            patch.object(patreon_scheduled, "get_recovery_manager", return_value=recovery_mgr),
-            patch.object(patreon_scheduled, "get_alert_manager", return_value=alert_mgr),
-        ):
-            result = await scheduled_patreon_health_check(discord_client=mock_client, alert_user_id=777)
-
-        assert result["success"] is True
-        call_kwargs = alert_mgr.send_alert_if_needed.call_args[1]
-        assert call_kwargs.get("user_id") == 777
