@@ -11,8 +11,6 @@ from difflib import SequenceMatcher
 from typing import Any, Iterable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-import discord
-
 from runtime_state import (
     get_bot,
     get_current_channel_id,
@@ -527,7 +525,10 @@ def _format_message_history(messages: Iterable[Any], max_chars: int = 12000) -> 
     return "\n".join(lines) or "(No non-bot messages found in the selected time window.)"
 
 
-async def _resolve_channel(channel_id: int) -> discord.abc.Messageable | None:
+async def _resolve_channel(channel_id: int) -> Any | None:
+    # Discord bot was removed in May 2026. There is no Slack equivalent
+    # wired in yet, so this always returns None and callers fall back to
+    # the "channel not available" error path.
     bot = get_bot()
     if bot is None:
         return None
@@ -587,7 +588,7 @@ async def generate_channel_recap_report(
         else:
             style = "action-items"
     style_key = _normalize_style(style)
-    cutoff = discord.utils.utcnow() - dt.timedelta(days=window_days)
+    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=window_days)
     history_limit = max(25, min(int(max_messages), 300))
 
     try:
