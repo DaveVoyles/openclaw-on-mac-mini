@@ -89,43 +89,29 @@ docker logs openclaw --tail 30 -f
 
 ```
 openclaw/
-├── src/                    # All source code
-│   ├── bot.py              # Main Discord bot + 38 slash commands
-│   ├── llm.py              # Gemini + Ollama hybrid LLM dispatcher
-│   ├── agent_loop.py       # Persistent plan management (8 skills)
-│   ├── worker_agent.py     # Sub-agent spawning for task delegation
-│   ├── mission_control.py  # Kanban task board (5 skills)
-│   ├── ontology_skills.py  # Graph memory (7 skills)
-│   ├── monitor_skills.py   # URL change detection (4 skills)
-│   ├── rss_skills.py       # RSS/Atom feed monitoring (4 skills)
-│   ├── research_agent.py   # Multi-step web research
-│   ├── gateway.py          # Maton API gateway client
-│   ├── calendar_skills.py  # Google Calendar OAuth
-│   ├── email_skills.py     # Gmail/Outlook IMAP+SMTP
-│   ├── config.py           # Centralized config (YAML + env)
-│   ├── utils.py            # Shared utilities
-│   └── cogs/               # Discord command groups
-│       ├── analytics_cog.py
-│       ├── docker_cog.py
-│       ├── media_cog.py
-│       └── network_cog.py
+├── src/                    # All source code (~145 modules)
+│   ├── slack_bot.py        # Slack Bolt entrypoint (Socket Mode)
+│   ├── ask_executor.py     # Routes Slack /chat → orchestrator
+│   ├── ask_orchestrator.py # Plans tool calls, runs the LLM loop
+│   ├── llm_tools.py        # Tool dispatch: tools.yaml → SKILLS
+│   ├── host_bridge.py      # Standalone host process for /copilot CLI
+│   ├── config.py           # Centralized config (YAML + env) — import `cfg`
+│   ├── utils.py            # Shared utilities (atomic_write, http session, …)
+│   ├── llm/                # LLM client wrappers (Gemini + Ollama)
+│   ├── builders/           # Slack Block Kit message builders
+│   ├── utils/              # Subpackage of focused helpers
+│   └── plugin_system/      # Plugin loader and hooks
 ├── skills/                 # Skill registry + ClawHub bundles  ⚠️ see note below
-│   ├── __init__.py         # SKILLS dict — central registry
-│   ├── advanced_skills.py  # Media, network, Plex, reports
-│   └── <bundle>/           # ClawHub skill bundles (13+)
+│   ├── __init__.py         # SKILLS dict — 182 entries
+│   └── <bundle>/           # ClawHub skill bundles
 ├── tests/                  # pytest test suite
 ├── config/                 # Configuration files
-│   ├── config.yaml         # Main bot config
-│   ├── tools.yaml          # 84 Gemini tool declarations
+│   ├── config.yaml         # Main config
+│   ├── tools.yaml          # 113 LLM-facing tool declarations (subset of SKILLS)
 │   ├── permissions.yaml    # Role-based access control
 │   └── prompts/system.txt  # LLM system prompt
-├── data/                   # Runtime data (Docker volume)
-│   ├── plans/              # Agent plan Markdown files
-│   ├── tasks.json          # Mission Control tasks
-│   ├── memory/             # QMD, ontology, snapshots, RSS
-│   └── audit/              # JSONL audit logs
+├── data/                   # Runtime data (Docker volume; gitignored)
 ├── scripts/                # Utility scripts
-├── templates/              # HTML templates (dashboard)
 ├── docs/                   # Documentation
 ├── Dockerfile
 ├── docker-compose.yml
@@ -232,61 +218,46 @@ async def test_my_skill_success():
 
 ---
 
-## Adding a New Command
+## Adding a New Slash Command
 
-Slash commands can be added to `src/bot.py` or as a new cog in `src/cogs/`.
+Slack slash commands are handled in `src/slack_bot.py`. The repo currently
+exposes a small fixed surface (`/chat`, `/copilot`, `/incident`); most new
+capabilities should be added as **skills** (see "Adding a New Skill" above)
+and exposed via `config/tools.yaml` rather than as new slash commands.
 
-### In bot.py
+When a new top-level slash command is genuinely warranted:
 
 ```python
-@bot.tree.command(name="mycommand", description="Do something useful")
-@require_auth
-async def mycommand_cmd(interaction: discord.Interaction, param: str):
-    await interaction.response.defer()
-    # Check emergency stop for write operations
+# src/slack_bot.py
+@app.command("/mycommand")
+async def handle_mycommand(ack, body, client):
+    await ack()
+    user_id = body["user_id"]
+    text = body.get("text", "").strip()
+
     if is_emergency_stopped():
-        await interaction.followup.send("⛔ Emergency stop is active.")
+        await client.chat_postEphemeral(
+            channel=body["channel_id"],
+            user=user_id,
+            text="⛔ Emergency stop is active.",
+        )
         return
+
     # ... implementation ...
-    audit_log(interaction.user, "mycommand", detail=param, result="success")
-    await interaction.followup.send(embed=result_embed)
+    audit_log(user_id, "mycommand", detail=text, result="success")
+    await client.chat_postMessage(channel=body["channel_id"], text="Done!")
 ```
 
-### As a new cog
-
-Create `src/cogs/my_cog.py`:
-
-```python
-import discord
-from discord import app_commands
-from discord.ext import commands
-from cog_helpers import audit_log
-
-
-class MyCog(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-
-    @app_commands.command(name="mycommand", description="Do something useful")
-    async def mycommand_cmd(self, interaction: discord.Interaction, param: str):
-        await interaction.response.defer()
-        audit_log(interaction.user, "mycommand", detail=param, result="success")
-        await interaction.followup.send("Done!")
-
-
-async def setup(bot):
-    await bot.add_cog(MyCog(bot))
-```
-
-Then load the cog in `bot.py` by adding it to the cog loading section.
+Then register the command in the Slack app manifest
+(`scripts/register_slack_commands.py` or the Slack app config UI).
 
 ### Checklist
 
-- [ ] Use `@require_auth` or call `is_allowed(interaction)` at the top
+- [ ] Acknowledge the command within 3 seconds (`await ack()`)
 - [ ] Check `is_emergency_stopped()` for any write/mutating command
-- [ ] Use `ApprovalView` for HIGH/CRITICAL risk operations (see `/restart` as template)
 - [ ] Call `audit_log()` at every outcome branch
 - [ ] Add to `config/permissions.yaml` if role-restricted
+- [ ] Register the command in the Slack app manifest
 - [ ] Add to `docs/COMMANDS.md`
 
 ---
