@@ -23,7 +23,7 @@ Total documented commands: **134**
 | --- | --- |
 | `/ping` | Check if bot is alive |
 | `/about` | Version and system info |
-| `/whoami` | Your Discord identity & permissions |
+| `/whoami` | Your Slack identity & permissions |
 | `/help` | List all commands |
 
 ## 🐳 Docker & System
@@ -44,7 +44,7 @@ Total documented commands: **134**
 | `/ask <question> [model] [scope] [reset_context] [anchor]` | AI-powered query — auto mode follows the active routing profile for non-tool asks and keeps Gemini for tool-native flows. Context controls are first-class slash options: scope (current/cross-channel/prior-report), reset_context, and anchor override ('none' disables anchor). Legacy inline flags (e.g. --cross-channel, --reset-context, --anchor, --no-anchor) still work. |
 | `/model show` | Show your current LLM routing preference and Ollama status. |
 | `/model set <preference>` | Set your default LLM routing: auto (routing profile), local (Gemma), gemini (cloud), openai (GPT-4o), anthropic (Claude), or copilot (enterprise proxy). Alias accepted: claude → anthropic. |
-| `/research <query> [deep:true]` | Deep multi-step research — Discord thread, planned sub-queries, 4-tier search (Perplexity → Tavily → DDG → Bing Lite), source ranking, cross-referencing, confidence levels, synthesized report with methodology section |
+| `/research <query> [deep:true]` | Deep multi-step research — Slack thread, planned sub-queries, 4-tier search (Perplexity → Tavily → DDG → Bing Lite), source ranking, cross-referencing, confidence levels, synthesized report with methodology section |
 | `/weather [location]` | Current conditions + 3-day forecast for any location (default: WEATHER_DEFAULT_LOCATION env var) |
 | `/clear` | Clear active conversation history |
 | `/save <name>` | Save current conversation as a named thread (persisted to disk) |
@@ -57,9 +57,9 @@ Total documented commands: **134**
 
 | Command | Description |
 | --- | --- |
-| `/recap weekly [days] [style]` | Summarize the current Discord channel or thread with highlights, action items, or a compact table. Optional save-to-vault and Monday scheduling. |
+| `/recap weekly [days] [style]` | Summarize the current Slack channel or thread with highlights, action items, or a compact table. Optional save-to-vault and Monday scheduling. |
 | `/sports upcoming [query]` | Create a sports watch guide with matchups, ET kickoff times, and where-to-watch details from live web research. Optional save-to-vault and Monday scheduling. |
-| `Create recap from thread` | Right-click a Discord message or thread to generate a recap without typing a slash command. |
+| `Create recap from thread` | Right-click a Slack message or thread to generate a recap without typing a slash command. |
 
 ## 🎬 Media & Downloads
 
@@ -209,7 +209,7 @@ Total documented commands: **134**
 | `/sms test [code]` | Start verification or submit code from SMS |
 | `/sms status` | Show masked phone, verification state, and remaining send budget |
 | `/sms send <message>` | Confirmation-based SMS send to configured phone |
-| `Context menu: Send to SMS` | Right-click a Discord message and forward it via SMS with confirmation |
+| `Context menu: Send to SMS` | Right-click a Slack message and forward it via SMS with confirmation |
 
 ## 🎬 Movie & TV
 

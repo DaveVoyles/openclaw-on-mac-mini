@@ -54,7 +54,7 @@ Slack user ─► /slash command ─► src/slack_bot.py ─► src/ask_orchestr
    cd ~/docker-stack/openclaw && docker compose up -d --build
    ```
 
-3. **`src/discord_background.py` is a re-export shim.** Real loop logic lives in `src/bg_briefing.py`, `src/bg_monitoring.py`, `src/bg_healing.py`, and `src/bg_tasks.py` (supervisor with backoff/restart). Register new loops in `src/bg_tasks.py::_build_background_task_factories()`.
+3. **Background loops run as `asyncio.create_task()` in `slack_bot.py`.** The old `bg_tasks.py` / `bg_monitoring.py` / `bg_healing.py` / `bg_briefing.py` / `discord_background.py` supervisor family was deleted in May 2026 — it was Discord-coupled and never wired up in the Slack runtime. Today's loops (`_digest_loop`, `_file_alert_loop`, `dropbox_watch_loop`) are started directly in the startup block around line 5953. To add a new persistent loop: define an `async def my_loop(client)` in a new module, then add `asyncio.create_task(my_loop(app.client))` in `slack_bot.py`'s startup block. No supervisor registry exists — each loop handles its own `try/except asyncio.CancelledError`. See [`docs/AGENT-EXTENSION-GUIDE.md` § 6](AGENT-EXTENSION-GUIDE.md#6-add-a-background-loop) for the full recipe.
 
 4. **Tests use xdist by default.** `pyproject.toml` forces `-n auto --dist loadfile`. Run single-process with:
    ```bash

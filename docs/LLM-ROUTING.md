@@ -265,7 +265,7 @@ CodingRouteDecision(matches: bool, reason: str)
 - `llm/__init__.py` `__getattr__` lazy loader breaks circular import chain
 - `COPILOT_PROXY_ENABLED` consolidated to single source in `providers.py`
 
-### Waves 6–7 — Discord commands + streaming
+### Waves 6–7 — Slash commands + streaming
 
 - `/providers` slash command: live availability, latency, circuit-breaker state
 - `/routing` slash command: active profile, fallback chain, mini-model config
@@ -273,7 +273,7 @@ CodingRouteDecision(matches: bool, reason: str)
 - Ollama streaming token metrics (`prompt_eval_count`/`eval_count` -> `_last_usage`)
 - `AUDIT_ROTATE_INTERVAL` env var; async `rotate_audit_log()` coroutine
 - Per-provider token breakdown in `token_usage_summary()`
-- Routing debug footer in Discord (`SHOW_ROUTING_DEBUG` env var)
+- Routing debug footer in Slack (`SHOW_ROUTING_DEBUG` env var)
 
 ### Wave 8 — Tests + cleanup
 

@@ -52,32 +52,21 @@ For the full first-time deployment path, including local vs production compose g
 
 **Minimum setup to get OpenClaw running:**
 
-### 1. Discord Bot (Required)
+### 1. Slack App (Required)
 
-**Get your bot token:**
-1. Go to https://discord.com/developers/applications
-2. Click **New Application** → name it "OpenClaw"
-3. Go to **Bot** tab → Click **Add Bot**
-4. Under **Token**, click **Reset Token** → **Copy**
-5. Enable **Message Content Intent** and **Server Members Intent**
-6. Go to **OAuth2** → **URL Generator**:
-   - Scopes: `bot`, `applications.commands`
-   - Bot Permissions: `Send Messages`, `Read Message History`, `Use Slash Commands`
-7. Copy the generated URL and open in browser to invite bot to your server
+**Slack is the primary interface for OpenClaw.** Follow the [Slack Setup Guide](SLACK-SETUP.md) for full OAuth, socket mode, and slash command registration instructions.
 
-**Configure `.env`:**
+**Minimum `.env` settings:**
 ```bash
-DISCORD_BOT_TOKEN=your_token_here
-DISCORD_GUILD_ID=your_server_id
-ALLOWED_USER_IDS=your_user_id
-ALERT_CHANNEL_ID=channel_id_for_notifications
+SLACK_BOT_TOKEN=xoxb-your_bot_token
+SLACK_APP_TOKEN=xapp-your_app_token
+ALLOWED_USER_IDS=your_slack_user_id
+ALERT_CHANNEL_ID=C0XXXXXXXXX
 ```
 
-**Get server/user/channel IDs:**
-1. Enable Developer Mode: Discord Settings → Advanced → Developer Mode
-2. Right-click server name → Copy Server ID
-3. Right-click your profile → Copy User ID
-4. Right-click a channel → Copy Channel ID
+**Get Slack IDs:**
+- Your User ID: Open Slack → click your avatar → Profile → copy Member ID
+- Channel ID: Right-click any channel → View channel details → copy from URL
 
 ---
 
@@ -114,7 +103,7 @@ docker compose up -d
 docker compose logs -f openclaw
 ```
 
-**Test in Discord:**
+**Test in Slack:**
 ```
 /ping
 /about
@@ -146,7 +135,7 @@ NEWSAPI_KEY=your_key_here
 curl "https://newsapi.org/v2/top-headlines?country=us&apiKey=YOUR_KEY"
 ```
 
-**In Discord:**
+**In Slack:**
 ```
 /ask Show me today's top tech news
 ```
@@ -176,7 +165,7 @@ curl -H "x-apisports-key: YOUR_KEY" \
   "https://v1.basketball.api-sports.io/games?date=2024-01-15&league=12&season=2024-2025"
 ```
 
-**In Discord:**
+**In Slack:**
 ```
 /ask NBA scores for today
 ```
@@ -204,7 +193,7 @@ ALPHAVANTAGE_KEY=your_key_here
 curl "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=DIS&apikey=YOUR_KEY"
 ```
 
-**In Discord:**
+**In Slack:**
 ```
 /ask What's the current Disney stock price?
 ```
@@ -238,7 +227,7 @@ curl -X POST https://api.perplexity.ai/chat/completions \
   -d '{"model":"llama-3.1-sonar-small-128k-online","messages":[{"role":"user","content":"What is the capital of France?"}]}'
 ```
 
-**In Discord:**
+**In Slack:**
 ```
 /websearch latest developments in AI
 ```
@@ -269,7 +258,7 @@ curl -X POST https://api.tavily.com/search \
   -d '{"api_key":"YOUR_KEY","query":"artificial intelligence news","search_depth":"basic"}'
 ```
 
-**In Discord:**
+**In Slack:**
 ```
 /websearch climate change latest research
 ```
@@ -301,7 +290,7 @@ curl -X POST https://api.firecrawl.dev/v1/scrape \
   -d '{"url":"https://example.com"}'
 ```
 
-**In Discord:**
+**In Slack:**
 ```
 /browse https://news.ycombinator.com
 ```
@@ -360,7 +349,7 @@ OMDB_API_KEY=your_key_here
 curl "http://www.omdbapi.com/?t=Inception&apikey=YOUR_KEY"
 ```
 
-**In Discord:**
+**In Slack:**
 ```
 /media movie Inception
 /media tv Breaking Bad
@@ -396,7 +385,7 @@ curl http://192.168.1.93:5055/api/v1/status \
   -H "X-Api-Key: YOUR_KEY"
 ```
 
-**In Discord:**
+**In Slack:**
 ```
 /request The Matrix
 ```
@@ -427,7 +416,7 @@ curl http://192.168.1.93:8989/api/v3/system/status \
   -H "X-Api-Key: YOUR_KEY"
 ```
 
-**In Discord:**
+**In Slack:**
 ```
 /search Breaking Bad
 /ask Add Breaking Bad to Sonarr
@@ -506,7 +495,7 @@ PLEX_PORT=32400
 curl "http://192.168.1.93:8181/api/v2?apikey=YOUR_KEY&cmd=get_activity"
 ```
 
-**In Discord:**
+**In Slack:**
 ```
 /recent
 /ask What's currently playing on Plex?
@@ -549,7 +538,7 @@ curl http://localhost:11434/api/generate -d '{
 }'
 ```
 
-**In Discord:**
+**In Slack:**
 ```
 /ask model:local Tell me a joke
 /model set local
@@ -598,7 +587,7 @@ GLANCES_URL=http://host.docker.internal:61208
 curl http://localhost:61208/api/3/cpu
 ```
 
-**In Discord:**
+**In Slack:**
 ```
 /system
 /report
@@ -635,7 +624,7 @@ print("Success!")
 mail.logout()
 ```
 
-**In Discord:**
+**In Slack:**
 ```
 /ask Check my inbox
 /ask Send email to someone@example.com
@@ -689,7 +678,7 @@ curl https://api.agentmail.to/v0/inboxes/YOUR_INBOX/messages \
   -H "Authorization: Bearer YOUR_KEY"
 ```
 
-**In Discord:**
+**In Slack:**
 ```
 /mail recipient@example.com "Hello from OpenClaw"
 ```
@@ -720,7 +709,7 @@ curl -d "Hello from OpenClaw" https://ntfy.sh/openclaw-alerts-abc123
 
 **Check your phone for notification.**
 
-**In Discord:**
+**In Slack:**
 ```
 /notify Test notification
 ```
@@ -760,7 +749,7 @@ SD_URL=http://host.docker.internal:7861
 SD_TIMEOUT=120
 ```
 
-**In Discord:**
+**In Slack:**
 ```
 /generate-image a cat wearing a top hat
 ```
@@ -823,7 +812,7 @@ ADGUARD_PASSWORD=your_password
 curl -u admin:password http://192.168.1.8:3053/control/status
 ```
 
-**In Discord:**
+**In Slack:**
 ```
 /network  # Includes DNS stats
 ```
@@ -832,7 +821,7 @@ curl -u admin:password http://192.168.1.8:3053/control/status
 
 ## Feature Configuration (W9–W13)
 
-Environment variables for features added in Discord improvement waves W9–W13. These supplement `config/config.yaml` and can be set in `.env`.
+Environment variables for features added in waves W9–W13. These supplement `config/config.yaml` and can be set in `.env`.
 
 ### Routing & Provider Selection (W9)
 - `ROUTING_LATENCY_THRESHOLD_MS` — Skip providers with p95 latency above this threshold in milliseconds (default: `10000`)
@@ -843,7 +832,7 @@ Environment variables for features added in Discord improvement waves W9–W13. 
 - `RECALL_DOMAIN_GUARD_STRICT` — Set to `true` to suppress off-topic memories more aggressively (default: `false`)
 
 ### Alerts & Notifications (W13)
-- `OWNER_USER_ID` — Discord user ID to DM for CRITICAL severity alerts (falls back to `BOT_OWNER_ID`)
+- `OWNER_USER_ID` — Slack user ID to DM for CRITICAL severity alerts (falls back to `BOT_OWNER_ID`)
 - `BOT_OWNER_ID` — Alias for `OWNER_USER_ID` (legacy; prefer `OWNER_USER_ID`)
 
 ### Quality Repair (W11)
@@ -860,7 +849,7 @@ Environment variables for features added in Discord improvement waves W9–W13. 
 cd /Users/davevoyles/openclaw
 
 # Essential vars
-grep -E "^(DISCORD_BOT_TOKEN|GOOGLE_API_KEY)=" .env
+grep -E "^(SLACK_BOT_TOKEN|SLACK_APP_TOKEN|GOOGLE_API_KEY)=" .env
 
 # Optional API keys
 grep -E "^(NEWSAPI_KEY|APISPORTS_KEY|ALPHAVANTAGE_KEY)=" .env
@@ -880,7 +869,7 @@ python verify_apis.py
 
 Expected output:
 ```
-✅ Discord: Connected
+✅ Slack: Connected
 ✅ Gemini: Connected
 ✅ NewsAPI: Connected (100 requests remaining)
 ✅ Tavily: Connected (1000 requests remaining)
@@ -890,7 +879,7 @@ Expected output:
 
 ---
 
-### 3. Test in Discord
+### 3. Test in Slack
 
 **Basic commands:**
 ```
@@ -964,27 +953,21 @@ docker compose logs openclaw | grep -i "rate limit"
 
 ## Troubleshooting
 
-### Discord Bot Not Responding
+### Slack Bot Not Responding
 
 **Check:**
-1. Bot is online in server (green dot)
-2. Bot has permissions (Send Messages, Use Slash Commands)
-3. Commands are synced:
-   ```bash
-   docker compose logs openclaw | grep "Synced.*commands"
-   ```
-4. Bot token is correct in `.env`
+1. Bot is connected (Socket Mode — no green dot in Slack; check `docker logs openclaw` for "Connected")
+2. Slash commands are registered correctly in the Slack App manifest
+3. Bot token and app token are correct in `.env`
+4. Bot has been invited to the channel
 
 **Fix:**
 ```bash
 # Restart bot
 docker compose restart openclaw
 
-# Check logs
-docker compose logs -f openclaw
-
-# Re-invite bot with correct permissions
-# (Use URL from Discord Developer Portal)
+# Check logs for connection status
+docker compose logs -f openclaw | grep -E "socket|connected|error"
 ```
 
 ---
@@ -1171,7 +1154,7 @@ python test_api.py
 ## Quick Reference
 
 ### Essential APIs (Get Started)
-- ✅ Discord Bot Token
+- ✅ Slack Bot Token + App Token
 - ✅ Google Gemini API Key
 
 ### Recommended APIs (Free Tier)

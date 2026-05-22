@@ -148,6 +148,7 @@ docker-compose -f docker-compose.prod.yml up -d
 
 Deep-dive docs for individual subsystems. Linked here so they don't drift orphaned from the rest of the docs set.
 
+- [**Skills Catalog**](SKILLS-CATALOG.html) — Quick-reference table of all 113 LLM-callable tools, organized by category
 - [**Memory System**](MEMORY-SYSTEM.html) — Multi-layer memory: facts, profiles, QMD, vector store, rules engine
 - [**Research & Autonomous Features**](RESEARCH-GUIDE.html) — `/research`, agent loop, goal tracker, scheduled briefings
 - [**Personalized Digests**](PERSONALIZED_DIGESTS.html) — Per-user digest delivery via `digest_manager` + `scheduler`
