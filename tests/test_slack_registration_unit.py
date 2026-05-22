@@ -4,16 +4,16 @@ test_slack_registration_unit.py — Characterization tests for create_slack_app(
 These tests act as a safety net: if a refactor drops or misregisters handlers,
 these tests will catch it before CI smoke tests do.
 
-Counts at time of authoring (src/slack_bot.py):
+Counts at time of last update (src/slack_bot.py):
   @app.event:   5  (app_home_opened, app_mention, message, reaction_added, file_shared)
-  @app.command: 25 (/chat, /help, /health, /digest, /simple, /research, /batch, /files,
-                     /metrics, /brief, /mystats, /template, /mypins, /filesearch, /schedule,
-                     /clear, /nickname, /inbox, /email, /today, /calendar, /clawbox, /clawchan,
-                     /drive, /contacts)
-  @app.action:  8  (file_compare_start, file_translate, translate_lang_selected,
+  @app.command: 32 (/batch, /brief, /calendar, /chat, /clawbox, /clawchan, /clear, /contacts,
+                     /copilot ×5, /digest, /drive, /email, /files, /filesearch, /health, /help,
+                     /host, /inbox, /incident, /metrics, /mypins, /mystats, /nickname,
+                     /research, /schedule, /simple, /template, /today)
+  @app.action:  9  (file_compare_start, file_translate, translate_lang_selected,
                      retry_last_prompt, clarify_file, clarify_question, clarify_write,
-                     gmail_summarize)
-  Total:        38
+                     gmail_summarize, incident_action_run)
+  Total:        46
 """
 
 import ast
@@ -25,9 +25,9 @@ SLACK_BOT_SRC = Path(__file__).parent.parent / "src" / "slack_bot.py"
 
 # Exact counts at authoring time — update intentionally when adding new handlers.
 EXPECTED_EVENT_COUNT = 5
-EXPECTED_COMMAND_COUNT = 26  # +1: /incident (Slack ↔ Incident Copilot bridge)
-EXPECTED_ACTION_COUNT = 9    # +1: incident_action_run
-EXPECTED_TOTAL_COUNT = EXPECTED_EVENT_COUNT + EXPECTED_COMMAND_COUNT + EXPECTED_ACTION_COUNT  # 40
+EXPECTED_COMMAND_COUNT = 32  # includes /copilot ×5 subcommand handlers, /host, /incident, etc.
+EXPECTED_ACTION_COUNT = 9    # includes incident_action_run
+EXPECTED_TOTAL_COUNT = EXPECTED_EVENT_COUNT + EXPECTED_COMMAND_COUNT + EXPECTED_ACTION_COUNT  # 46
 
 
 # ---------------------------------------------------------------------------

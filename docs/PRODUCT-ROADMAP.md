@@ -50,7 +50,7 @@ For documentation ownership, lifecycle rules, and artifact handling, see
 | CLI UX follow-up wave: context-pressure shipped; restrained narrative follow-through next | Active follow-up | `docs/UX_IMPROVEMENTS.md` | Treat the context-pressure tranche as shipped: `/tokeninfo` now carries actor breakdown + bookmark-before-clear guidance, while `/context`, `/session`, and `/watch status` already surface lighter next-send or next-retry pressure cues. The next active docs/implementation wave is the restrained narrative follow-through: let `/session` and `/sessions` express momentum or milestones without obscuring core status, keep `/collab` and `session share/export` neutral and pasteable, and continue deferring richer recap/export/dashboard storytelling until it actually lands. |
 | Dashboard/docs consistency for future CLI waves | Ongoing | `docs/DASHBOARD_SURFACES.md`, `docs/CLI_ARCHITECTURE.md`, `docs/CLI_QUICKSTART.md` | Keep docs/dashboard sync as a required lane for future CLI wave work |
 | CLI tech-debt follow-up planning | Audit-driven | `docs/tech_debt.md` | Use the shipped April 2026 audit as current context; start a new TD wave here only when new debt is confirmed or a new audit is warranted |
-| Discord follow-up work | Dormant | `docs/archive/Discord_Improvements.md` | Add any future Discord improvements here first instead of reviving the old roadmap as the primary entrypoint |
+| Discord follow-up work | Removed | `docs/archive/Discord_Improvements.md` | Discord was removed in May 2026. Historical waves are archived; no future Discord work planned. |
 | New interfaces: Open WebUI, Dashboard v2, Slack | In progress | `.github/docs/2026-04-18-new-interfaces-plan.md` | Implementation wave active; see plan file for port map, file list, and wave status |
 
 ---
@@ -166,11 +166,12 @@ document as the audit log and shipped evidence, not the place to start new cross
 Any new TD work should begin here and link back to the current April 2026 audit, or to a newer
 audit section if one is created later.
 
-### 4. Discord future work
+### 4. Discord (removed)
 
-`docs/archive/Discord_Improvements.md` is useful historical evidence, but all listed waves are shipped.
-Future Discord improvements should be proposed here first and only get a dedicated scoped roadmap if
-the work grows large enough to justify it.
+Discord was removed in May 2026. `docs/archive/Discord_Improvements.md` is preserved as historical
+evidence; all listed waves shipped before removal. No future Discord work is planned.
+If a Discord integration is ever re-added, start a new initiative in this roadmap rather than
+reviving the archived doc.
 
 ---
 
@@ -196,7 +197,7 @@ Use this shape when adding a new initiative:
 ### Initiative: <name>
 
 - **Status:** proposed | in progress | deferred | shipped
-- **Owner area:** cli | discord | docs | infra | cross-cutting
+- **Owner area:** cli | slack | docs | infra | cross-cutting
 - **Supporting doc:** `docs/...`
 - **Why now:** <one or two lines>
 - **Next step:** <concrete next action>
@@ -227,7 +228,7 @@ Use this shape when adding a new initiative:
 - **Status:** in progress
 - **Owner area:** infra, cross-cutting
 - **Supporting doc:** `.github/docs/2026-04-18-new-interfaces-plan.md`
-- **Why now:** OpenClaw currently surfaces through Discord and the CLI only. Adding an OpenAI-compatible API enables Open WebUI (browser chat) and any other OpenAI-compatible client. The community dashboard v2 (tugcantopaloglu) adds rich monitoring without any source changes. Slack integration (Socket Mode) brings conversational access without a public URL.
+- **Why now:** OpenClaw currently surfaces through Slack and the CLI only. Adding an OpenAI-compatible API enables Open WebUI (browser chat) and any other OpenAI-compatible client. The community dashboard v2 (tugcantopaloglu) adds rich monitoring without any source changes. Slack integration (Socket Mode) brings conversational access without a public URL.
 - **Port map:**
   - `8765` — OpenClaw server + new `/v1/` OpenAI-compatible API
   - `3000` — Open WebUI browser chat

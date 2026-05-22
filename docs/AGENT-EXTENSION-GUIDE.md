@@ -39,7 +39,7 @@ A **skill** is an async Python function the LLM can invoke as a tool. There are 
 
 > **Before writing a new skill:** Check [`docs/SKILLS-CATALOG.md`](SKILLS-CATALOG.md) — it lists all 113 existing tools organized by category. If an existing skill covers your use case, call it instead of duplicating logic.
 
-> **Scaffold helper:** Run `python scripts/new_skill.py` to generate a function stub, `SKILLS` registration snippet, and `tools.yaml` entry in one step.
+> **Scaffold helper:** Run `python scripts/new_skill.py` (interactive) or pass `--json '{"name":"...","description":"...","params":[...],"module":"..."}'` for agent-friendly non-interactive scaffolding.
 
 ### Recipe
 

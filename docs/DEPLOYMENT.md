@@ -48,7 +48,7 @@ make verify-deploy # confirm: shows CLI build label + /health JSON with git_sha 
 | Changed file(s) | Command |
 |---|---|
 | `src/openclaw_cli*.py`, `src/subprocess_utils.py` | `make ship-cli` |
-| Any other `src/` file (`model_router.py`, `discord_web.py`, `bot.py`, `llm/`, etc.) | `make ship-server` |
+| Any other `src/` file (`model_router.py`, `slack_bot.py`, `llm/`, etc.) | `make ship-server` |
 | Both, or unsure | `make ship` |
 
 ### Verify the deploy landed
@@ -72,7 +72,7 @@ Use this order for first-time setup:
 3. Fill in the **required** environment variables
 4. Review optional integrations and disable anything you are not using yet
 5. Start with `docker compose up -d --build` for local development, or `docker compose -f docker-compose.prod.yml up -d --build` for production
-6. Verify `/health`, `/dashboard`, and Discord command responsiveness
+6. Verify `/health` endpoint and Slack bot responsiveness
 
 ---
 
@@ -80,12 +80,12 @@ Use this order for first-time setup:
 
 ### Required for a minimal healthy deployment
 
-These values are required to get the bot online and responding in Discord:
+These values are required to get the bot online and responding via Slack:
 
 | Variable | Why it matters |
 | --- | --- |
-| `DISCORD_BOT_TOKEN` | Authenticates the Discord bot |
-| `DISCORD_GUILD_ID` | Targets your Discord server for command sync |
+| `SLACK_BOT_TOKEN` | Authenticates the Slack bot (`xoxb-...`) |
+| `SLACK_APP_TOKEN` | Enables Socket Mode connection (`xapp-...`) |
 | `ALLOWED_USER_IDS` | Allows privileged commands for trusted operators |
 | `GOOGLE_API_KEY` | Enables the primary Gemini-backed `/ask` workflow |
 
@@ -103,7 +103,7 @@ These values are required to get the bot online and responding in Discord:
 | Category | Variables |
 | --- | --- |
 | Local LLM | `LOCAL_LLM_ENABLED`, `OLLAMA_URL`, `OLLAMA_MODEL`, `DEFAULT_MODEL_PREFERENCE`, `ROUTING_PROFILE` |
-| Notifications / channel routing | `ALERT_CHANNEL_ID`, `DISCORD_CHANNEL_RESEARCH_ID`, `DISCORD_CHANNEL_ANALYTICS_ID`, `DISCORD_CHANNEL_BOOKMARKS_ID`, `DISCORD_CHANNEL_REAL_ESTATE_ID` |
+| Notifications / channel routing | `ALERT_CHANNEL_ID`, `SLACK_NOTIFY_USER_ID` |
 | Backups / NAS | `NAS_HOST`, `NAS_SSH_PORT`, `NAS_SSH_USER`, `NAS_BACKUP_PATH`, `SSH_KEY_PATH`, `SSH_KNOWN_HOSTS` |
 | Service integrations | Media, search, productivity, and infrastructure API keys from `.env.example` |
 
@@ -171,13 +171,13 @@ docker compose logs openclaw --tail 100
 curl -sf http://localhost:8765/health
 ```
 
-### 4. Confirm Discord behavior
+### 4. Confirm Slack behavior
 
 After the container is healthy:
 
-- wait for command sync on startup
-- run `/ping`
-- run `/about`
+- wait for Socket Mode connection log line (`⚡️ Bolt app is running!`)
+- send `/ping` in your Slack workspace
+- send `/about`
 - run a simple `/ask` prompt
 
 ---
@@ -209,7 +209,7 @@ curl -sf http://localhost:8765/health
 - the container should report healthy
 - `/dashboard` and `/metrics` should respond
 - `ENVIRONMENT=production` should be present in the container environment
-- Discord commands should sync and respond normally
+- Slack slash commands should register and respond normally
 
 Example:
 
@@ -289,7 +289,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 ### When rollback is preferable
 
 - container fails health checks after an update
-- Discord auth or command sync breaks
+- Slack auth or slash command registration breaks
 - required env/config changes were missed
 - a new image starts but core `/ask` or dashboard behavior regresses
 
