@@ -6063,6 +6063,13 @@ async def _start_health_server() -> None:
     app.router.add_get("/health", health)
     app.router.add_get("/", health)
 
+    try:
+        from dashboard.routes import setup_dashboard
+        setup_dashboard(app)
+        log.info("Dashboard routes registered at /dashboard")
+    except Exception as _exc:
+        log.warning("Dashboard unavailable: %s", _exc)
+
     port = int(os.getenv("HEALTH_PORT", "8765"))
     runner = web.AppRunner(app)
     await runner.setup()
