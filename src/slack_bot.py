@@ -5090,6 +5090,49 @@ async def _send_morning_briefing(client: Any) -> str:
     except Exception:
         pass
 
+    # SABnzbd queue snapshot
+    _sab_url = os.environ.get("SABNZBD_URL", "")
+    _sab_key = os.environ.get("SABNZBD_API_KEY", "")
+    if _sab_url and _sab_key:
+        try:
+            async with aiohttp.ClientSession() as _s:
+                async with _s.get(
+                    f"{_sab_url}/api",
+                    params={"mode": "qstatus", "output": "json", "apikey": _sab_key},
+                    timeout=aiohttp.ClientTimeout(total=4),
+                ) as _r:
+                    _q = (await _r.json()).get("queue", {})
+            _slots = _q.get("noofslots", 0)
+            if _slots:
+                _mb_left = float(_q.get("mbleft", 0))
+                sections.append(f"📰 *SABnzbd:* {_slots} item(s) queued, {_mb_left/1024:.1f} GB left")
+            else:
+                sections.append("📰 *SABnzbd:* queue empty")
+        except Exception:
+            pass
+
+    # AdGuard daily stats
+    _ag_url = os.environ.get("ADGUARD_URL", "")
+    _ag_user = os.environ.get("ADGUARD_USER", "")
+    _ag_pass = os.environ.get("ADGUARD_PASSWORD", "")
+    if _ag_url and _ag_user:
+        try:
+            import base64 as _b64
+            _creds = _b64.b64encode(f"{_ag_user}:{_ag_pass}".encode()).decode()
+            async with aiohttp.ClientSession() as _s:
+                async with _s.get(
+                    f"{_ag_url}/control/stats",
+                    headers={"Authorization": f"Basic {_creds}"},
+                    timeout=aiohttp.ClientTimeout(total=4),
+                ) as _r:
+                    _ag = await _r.json()
+            _total = _ag.get("num_dns_queries", 0)
+            _blocked = _ag.get("num_blocked_filtering", 0)
+            _pct = round(_blocked / max(_total, 1) * 100, 1)
+            sections.append(f"🛡️ *AdGuard:* {_total:,} queries yesterday, {_pct}% blocked")
+        except Exception:
+            pass
+
     news_key = os.environ.get("NEWSAPI_KEY", "")
     if news_key:
         try:
@@ -6651,6 +6694,70 @@ def _register_integration_handlers(app: Any) -> None:
                     lines.append(f"• *Services:* {total_services}/{total_services} up ✅")
         except Exception:
             pass
+
+        # SABnzbd
+        sabnzbd_url = os.environ.get("SABNZBD_URL", "")
+        sabnzbd_key = os.environ.get("SABNZBD_API_KEY", "")
+        if sabnzbd_url and sabnzbd_key:
+            try:
+                async with aiohttp.ClientSession() as _s:
+                    async with _s.get(
+                        f"{sabnzbd_url}/api",
+                        params={"mode": "qstatus", "output": "json", "apikey": sabnzbd_key},
+                        timeout=aiohttp.ClientTimeout(total=4),
+                    ) as _r:
+                        _q = (await _r.json()).get("queue", {})
+                _status = _q.get("status", "?")
+                _slots = _q.get("noofslots", 0)
+                if _slots and _status.lower() != "idle":
+                    _mb_left = float(_q.get("mbleft", 0))
+                    lines.append(f"• 📰 SABnzbd: {_slots} job(s), {_mb_left/1024:.1f} GB left")
+                else:
+                    lines.append("• 📰 SABnzbd: idle")
+            except Exception:
+                pass
+
+        # AdGuard
+        _adguard_url = os.environ.get("ADGUARD_URL", "")
+        _adguard_user = os.environ.get("ADGUARD_USER", "")
+        _adguard_pass = os.environ.get("ADGUARD_PASSWORD", "")
+        if _adguard_url and _adguard_user:
+            try:
+                import base64 as _b64
+                _creds = _b64.b64encode(f"{_adguard_user}:{_adguard_pass}".encode()).decode()
+                async with aiohttp.ClientSession() as _s:
+                    async with _s.get(
+                        f"{_adguard_url}/control/stats",
+                        headers={"Authorization": f"Basic {_creds}"},
+                        timeout=aiohttp.ClientTimeout(total=4),
+                    ) as _r:
+                        _ag = await _r.json()
+                _total = _ag.get("num_dns_queries", 0)
+                _blocked = _ag.get("num_blocked_filtering", 0)
+                _pct = round(_blocked / max(_total, 1) * 100, 1)
+                lines.append(f"• 🛡️ AdGuard: {_total:,} queries, {_pct}% blocked")
+            except Exception:
+                pass
+
+        # Lidarr
+        _lidarr_url = os.environ.get("LIDARR_URL", "")
+        _lidarr_key = os.environ.get("LIDARR_API_KEY", "")
+        if _lidarr_url and _lidarr_key:
+            try:
+                async with aiohttp.ClientSession() as _s:
+                    async with _s.get(
+                        f"{_lidarr_url}/api/v1/queue",
+                        headers={"X-Api-Key": _lidarr_key},
+                        timeout=aiohttp.ClientTimeout(total=4),
+                    ) as _r:
+                        _lq = await _r.json()
+                _active = [i for i in (_lq if isinstance(_lq, list) else []) if i.get("status") in ("downloading", "queued")]
+                if _active:
+                    lines.append(f"• 🎵 Lidarr: {len(_active)} downloading")
+                else:
+                    lines.append("• 🎵 Lidarr: queue empty")
+            except Exception:
+                pass
 
         try:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines))
