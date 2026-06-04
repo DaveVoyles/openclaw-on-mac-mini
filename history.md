@@ -58,6 +58,7 @@
 - 2026-06-04: Wave 6 deployed — Overseerr card (auth TBD), Sonarr calendar card+/upcoming, Radarr watchlist, Tailscale device card+/tailscale, Time Machine status, download webhooks, quick stats strip, persistent card collapse, host.docker.internal URL fix for all local services
 - 2026-06-04: Enabled Sonarr+Radarr download-complete webhooks via their APIs — both firing to openclaw.davevoyles.synology.me/api/webhooks/sonarr|radarr, confirmed in container logs
 - 2026-06-04: Updated README to reflect Hermes-first Slack architecture and synced .env.example with current media, NAS, notification, monitoring, and host-bridge variables.
+- 2026-06-04: Wave 10B added Lidarr to dashboard and Slack ARR queue views plus a Tools & Services quick-link card; Python AST/HTML checks passed.
 - 2026-06-04: Added Wave 7B dashboard and Slack upgrades — Uptime Kuma status API/card, PWA install banner + service-worker registration, categorized Slack App Home with all 48 commands, and Overseerr API-key setup guidance; syntax checks and Slack registration tests passed.
 - 2026-06-04: Wave 7 deployed: README/env.example refreshed, Uptime Kuma card live (31 services, real heartbeat data), PWA install banner, Slack home tab rebuilt with all 48 commands, Copilot instructions strengthened with explicit doc-sync rules
 - 2026-06-04: Wave 8B grouped Uptime Kuma dashboard services by group and disabled ChromaDB anonymized telemetry in docker-compose to suppress startup telemetry errors.
@@ -65,3 +66,4 @@
 - 2026-06-04: Added dashboard retry buttons for media/uptime card error states and debounced Overseerr, research, and skills search inputs; HTML validation passed.
 - 2026-06-04: Renamed the dashboard Gemini status dot to Hermes, switched status checks to SSH bridge reachability, and added copy buttons for install commands, webhook URLs, and the Patreon docker cp command.
 - 2026-06-04: Fixed Overseerr/Seerr API key (was decoding base64 — key must be sent raw); updated Seerr v3.2.0 → v3.3.0
+- 2026-06-04: Wave 10A added hardened Time Machine plist parsing plus SABnzbd dashboard/Slack downloads visibility; syntax checks and Slack registration tests passed.

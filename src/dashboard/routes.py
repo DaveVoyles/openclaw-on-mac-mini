@@ -45,6 +45,7 @@ from .api_handlers import (
     api_tautulli_history_handler,
     api_arr_queue_handler,
     api_arr_history_handler,
+    api_sabnzbd_queue_handler,
     api_overseerr_recent_handler,
     api_overseerr_search_handler,
     api_overseerr_request_handler,
@@ -257,6 +258,7 @@ def setup_dashboard(
     app.router.add_get("/api/system/alerts", api_system_alerts_handler)
     app.router.add_get("/api/system/health", api_system_health_handler)
     app.router.add_get("/api/system/timemachine", api_system_timemachine_handler)
+    app.router.add_get("/api/sabnzbd/queue", api_sabnzbd_queue_handler)
     app.router.add_post("/api/hermes/upgrade", action(api_hermes_upgrade_handler))
     app.router.add_get("/api/nas/browse", api_nas_browse_handler)
     app.router.add_get("/api/overseerr/recent", api_overseerr_recent_handler)

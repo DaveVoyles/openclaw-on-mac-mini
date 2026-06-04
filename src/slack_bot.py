@@ -727,7 +727,8 @@ _HELP_TEXT = """
 • `/watching` — See what Plex is playing right now
 • `/plex <status|recent|search|request>` — Check Plex / Overseerr
 • `/request <title>` — Search Overseerr and request media
-• `/arr` — View Sonarr/Radarr queues
+• `/arr` — View Sonarr/Radarr/Lidarr queues
+• `/downloads` — View SABnzbd downloads
 • `/upcoming` — Show Sonarr episodes airing soon
 
 *⚙️ Utilities*
@@ -3169,7 +3170,8 @@ def _build_home_view(user_id: str, name: str) -> dict:
                 "`/watching` — What's playing on Plex now",
                 "`/plex <status|recent|search|request>` — Check Plex / Overseerr",
                 "`/request <title>` — Search Overseerr and request media",
-                "`/arr` — View Sonarr/Radarr queues",
+                "`/arr` — View Sonarr/Radarr/Lidarr queues",
+                "`/downloads` — View SABnzbd downloads",
                 "`/upcoming` — Show upcoming Sonarr episodes",
             ],
         ),
@@ -7280,6 +7282,12 @@ def _register_integration_handlers(app: Any) -> None:
         sonarr_key = os.environ.get("SONARR_API_KEY", "")
         radarr_url = os.environ.get("RADARR_URL", "http://localhost:7878")
         radarr_key = os.environ.get("RADARR_API_KEY", "")
+        lidarr_url = os.environ.get("LIDARR_URL", "http://host.docker.internal:8686")
+        lidarr_key = os.environ.get("LIDARR_API_KEY", "")
+
+        def _pct(item: dict[str, Any]) -> int:
+            size = item.get("size") or 0
+            return round(100 * (1 - item.get("sizeleft", 0) / max(size, 1))) if size else 0
 
         lines = ["*📥 Download Queue*"]
 
@@ -7298,8 +7306,7 @@ def _register_integration_handlers(app: Any) -> None:
                     else:
                         lines.append(f"📺 Sonarr: {total} in queue")
                         for item in records[:3]:
-                            pct = round(100 * (1 - item.get('sizeleft', 0) / max(item.get('size', 1), 1)))
-                            lines.append(f"  • {item.get('title', '?')} ({pct}%)")
+                            lines.append(f"  • {item.get('title', '?')} ({_pct(item)}%)")
             except Exception as e:
                 lines.append(f"📺 Sonarr: error ({e})")
 
@@ -7317,10 +7324,29 @@ def _register_integration_handlers(app: Any) -> None:
                     else:
                         lines.append(f"🎬 Radarr: {total} in queue")
                         for item in records[:3]:
-                            pct = round(100 * (1 - item.get('sizeleft', 0) / max(item.get('size', 1), 1)))
-                            lines.append(f"  • {item.get('title', '?')} ({pct}%)")
+                            lines.append(f"  • {item.get('title', '?')} ({_pct(item)}%)")
             except Exception as e:
                 lines.append(f"🎬 Radarr: error ({e})")
+
+            try:
+                async with s.get(
+                    f"{lidarr_url}/api/v1/queue?page=1&pageSize=20&apikey={lidarr_key}",
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as r:
+                    d = await r.json()
+                    total = d.get("totalRecords", 0)
+                    records = d.get("records", [])
+                    if total == 0:
+                        lines.append("🎵 Lidarr: 0 active downloads")
+                    else:
+                        lines.append(f"🎵 Lidarr: {total} in queue")
+                        for item in records[:3]:
+                            artist_name = (item.get("artist") or {}).get("artistName") or item.get("artistName", "")
+                            title = item.get("title") or (item.get("album") or {}).get("title") or "?"
+                            label = " - ".join(part for part in [artist_name, title] if part) or "?"
+                            lines.append(f"  • {label} ({_pct(item)}%)")
+            except Exception as e:
+                lines.append(f"🎵 Lidarr: error ({e})")
 
             try:
                 async with s.get(
@@ -7336,6 +7362,56 @@ def _register_integration_handlers(app: Any) -> None:
                 pass
 
         await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines))
+
+    @app.command("/downloads")
+    async def handle_slash_downloads(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        import aiohttp
+
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", "")
+
+        sab_url = os.environ.get("SABNZBD_URL", "http://host.docker.internal:8775")
+        sab_key = os.environ.get("SABNZBD_API_KEY", "")
+
+        if not sab_key:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="⚠️ SABNZBD_API_KEY not configured.")
+            return
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{sab_url}/api",
+                    params={"mode": "queue", "apikey": sab_key, "output": "json"},
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as resp:
+                    data = await resp.json()
+
+            q = data.get("queue", {})
+            status = q.get("status", "Unknown")
+            speed_kb = float(q.get("kbpersec", 0))
+            speed_str = f"{speed_kb / 1024:.1f} MB/s" if speed_kb > 0 else "0 MB/s"
+            slots = q.get("slots", [])
+            total = int(q.get("noofslots_total", 0) or 0)
+            size_left = q.get("sizeleft", "0 B")
+
+            if not slots:
+                text = f"📥 *SABnzbd:* {status} — queue empty"
+            else:
+                lines = [f"📥 *SABnzbd Downloads* — {status} at {speed_str}\n*{total} item(s)* · {size_left} remaining\n"]
+                for s in slots[:5]:
+                    pct = s.get("percentage", 0)
+                    name = s.get("filename", s.get("name", "?"))[:50]
+                    timeleft = s.get("timeleft", "")
+                    eta = f" · ETA {timeleft}" if timeleft and timeleft != "0:00:00" else ""
+                    lines.append(f"• {name} — {pct}%{eta}")
+                if total > 5:
+                    lines.append(f"_...and {total - 5} more_")
+                text = "\n".join(lines)
+
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text)
+        except Exception as exc:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ SABnzbd error: {exc}")
 
     @app.command("/upcoming")
     async def handle_slash_upcoming(ack: Any, body: dict[str, Any], client: Any) -> None:

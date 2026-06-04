@@ -23,15 +23,15 @@ OpenClaw is a Slack-first personal AI assistant for homelab ops, media visibilit
 ## What it can do
 
 - **Ask anything** via Hermes — quick answers, threaded sessions, research, and summaries.
-- **Watch your media stack** — Plex now playing, recent activity, and Sonarr/Radarr download queues.
+- **Watch your media stack** — Plex now playing, recent activity, Sonarr/Radarr/Lidarr queues, SABnzbd downloads, and daily briefing highlights.
 - **Handle media requests** — search Overseerr and request movies or TV from Slack.
-- **Show network visibility** — Tailscale device status, NAS reachability, and host health.
+- **Show network visibility** — Tailscale device status, NAS reachability, host health, and grouped Uptime Kuma service checks.
 - **Send notifications** — ntfy push alerts, Slack DMs, digests, briefings, and download-complete notices.
 - **Work with files** — browse synced files, search recent uploads, and pull quick briefs.
 
 ## Key Slack commands
 
-OpenClaw currently registers **48 Slack slash commands**. These are the most useful day-to-day ones; use `/help` for the full list.
+OpenClaw currently registers **51 Slack slash commands**. These are the most useful day-to-day ones; use `/help` for the full list.
 
 ### AI & Chat
 - `/hermes <prompt>` — start a threaded Hermes session
@@ -46,12 +46,15 @@ OpenClaw currently registers **48 Slack slash commands**. These are the most use
 
 ### Media
 - `/watching` — see what Plex is playing right now
-- `/arr` — view Sonarr/Radarr download queues
+- `/arr` — view Sonarr/Radarr/Lidarr download queues
+- `/downloads` — view active SABnzbd downloads
 - `/request <title>` — request media through Overseerr
 - `/upcoming` — show episodes airing soon from Sonarr
 
 ### Ops & Network
-- `/status` — quick system snapshot
+- `/status` — quick system snapshot with Uptime Kuma service summary
+- `/uptime` — show all Uptime Kuma services grouped by status-page section
+- `/morning` — trigger the owner morning briefing DM on demand
 - `/tailscale` — show current Tailscale device status
 - `/wake mbp|mbp2` — send a Wake-on-LAN packet
 - `/nas df|ls <path>|free` — browse NAS status and folders
@@ -68,7 +71,7 @@ SSH bridge]
 GitHub Copilot]
     OC --> DB[Dashboard]
     OC --> MEDIA[Plex · Tautulli
-Sonarr · Radarr · Overseerr]
+Sonarr · Radarr · Lidarr · SABnzbd · Overseerr]
     OC --> NET[Tailscale]
     OC --> NOTIFY[ntfy · Slack DM]
 ```
@@ -89,7 +92,7 @@ docker compose up -d --build
 ### Important environment groups
 - **Slack & dashboard:** bot tokens, notify user, API auth
 - **Hermes / host bridge:** `COPILOT_BACKEND=hermes`, bridge paths, Copilot proxy
-- **Media services:** Tautulli, Sonarr, Radarr, Overseerr
+- **Media services:** Tautulli, Sonarr, Radarr, Lidarr, SABnzbd, Overseerr
 - **Notifications & monitoring:** ntfy, Slack DM, Uptime Kuma, Wake-on-LAN
 - **NAS & search providers:** NAS credentials, GitHub repos, search API keys
 

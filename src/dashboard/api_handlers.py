@@ -5598,59 +5598,91 @@ async def api_arr_queue_handler(request):
     sonarr_key = os.environ.get("SONARR_API_KEY", "")
     radarr_url = os.environ.get("RADARR_URL", "http://localhost:7878")
     radarr_key = os.environ.get("RADARR_API_KEY", "")
+    lidarr_url = os.environ.get("LIDARR_URL", "http://host.docker.internal:8686")
+    lidarr_key = os.environ.get("LIDARR_API_KEY", "")
 
-    result = {"sonarr": [], "radarr": [], "sonarr_total": 0, "radarr_total": 0, "radarr_missing": 0}
+    result = {
+        "sonarr": [],
+        "radarr": [],
+        "lidarr": [],
+        "sonarr_total": 0,
+        "radarr_total": 0,
+        "lidarr_total": 0,
+        "radarr_missing": 0,
+    }
+
+    def _pct(item):
+        size = item.get("size") or 0
+        return round(100 * (1 - item.get("sizeleft", 0) / max(size, 1))) if size else 0
+
+    async def _fetch_json(session, url, *, params=None):
+        async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=5)) as response:
+            return await response.json()
 
     async with aiohttp.ClientSession() as s:
+        tasks = {}
         if sonarr_key:
-            try:
-                async with s.get(
-                    f"{sonarr_url}/api/v3/queue",
-                    params={"apikey": sonarr_key, "pageSize": 10},
-                    timeout=aiohttp.ClientTimeout(total=5),
-                ) as r:
-                    d = await r.json()
-                    result["sonarr_total"] = d.get("totalRecords", 0)
-                    result["sonarr"] = [
-                        {
-                            "title": i.get("title", "?"),
-                            "status": i.get("status", "?"),
-                            "pct": round(100 * (1 - i.get("sizeleft", 0) / max(i.get("size", 1), 1))) if i.get("size") else 0,
-                        }
-                        for i in d.get("records", [])
-                    ]
-            except Exception as e:
-                result["sonarr_error"] = str(e)
-
+            tasks["sonarr_queue"] = asyncio.create_task(
+                _fetch_json(s, f"{sonarr_url}/api/v3/queue", params={"apikey": sonarr_key, "pageSize": 10})
+            )
         if radarr_key:
-            try:
-                async with s.get(
-                    f"{radarr_url}/api/v3/queue",
-                    params={"apikey": radarr_key, "pageSize": 10},
-                    timeout=aiohttp.ClientTimeout(total=5),
-                ) as r:
-                    d = await r.json()
-                    result["radarr_total"] = d.get("totalRecords", 0)
-                    result["radarr"] = [
-                        {
-                            "title": i.get("title", "?"),
-                            "status": i.get("status", "?"),
-                            "pct": round(100 * (1 - i.get("sizeleft", 0) / max(i.get("size", 1), 1))) if i.get("size") else 0,
-                        }
-                        for i in d.get("records", [])
-                    ]
-            except Exception as e:
-                result["radarr_error"] = str(e)
-            try:
-                async with s.get(
-                    f"{radarr_url}/api/v3/wanted/missing",
-                    params={"apikey": radarr_key, "pageSize": 1},
-                    timeout=aiohttp.ClientTimeout(total=5),
-                ) as r:
-                    d = await r.json()
-                    result["radarr_missing"] = d.get("totalRecords", 0)
-            except Exception:
-                pass
+            tasks["radarr_queue"] = asyncio.create_task(
+                _fetch_json(s, f"{radarr_url}/api/v3/queue", params={"apikey": radarr_key, "pageSize": 10})
+            )
+            tasks["radarr_missing"] = asyncio.create_task(
+                _fetch_json(s, f"{radarr_url}/api/v3/wanted/missing", params={"apikey": radarr_key, "pageSize": 1})
+            )
+        if lidarr_key:
+            tasks["lidarr_queue"] = asyncio.create_task(
+                _fetch_json(
+                    s,
+                    f"{lidarr_url}/api/v1/queue?page=1&pageSize=20&apikey={lidarr_key}",
+                )
+            )
+
+        task_results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+
+    for name, payload in zip(tasks.keys(), task_results):
+        if isinstance(payload, Exception):
+            result[f"{name}_error"] = str(payload)
+            continue
+        if name == "sonarr_queue":
+            result["sonarr_total"] = payload.get("totalRecords", 0)
+            result["sonarr"] = [
+                {
+                    "title": item.get("title", "?"),
+                    "status": item.get("status", "?"),
+                    "pct": _pct(item),
+                    "type": "tv",
+                }
+                for item in payload.get("records", [])
+            ]
+        elif name == "radarr_queue":
+            result["radarr_total"] = payload.get("totalRecords", 0)
+            result["radarr"] = [
+                {
+                    "title": item.get("title", "?"),
+                    "status": item.get("status", "?"),
+                    "pct": _pct(item),
+                    "type": "movie",
+                }
+                for item in payload.get("records", [])
+            ]
+        elif name == "radarr_missing":
+            result["radarr_missing"] = payload.get("totalRecords", 0)
+        elif name == "lidarr_queue":
+            result["lidarr_total"] = payload.get("totalRecords", 0)
+            result["lidarr"] = [
+                {
+                    "title": item.get("title") or (item.get("album") or {}).get("title") or "?",
+                    "artistName": (item.get("artist") or {}).get("artistName") or item.get("artistName", ""),
+                    "status": item.get("status", "?"),
+                    "pct": _pct(item),
+                    "protocol": item.get("protocol", "?"),
+                    "type": "music",
+                }
+                for item in payload.get("records", [])
+            ]
 
     return web.Response(content_type="application/json", text=json.dumps(result))
 
@@ -5884,9 +5916,24 @@ async def api_system_timemachine_handler(request):
         status_result = await run_shell(command="tmutil status 2>/dev/null || true", slack_user_id="dashboard", timeout_s=10)
         status_output = status_result if isinstance(status_result, str) else (getattr(status_result, "stdout", "") or "")
         if status_output.strip():
-            parsed = plistlib.loads(status_output.encode("utf-8"))
-            tm_status["running"] = bool(parsed.get("Running", False))
-            tm_status["percent"] = parsed.get("Percent", -1)
+            xml_start = status_output.find("<?xml")
+            if xml_start == -1:
+                xml_start = status_output.find("<plist")
+            if xml_start >= 0:
+                status_output = status_output[xml_start:]
+            try:
+                parsed = plistlib.loads(status_output.encode("utf-8"))
+                tm_status["running"] = bool(parsed.get("Running", False))
+                tm_status["percent"] = parsed.get("Percent", -1)
+            except Exception:
+                import re as _re
+
+                running_match = _re.search(r"<key>Running</key>\s*<integer>(\d+)</integer>", status_output)
+                if running_match:
+                    tm_status["running"] = running_match.group(1) == "1"
+                percent_match = _re.search(r"<key>Percent</key>\s*<real>([0-9.]+)</real>", status_output)
+                if percent_match:
+                    tm_status["percent"] = float(percent_match.group(1))
     except Exception as exc:
         tm_status["error"] = str(exc)
 
@@ -6187,3 +6234,59 @@ async def api_uptime_kuma_handler(request):
             content_type="application/json",
             text=json.dumps({"error": str(exc), "services": []}),
         )
+
+
+async def api_sabnzbd_queue_handler(request):
+    """GET /api/sabnzbd/queue — SABnzbd download queue."""
+    import os
+
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+
+    cached = _cache_get("sabnzbd_queue")
+    if cached:
+        return web.Response(content_type="application/json", text=json.dumps(cached))
+
+    base = os.environ.get("SABNZBD_URL", "http://host.docker.internal:8775")
+    api_key = os.environ.get("SABNZBD_API_KEY", "")
+    if not api_key:
+        return web.Response(content_type="application/json", text=json.dumps({"error": "SABNZBD_API_KEY not set"}))
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{base}/api",
+                params={"mode": "queue", "apikey": api_key, "output": "json"},
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as resp:
+                data = await resp.json()
+
+        q = data.get("queue", {})
+        slots = q.get("slots", [])
+        items = []
+        for s in slots:
+            items.append(
+                {
+                    "name": s.get("filename", s.get("name", "?")),
+                    "progress": float(s.get("percentage", 0)),
+                    "size": s.get("size", "?"),
+                    "sizeleft": s.get("sizeleft", "?"),
+                    "timeleft": s.get("timeleft", "?"),
+                    "status": s.get("status", "?"),
+                    "category": s.get("cat", ""),
+                }
+            )
+
+        result = {
+            "status": q.get("status", "Unknown"),
+            "speed": q.get("kbpersec", "0"),
+            "speed_mb": round(float(q.get("kbpersec", 0)) / 1024, 2),
+            "queue_size": int(q.get("noofslots_total", 0) or 0),
+            "size_left": q.get("sizeleft", "0 B"),
+            "eta": q.get("timeleft", ""),
+            "slots": items,
+        }
+        _cache_set("sabnzbd_queue", result, ttl_seconds=20)
+        return web.Response(content_type="application/json", text=json.dumps(result))
+    except Exception as exc:
+        return web.Response(content_type="application/json", text=json.dumps({"error": str(exc)}))
