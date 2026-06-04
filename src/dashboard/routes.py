@@ -222,6 +222,7 @@ def setup_dashboard(
     app.router.add_get("/api/changelog", api_changelog_handler)
     app.router.add_get("/api/hermes/skills", api_hermes_skills_handler)
     app.router.add_get("/api/docker/status", api_docker_status_handler)
+    app.router.add_get("/api/network/wol", api_network_wol_handler)
     app.router.add_post("/api/network/wol", action(api_network_wol_handler))
     app.router.add_post("/api/hermes/upgrade", action(api_hermes_upgrade_handler))
     app.router.add_get("/api/nas/browse", api_nas_browse_handler)

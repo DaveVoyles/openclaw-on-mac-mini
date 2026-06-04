@@ -4895,13 +4895,50 @@ async def api_docker_status_handler(request: web.Request) -> web.Response:
 
 
 async def api_network_wol_handler(request: web.Request) -> web.Response:
-    """Send Wake-on-LAN magic packet to configured MAC address."""
-    import os
+    """Send Wake-on-LAN magic packet to a named machine or default MAC.
+
+    Supports two machines via env vars:
+      WOL_MACBOOK_PRO_MAC   — hardware MAC of MacBook Pro (192.168.1.131)
+      WOL_MACBOOK_PRO2_MAC  — hardware MAC of MacBook Pro 2 (192.168.1.136)
+      WOL_BROADCAST_IP      — broadcast address (default 192.168.1.255)
+
+    POST body (JSON): {"machine": "mbp"} or {"machine": "mbp2"} or {} for first available.
+    """
     import socket
 
-    mac = os.environ.get("WOL_MACBOOK_MAC", "")
-    if not mac:
-        return web.json_response({"error": "WOL_MACBOOK_MAC not set in environment", "sent": False}, status=400)
+    broadcast_ip = os.environ.get("WOL_BROADCAST_IP", "192.168.1.255")
+
+    # Build machine registry from env
+    machines = {}
+    if os.environ.get("WOL_MACBOOK_PRO_MAC"):
+        machines["mbp"] = {"label": "MacBook Pro", "mac": os.environ["WOL_MACBOOK_PRO_MAC"], "ip": "192.168.1.131"}
+    if os.environ.get("WOL_MACBOOK_PRO2_MAC"):
+        machines["mbp2"] = {"label": "MacBook Pro 2", "mac": os.environ["WOL_MACBOOK_PRO2_MAC"], "ip": "192.168.1.136"}
+    # Legacy single-machine support
+    if not machines and os.environ.get("WOL_MACBOOK_MAC"):
+        machines["default"] = {"label": "MacBook", "mac": os.environ["WOL_MACBOOK_MAC"], "ip": None}
+
+    if not machines:
+        return web.json_response(
+            {"error": "No WoL MAC configured. Set WOL_MACBOOK_PRO_MAC and/or WOL_MACBOOK_PRO2_MAC in .env", "sent": False},
+            status=400,
+        )
+
+    # GET: return available machines list
+    if request.method == "GET":
+        return web.json_response({"machines": {k: {"label": v["label"], "ip": v["ip"]} for k, v in machines.items()}})
+
+    # POST: send magic packet
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    target_key = body.get("machine", "") or next(iter(machines))
+    if target_key not in machines:
+        return web.json_response({"error": f"Unknown machine '{target_key}'. Valid: {list(machines)}", "sent": False}, status=400)
+
+    machine = machines[target_key]
+    mac = machine["mac"]
     mac_clean = re.sub(r"[:\-]", "", mac).upper()
     if len(mac_clean) != 12:
         return web.json_response({"error": f"Invalid MAC address format: {mac}", "sent": False}, status=400)
@@ -4909,8 +4946,16 @@ async def api_network_wol_handler(request: web.Request) -> web.Response:
         magic = bytes.fromhex("FF" * 6 + mac_clean * 16)
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            # Send to subnet broadcast AND global broadcast for reliability
+            sock.sendto(magic, (broadcast_ip, 9))
             sock.sendto(magic, ("255.255.255.255", 9))
-        return web.json_response({"sent": True, "mac": mac, "message": f"Magic packet sent to {mac}"})
+        return web.json_response({
+            "sent": True,
+            "mac": mac,
+            "machine": machine["label"],
+            "broadcast": broadcast_ip,
+            "message": f"Magic packet sent to {machine['label']} ({mac})",
+        })
     except Exception as exc:
         return web.json_response({"error": str(exc), "sent": False}, status=500)
 
