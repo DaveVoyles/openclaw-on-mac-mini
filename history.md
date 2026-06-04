@@ -52,3 +52,4 @@
 - 2026-06-04: Added Tautulli and Sonarr/Radarr dashboard cards plus a `/watching` Slack command; syntax checks passed, Slack registration stayed green, and Tautulli API remained responsive.
 - 2026-06-04: Added Hermes session transcripts to the dashboard plus `/sessions`, `/arr`, and a weekly Hermes digest scheduler; Python AST checks and Slack registration tests passed.
 - 2026-06-04: Wave 4 deployed — Tautulli/Plex card, Sonarr/Radarr queue card, Docker action buttons+logs, system alerts panel, Hermes transcript viewer, weekly digest, /watching /sessions /arr Slack commands (45 total)
+- 2026-06-04: Wave 5 deployed — secured 8 unprotected API endpoints, async sqlite, TTL cache, Slack loading messages + error handling, /status+briefing with Plex, /help with all 45 commands, live badges, voice pulse, scroll-to-top FAB
