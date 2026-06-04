@@ -901,6 +901,8 @@
           <button onclick="jumpTo('nas-disk-card')" class="jump-pill">💾 NAS</button>
           <button onclick="jumpTo('docker-status-card')" class="jump-pill">🐳 Docker</button>
           <button onclick="jumpTo('github-activity-card')" class="jump-pill">🐙 GitHub</button>
+          <button onclick="jumpTo('plex-activity-card')" class="jump-pill">🎬 Plex</button>
+          <button onclick="jumpTo('arr-queue-card')" class="jump-pill">⬇️ Queue</button>
           <button onclick="jumpTo('system-health-card')" class="jump-pill">🖥 Health</button>
           <button onclick="jumpTo('hermes-sessions-card')" class="jump-pill">📋 Sessions</button>
         </nav>
@@ -1431,21 +1433,20 @@
           </div>
         </div>
 
-        <!-- Container Log Viewer -->
-        <div class="card" id="container-logs-card">
-          <h2>📋 Container Logs</h2>
-          <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:0.6rem">
-            <select id="log-service-select" style="padding:0.3rem 0.5rem;background:var(--surface-solid,#1a1b2e);border:1px solid var(--border,#444);border-radius:6px;color:var(--text,#e8e8e8);font-size:0.82rem;min-width:160px">
-              <option value="">Select container…</option>
-            </select>
-            <select id="log-lines-select" style="padding:0.3rem 0.5rem;background:var(--surface-solid,#1a1b2e);border:1px solid var(--border,#444);border-radius:6px;color:var(--text,#e8e8e8);font-size:0.82rem">
-              <option value="50">50 lines</option>
-              <option value="100">100 lines</option>
-              <option value="200">200 lines</option>
-            </select>
-            <button onclick="fetchContainerLogs()" style="padding:0.3rem 0.75rem;background:var(--surface,#1a1b2e);border:1px solid var(--border,#444);border-radius:6px;color:var(--text,#e8e8e8);font-size:0.82rem;cursor:pointer">Fetch Logs</button>
+        <div class="card" id="container-logs-card" style="margin-bottom:1rem">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem">
+            <h2 style="margin:0">📜 Container Logs</h2>
+            <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+              <select id="logs-container-select" onchange="loadContainerLogs()" style="padding:0.3rem 0.5rem;background:var(--surface-solid,#1a1b2e);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.8rem">
+                <option value="openclaw">openclaw</option>
+              </select>
+              <label style="font-size:0.75rem;color:var(--muted);display:flex;align-items:center;gap:0.3rem">
+                <input type="checkbox" id="logs-autorefresh" onchange="toggleLogsAutoRefresh()"> Live
+              </label>
+              <button onclick="loadContainerLogs()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">↻</button>
+            </div>
           </div>
-          <pre id="container-log-output" style="background:var(--surface-solid,#0d1117);border:1px solid var(--border,#333);border-radius:6px;padding:0.75rem;font-size:0.75rem;line-height:1.5;max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-word;color:var(--text,#e8e8e8);font-family:'JetBrains Mono',monospace">Select a container and click Fetch Logs.</pre>
+          <pre id="container-logs-output" style="margin-top:0.75rem;background:#0d1117;color:#7ee787;font-size:0.72rem;line-height:1.4;padding:0.75rem;border-radius:6px;max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all">Loading…</pre>
         </div>
 
         <!-- Mac Mini Resource Usage -->
@@ -1567,6 +1568,17 @@
 
         <!-- Top cards -->
         <div class="grid">
+          <!-- System Alerts Panel — shown at top when alerts exist -->
+          <div id="system-alerts-panel" style="display:none;margin-bottom:1rem;padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:10px;grid-column:1 / -1">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">
+              <span style="font-weight:700;color:#ef4444">🚨 Alerts</span>
+              <span id="alerts-count" style="font-size:0.75rem;background:rgba(239,68,68,0.2);color:#ef4444;padding:0.1rem 0.4rem;border-radius:10px"></span>
+            </div>
+            <div id="alerts-list" style="display:flex;flex-direction:column;gap:0.3rem"></div>
+          </div>
+          <div id="system-ok-banner" style="display:none;margin-bottom:1rem;padding:0.5rem 1rem;background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.2);border-radius:8px;font-size:0.82rem;color:#4ade80;grid-column:1 / -1">
+            ✅ All systems nominal
+          </div>
           <!-- Spending -->
           <div class="card">
             <h2>&#128176; Gemini Spending</h2>
@@ -1830,7 +1842,13 @@
           </div>
           <div class="card-body" id="hermes-sessions-body" style="display:none;padding:0.75rem">
             <div id="hermes-sessions-list">Loading…</div>
-            <div id="hermes-session-detail" style="display:none;margin-top:1rem;padding:0.75rem;background:rgba(0,0,0,0.3);border-radius:6px;max-height:400px;overflow-y:auto;font-size:0.8rem;font-family:monospace"></div>
+            <div id="session-transcript-panel" style="display:none;margin-top:0.75rem;border-top:1px solid var(--border);padding-top:0.75rem">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+                <div id="transcript-session-title" style="font-weight:600;font-size:0.85rem"></div>
+                <button onclick="document.getElementById('session-transcript-panel').style.display='none'" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem">✕</button>
+              </div>
+              <div id="transcript-messages" style="max-height:400px;overflow-y:auto;display:flex;flex-direction:column;gap:0.5rem"></div>
+            </div>
           </div>
         </div>
 
@@ -2044,6 +2062,38 @@
           <div id="github-activity-empty" style="color:var(--muted);font-style:italic">Loading GitHub activity...</div>
           <div id="github-activity-commits" style="display:none"></div>
           <div id="github-activity-prs" style="display:none"></div>
+        </div>
+
+        <!-- 🎬 Plex Activity (Tautulli) -->
+        <div class="card" id="plex-activity-card" style="margin-bottom:1rem">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+            <h2 style="margin:0">🎬 Plex Activity</h2>
+            <div style="display:flex;gap:0.5rem;align-items:center">
+              <span id="plex-stream-count" style="font-size:0.75rem;color:var(--muted)"></span>
+              <button onclick="loadPlexActivity()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">↻</button>
+            </div>
+          </div>
+          <div id="plex-activity-body" style="margin-top:0.75rem">
+            <div id="plex-now-playing" style="margin-bottom:0.75rem"></div>
+            <div style="color:var(--muted);font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.4rem">Recently Watched</div>
+            <div id="plex-history-list" style="display:flex;flex-direction:column;gap:0.3rem"></div>
+          </div>
+        </div>
+
+        <!-- 📥 Sonarr / Radarr Queue -->
+        <div class="card" id="arr-queue-card" style="margin-bottom:1rem">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap">
+            <h2 style="margin:0">📥 Sonarr / Radarr Queue</h2>
+            <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+              <span id="arr-queue-summary" style="font-size:0.75rem;color:var(--muted)">Loading…</span>
+              <span id="arr-missing-count" style="font-size:0.75rem;color:var(--muted)"></span>
+              <button onclick="loadArrQueue()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">↻</button>
+            </div>
+          </div>
+          <div id="arr-queue-body" style="margin-top:0.75rem">
+            <div id="arr-queue-list" style="display:flex;flex-direction:column;gap:0.5rem"></div>
+            <div id="arr-history-fallback" style="margin-top:0.75rem"></div>
+          </div>
         </div>
 
         <!-- Memory Browser -->
@@ -2832,6 +2882,125 @@
         }
       }
 
+
+      async function loadPlexActivity() {
+        const headers = _actionAuthHeaders('dashboard-ui');
+        const countEl = document.getElementById('plex-stream-count');
+        const nowEl = document.getElementById('plex-now-playing');
+        const listEl = document.getElementById('plex-history-list');
+
+        try {
+          const r = await fetch('/api/tautulli/activity', { headers });
+          const d = await r.json();
+          const sessions = Array.isArray(d.sessions) ? d.sessions : [];
+          if (countEl) countEl.textContent = sessions.length ? `${sessions.length} streaming` : 'idle';
+          if (nowEl) {
+            if (sessions.length) {
+              nowEl.innerHTML = sessions.map((session) => {
+                const pct = Math.max(0, Math.min(100, Number(session.progress_percent || 0)));
+                return `<div style="padding:0.5rem 0.75rem;background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.2);border-radius:8px;margin-bottom:0.4rem">
+                  <div style="font-weight:600;color:var(--text)">${esc(session.full_title || session.title || 'Unknown')}</div>
+                  <div style="font-size:0.75rem;color:var(--muted)">${esc(session.user || '')} · ${esc(session.player || '')}</div>
+                  <div style="margin-top:0.4rem;height:4px;background:rgba(255,255,255,0.1);border-radius:2px">
+                    <div style="height:4px;background:#4ade80;border-radius:2px;width:${pct}%"></div>
+                  </div>
+                </div>`;
+              }).join('');
+            } else {
+              nowEl.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;font-style:italic">Nothing streaming right now</div>';
+            }
+          }
+        } catch (e) {
+          if (countEl) countEl.textContent = 'unavailable';
+          if (nowEl) nowEl.innerHTML = `<div style="color:var(--muted);font-size:0.82rem;font-style:italic">Failed to load Plex activity: ${esc(e.message || 'unknown error')}</div>`;
+        }
+
+        try {
+          const r = await fetch('/api/tautulli/history?length=8', { headers });
+          const d = await r.json();
+          const items = Array.isArray(d.data) ? d.data : [];
+          if (listEl) {
+            listEl.innerHTML = items.length ? items.map((item) => {
+              const when = item.stopped ? new Date(Number(item.stopped) * 1000).toLocaleDateString() : '';
+              const icon = item.media_type === 'movie' ? '🎬' : '📺';
+              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+                <span style="font-size:0.82rem">${icon} ${esc(item.full_title || item.title || 'Unknown')}</span>
+                <span style="font-size:0.72rem;color:var(--muted);white-space:nowrap">${esc(when)}</span>
+              </div>`;
+            }).join('') : '<div style="color:var(--muted);font-size:0.82rem;font-style:italic">No recent watch history available</div>';
+          }
+        } catch (e) {
+          if (listEl) listEl.innerHTML = `<div style="color:var(--muted);font-size:0.82rem;font-style:italic">Failed to load history: ${esc(e.message || 'unknown error')}</div>`;
+        }
+      }
+
+      async function loadArrQueue() {
+        const headers = _actionAuthHeaders('dashboard-ui');
+        const summaryEl = document.getElementById('arr-queue-summary');
+        const missingEl = document.getElementById('arr-missing-count');
+        const listEl = document.getElementById('arr-queue-list');
+        const historyEl = document.getElementById('arr-history-fallback');
+        if (!listEl || !historyEl) return;
+
+        try {
+          const r = await fetch('/api/arr/queue', { headers });
+          const d = await r.json();
+          const sonarr = Array.isArray(d.sonarr) ? d.sonarr : [];
+          const radarr = Array.isArray(d.radarr) ? d.radarr : [];
+          const active = [
+            ...sonarr.map(item => ({ ...item, kind: 'tv', badge: '📺 Sonarr' })),
+            ...radarr.map(item => ({ ...item, kind: 'movie', badge: '🎬 Radarr' })),
+          ];
+          if (summaryEl) summaryEl.textContent = active.length
+            ? `${active.length} active download${active.length === 1 ? '' : 's'}`
+            : 'Queue idle';
+          if (missingEl) missingEl.textContent = `📺 ${Number(d.radarr_missing || 0)} missing movies`;
+
+          if (active.length) {
+            historyEl.innerHTML = '';
+            listEl.innerHTML = active.map((item) => {
+              const pct = Math.max(0, Math.min(100, Number(item.pct || 0)));
+              return `<div style="padding:0.55rem 0.7rem;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px">
+                <div style="display:flex;justify-content:space-between;gap:0.5rem;align-items:center;margin-bottom:0.28rem">
+                  <span style="font-size:0.82rem;font-weight:600;color:var(--text)">${esc(item.title || 'Unknown')}</span>
+                  <span style="font-size:0.68rem;color:var(--muted);white-space:nowrap">${esc(item.badge || '')}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;gap:0.5rem;align-items:center;font-size:0.74rem;color:var(--muted);margin-bottom:0.35rem">
+                  <span>${esc(item.status || 'unknown')}</span>
+                  <span>${pct}%</span>
+                </div>
+                <div style="height:5px;background:rgba(255,255,255,0.1);border-radius:999px;overflow:hidden">
+                  <div style="height:5px;background:${item.kind === 'movie' ? '#f59e0b' : '#60a5fa'};border-radius:999px;width:${pct}%"></div>
+                </div>
+              </div>`;
+            }).join('');
+            return;
+          }
+
+          listEl.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;font-style:italic">No active Sonarr or Radarr downloads</div>';
+          const histResp = await fetch('/api/arr/history', { headers });
+          const hist = await histResp.json();
+          const grabs = Array.isArray(hist.grabs) ? hist.grabs.slice(0, 5) : [];
+          historyEl.innerHTML = grabs.length ? `
+            <div style="color:var(--muted);font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.4rem">Last grabbed</div>
+            <div style="display:flex;flex-direction:column;gap:0.3rem">
+              ${grabs.map((item) => {
+                const when = item.date ? new Date(item.date).toLocaleString() : '';
+                const icon = item.kind === 'movie' ? '🎬' : '📺';
+                return `<div style="display:flex;justify-content:space-between;gap:0.5rem;align-items:center;padding:0.3rem 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+                  <span style="font-size:0.8rem">${icon} ${esc(item.title || 'Unknown')} <span style="color:var(--muted)">· ${esc(item.quality || '?')}</span></span>
+                  <span style="font-size:0.7rem;color:var(--muted);white-space:nowrap">${esc(when)}</span>
+                </div>`;
+              }).join('')}
+            </div>` : '<div style="color:var(--muted);font-size:0.82rem;font-style:italic;margin-top:0.75rem">No recent grabs available</div>';
+        } catch (e) {
+          if (summaryEl) summaryEl.textContent = 'Unavailable';
+          if (missingEl) missingEl.textContent = '';
+          listEl.innerHTML = `<div style="color:var(--muted);font-size:0.82rem;font-style:italic">Failed to load queue: ${esc(e.message || 'unknown error')}</div>`;
+          historyEl.innerHTML = '';
+        }
+      }
+
       function renderSkills(skills) {
         const sb = document.getElementById("skills-body");
         sb.innerHTML = "";
@@ -2912,12 +3081,12 @@
           });
           cg.appendChild(div);
         });
-        // populate log-service-select
-        const sel = document.getElementById('log-service-select');
+        // populate logs-container-select
+        const sel = document.getElementById('logs-container-select');
         if (sel) {
           const prev = sel.value;
-          sel.innerHTML = '<option value="">Select container…</option>' +
-            containers.map(c => `<option value="${esc(c.name)}"${c.name===prev?' selected':''}>${esc(c.name)}</option>`).join('');
+          sel.innerHTML = containers.map(c => `<option value="${esc(c.name)}"${c.name===prev?' selected':''}>${esc(c.name)}</option>`).join('');
+          if (!sel.value && containers[0]?.name) sel.value = containers[0].name;
         }
       }
 
@@ -3937,6 +4106,8 @@
           loadConfigStatus();
           loadChannelMemoryInspector({ quietIfMissing: true });
           loadGitHubActivity();
+          loadPlexActivity();
+          loadArrQueue();
           refreshStatus();
         } catch (e) {
           document.getElementById("loading").innerHTML =
@@ -3958,6 +4129,8 @@
       }, 1000);
       setInterval(() => { _resetCountdown(); refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadPlans(); loadTaskStatuses(); loadAgentSessions(); refreshHermesStatus(); refreshCopilotSessions(); loadApprovals(); loadRunTimeline(); loadQualityEvals(); loadQualityMetrics(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadQuotaStatus(); loadSkillStats(); loadConfigStatus(); loadChannelMemoryInspector({ quietIfMissing: true }); loadTopology(); refreshStatus(); }, 60000);
       setInterval(() => { loadGitHubActivity(); }, 300000);
+      setInterval(() => { loadPlexActivity(); }, 30000);
+      setInterval(() => { loadArrQueue(); }, 60000);
       setInterval(refreshNetworkPing, 60000);
       setInterval(refreshSystemHealth, 30000);
       setInterval(refreshCopilotSessions, 15000);
@@ -5046,6 +5219,15 @@
         el.textContent = s;
         return el.innerHTML;
       }
+
+      function showToast(msg, type = 'success') {
+        const t = document.createElement('div');
+        t.textContent = msg;
+        t.style.cssText = `position:fixed;bottom:1.5rem;right:1.5rem;padding:0.6rem 1rem;background:${type === 'error' ? '#ef4444' : '#22c55e'};color:#fff;border-radius:8px;font-size:0.85rem;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);transition:opacity 0.3s`;
+        document.body.appendChild(t);
+        setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000);
+      }
+
       function deleteTask(taskId) {
         if (!confirm(`Delete task "${taskId}"?`)) return;
         const token = (
@@ -5072,22 +5254,27 @@
       }
 
       async function dockerAction(action, container) {
-        if (!confirm(`${action} container "${container}"?`)) return;
+        if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} container "${container}"?`)) return;
+        const headers = _actionAuthHeaders ? _actionAuthHeaders('dashboard-ui') : {};
+        headers['Content-Type'] = 'application/json';
         try {
-          const res = await fetch('/api/docker/action', {
+          const r = await fetch('/api/docker/action', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({action, container})
+            headers,
+            body: JSON.stringify({ action, container })
           });
-          const d = await res.json();
+          const d = await r.json();
           if (d.success) {
-            showToast(`✅ ${action} "${container}" OK`, 'success');
-            setTimeout(() => loadDashboard(), 3000);
+            showToast(`✅ ${container} ${action}ed`);
+            setTimeout(() => {
+              loadDockerStatus();
+              loadContainerLogs();
+            }, 1500);
           } else {
-            showToast(`❌ ${action} failed: ${d.error || 'unknown error'}`, 'error');
+            showToast(`❌ ${d.error || 'Action failed'}`, 'error');
           }
-        } catch(e) {
-          showToast(`❌ Docker action failed: ${e.message}`, 'error');
+        } catch (e) {
+          showToast(`❌ ${e}`, 'error');
         }
       }
 
@@ -5222,21 +5409,82 @@
         if (ta) { ta.value = text; ta.focus(); }
       }
 
-      async function fetchContainerLogs() {
-        const service = document.getElementById('log-service-select').value;
-        const lines = document.getElementById('log-lines-select').value;
-        const out = document.getElementById('container-log-output');
-        if (!service) { out.textContent = 'Select a container first.'; return; }
-        out.textContent = 'Loading…';
+      let _logsTimer = null;
+
+      async function loadContainerLogs() {
+        const container = document.getElementById('logs-container-select')?.value || 'openclaw';
+        const out = document.getElementById('container-logs-output');
+        const headers = typeof _actionAuthHeaders === 'function' ? _actionAuthHeaders('dashboard-ui') : {};
         try {
-          const res = await fetch(`/api/docker/logs?service=${encodeURIComponent(service)}&lines=${lines}`);
-          const d = await res.json();
-          if (d.error) { out.textContent = 'Error: ' + d.error; return; }
-          out.textContent = d.output || '(empty)';
-          out.scrollTop = out.scrollHeight;
-        } catch(e) {
-          out.textContent = 'Fetch error: ' + e.message;
+          if (out) out.textContent = 'Loading…';
+          const r = await fetch(`/api/docker/logs?service=${encodeURIComponent(container)}&lines=80`, { headers });
+          const d = await r.json();
+          if (out) {
+            out.textContent = d.output || d.error || 'No output';
+            out.scrollTop = out.scrollHeight;
+          }
+          const sel = document.getElementById('logs-container-select');
+          if (sel && sel.options.length <= 1) {
+            const sr = await fetch('/api/docker/status', { headers });
+            const sd = await sr.json();
+            const containers = sd.containers || [];
+            containers.forEach(c => {
+              if (!Array.from(sel.options).find(o => o.value === c.name)) {
+                const opt = document.createElement('option');
+                opt.value = c.name;
+                opt.textContent = c.name;
+                sel.appendChild(opt);
+              }
+            });
+          }
+        } catch (e) {
+          if (out) out.textContent = `Error: ${e}`;
         }
+      }
+
+      function toggleLogsAutoRefresh() {
+        const checked = document.getElementById('logs-autorefresh')?.checked;
+        if (checked) {
+          loadContainerLogs();
+          _logsTimer = setInterval(loadContainerLogs, 10000);
+        } else {
+          clearInterval(_logsTimer);
+          _logsTimer = null;
+        }
+      }
+
+      async function loadSystemAlerts() {
+        const headers = typeof _actionAuthHeaders === 'function' ? _actionAuthHeaders('dashboard-ui') : {};
+        try {
+          const r = await fetch('/api/system/alerts', { headers });
+          const d = await r.json();
+          const panel = document.getElementById('system-alerts-panel');
+          const okBanner = document.getElementById('system-ok-banner');
+          const list = document.getElementById('alerts-list');
+          const count = document.getElementById('alerts-count');
+          const realAlerts = (d.alerts || []).filter(a => a.severity !== 'info');
+          if (realAlerts.length > 0) {
+            if (panel) panel.style.display = 'block';
+            if (okBanner) okBanner.style.display = 'none';
+            if (count) count.textContent = realAlerts.length;
+            if (list) {
+              list.innerHTML = realAlerts.map(a =>
+                `<div style="font-size:0.82rem">${a.icon} ${esc(a.msg)}</div>`
+              ).join('');
+            }
+          } else {
+            if (panel) panel.style.display = 'none';
+            if (okBanner) okBanner.style.display = 'block';
+            if (list) list.innerHTML = '';
+            setTimeout(() => { if (okBanner) okBanner.style.display = 'none'; }, 5000);
+          }
+          const infoAlerts = (d.alerts || []).filter(a => a.severity === 'info');
+          if (infoAlerts.length && list && realAlerts.length) {
+            list.innerHTML += infoAlerts.map(a =>
+              `<div style="font-size:0.78rem;color:var(--muted)">${a.icon} ${esc(a.msg)}</div>`
+            ).join('');
+          }
+        } catch (e) {}
       }
 
       // Voice input
@@ -5648,6 +5896,8 @@
       let _globalSearchPreloadPromise = null;
 
       const CARD_COLLAPSE_TARGETS = {
+        'plex-activity-card': 'plex-activity-body',
+        'arr-queue-card': 'arr-queue-body',
         'docker-status-card': 'docker-status-body',
         'nas-browse-card': 'nas-browse-body',
         'hermes-status-card': 'hermes-status-body',
@@ -5658,6 +5908,8 @@
       };
 
       const CARD_COLLAPSE_LOADERS = {
+        'plex-activity-card': () => loadPlexActivity(),
+        'arr-queue-card': () => loadArrQueue(),
         'docker-status-card': () => loadDockerStatus(),
         'nas-browse-card': () => loadNasBrowse(_nasBrowsePath),
         'hermes-memory-card': () => loadHermesMemory(),
@@ -6586,14 +6838,14 @@
           }
           el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:0.8rem">' +
             '<thead><tr style="color:var(--muted)"><th style="text-align:left;padding:0.3rem 0.5rem">Session</th><th style="text-align:left;padding:0.3rem 0.5rem">Model</th><th style="text-align:left;padding:0.3rem 0.5rem">Date</th><th style="padding:0.3rem 0.5rem">Msgs</th><th style="padding:0.3rem 0.5rem">Actions</th></tr></thead><tbody>' +
-            d.sessions.map(s => `<tr style="border-top:1px solid rgba(255,255,255,0.05)">
+            d.sessions.map(s => `<tr style="border-top:1px solid rgba(255,255,255,0.05);cursor:pointer" onclick="loadSessionTranscript('${encodeURIComponent(s.id)}')">
               <td style="padding:0.3rem 0.5rem;font-family:monospace;color:var(--muted);font-size:0.72rem" title="${esc(s.id)}">${s.title && s.title !== s.id ? esc(s.title.substring(0,30)) : esc(s.id.substring(0,20))}</td>
               <td style="padding:0.3rem 0.5rem;color:#86efac">${esc(s.model)}</td>
               <td style="padding:0.3rem 0.5rem">${esc(s.started_at)}</td>
               <td style="padding:0.3rem 0.5rem;text-align:center">${s.message_count}</td>
               <td style="padding:0.3rem 0.5rem;text-align:center;display:flex;gap:0.3rem">
-                <button onclick="viewHermesSession('${encodeURIComponent(s.id)}')" style="font-size:0.7rem;padding:0.15rem 0.4rem;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.2);border-radius:4px;color:#4ade80;cursor:pointer">View</button>
-                <button onclick="resumeHermesSession('${encodeURIComponent(s.id)}')" style="font-size:0.7rem;padding:0.15rem 0.4rem;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.2);border-radius:4px;color:#a78bfa;cursor:pointer">Resume</button>
+                <button onclick="event.stopPropagation(); loadSessionTranscript('${encodeURIComponent(s.id)}')" style="font-size:0.7rem;padding:0.15rem 0.4rem;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.2);border-radius:4px;color:#4ade80;cursor:pointer">View</button>
+                <button onclick="event.stopPropagation(); resumeHermesSession('${encodeURIComponent(s.id)}')" style="font-size:0.7rem;padding:0.15rem 0.4rem;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.2);border-radius:4px;color:#a78bfa;cursor:pointer">Resume</button>
               </td>
             </tr>`).join('') +
             '</tbody></table>';
@@ -6603,27 +6855,52 @@
         }
       }
 
-      async function viewHermesSession(sessionId) {
-        const detail = document.getElementById('hermes-session-detail');
-        if (!detail) return;
-        detail.style.display = 'block';
-        detail.textContent = 'Loading messages…';
+      async function loadSessionTranscript(sessionId) {
+        const panel = document.getElementById('session-transcript-panel');
+        const msgs = document.getElementById('transcript-messages');
+        const title = document.getElementById('transcript-session-title');
+        if (!panel || !msgs) return;
+
+        const headers = typeof _actionAuthHeaders === 'function' ? _actionAuthHeaders('dashboard-ui') : {};
+        const resolvedSessionId = decodeURIComponent(sessionId);
+        msgs.innerHTML = '<div style="color:var(--muted);font-style:italic">Loading…</div>';
+        panel.style.display = 'block';
+        panel.scrollIntoView({behavior:'smooth'});
+
         try {
-          const resolvedSessionId = decodeURIComponent(sessionId);
-          const r = await fetch(`/api/hermes/sessions/${encodeURIComponent(resolvedSessionId)}`, {headers: _actionAuthHeaders('dashboard-ui')});
+          const r = await fetch(`/api/hermes/sessions/${encodeURIComponent(resolvedSessionId)}/messages`, {headers});
           const d = await r.json();
-          if (!d.messages || d.messages.length === 0) {
-            detail.textContent = 'No messages found.';
+          if (!r.ok || d.error) {
+            msgs.innerHTML = `<div style="color:#ef4444">${esc(d.error || `HTTP ${r.status}`)}</div>`;
             return;
           }
-          detail.innerHTML = d.messages.map(m => {
-            const color = m.role === 'user' ? '#60a5fa' : (m.role === 'assistant' ? '#4ade80' : '#f59e0b');
-            const label = m.role === 'user' ? '👤 User' : (m.role === 'assistant' ? '⚕ Hermes' : m.role);
-            return `<div style="margin-bottom:0.75rem"><span style="color:${color};font-weight:bold">${label}</span><div style="margin-top:0.25rem;white-space:pre-wrap;color:var(--text)">${esc(m.content)}</div></div>`;
-          }).join('<hr style="border-color:rgba(255,255,255,0.07);margin:0.5rem 0">');
+          if (title) title.textContent = d.session?.title || `Session ${resolvedSessionId.slice(0, 8)}`;
+          const messages = Array.isArray(d.messages) ? d.messages : [];
+          if (messages.length === 0) {
+            msgs.innerHTML = '<div style="color:var(--muted);font-style:italic">No messages found.</div>';
+            return;
+          }
+          msgs.innerHTML = messages.map(m => {
+            const role = m.role || m.type || m.speaker || 'unknown';
+            const content = m.content || m.text || m.message || m.body || '';
+            const isUser = role === 'user' || role === 'human';
+            return `<div style="display:flex;justify-content:${isUser ? 'flex-end' : 'flex-start'}">
+              <div style="max-width:85%;padding:0.5rem 0.75rem;border-radius:10px;font-size:0.8rem;line-height:1.4;
+                background:${isUser ? 'rgba(124,58,237,0.2)' : 'rgba(255,255,255,0.04)'};
+                border:1px solid ${isUser ? 'rgba(124,58,237,0.4)' : 'rgba(255,255,255,0.1)'};
+                color:var(--text)">
+                ${String(content).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}
+              </div>
+            </div>`;
+          }).join('');
+          msgs.scrollTop = msgs.scrollHeight;
         } catch(e) {
-          detail.textContent = 'Error loading messages.';
+          msgs.innerHTML = `<div style="color:#ef4444">Error: ${esc(e.message || String(e))}</div>`;
         }
+      }
+
+      async function viewHermesSession(sessionId) {
+        await loadSessionTranscript(sessionId);
       }
 
       function resumeHermesSession(sessionId) {
@@ -6742,6 +7019,9 @@
         initCardCollapse();
         initGlobalSearch();
         refreshPromptLibrarySelect();
+        loadContainerLogs();
+        loadSystemAlerts();
+        setInterval(loadSystemAlerts, 60000);
       });
       document.addEventListener('keydown', e => {
         if (e.key === 'Escape') {
@@ -6768,10 +7048,17 @@
           }
           grid.innerHTML = d.containers.map(c => {
             const color = c.badge === 'up' ? '#4ade80' : (c.badge === 'down' ? '#f87171' : '#f59e0b');
+            const isRunning = (c.status || '').toLowerCase().includes('up') || c.state === 'running' || c.badge === 'up';
+            const actionBtn = isRunning
+              ? `<button onclick="dockerAction('restart','${esc(c.name || '')}')" style="font-size:0.7rem;padding:0.15rem 0.45rem;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:4px;color:#f59e0b;cursor:pointer" title="Restart">🔄</button>`
+              : `<button onclick="dockerAction('start','${esc(c.name || '')}')" style="font-size:0.7rem;padding:0.15rem 0.45rem;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);border-radius:4px;color:#4ade80;cursor:pointer" title="Start">▶</button>`;
             return `<div style="padding:0.55rem 0.65rem;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:6px;display:flex;flex-direction:column;gap:0.28rem">
               <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem">
                 <span style="font-size:0.78rem;font-weight:500;color:var(--text)">${esc(c.name || '')}</span>
-                <span style="padding:0.08rem 0.38rem;border-radius:999px;background:${color}22;color:${color};font-size:0.66rem;text-transform:uppercase">${esc(c.badge || 'unknown')}</span>
+                <div style="display:flex;align-items:center;gap:0.35rem">
+                  ${actionBtn}
+                  <span style="padding:0.08rem 0.38rem;border-radius:999px;background:${color}22;color:${color};font-size:0.66rem;text-transform:uppercase">${esc(c.badge || 'unknown')}</span>
+                </div>
               </div>
               <div style="font-size:0.68rem;color:var(--muted)">${esc(c.image || '')}</div>
               <div style="font-size:0.68rem;color:var(--muted)">${esc(c.status || '')}</div>

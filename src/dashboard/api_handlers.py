@@ -5365,3 +5365,279 @@ async def api_system_health_handler(request):
     result["hostname"] = os.uname().nodename
     result["timestamp"] = time.time()
     return web.Response(content_type="application/json", text=json.dumps(result))
+
+
+async def api_system_alerts_handler(request: web.Request) -> web.Response:
+    import os
+    import shutil
+    import time
+
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+
+    alerts: list[dict[str, str]] = []
+
+    try:
+        disk = shutil.disk_usage("/")
+        pct = disk.used / disk.total * 100
+        if pct > 90:
+            alerts.append({"severity": "error", "msg": f"/ disk {pct:.0f}% full ({disk.free / 1e9:.0f}GB free)", "icon": "🔴"})
+        elif pct > 80:
+            alerts.append({"severity": "warn", "msg": f"/ disk {pct:.0f}% used — watch this", "icon": "🟡"})
+    except Exception as e:
+        alerts.append({"severity": "info", "msg": f"Disk check failed: {e}", "icon": "ℹ️"})
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "docker",
+            "ps",
+            "--filter",
+            "health=unhealthy",
+            "--format",
+            "{{.Names}}",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+        unhealthy = [line for line in out.decode().splitlines() if line.strip()]
+        for name in unhealthy:
+            alerts.append({"severity": "error", "msg": f"Container unhealthy: {name}", "icon": "🔴"})
+    except Exception:
+        pass
+
+    if not os.environ.get("WOL_MACBOOK_PRO_MAC"):
+        alerts.append({"severity": "info", "msg": "WoL: MacBook Pro 1 MAC not set — enable SSH on MBP to configure", "icon": "ℹ️"})
+
+    try:
+        nas_path = os.environ.get("NAS_BACKUP_PATH", "/Volumes/Misc")
+        if os.path.exists(nas_path):
+            nas_disk = shutil.disk_usage(nas_path)
+            nas_pct = nas_disk.used / nas_disk.total * 100
+            if nas_pct > 90:
+                alerts.append({"severity": "error", "msg": f"NAS disk {nas_pct:.0f}% full", "icon": "🔴"})
+            elif nas_pct > 80:
+                alerts.append({"severity": "warn", "msg": f"NAS disk {nas_pct:.0f}% used", "icon": "🟡"})
+    except Exception:
+        pass
+
+    ok = len(alerts) == 0 or all(alert["severity"] == "info" for alert in alerts)
+    return web.Response(
+        content_type="application/json",
+        text=json.dumps({"alerts": alerts, "ok": ok, "timestamp": time.time()}),
+    )
+
+
+
+async def api_tautulli_activity_handler(request):
+    import os, aiohttp
+
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+    url = os.environ.get("TAUTULLI_URL", "http://localhost:8181")
+    key = os.environ.get("TAUTULLI_API_KEY", "")
+    if not key:
+        return web.Response(content_type="application/json", text=json.dumps({"error": "TAUTULLI_API_KEY not set"}))
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(
+                f"{url}/api/v2",
+                params={"apikey": key, "cmd": "get_activity"},
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as r:
+                data = await r.json()
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps(data.get("response", {}).get("data", {})),
+        )
+    except Exception as e:
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps({"error": str(e), "sessions": [], "stream_count": "0"}),
+        )
+
+
+async def api_tautulli_history_handler(request):
+    import os, aiohttp
+
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+    url = os.environ.get("TAUTULLI_URL", "http://localhost:8181")
+    key = os.environ.get("TAUTULLI_API_KEY", "")
+    if not key:
+        return web.Response(content_type="application/json", text=json.dumps({"error": "TAUTULLI_API_KEY not set", "data": []}))
+    length = request.rel_url.query.get("length", "10")
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(
+                f"{url}/api/v2",
+                params={"apikey": key, "cmd": "get_history", "length": length},
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as r:
+                data = await r.json()
+        hist = data.get("response", {}).get("data", {})
+        return web.Response(content_type="application/json", text=json.dumps(hist))
+    except Exception as e:
+        return web.Response(content_type="application/json", text=json.dumps({"error": str(e), "data": []}))
+
+
+async def api_arr_queue_handler(request):
+    import os, aiohttp
+
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+
+    sonarr_url = os.environ.get("SONARR_URL", "http://localhost:8989")
+    sonarr_key = os.environ.get("SONARR_API_KEY", "")
+    radarr_url = os.environ.get("RADARR_URL", "http://localhost:7878")
+    radarr_key = os.environ.get("RADARR_API_KEY", "")
+
+    result = {"sonarr": [], "radarr": [], "sonarr_total": 0, "radarr_total": 0, "radarr_missing": 0}
+
+    async with aiohttp.ClientSession() as s:
+        if sonarr_key:
+            try:
+                async with s.get(
+                    f"{sonarr_url}/api/v3/queue",
+                    params={"apikey": sonarr_key, "pageSize": 10},
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as r:
+                    d = await r.json()
+                    result["sonarr_total"] = d.get("totalRecords", 0)
+                    result["sonarr"] = [
+                        {
+                            "title": i.get("title", "?"),
+                            "status": i.get("status", "?"),
+                            "pct": round(100 * (1 - i.get("sizeleft", 0) / max(i.get("size", 1), 1))) if i.get("size") else 0,
+                        }
+                        for i in d.get("records", [])
+                    ]
+            except Exception as e:
+                result["sonarr_error"] = str(e)
+
+        if radarr_key:
+            try:
+                async with s.get(
+                    f"{radarr_url}/api/v3/queue",
+                    params={"apikey": radarr_key, "pageSize": 10},
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as r:
+                    d = await r.json()
+                    result["radarr_total"] = d.get("totalRecords", 0)
+                    result["radarr"] = [
+                        {
+                            "title": i.get("title", "?"),
+                            "status": i.get("status", "?"),
+                            "pct": round(100 * (1 - i.get("sizeleft", 0) / max(i.get("size", 1), 1))) if i.get("size") else 0,
+                        }
+                        for i in d.get("records", [])
+                    ]
+            except Exception as e:
+                result["radarr_error"] = str(e)
+            try:
+                async with s.get(
+                    f"{radarr_url}/api/v3/wanted/missing",
+                    params={"apikey": radarr_key, "pageSize": 1},
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as r:
+                    d = await r.json()
+                    result["radarr_missing"] = d.get("totalRecords", 0)
+            except Exception:
+                pass
+
+    return web.Response(content_type="application/json", text=json.dumps(result))
+
+
+async def api_arr_history_handler(request):
+    import os, aiohttp
+
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+    sonarr_url = os.environ.get("SONARR_URL", "http://localhost:8989")
+    sonarr_key = os.environ.get("SONARR_API_KEY", "")
+    radarr_url = os.environ.get("RADARR_URL", "http://localhost:7878")
+    radarr_key = os.environ.get("RADARR_API_KEY", "")
+    grabs = []
+    async with aiohttp.ClientSession() as s:
+        for base_url, key, kind in [(sonarr_url, sonarr_key, "tv"), (radarr_url, radarr_key, "movie")]:
+            if not key:
+                continue
+            try:
+                async with s.get(
+                    f"{base_url}/api/v3/history",
+                    params={"apikey": key, "pageSize": 5, "eventType": 1},
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as r:
+                    d = await r.json()
+                    for item in d.get("records", []):
+                        grabs.append(
+                            {
+                                "title": item.get("sourceTitle", "?"),
+                                "date": item.get("date", ""),
+                                "quality": item.get("quality", {}).get("quality", {}).get("name", "?"),
+                                "kind": kind,
+                            }
+                        )
+            except Exception:
+                pass
+    grabs.sort(key=lambda x: x.get("date", ""), reverse=True)
+    return web.Response(content_type="application/json", text=json.dumps({"grabs": grabs[:10]}))
+
+
+async def api_hermes_session_messages_handler(request: web.Request) -> web.Response:
+    import os
+    import sqlite3 as _sqlite3
+
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+
+    session_id = request.match_info.get("session_id", "")
+    if not session_id:
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps({"error": "session_id required"}),
+            status=400,
+        )
+
+    db_path = "/Users/davevoyles/.hermes/state.db"
+    if not os.path.exists(db_path):
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps({"error": "Hermes state DB not found"}),
+            status=404,
+        )
+
+    try:
+        conn = _sqlite3.connect(f"file:{db_path}?immutable=1", uri=True)
+        conn.row_factory = _sqlite3.Row
+        try:
+            session_row = conn.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
+            if not session_row:
+                return web.Response(
+                    content_type="application/json",
+                    text=json.dumps({"error": "Session not found"}),
+                    status=404,
+                )
+
+            message_rows = conn.execute(
+                "SELECT id, session_id, role, content, timestamp, active, tool_name, finish_reason "
+                "FROM messages WHERE session_id=? AND active=1 ORDER BY timestamp ASC",
+                (session_id,),
+            ).fetchall()
+        finally:
+            conn.close()
+
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps(
+                {
+                    "session": dict(session_row),
+                    "messages": [dict(row) for row in message_rows],
+                }
+            ),
+        )
+    except Exception as e:
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps({"error": str(e)}),
+            status=500,
+        )

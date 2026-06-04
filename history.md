@@ -48,3 +48,6 @@
 - 2026-06-04: Deployed 12 new features across 4 waves: /wake /nas /h Slack commands; dashboard dark mode, collapsible cards, global search; MacBook ping badges, memory editor, health card; ntfy push notifications, morning briefing, GitHub activity card (commit cf2c86e)
 - 2026-06-04: Simplified Ask OpenClaw model dropdown to Hermes (default)/Copilot CLI/Local; added ntfy subscribe banner; ntfy push notifications active on openclaw-alerts topic
 - 2026-06-04: Fixed host-bridge env docs, removed the fake SMS reset quota value, restored real content-extraction status checks, and repaired the webhook/keychain regression tests; full pytest passed.
+- 2026-06-04: Phone-first UX wave deployed: voice input, PWA manifest, mobile jump nav, /status /resume /q Slack commands, dashboard cleanup (Discord refs removed, Hermes-first interface guide), 7 test failures fixed → 5875 passed (commit 8344b24)
+- 2026-06-04: Added Tautulli and Sonarr/Radarr dashboard cards plus a `/watching` Slack command; syntax checks passed, Slack registration stayed green, and Tautulli API remained responsive.
+- 2026-06-04: Added Hermes session transcripts to the dashboard plus `/sessions`, `/arr`, and a weekly Hermes digest scheduler; Python AST checks and Slack registration tests passed.

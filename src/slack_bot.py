@@ -6188,9 +6188,7 @@ def _register_integration_handlers(app: Any) -> None:
         try:
             import sqlite3
 
-            db_path = os.path.expanduser("~/.hermes/state.db")
-            if not os.path.exists(db_path):
-                db_path = "/Users/davevoyles/.hermes/state.db"
+            db_path = "/Users/davevoyles/.hermes/state.db"
             conn = sqlite3.connect(f"file:{db_path}?immutable=1", uri=True)
             try:
                 row = conn.execute(
@@ -6244,6 +6242,82 @@ def _register_integration_handlers(app: Any) -> None:
             await _post_slack_text_chunks(client, channel_id, answer, thread_ts=thread_ts)
 
         asyncio.create_task(_bg_resume())
+
+    @app.command("/sessions")
+    async def handle_slash_sessions(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        import sqlite3
+        import time as _time
+
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", "")
+        text = (body.get("text", "") or "").strip()
+
+        db_path = "/Users/davevoyles/.hermes/state.db"
+
+        try:
+            conn = sqlite3.connect(f"file:{db_path}?immutable=1", uri=True)
+            try:
+                sessions = conn.execute(
+                    "SELECT id, title, message_count, started_at, model FROM sessions ORDER BY started_at DESC LIMIT 10"
+                ).fetchall()
+            finally:
+                conn.close()
+        except Exception as e:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ Could not read sessions: {e}")
+            return
+
+        if not sessions:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="No Hermes sessions found.")
+            return
+
+        if text.startswith("resume "):
+            try:
+                idx = int(text.split()[1]) - 1
+                if 0 <= idx < len(sessions):
+                    session_id = sessions[idx][0]
+                    await client.chat_postEphemeral(
+                        channel=channel_id,
+                        user=user_id,
+                        text=(
+                            f"Resuming session: `{str(session_id)[:16]}…`\n"
+                            "Send `/copilot` or `/hermes` with your next message — session will continue."
+                        ),
+                    )
+                else:
+                    await client.chat_postEphemeral(
+                        channel=channel_id,
+                        user=user_id,
+                        text=f"Session #{idx + 1} not found. List has {len(sessions)} sessions.",
+                    )
+            except (ValueError, IndexError):
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text="Usage: `/sessions resume <number>`")
+            return
+
+        if text.isdigit():
+            idx = int(text) - 1
+            if 0 <= idx < len(sessions):
+                sid, title, mc, started, model = sessions[idx]
+                started_str = _time.strftime('%Y-%m-%d %H:%M', _time.localtime(started)) if started else '?'
+                msg = (
+                    f"*Session #{idx + 1}*\n"
+                    f"ID: `{sid}`\n"
+                    f"Title: {title or 'Untitled'}\n"
+                    f"Model: {model or '?'}\n"
+                    f"Messages: {mc or 0}\n"
+                    f"Started: {started_str}\n\n"
+                    f"Resume: `/sessions resume {idx + 1}`"
+                )
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg)
+                return
+
+        lines = ["*⚕ Hermes Sessions*", ""]
+        for i, (sid, title, mc, started, model) in enumerate(sessions, 1):
+            started_str = _time.strftime('%m/%d %H:%M', _time.localtime(started)) if started else '?'
+            short_title = (title or 'Untitled')[:50]
+            lines.append(f"{i}. _{short_title}_ ({mc or 0} msgs · {started_str})")
+        lines.append("\n_Tip: `/sessions 3` for details · `/sessions resume 3` to continue_")
+        await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines))
 
     @app.command("/q")
     async def handle_slash_q(ack: Any, body: dict[str, Any], client: Any) -> None:
@@ -6637,6 +6711,124 @@ def _register_integration_handlers(app: Any) -> None:
         request_id = request_body.get("id") if isinstance(request_body, dict) else None
         request_suffix = f" (request #{request_id})" if request_id else ""
         await respond(text=f"✅ Requested *{_overseerr_title(match)}* via Overseerr{request_suffix}.")
+
+    @app.command("/arr")
+    async def handle_slash_arr(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        import aiohttp
+        import os
+
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", "")
+
+        sonarr_url = os.environ.get("SONARR_URL", "http://localhost:8989")
+        sonarr_key = os.environ.get("SONARR_API_KEY", "")
+        radarr_url = os.environ.get("RADARR_URL", "http://localhost:7878")
+        radarr_key = os.environ.get("RADARR_API_KEY", "")
+
+        lines = ["*📥 Download Queue*"]
+
+        async with aiohttp.ClientSession() as s:
+            try:
+                async with s.get(
+                    f"{sonarr_url}/api/v3/queue",
+                    params={"apikey": sonarr_key, "pageSize": 5},
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as r:
+                    d = await r.json()
+                    total = d.get("totalRecords", 0)
+                    records = d.get("records", [])
+                    if total == 0:
+                        lines.append("📺 Sonarr: 0 active downloads")
+                    else:
+                        lines.append(f"📺 Sonarr: {total} in queue")
+                        for item in records[:3]:
+                            pct = round(100 * (1 - item.get('sizeleft', 0) / max(item.get('size', 1), 1)))
+                            lines.append(f"  • {item.get('title', '?')} ({pct}%)")
+            except Exception as e:
+                lines.append(f"📺 Sonarr: error ({e})")
+
+            try:
+                async with s.get(
+                    f"{radarr_url}/api/v3/queue",
+                    params={"apikey": radarr_key, "pageSize": 5},
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as r:
+                    d = await r.json()
+                    total = d.get("totalRecords", 0)
+                    records = d.get("records", [])
+                    if total == 0:
+                        lines.append("🎬 Radarr: 0 active downloads")
+                    else:
+                        lines.append(f"🎬 Radarr: {total} in queue")
+                        for item in records[:3]:
+                            pct = round(100 * (1 - item.get('sizeleft', 0) / max(item.get('size', 1), 1)))
+                            lines.append(f"  • {item.get('title', '?')} ({pct}%)")
+            except Exception as e:
+                lines.append(f"🎬 Radarr: error ({e})")
+
+            try:
+                async with s.get(
+                    f"{radarr_url}/api/v3/wanted/missing",
+                    params={"apikey": radarr_key, "pageSize": 1},
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as r:
+                    d = await r.json()
+                    missing = d.get("totalRecords", 0)
+                    if missing:
+                        lines.append(f"_📋 {missing} movies on Radarr watchlist_")
+            except Exception:
+                pass
+
+        await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines))
+
+    @app.command("/watching")
+    async def handle_slash_watching(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", "")
+
+        import aiohttp, os
+
+        tautulli_url = os.environ.get("TAUTULLI_URL", "http://localhost:8181")
+        tautulli_key = os.environ.get("TAUTULLI_API_KEY", "")
+
+        if not tautulli_key:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="TAUTULLI_API_KEY not configured")
+            return
+
+        lines = []
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.get(
+                    f"{tautulli_url}/api/v2",
+                    params={"apikey": tautulli_key, "cmd": "get_activity"},
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as r:
+                    act = (await r.json()).get("response", {}).get("data", {})
+                sessions = act.get("sessions", [])
+                if sessions:
+                    lines.append(f"*🎬 Now Playing on Plex* ({len(sessions)} stream{'s' if len(sessions) > 1 else ''})\n")
+                    for s2 in sessions:
+                        pct = s2.get("progress_percent", 0)
+                        lines.append(f"• _{s2.get('full_title', s2.get('title', '?'))}_ — {s2.get('user', '')} ({pct}%)")
+                else:
+                    lines.append("*🎬 Plex* — Nothing streaming right now\n")
+                    async with s.get(
+                        f"{tautulli_url}/api/v2",
+                        params={"apikey": tautulli_key, "cmd": "get_history", "length": "3"},
+                        timeout=aiohttp.ClientTimeout(total=5),
+                    ) as r:
+                        hist = (await r.json()).get("response", {}).get("data", {}).get("data", [])
+                    if hist:
+                        lines.append("*Recently watched:*")
+                        for item in hist[:3]:
+                            icon = "🎬" if item.get("media_type") == "movie" else "📺"
+                            lines.append(f"• {icon} _{item.get('full_title', item.get('title', '?'))}_")
+        except Exception as e:
+            lines.append(f"❌ Could not reach Tautulli: {e}")
+
+        await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines))
 
     @app.command("/wake")
     async def handle_slash_wake(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
@@ -7729,6 +7921,73 @@ async def create_slack_handler() -> Any | None:  # type: ignore[return]
             log.error("Morning briefing failed: %s", exc)
             return f"Morning briefing failed: {exc}"
 
+    async def _weekly_digest() -> str:
+        """Sunday 9am: summarize the week via Hermes and send to Slack+ntfy."""
+        import os
+        import sqlite3
+        import time
+
+        from host_bridge import run_hermes_stream
+        from slack_sdk.web.async_client import AsyncWebClient
+
+        db_path = "/Users/davevoyles/.hermes/state.db"
+        rows: list[tuple[Any, ...]] = []
+        try:
+            conn = sqlite3.connect(f"file:{db_path}?immutable=1", uri=True)
+            try:
+                one_week_ago = time.time() - 7 * 24 * 3600
+                rows = conn.execute(
+                    "SELECT title, message_count, started_at FROM sessions WHERE started_at > ? ORDER BY started_at DESC",
+                    (one_week_ago,),
+                ).fetchall()
+            finally:
+                conn.close()
+            session_summaries = "\n".join(
+                [f"- {r[0] or 'Untitled'} ({r[1]} messages)" for r in rows]
+            ) if rows else "No sessions this week"
+        except Exception as e:
+            session_summaries = f"(Could not read sessions: {e})"
+
+        context = f"""Here is my week's activity summary:
+
+Hermes sessions ({len(rows)}):
+{session_summaries}
+
+Please write a brief, friendly weekly recap for me. Keep it under 10 bullet points. Be conversational and highlight anything interesting. Start with a one-sentence summary, then bullet points."""
+
+        try:
+            result_parts: list[str] = []
+            async for chunk in run_hermes_stream(prompt=context, slack_user_id="weekly-digest", hermes_session_id=None):
+                if isinstance(chunk, dict) and chunk.get("type") == "chunk":
+                    result_parts.append(chunk.get("text", ""))
+                elif isinstance(chunk, dict) and chunk.get("type") == "error":
+                    raise RuntimeError(chunk.get("error", "Unknown Hermes error"))
+                elif isinstance(chunk, dict) and chunk.get("type") == "done":
+                    break
+            digest = "".join(result_parts).strip()
+            if not digest:
+                digest = f"Weekly summary: {len(rows)} Hermes sessions this week.\n\n{session_summaries}"
+        except Exception as e:
+            digest = f"Weekly digest failed: {e}\n\nSessions this week:\n{session_summaries}"
+
+        slack_msg = f"📊 *OpenClaw Weekly Digest*\n\n{digest}"
+
+        notify_user_id = os.environ.get("SLACK_NOTIFY_USER_ID", "")
+        if notify_user_id:
+            try:
+                web_client = AsyncWebClient(token=os.environ.get("SLACK_BOT_TOKEN", ""))
+                dm = await web_client.conversations_open(users=notify_user_id)
+                dm_id = dm["channel"]["id"]
+                await web_client.chat_postMessage(channel=dm_id, text=slack_msg)
+            except Exception as e:
+                log.warning("Weekly digest Slack send failed: %s", e)
+
+        await _send_ntfy(
+            "📊 Weekly Digest Ready",
+            digest[:200] + "..." if len(digest) > 200 else digest,
+        )
+        return "Weekly digest sent"
+
     async def _hermes_nightly_upgrade() -> str:
         try:
             from host_bridge import HERMES_BIN, _enabled as _host_bridge_enabled, run_shell
@@ -7770,6 +8029,7 @@ async def create_slack_handler() -> Any | None:  # type: ignore[return]
         scheduler.register_skills(
             {
                 "morning_briefing": _morning_briefing,
+                "weekly_digest": _weekly_digest,
                 "hermes_nightly_upgrade": _hermes_nightly_upgrade,
             }
         )
@@ -7789,6 +8049,20 @@ async def create_slack_handler() -> Any | None:  # type: ignore[return]
         elif morning_task.cron_hour != briefing_hour or morning_task.cron_minute != 0:
             scheduler.update(morning_task.task_id, cron_hour=briefing_hour, cron_minute=0, enabled=True)
             log.info("Updated morning briefing task to %02d:00 UTC", briefing_hour)
+
+        weekly_task = next((task for task in scheduler.list_tasks() if task.action == "weekly_digest"), None)
+        if weekly_task is None:
+            scheduler.create(
+                action="weekly_digest",
+                args={},
+                cron_expression="0 9 * * 0",
+                created_by="system",
+                alert_only=False,
+            )
+            log.info("Registered weekly_digest task for Sundays at 09:00 UTC")
+        elif weekly_task.cron_expression != "0 9 * * 0":
+            scheduler.update(weekly_task.task_id, cron_expression="0 9 * * 0", enabled=True)
+            log.info("Updated weekly_digest task to Sundays at 09:00 UTC")
 
         if not any(task.action == "hermes_nightly_upgrade" for task in scheduler.list_tasks()):
             scheduler.create(
