@@ -48,6 +48,7 @@ from .api_handlers import (  # noqa: F401
 from .html_handlers import (  # noqa: F401
     dashboard_handler,
     guide_handler,
+    hermes_installer_handler,
     login_handler,
     openclaw_cli_download_handler,
     openclaw_cli_installer_handler,
@@ -101,6 +102,7 @@ __all__ = [
     # HTML handlers
     "dashboard_handler",
     "guide_handler",
+    "hermes_installer_handler",
     "login_handler",
     "openclaw_cli_download_handler",
     "openclaw_cli_installer_handler",

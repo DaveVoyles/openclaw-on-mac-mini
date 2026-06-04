@@ -6034,6 +6034,252 @@ def _register_integration_handlers(app: Any) -> None:
         await ack()
         await _handle_hermes_slash(body, client, command_name="/h")
 
+    async def _run_hermes_quick_command(
+        prompt: str,
+        *,
+        resume_session_id: str | None = None,
+        cwd: str | None = None,
+    ) -> tuple[str, str | None]:
+        if not _HERMES_BIN.exists():
+            return "", f"Hermes binary not found at {_HERMES_BIN}"
+
+        workdir = cwd or os.getenv("OPENCLAW_HOST_BRIDGE_WORKDIR", "/Users/davevoyles/docker-stack")
+        cmd = [str(_HERMES_BIN), "chat"]
+        if resume_session_id:
+            cmd.extend(["--resume", resume_session_id])
+        cmd.extend(["-q", prompt])
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                cwd=workdir,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return "", f"Hermes failed to start: {type(exc).__name__}: {exc}"
+
+        stdout_bytes, stderr_bytes = await proc.communicate()
+        stdout_text = stdout_bytes.decode("utf-8", errors="replace")
+        stderr_text = stderr_bytes.decode("utf-8", errors="replace").strip()
+        if proc.returncode != 0:
+            return "", stderr_text or f"Hermes exited with status {proc.returncode}"
+
+        cleaned_lines = [line for line in stdout_text.splitlines() if not _HERMES_SESSION_RE.match(line)]
+        return "\n".join(cleaned_lines).strip(), None
+
+    async def _post_slack_text_chunks(client: Any, channel_id: str, text: str, *, thread_ts: str | None = None) -> None:
+        body = text.strip() or "(no response)"
+        for start in range(0, len(body), 3500):
+            await client.chat_postMessage(channel=channel_id, thread_ts=thread_ts, text=body[start : start + 3500])
+
+    @app.command("/status")
+    async def handle_slash_status_quick(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", "")
+
+        lines = ["*🖥️ OpenClaw System Status*\n"]
+
+        try:
+            import shutil
+
+            if os.path.exists("/proc/loadavg") and os.path.exists("/proc/meminfo"):
+                with open("/proc/loadavg", encoding="utf-8") as fh:
+                    la = fh.read().split()
+                with open("/proc/meminfo", encoding="utf-8") as fh:
+                    mem = {
+                        k.strip(): v.strip()
+                        for k, _, v in (line.partition(":") for line in fh if ":" in line)
+                    }
+                mem_total = int(mem.get("MemTotal", "0 kB").split()[0]) / 1024 / 1024
+                mem_avail = int(mem.get("MemAvailable", "0 kB").split()[0]) / 1024 / 1024
+                mem_used = mem_total - mem_avail
+                disk = shutil.disk_usage("/")
+                lines.append(
+                    f"• *Mac Mini:* load {la[0]} · RAM {mem_used:.1f}/{mem_total:.1f}GB · disk {disk.used/1e9:.0f}/{disk.total/1e9:.0f}GB"
+                )
+            else:
+                la = os.getloadavg()
+                disk = shutil.disk_usage("/")
+                lines.append(
+                    f"• *Mac Mini:* load {la[0]:.2f} · disk {disk.used/1e9:.0f}/{disk.total/1e9:.0f}GB"
+                )
+        except Exception as exc:  # noqa: BLE001
+            lines.append(f"• *Mac Mini:* error ({exc})")
+
+        async def _check(ip: str) -> bool:
+            try:
+                _reader, writer = await asyncio.wait_for(asyncio.open_connection(ip, 22), timeout=2)
+                writer.close()
+                if hasattr(writer, "wait_closed"):
+                    await writer.wait_closed()
+                return True
+            except Exception:
+                return False
+
+        mbp_online = await _check("192.168.1.131")
+        mbp2_online = await _check("192.168.1.136")
+        lines.append(
+            f"• *MacBook Pro:* {'✓ online' if mbp_online else 'offline'} · *MacBook Pro 2:* {'✓ online' if mbp2_online else 'offline'}"
+        )
+
+        try:
+            import sqlite3
+
+            db_path = os.path.expanduser("~/.hermes/state.db")
+            if not os.path.exists(db_path):
+                db_path = "/Users/davevoyles/.hermes/state.db"
+            since = time.time() - 86400
+            conn = sqlite3.connect(f"file:{db_path}?immutable=1", uri=True)
+            try:
+                count = conn.execute(
+                    "SELECT COUNT(*) FROM sessions WHERE started_at > ?",
+                    (since,),
+                ).fetchone()[0]
+            finally:
+                conn.close()
+            lines.append(f"• *Hermes:* {count} session(s) today")
+        except Exception:
+            pass
+
+        try:
+            import subprocess
+
+            result = subprocess.run(
+                ["docker", "ps", "--format", "{{.Names}}"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            containers = [line for line in result.stdout.strip().splitlines() if line]
+            lines.append(f"• *Docker:* {len(containers)} container(s) running")
+        except Exception:
+            pass
+
+        try:
+            import shutil
+
+            nas_paths = ["/Volumes/Misc", "/mnt/nas", os.environ.get("NAS_BACKUP_PATH", "")]
+            for nas_path in nas_paths:
+                if nas_path and os.path.exists(nas_path):
+                    usage = shutil.disk_usage(nas_path)
+                    lines.append(f"• *NAS:* {usage.free/1e12:.1f}TB free of {usage.total/1e12:.1f}TB")
+                    break
+        except Exception:
+            pass
+
+        await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines))
+
+    @app.command("/resume")
+    async def handle_slash_resume(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
+        _ = say
+        await ack()
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", "")
+        prompt = (body.get("text") or "").strip()
+
+        ok, msg = _copilot_owner_check(user_id, command_name="/resume")
+        if not ok:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg or "🛑 forbidden")
+            return
+
+        try:
+            import sqlite3
+
+            db_path = os.path.expanduser("~/.hermes/state.db")
+            if not os.path.exists(db_path):
+                db_path = "/Users/davevoyles/.hermes/state.db"
+            conn = sqlite3.connect(f"file:{db_path}?immutable=1", uri=True)
+            try:
+                row = conn.execute(
+                    "SELECT id, title, COALESCE(message_count, 0) FROM sessions ORDER BY started_at DESC LIMIT 1"
+                ).fetchone()
+            finally:
+                conn.close()
+        except Exception as exc:  # noqa: BLE001
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=f"❌ Could not read Hermes sessions: {exc}",
+            )
+            return
+
+        if not row:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="No Hermes sessions found. Start one with `/h <prompt>`",
+            )
+            return
+
+        session_id, title, msg_count = row
+        session_id = str(session_id)
+        short_id = session_id[:8]
+        title_text = str(title or "Untitled")
+
+        if not prompt:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=(
+                    f"⚕ *Last session:* `{short_id}` — _{title_text}_ ({msg_count} messages)\n"
+                    "Send your next message with `/resume <your message>`"
+                ),
+            )
+            return
+
+        msg = await client.chat_postMessage(
+            channel=channel_id,
+            text=f"⚕ Resuming session `{short_id}`… _{title_text}_",
+        )
+        thread_ts = msg.get("ts") or msg.get("message", {}).get("ts")
+
+        async def _bg_resume() -> None:
+            answer, err = await _run_hermes_quick_command(prompt, resume_session_id=session_id)
+            if err:
+                await client.chat_postMessage(channel=channel_id, thread_ts=thread_ts, text=f"❌ Error: {err}")
+                return
+            await _post_slack_text_chunks(client, channel_id, answer, thread_ts=thread_ts)
+
+        asyncio.create_task(_bg_resume())
+
+    @app.command("/q")
+    async def handle_slash_q(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", "")
+        prompt = (body.get("text") or "").strip()
+
+        ok, msg = _copilot_owner_check(user_id, command_name="/q")
+        if not ok:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg or "🛑 forbidden")
+            return
+
+        if not prompt:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="Usage: `/q <your question>` — asks Hermes and shows the answer only to you",
+            )
+            return
+
+        await client.chat_postEphemeral(channel=channel_id, user=user_id, text="⚕ Thinking…")
+        answer, err = await _run_hermes_quick_command(prompt)
+        if err:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ Error: {err}")
+            return
+
+        answer = answer or "(no response)"
+        if len(answer) <= 2000:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"⚕ {answer}")
+            return
+
+        parent = await client.chat_postMessage(channel=channel_id, text="⚕ Answer to your quick question:")
+        thread_ts = parent.get("ts") or parent.get("message", {}).get("ts")
+        await _post_slack_text_chunks(client, channel_id, answer, thread_ts=thread_ts)
+
     # ------------------------------------------------------------------
     # Companion slash commands for Phase 3 session management
     # ------------------------------------------------------------------

@@ -42,3 +42,9 @@
 - 2026-06-04: Added a dashboard NAS file browser, surfaced model fallback circuit health in config status, and wired Slack DM alerts when provider circuits open.
 - 2026-06-04: Added Hermes MEMORY.md NAS sync skill plus dashboard/manual and nightly scheduled Hermes upgrade flows with Slack owner notification support.
 - 2026-06-04: Wave 3-5 deployed — hermes upgrade scheduler, memory-sync skill, /plex Slack command, Wake-on-LAN, NAS file browser, model fallback circuit badges + Slack notify (commit 446efc2, 4195 tests passing)
+- 2026-06-04: SSH'd into MacBook Pro 2 (192.168.1.136) to get hardware MAC (70:8c:f2:ae:06:71); set WOL_MACBOOK_PRO2_MAC in .env; WoL dashboard button now fully functional for MacBook Pro 2
+- 2026-06-04: Added `/wake`, `/nas`, and `/h` Slack slash commands, updated Slack command metadata/manifest entries, and kept the registration characterization tests passing.
+- 2026-06-04: Added dashboard intelligence features for MacBook ping badges, Hermes MEMORY.md load/save controls, and Mac Mini system health metrics; AST checks passed and new routes were verified.
+- 2026-06-04: Deployed 12 new features across 4 waves: /wake /nas /h Slack commands; dashboard dark mode, collapsible cards, global search; MacBook ping badges, memory editor, health card; ntfy push notifications, morning briefing, GitHub activity card (commit cf2c86e)
+- 2026-06-04: Simplified Ask OpenClaw model dropdown to Hermes (default)/Copilot CLI/Local; added ntfy subscribe banner; ntfy push notifications active on openclaw-alerts topic
+- 2026-06-04: Fixed host-bridge env docs, removed the fake SMS reset quota value, restored real content-extraction status checks, and repaired the webhook/keychain regression tests; full pytest passed.

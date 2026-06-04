@@ -360,7 +360,7 @@
       <!-- 1. Overview -->
       <h2 id="overview">1. Overview &amp; Architecture</h2>
       <p>
-        OpenClaw is a Discord bot that acts as an AI-powered operations agent
+        OpenClaw is a Slack bot that acts as an AI-powered operations agent
         for your Mac Mini Docker stack. It connects to:
       </p>
       <ul>
@@ -414,7 +414,7 @@ OpenClaw queries SABnzbd + qBittorrent APIs
     &darr;
 GPT-4o formats the results into a human-readable answer
     &darr;
-You get a Discord embed with your active downloads</code></pre>
+You get a Slack message with your active downloads</code></pre>
         <p>
           GPT-4o via GitHub Models can chain up to <strong>5 tool calls</strong> per question
           (Gemini 2.5 Flash is the fallback when GitHub Models is unavailable).
@@ -433,15 +433,13 @@ You get a Discord embed with your active downloads</code></pre>
       <!-- 2. Getting Started -->
       <h2 id="getting-started">2. Getting Started</h2>
       <p>
-        OpenClaw lives in your Discord server. All commands are slash commands
+        OpenClaw lives in your Slack workspace. All commands are slash commands
         &mdash; type <code>/</code> in any channel to see the full list.
       </p>
-      <div class="card" style="border-left:3px solid var(--accent);padding:0.7rem 1rem;margin-bottom:1rem">
-        <strong>Using Slack instead of Discord?</strong>
-        Family members and non-technical users can access OpenClaw directly
-        from Slack &mdash; no Discord needed. DM <code>@OpenClaw</code> or use
-        slash commands like <code>/chat</code>, <code>/status</code>, and
-        <code>/files</code>. See
+      <div class="card" style="border-left:3px solid #4a154b;padding:0.7rem 1rem;margin-bottom:1rem">
+        <strong>Slack is the primary interface.</strong>
+        DM <code>@OpenClaw</code> or use slash commands like <code>/chat</code>,
+        <code>/status</code>, and <code>/files</code> from any channel. See
         <a href="#slack-bot">Section&nbsp;72: Slack Bot for Family</a>
         for the full guide, including file uploads, proactive alerts, and the
         Windows sync setup.
@@ -649,7 +647,7 @@ You get a Discord embed with your active downloads</code></pre>
 
       <div class="tip">
         <strong>&#128161; Long responses:</strong> Responses longer than 3,800
-        characters are automatically split across multiple Discord embeds
+        characters are automatically split across multiple Slack messages
         &mdash; no truncation.
       </div>
 
@@ -1129,7 +1127,7 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
       <!-- 10. AgentMail -->
       <h2 id="mail">11. AgentMail (Email)</h2>
       <p>
-        Send emails directly from Discord using the AgentMail.to API. Useful for
+        Send emails directly from Slack using the AgentMail.to API. Useful for
         alerts, notifications, or sending yourself reminders.
       </p>
 
@@ -1168,7 +1166,7 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
       <!-- 11.5 Gmail (IMAP/SMTP) -->
       <h2 id="gmail">11.5. Gmail (IMAP/SMTP)</h2>
       <p>
-        Read, search, and send emails directly from Discord via your personal
+        Read, search, and send emails directly from Slack via your personal
         Gmail account. Uses IMAP/SMTP with a Google App Password &mdash; no
         full OAuth required.
       </p>
@@ -1466,7 +1464,7 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
         </li>
         <li>
           <strong>Synthesizes</strong> a structured report using low-temperature
-          Gemini in a new Discord thread, including per-section confidence levels
+          Gemini in a new Slack thread, including per-section confidence levels
           (high/medium/low) and a methodology section
         </li>
       </ol>
@@ -1485,7 +1483,7 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
       </div>
 
       <div class="tip">
-        <strong>&#128161; Live progress:</strong> A Discord thread is created
+        <strong>&#128161; Live progress:</strong> A Slack thread is created
         immediately. The bot posts progress messages as each search and URL is
         processed. The final report appears with action buttons:<br />
         &nbsp;&nbsp;<strong>&#128204; Save to Memory</strong> &mdash; stores the
@@ -1505,7 +1503,7 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
 
       <h2 id="recaps-sports">14.5 Recaps &amp; Sports Watch Guides</h2>
       <p>
-        OpenClaw now includes dedicated Discord workflows for weekly recaps and
+        OpenClaw now includes dedicated Slack workflows for weekly recaps and
         structured sports watch guides, so repeatable research tasks do not
         need to start from a blank prompt every time.
       </p>
@@ -1517,7 +1515,7 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
       <div class="card">
         <h3 style="margin-top: 0"><code>/recap weekly</code></h3>
         <p>
-          Summarize the current Discord channel or thread across the last
+          Summarize the current Slack channel or thread across the last
           1&ndash;30 days. Choose whether the output should emphasize highlights,
           action items, or a compact table.
         </p>
@@ -1560,14 +1558,14 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
 /sports upcoming sport:"college lacrosse" league:"NCAA Division 1" days:7
 /sports upcoming team:"Maryland" days:5 include_watch_info:true schedule_weekly:true</code></pre>
         <p style="margin-top: 0.5rem">
-          Typical output is a Discord-friendly markdown table:
+          Typical output is a Slack-friendly markdown table:
         </p>
         <pre><code>| Date | Matchup | Time (ET) | Watch | Notes |
 |------|---------|-----------|-------|-------|
 | Sat  | Maryland vs Army | 1:00 PM | ESPN+ | Ranked matchup |
 | Sun  | Notre Dame vs Duke | 4:00 PM | ACCN | Stream confirmed |</code></pre>
         <p style="margin-top: 0.5rem">
-          Table behavior: markdown tables are reformatted for Discord embeds. If
+          Table behavior: markdown tables are formatted for Slack messages. If
           a table is large/complex, OpenClaw can attach a rendered
           <code>table.png</code> image for readability.
         </p>
@@ -1575,7 +1573,7 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
 
       <div class="tip">
         <strong>&#128161; Right-click shortcut:</strong> Use
-        <strong>Create recap from thread</strong> from the Discord context menu
+        <strong>Create recap from thread</strong> from the Slack message menu
         on any message or thread to generate a summary without retyping the
         command.
       </div>
@@ -1621,7 +1619,7 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
 
       <h3>Authorization</h3>
       <p>
-        Only Discord users listed in <code>ALLOWED_USER_IDS</code> (in
+        Only Slack users listed in <code>ALLOWED_USER_IDS</code> (in
         <code>.env</code>) can use the bot. All other users are silently
         rejected.
       </p>
@@ -1879,7 +1877,7 @@ https://openclaw.davevoyles.synology.me/guide</code></pre>
 
       <h3>Terminal CLI Access</h3>
       <p>
-        OpenClaw is not limited to Discord. You can talk to the same
+        OpenClaw is not limited to Slack. You can talk to the same
         authenticated ask pipeline from a terminal on this Mac Mini or another
         Mac over Tailscale by launching <code>OpenClaw</code> (or
         <code>openclaw</code>) plus the <a href="/terminal">Terminal reference</a>.
@@ -2126,7 +2124,7 @@ openclaw --health</code></pre>
           <tr>
             <td>Scheduled jobs, recurring reports, background health checks</td>
             <td><strong>OpenClaw</strong></td>
-            <td>It stays running, remembers context, and can notify you in Discord without an open terminal.</td>
+            <td>It stays running, remembers context, and can notify you in Slack without an open terminal.</td>
           </tr>
           <tr>
             <td>Home-lab orchestration with approvals and audit trail</td>
@@ -2151,7 +2149,7 @@ openclaw --health</code></pre>
         </table>
         <p>
           <strong>Rule of thumb:</strong> use OpenClaw when you want
-          persistence, approvals, monitoring, Discord/mobile access, or memory
+          persistence, approvals, monitoring, Slack/mobile access, or memory
           across sessions. Use Copilot CLI when you want the fastest path to
           changing code, running commands, and manipulating the local machine in
           real time.
@@ -2343,7 +2341,7 @@ OpenClaw sends: POST https://gateway.maton.ai/slack/api/chat.postMessage
     &darr;
 Maton injects the stored Slack OAuth token and proxies the request
     &darr;
-Slack receives the message &mdash; reply appears in Discord</code></pre>
+Slack receives the message &mdash; reply appears in Slack</code></pre>
         <p>
           The gateway base URL is
           <code>https://gateway.maton.ai/{app}/{native-api-path}</code>. You use
@@ -2505,7 +2503,7 @@ Slack receives the message &mdash; reply appears in Discord</code></pre>
       <!-- 22. Bookmark Capture -->
       <h2 id="bookmark">22. Bookmark Capture (<code>/bookmark</code>)</h2>
       <p>
-        Save articles, web pages, and URLs directly from Discord into the
+        Save articles, web pages, and URLs directly from Slack into the
         <a href="#vault">Obsidian Vault</a> knowledge base. The bot fetches the
         page, summarizes it with Gemini, and writes a structured Markdown note.
       </p>
@@ -2645,7 +2643,7 @@ This article covers ...
 /chat What have I saved about Sonarr upgrades?
 /chat Show me all bookmarks tagged "reference"</code></pre>
 
-      <h3>Discord Commands (<code>/note</code>)</h3>
+      <h3>Slack Commands (<code>/note</code>)</h3>
       <table>
         <tr>
           <th>Command</th>
@@ -2679,7 +2677,7 @@ This article covers ...
       <!-- 24. Channel Architecture -->
       <h2 id="channels">24. Channel Architecture &amp; Role Routing</h2>
       <p>
-        OpenClaw can be configured to give different Discord channels
+        OpenClaw can be configured to give different Slack channels
         <strong>specialized AI personas</strong>. When a user sends an
         <code>/chat</code> message in a role-configured channel, the bot
         automatically injects a topic-specific system prompt that focuses Gemini
@@ -2723,7 +2721,7 @@ This article covers ...
       <div class="card">
         <ol>
           <li>
-            Create dedicated Discord channels (e.g., <code>#research</code>,
+            Create dedicated Slack channels (e.g., <code>#research</code>,
             <code>#analytics</code>, <code>#bookmarks</code>)
           </li>
           <li>
@@ -3633,7 +3631,7 @@ Marple Township millage rate is 25.46...
       <div class="card">
         <h3 style="margin-top: 0">How It Works</h3>
         <ol>
-          <li>Attach an image to your Discord message</li>
+          <li>Attach an image to your Slack message</li>
           <li>
             Include an <code>/chat</code> prompt describing what you want
           </li>
@@ -3794,7 +3792,7 @@ Division 1 men's lacrosse games this week and post a table.
             <td>Saved Conversations</td>
             <td>
               View and resume saved conversation threads directly from the
-              dashboard without using Discord commands.
+              dashboard without using Slack commands.
             </td>
           </tr>
           <tr>
@@ -4003,7 +4001,7 @@ Division 1 men's lacrosse games this week and post a table.
       <p>
         Use <code>schedule_research_report</code> to set up recurring
         research on any topic. The bot runs a full autonomous research cycle
-        on the specified cron schedule, posts results to a Discord thread,
+        on the specified cron schedule, posts results to a Slack thread,
         and saves the report to the Obsidian vault.
       </p>
 
@@ -4034,7 +4032,7 @@ Division 1 men's lacrosse games this week and post a table.
       <p>
         OpenClaw receives real-time webhook events from Sonarr, Radarr, and
         Plex. When a download completes or media is added, the bot
-        automatically posts a formatted notification to your Discord channel.
+        automatically posts a formatted notification to your Slack channel.
       </p>
 
       <h3>Supported Events</h3>
@@ -4046,7 +4044,7 @@ Division 1 men's lacrosse games this week and post a table.
       </ul>
       <p>
         Webhooks are parsed by <code>webhook_formatter.py</code> and
-        delivered as rich Discord embeds with media title, quality, and
+        delivered as rich Slack messages with media title, quality, and
         source details.
       </p>
 
@@ -4062,7 +4060,7 @@ Division 1 men's lacrosse games this week and post a table.
         OpenClaw monitors all Docker containers every 5 minutes. If any
         container is in an <strong>unhealthy</strong> or
         <strong>exited</strong> state, the bot posts an alert embed to your
-        <code>#alerts</code> Discord channel.
+        <code>#alerts</code> Slack channel.
       </p>
 
       <h3>What Gets Checked</h3>
@@ -4119,7 +4117,7 @@ Division 1 men's lacrosse games this week and post a table.
           </tr>
           <tr>
             <td><code>copilot_fix</code></td>
-            <td>Spawns Copilot CLI on Mac Mini to fix novel issues; <strong>requires user approval</strong> via &#9989; Discord reaction</td>
+            <td>Spawns Copilot CLI on Mac Mini to fix novel issues; <strong>requires user approval</strong> via &#9989; Slack reaction</td>
             <td>Requires approval</td>
           </tr>
         </tbody>
@@ -4144,7 +4142,7 @@ Division 1 men's lacrosse games this week and post a table.
       <!-- 43. Right-Click Context Menus -->
       <h2 id="context-menus">43. Right-Click Context Menus</h2>
       <p>
-        Right-click any message in Discord to access quick AI actions
+        Right-click any message in Slack to access quick AI actions
         without typing a command.
       </p>
 
@@ -4208,7 +4206,7 @@ Division 1 men's lacrosse games this week and post a table.
       <h3>Auto-Threading</h3>
       <p>
         When a <code>/chat</code> conversation exceeds 3 exchanges in the same
-        channel, OpenClaw automatically creates a Discord thread to keep the
+        channel, OpenClaw automatically creates a Slack thread to keep the
         channel clean. A link to the thread appears in the original channel.
       </p>
 
@@ -4216,7 +4214,7 @@ Division 1 men's lacrosse games this week and post a table.
       <h2 id="document-editing">45. Document Editing (/doc &amp; /sheet)</h2>
       <p>
         Create, read, and edit Word documents (<code>.docx</code>) and Excel
-        spreadsheets (<code>.xlsx</code>) directly from Discord. Powered by
+        spreadsheets (<code>.xlsx</code>) directly from Slack. Powered by
         <code>python-docx</code> and <code>openpyxl</code>.
       </p>
 
@@ -4260,7 +4258,7 @@ Division 1 men's lacrosse games this week and post a table.
       <h3><code>/review text [mode]</code></h3>
       <p>Opens a modal where you paste up to 4,000 characters of text. The bot returns a structured critique embed.</p>
       <h3><code>/review file [mode]</code></h3>
-      <p>Upload a file directly in Discord. Supported formats: <code>.docx</code>, <code>.xlsx</code>, <code>.txt</code>, <code>.md</code>, <code>.pdf</code>, <code>.py</code>, <code>.json</code>, <code>.csv</code>.</p>
+      <p>Upload a file directly in Slack. Supported formats: <code>.docx</code>, <code>.xlsx</code>, <code>.txt</code>, <code>.md</code>, <code>.pdf</code>, <code>.py</code>, <code>.json</code>, <code>.csv</code>.</p>
       <p>After reviewing, click <strong>💾 Save Review to Vault</strong> to store the critique in <code>/vault/Reviews/</code> as an Obsidian-compatible markdown file.</p>
       <h3>Example Use Cases</h3>
       <ul>
@@ -4271,7 +4269,7 @@ Division 1 men's lacrosse games this week and post a table.
 
       <!-- 47. Interview Mode -->
       <h2 id="interview">47. Interview Mode (<code>/interview</code>)</h2>
-      <p>Instead of writing a long prompt, let the bot interview you. It asks 3–5 clarifying questions via Discord modals, then synthesizes a personalized, tailored response based on your answers.</p>
+      <p>Instead of writing a long prompt, let the bot interview you. It asks 3–5 clarifying questions via Slack modals, then synthesizes a personalized, tailored response based on your answers.</p>
       <h3><code>/interview &lt;goal&gt;</code></h3>
       <p>Describe what you want to create or decide. The bot generates context-specific questions, walks you through them one at a time, then produces the output.</p>
       <h3>Example Goals</h3>
@@ -4305,7 +4303,7 @@ Division 1 men's lacrosse games this week and post a table.
 
       <!-- 49. Calendar & Email -->
       <h2 id="calendar-email">49. Calendar &amp; Email</h2>
-      <p>Manage your Google Calendar and email inbox directly from Discord. All email responses are ephemeral (only visible to you) for privacy.</p>
+      <p>Manage your Google Calendar and email inbox directly from Slack. All email responses are ephemeral (only visible to you) for privacy.</p>
       <h3>Calendar Commands</h3>
       <ul>
         <li><code>/calendar today</code> — List today's events</li>
@@ -4352,7 +4350,7 @@ Division 1 men's lacrosse games this week and post a table.
       <p><strong>Setup:</strong> Start Stable Diffusion with <code>--api</code> flag, then set <code>SD_URL=http://192.168.1.93:7860</code> in <code>.env</code>.</p>
 
       <h2 id="dns">52. DNS Management (<code>/dns</code>)</h2>
-      <p>Control your AdGuard Home DNS filtering directly from Discord.</p>
+      <p>Control your AdGuard Home DNS filtering directly from Slack.</p>
       <ul>
         <li><code>/dns status</code> — Show whether filtering is enabled, query counts, and blocked counts.</li>
         <li><code>/dns stats</code> — Full query/block statistics with top allowed and blocked domains.</li>
@@ -4372,7 +4370,7 @@ Division 1 men's lacrosse games this week and post a table.
       <p><strong>Setup:</strong> Create Maton flows for Notion and set <code>MATON_NOTION_SEARCH_URL</code>, <code>MATON_NOTION_CREATE_URL</code>, and <code>MATON_NOTION_TODO_URL</code> webhook URLs in <code>.env</code>.</p>
 
       <h2 id="gdoc">54. Google Docs (<code>/gdoc</code>)</h2>
-      <p>Create and list Google Docs from Discord via Maton automation webhooks.</p>
+      <p>Create and list Google Docs from Slack via Maton automation webhooks.</p>
       <ul>
         <li><code>/gdoc save &lt;title&gt; &lt;content&gt;</code> — Create a new Google Doc with the given title and content.</li>
         <li><code>/gdoc list</code> — List your most recent Google Docs (requires a Maton list flow).</li>
@@ -4412,7 +4410,7 @@ Division 1 men's lacrosse games this week and post a table.
       <p><strong>Setup:</strong> Get a free API key at <a href="https://www.omdbapi.com/" target="_blank">omdbapi.com</a> (1,000 requests/day free), then set <code>OMDB_API_KEY</code> in <code>.env</code>.</p>
 
       <h2 id="sentry">58. Error Monitoring (<code>/sentry</code>)</h2>
-      <p>Monitor application errors via Sentry directly from Discord.</p>
+      <p>Monitor application errors via Sentry directly from Slack.</p>
       <ul>
         <li><code>/sentry issues [project]</code> — List the latest unresolved issues. Omit project to see all projects' issues.</li>
         <li><code>/sentry projects</code> — List all projects in your Sentry org.</li>
@@ -4810,7 +4808,7 @@ Related Trends:
 1. Fetch weather forecast
 2. Get stock quotes for watchlist
 3. Generate personalized digest
-4. Send summary to Discord
+4. Send summary to Slack
 
 Schedule: "0 7 * * *" (every day at 7 AM)
 
@@ -5074,7 +5072,7 @@ openclaw_response_latency_seconds_bucket{le="0.1"}
 ✅ Redis: Connected  
 ✅ ChromaDB: Healthy
 ⚠️  Polygon API: 4/5 quota used
-✅ Discord Bot: Online
+✅ Slack Bot: Online
 Overall Status: HEALTHY (4/5 checks passed)</code></pre>
 
       <h3>Performance Monitoring</h3>
@@ -5136,9 +5134,9 @@ git push --tags
 # Automated deployment begins</code></pre>
 
       <h2 id="patreon-monitoring">71. Patreon/MonsterVision Monitoring</h2>
-      <p>Automated health monitoring for the MonsterVision Patreon downloader with cookie management, auto-recovery, and Discord alerts.</p>
+      <p>Automated health monitoring for the MonsterVision Patreon downloader with cookie management, auto-recovery, and Slack alerts.</p>
 
-      <h3>Discord Commands</h3>
+      <h3>Slack Commands</h3>
       
       <h4><code>/patreon status</code></h4>
       <p>Get comprehensive health diagnostics for the Patreon/MonsterVision system including:</p>
@@ -5208,7 +5206,7 @@ git push --tags
         <li>Disk space and resource usage</li>
       </ul>
 
-      <h4>Discord Alerts</h4>
+      <h4>Slack Alerts</h4>
       <p>Automatic notifications are sent to the configured alert channel when:</p>
       <ul>
         <li><strong>WARNING:</strong> Cookies aging (3-5 days old)</li>
@@ -5500,13 +5498,13 @@ Invoke-RestMethod `
         <code>SLACK_BOT_TOKEN</code> (xoxb-), <code>SLACK_APP_TOKEN</code> (xapp-),
         <code>SLACK_NOTIFY_USER_ID</code>, <code>OPENCLAW_UPLOAD_KEY</code>,
         <code>OPENCLAW_FILE_POLL_INTERVAL</code>, <code>AI_FILES_DIR</code>.
-        The bot is started via <code>create_slack_handler()</code> integrated with the main Discord bot.
+        The bot is started via <code>create_slack_handler()</code> integrated with the main Slack bot.
       </div>
 
       <!-- 73. Open WebUI -->
       <h2 id="open-webui">73. Open WebUI (Browser Chat Interface)</h2>
       <p>
-        Open WebUI gives every family member a full browser-based chat interface &mdash; no Discord
+        Open WebUI gives every family member a full browser-based chat interface &mdash; no Slack
         or Slack required. It connects directly to OpenClaw&rsquo;s AI models so you can have
         conversations, manage knowledge, create prompts, and more from any device with a web browser.
       </p>
@@ -5548,7 +5546,7 @@ Invoke-RestMethod `
         <li>The interface works well on mobile &mdash; just open it in Safari or Chrome</li>
       </ul>
 
-      <h3>Comparison: Discord vs. Slack vs. Open WebUI</h3>
+      <h3>Comparison: Slack vs. Open WebUI vs. Terminal</h3>
       <div class="card">
         <table style="width:100%;border-collapse:collapse">
           <thead>
@@ -5560,19 +5558,19 @@ Invoke-RestMethod `
           </thead>
           <tbody>
             <tr>
-              <td style="padding:0.35rem 0.6rem">Discord</td>
-              <td style="padding:0.35rem 0.6rem">Full skill set, power users, slash commands</td>
-              <td style="padding:0.35rem 0.6rem">Yes (Discord app)</td>
-            </tr>
-            <tr>
-              <td style="padding:0.35rem 0.6rem">Slack</td>
-              <td style="padding:0.35rem 0.6rem">Family file sharing, daily digests, plain-language mode</td>
-              <td style="padding:0.35rem 0.6rem">Yes (Slack app)</td>
+              <td style="padding:0.35rem 0.6rem"><strong>Slack</strong></td>
+              <td style="padding:0.35rem 0.6rem"><strong>Primary interface — full skill set, slash commands, threads, file uploads</strong></td>
+              <td style="padding:0.35rem 0.6rem"><strong>Yes (Slack app)</strong></td>
             </tr>
             <tr>
               <td style="padding:0.35rem 0.6rem"><strong>Open WebUI</strong></td>
               <td style="padding:0.35rem 0.6rem"><strong>Browser-based chat, no app needed, works on any device</strong></td>
               <td style="padding:0.35rem 0.6rem"><strong>No &mdash; just a browser</strong></td>
+            </tr>
+            <tr>
+              <td style="padding:0.35rem 0.6rem">Terminal CLI</td>
+              <td style="padding:0.35rem 0.6rem">Power users, scripting, Copilot CLI on Mac Mini</td>
+              <td style="padding:0.35rem 0.6rem">No &mdash; SSH or local shell</td>
             </tr>
           </tbody>
         </table>
@@ -5675,7 +5673,7 @@ Invoke-RestMethod `
           renderGuideQuickstart();
           renderGuideCommands();
         } catch (e) {
-          body.innerHTML = '<tr><td colspan="2" style="color:var(--muted);font-style:italic">Unable to load command index right now. Use <code>/help</code> in Discord.</td></tr>';
+          body.innerHTML = '<tr><td colspan="2" style="color:var(--muted);font-style:italic">Unable to load command index right now. Use <code>/help</code> in Slack.</td></tr>';
         }
       }
 

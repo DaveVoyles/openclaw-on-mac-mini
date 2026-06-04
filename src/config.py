@@ -138,6 +138,9 @@ class _Config:
     nas_user: str = os.getenv("NAS_USER", "")
     nas_password: str = os.getenv("NAS_PASSWORD", "")
     nas_verify_ssl: bool = os.getenv("NAS_VERIFY_SSL", "false").lower() == "true"
+    # Public-facing base URL used to build Synology share links (defaults to NAS_URL).
+    # Set this to your external NAS URL, e.g. https://nas.davevoyles.synology.me:5001
+    nas_share_base_url: str = os.getenv("NAS_SHARE_BASE_URL", "")
 
     # -- Gateway (Maton) -------------------------------------------------------
     maton_api_key: str = os.getenv("MATON_API_KEY", "")

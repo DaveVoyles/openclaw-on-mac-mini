@@ -33,6 +33,7 @@ Keep these files local to this repo:
 | `docs/TESTING.md` | Running, writing, or debugging tests |
 | `docs/OPERATIONS-RUNBOOK.md` | Incident response or operational procedures |
 | `docs/TROUBLESHOOTING.md` | Diagnosing unexpected behavior |
+| [NAS-ACCESS.md](NAS-ACCESS.md) | Any task involving NAS files, ROMs, share links, or SSH to the NAS |
 
 ## Update rules
 

@@ -127,12 +127,21 @@ def _raw_command_groups() -> list[dict]:
         {
             "category": "🤖 Copilot CLI",
             "commands": [
-                {"name": "/copilot <prompt>", "desc": "Run GitHub Copilot CLI on the Mac Mini host via SSH. Starts or resumes your Copilot session."},
+                {"name": "/copilot <prompt>", "desc": "Run the configured host bridge backend on the Mac Mini. Starts or resumes your threaded session."},
+                {"name": "/hermes <prompt>", "desc": "Always run Hermes on the Mac Mini host, regardless of `COPILOT_BACKEND`."},
+                {"name": "/h <prompt>", "desc": "Alias for `/hermes` — always run Hermes on the Mac Mini host."},
                 {"name": "/copilot-sessions", "desc": "List your active Copilot CLI sessions."},
                 {"name": "/copilot-cancel", "desc": "Cancel the current Copilot task."},
                 {"name": "/copilot-end", "desc": "End your Copilot session and release the host connection."},
                 {"name": "/copilot-attach", "desc": "Attach to an existing Copilot session by ID."},
                 {"name": "/host <command>", "desc": "Run an arbitrary command on the Mac Mini host via the host bridge."},
+            ],
+        },
+        {
+            "category": "🏠 Home Lab",
+            "commands": [
+                {"name": "/wake [mbp|mbp2]", "desc": "Send a Wake-on-LAN magic packet to a configured MacBook Pro."},
+                {"name": "/nas [df|ls <path>|free]", "desc": "Inspect NAS disk usage, browse allowed mount paths, or show NAS CPU/memory when available."},
             ],
         },
         {
@@ -197,7 +206,8 @@ def _command_quickstart() -> list[dict]:
         {"name": "/help", "desc": "Browse commands by category"},
         {"name": "/chat", "desc": "Ask OpenClaw anything in Slack"},
         {"name": "/research", "desc": "Run deep multi-source research"},
-        {"name": "/copilot", "desc": "Launch GitHub Copilot CLI on the Mac Mini"},
+        {"name": "/copilot", "desc": "Launch the configured host bridge backend on the Mac Mini"},
+        {"name": "/hermes", "desc": "Launch a Hermes session on the Mac Mini"},
         {"name": "/incident start", "desc": "Kick off guided incident triage"},
         {"name": "/schedule", "desc": "Create and manage automations"},
     ]

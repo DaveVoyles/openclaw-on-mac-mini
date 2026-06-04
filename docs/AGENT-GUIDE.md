@@ -1,5 +1,5 @@
 # OpenClaw — Agent Quick Reference
-<!-- Updated: 2026-05-21 -->
+<!-- Updated: 2026-06-04 -->
 
 
 **Read this first.** 30-second orientation before touching anything.
@@ -27,19 +27,20 @@ Slack user ─► /slash command ─► src/slack_bot.py ─► src/ask_orchestr
                                                                        (the SKILLS registry)
 ```
 
-> **Discord is gone (2026-05).** `src/bot.py`, `src/cogs/`, `src/discord_commands/`, and `src/discord_*.py` have been deleted. **Slack is the sole interface.** Entry point is `src/slack_bot.py` (CMD in Dockerfile). Any doc still referring to a Discord bot, cogs, or `src/bot.py` is stale.
-
 > **LLM monolith is gone.** `src/llm.py` was split into the `src/llm/` package (`chat.py`, `context.py`, `providers.py`, `tool_execution.py`, …) plus `src/llm_client.py` for Gemini infra. Any doc that still says `src/llm.py` is stale.
 
 **Where things run:**
-- **Mac Mini M4** (192.168.1.93) — Docker containers via OrbStack, all source code
-- **NAS** (192.168.1.8) — Storage only (SMB + NFS mounts for media)
+- **Mac Mini M4** (192.168.1.93) — Docker via OrbStack plus host-side Hermes CLI
+- **NAS** (192.168.1.8) — Storage, reverse proxy, and backups
+- **Slack** — primary user interface for notifications, slash commands, and threaded sessions
+- **Dashboard:** `https://openclaw.davevoyles.synology.me/dashboard` — live browser UI, served locally from port `8765`
+- **Health:** `http://192.168.1.93:8765/health`
 - **Source:** `~/openclaw/` — application code (separate Git repo from docker-stack)
 - **Deploy config:** `~/docker-stack/openclaw/docker-compose.yml`
-- **Health:** `http://192.168.1.93:8765/health` — only HTTP endpoint exposed (Slack-native, no dashboard)
 
-**Code shape (2026-05-21, post-debt cleanup):**
-- `src/*.py` — ~145 modules, plus subpackages `src/llm/`, `src/builders/`, `src/utils/`, `src/plugin_system/`. The packages `src/api/`, `src/exporters/`, `src/dashboard/`, `src/cogs/`, and `src/discord_commands/` were removed during the Discord-removal debt cleanup; zero `import discord` lines remain and `discord.py` is no longer a dependency.
+**Code shape (2026-06-04):**
+- `src/*.py` — ~145 modules, plus subpackages `src/dashboard/`, `src/llm/`, `src/builders/`, `src/utils/`, `src/plugin_system/`
+- `src/slack_bot.py` — Slack entrypoint plus host-bridge command surface (`/copilot`, `/hermes`, `/host`)
 - `skills/` — 36 modules; the central `SKILLS` dict registers 182 entries
 - `config/tools.yaml` — 113 function-calling tool declarations (a curated subset of `SKILLS` exposed to the LLM)
 
@@ -54,7 +55,7 @@ Slack user ─► /slash command ─► src/slack_bot.py ─► src/ask_orchestr
    cd ~/docker-stack/openclaw && docker compose up -d --build
    ```
 
-3. **Background loops run as `asyncio.create_task()` in `slack_bot.py`.** The old `bg_tasks.py` / `bg_monitoring.py` / `bg_healing.py` / `bg_briefing.py` / `discord_background.py` supervisor family was deleted in May 2026 — it was Discord-coupled and never wired up in the Slack runtime. Today's loops (`_digest_loop`, `_file_alert_loop`, `dropbox_watch_loop`) are started directly in the startup block around line 5953. To add a new persistent loop: define an `async def my_loop(client)` in a new module, then add `asyncio.create_task(my_loop(app.client))` in `slack_bot.py`'s startup block. No supervisor registry exists — each loop handles its own `try/except asyncio.CancelledError`. See [`docs/AGENT-EXTENSION-GUIDE.md` § 6](AGENT-EXTENSION-GUIDE.md#6-add-a-background-loop) for the full recipe.
+3. **Background loops run as `asyncio.create_task()` in `slack_bot.py`.** Today's loops (`_digest_loop`, `_file_alert_loop`, `dropbox_watch_loop`) are started directly in the startup block. To add a new persistent loop: define an `async def my_loop(client)` in a new module, then add `asyncio.create_task(my_loop(app.client))` in `slack_bot.py`'s startup block. No supervisor registry exists — each loop handles its own `try/except asyncio.CancelledError`. See [`docs/AGENT-EXTENSION-GUIDE.md` § 6](AGENT-EXTENSION-GUIDE.md#6-add-a-background-loop) for the full recipe.
 
 4. **Tests use xdist by default.** `pyproject.toml` forces `-n auto --dist loadfile`. Run single-process with:
    ```bash
@@ -153,17 +154,18 @@ print('Firecrawl:', sp['firecrawl']['calls'], 'calls')
 
 ---
 
-## Slack Surface — `/copilot` host bridge + `/host` shortcuts
+## Slack Surface — `/copilot`, `/hermes`, and `/host`
 
-OpenClaw's primary remote interface is Slack. Two complementary slash command families bridge Slack to the Mac Mini host:
+OpenClaw's primary remote interface is Slack. Three complementary slash command families bridge Slack to the Mac Mini host:
 
-### `/copilot` family — interactive Copilot CLI sessions over SSH PTY
+### `/copilot` + `/hermes` — threaded host-agent sessions
 
-Routed by `src/slack_bot.py` through `src/host_bridge.py` (SessionManager + Session) which opens an `asyncssh` PTY to `davevoyles@host.docker.internal` and runs `copilot --allow-all-tools`. Each session is a Slack thread; replies in the thread become the next stdin turn.
+Routed by `src/slack_bot.py` through the host bridge/session manager. `/copilot` follows the configured `COPILOT_BACKEND`, while `/hermes` always starts a Hermes-backed session regardless of env config. Each session is a Slack thread; replies in the thread become the next turn.
 
 | Command | What it does |
 |---|---|
-| `/copilot <prompt>` | Open a thread, spawn a long-lived `copilot` process on the host, post stdout chunks back to the thread |
+| `/copilot <prompt>` | Open a thread and run the configured host backend (`ssh` Copilot CLI or Hermes) |
+| `/hermes <prompt>` | Open a thread that always runs Hermes on the Mac Mini host |
 | `/copilot-sessions` | List your active + recent sessions |
 | `/copilot-cancel <id>` | SIGINT (Ctrl-C) the current turn of a session |
 | `/copilot-end <id>` | End a session and close the host process |
@@ -206,13 +208,11 @@ Slash commands, OAuth scopes, and event subscriptions live in `scripts/update_sl
 
 ---
 
-## Removed: Discord Cog Guidance
+## Slack / Hermes interaction patterns
 
-This section previously documented patterns for Discord cogs (W1–W14). **Discord was removed in May 2026.** All cogs, `discord_error.py`, `discord_progress.py`, and the Discord bot entry (`src/bot.py`) have been deleted. Slack-equivalent patterns:
-
-- **Error handling:** Slack handlers in `src/slack_bot.py` use `say(...)` with formatted error text or upload an error file. There is no `build_error_embed` equivalent — Slack messages are markdown/Block Kit.
-- **Progress indicators:** the `/copilot` host bridge already streams progress via Slack thread updates (`src/host_bridge.py`); use the same pattern for new long-running commands.
-- **Alert routing:** `alert_manager.py` was deleted with the Discord cleanup; severity-aware alerting is currently log-only. Long-term: route alerts via Slack DMs to `SLACK_NOTIFY_USER_ID`. Until then, use `log.warning(...)` / `log.error(...)`.
+- **Error handling:** Slack handlers in `src/slack_bot.py` use `say(...)`, `chat_postEphemeral(...)`, or threaded replies with markdown/Block Kit-safe text.
+- **Progress indicators:** long-running host work streams updates back into the Slack thread; reuse the `/copilot` and `/hermes` session pattern for new threaded workflows.
+- **Alert routing:** day-to-day notifications route through Slack; fallback operational alerts remain log-based unless explicitly wired to `SLACK_NOTIFY_USER_ID`.
 
 ### Memory Recall — Domain Guard
 

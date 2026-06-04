@@ -42,6 +42,7 @@ from .api_handlers import (
     api_github_activity_handler,
     api_knowledge_graph_handler,
     api_memories_handler,
+    api_manifest_handler,
     api_network_ping_handler,
     api_network_wol_handler,
     api_plan_detail_handler,
@@ -128,6 +129,7 @@ def setup_dashboard(
         return require_session(handler)
 
     app.router.add_get("/dashboard", page(dashboard_handler))
+    app.router.add_get("/manifest.json", api_manifest_handler)
     app.router.add_get("/login", login_handler)
     app.router.add_get("/tech-guide", page(guide_handler))
     app.router.add_get("/guide", lambda r: web.HTTPMovedPermanently("/tech-guide"))

@@ -1,11 +1,10 @@
 """
 OpenClaw Mission Control Skill
 Kanban-style task management via the Mission Control ClawHub skill.
-Dashboard: https://davevoyles.github.io/openclaw-dashboard/
-Repo:      https://github.com/DaveVoyles/openclaw-dashboard
+Dashboard: https://openclaw.davevoyles.synology.me/dashboard
 
-Tasks live in the dashboard repo (data/tasks.json).
-mc-update.sh is used to modify tasks and push back to GitHub.
+Tasks live in data/tasks.json.
+mc-update.sh is used to modify tasks.
 """
 
 import asyncio
@@ -19,7 +18,7 @@ log = logging.getLogger(__name__)
 
 TASKS_FILE = Path(os.getenv("MC_TASKS_FILE", "/app/data/tasks.json"))
 MC_SCRIPT = Path(__file__).parent.parent / "skills" / "mission-control" / "scripts" / "mc-update.sh"
-DASHBOARD_URL = "https://davevoyles.github.io/openclaw-dashboard/"
+DASHBOARD_URL = os.getenv("OPENCLAW_PUBLIC_URL", "https://openclaw.davevoyles.synology.me") + "/dashboard"
 
 STATUS_EMOJI = {
     "permanent": "🔁",

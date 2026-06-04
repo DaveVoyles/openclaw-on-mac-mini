@@ -6,15 +6,15 @@ these tests will catch it before CI smoke tests do.
 
 Counts at time of last update (src/slack_bot.py):
   @app.event:   5  (app_home_opened, app_mention, message, reaction_added, file_shared)
-  @app.command: 39 (/batch, /brief, /calendar, /chat, /clawbox, /clawchan, /clear, /contacts,
+  @app.command: 42 (/batch, /brief, /calendar, /chat, /clawbox, /clawchan, /clear, /contacts,
                      /copilot ×5, /digest, /drive, /email, /files, /filesearch, /h, /health,
                      /help, /hermes, /host, /inbox, /incident, /metrics, /mypins, /mystats,
-                     /nas, /nickname, /plex, /research, /schedule, /simple, /template, /today,
-                     /wake)
+                     /nas, /nickname, /plex, /q, /research, /resume, /schedule, /simple,
+                     /status, /template, /today, /wake)
   @app.action:  9  (file_compare_start, file_translate, translate_lang_selected,
                      retry_last_prompt, clarify_file, clarify_question, clarify_write,
                      gmail_summarize, incident_action_run)
-  Total:        53
+  Total:        56
 """
 
 import ast
@@ -26,9 +26,9 @@ SLACK_BOT_SRC = Path(__file__).parent.parent / "src" / "slack_bot.py"
 
 # Exact counts at authoring time — update intentionally when adding new handlers.
 EXPECTED_EVENT_COUNT = 5
-EXPECTED_COMMAND_COUNT = 39  # includes /copilot ×5 subcommand handlers, /h, /hermes, /host, /incident, /nas, /plex, /wake, etc.
+EXPECTED_COMMAND_COUNT = 42  # includes /copilot ×5 subcommand handlers, /h, /hermes, /host, /incident, /nas, /plex, /q, /resume, /status, /wake, etc.
 EXPECTED_ACTION_COUNT = 9    # includes incident_action_run
-EXPECTED_TOTAL_COUNT = EXPECTED_EVENT_COUNT + EXPECTED_COMMAND_COUNT + EXPECTED_ACTION_COUNT  # 53
+EXPECTED_TOTAL_COUNT = EXPECTED_EVENT_COUNT + EXPECTED_COMMAND_COUNT + EXPECTED_ACTION_COUNT  # 56
 
 
 # ---------------------------------------------------------------------------

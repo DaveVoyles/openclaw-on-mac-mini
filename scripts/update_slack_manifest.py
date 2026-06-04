@@ -229,6 +229,24 @@ MANIFEST: dict = {
                 "usage_hint": "status | logs <svc> [n] | restart <svc> | disk | net | plex-fix | git <args>",
                 "should_escape": False,
             },
+            {
+                "command": "/wake",
+                "description": "Wake a configured MacBook Pro over Wake-on-LAN",
+                "usage_hint": "mbp | mbp2",
+                "should_escape": False,
+            },
+            {
+                "command": "/nas",
+                "description": "Inspect NAS disk usage, folders, and resource stats",
+                "usage_hint": "df | ls <path> | free",
+                "should_escape": False,
+            },
+            {
+                "command": "/h",
+                "description": "Short alias for /hermes to start a Hermes session",
+                "usage_hint": "<prompt>",
+                "should_escape": False,
+            },
         ],
     },
     "oauth_config": {

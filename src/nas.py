@@ -14,6 +14,7 @@ import asyncio
 import datetime
 import json as _json
 import logging
+import os
 import ssl
 import time
 
@@ -839,6 +840,83 @@ async def _search_one_folder(query: str, folder_path: str) -> list[dict]:
     return results
 
 
+
+
+# ---------------------------------------------------------------------------
+# FileStation — share link generation
+# ---------------------------------------------------------------------------
+
+# Mount path on Mac Mini host that maps to the NAS root share.
+# /Volumes/ROMs on Mac Mini  →  /ROMs on FileStation (the NAS share name)
+_MAC_MOUNT = os.environ.get("NAS_MAC_MOUNT", "/Volumes/ROMs")
+_NAS_SHARE = os.environ.get("NAS_FS_SHARE", "/ROMs")
+
+
+def mac_path_to_nas_path(mac_path: str) -> str:
+    """Convert a Mac Mini file path to the equivalent NAS FileStation path.
+
+    Example:
+        ``/Volumes/ROMs/ROMs/Sega - Saturn/shmups.md``  →  ``/ROMs/ROMs/Sega - Saturn/shmups.md``
+    """
+    if mac_path.startswith(_MAC_MOUNT):
+        return _NAS_SHARE + mac_path[len(_MAC_MOUNT):]
+    return mac_path  # already a NAS path or unknown — pass through
+
+
+async def nas_create_share_link(
+    path: str,
+    *,
+    expire_days: int = 0,
+    password: str | None = None,
+) -> str:
+    """Create a public share link for a file or folder on the Synology NAS.
+
+    Args:
+        path: File/folder path — either a NAS FileStation path (``/ROMs/...``)
+              or a Mac Mini path (``/Volumes/ROMs/...``), which is auto-converted.
+        expire_days: Days until the link expires. 0 = never expires.
+        password: Optional password to protect the link.
+
+    Returns:
+        A URL string on success, or an error message starting with ``❌``.
+    """
+    if not NAS_USER or not NAS_PASSWORD:
+        return "❌ NAS credentials not configured (NAS_USER / NAS_PASSWORD)."
+
+    # Normalise Mac paths to NAS FileStation paths
+    nas_path = mac_path_to_nas_path(path.strip())
+    if not nas_path.startswith("/"):
+        return f"❌ Invalid path: must start with '/' (got {path!r})."
+
+    extra: dict = {
+        "path": _json.dumps([nas_path]),
+        "expire_days": str(expire_days),
+        "enable_upload": "false",
+    }
+    if password:
+        extra["password"] = password
+
+    result = await _dsm("SYNO.FileStation.Sharing", 3, "create", extra)
+    if not result.get("success"):
+        err = result.get("_err") or result.get("error", {}).get("code", "unknown")
+        return f"❌ Could not create share link for `{nas_path}`: {err}"
+
+    links = (result.get("data") or {}).get("links", [])
+    if not links:
+        return "❌ Share link created but no URL returned by DSM."
+
+    share_id = links[0].get("id", "")
+    if not share_id:
+        return "❌ Share link created but ID is missing in DSM response."
+
+    # Build the public-facing URL using NAS_SHARE_BASE_URL if configured,
+    # otherwise fall back to the local NAS_URL.
+    share_base = cfg.nas_share_base_url.rstrip("/") or NAS_URL.rstrip("/")
+    share_url = f"{share_base}/sharing/{share_id}"
+    filename = nas_path.split("/")[-1] or nas_path
+    return f"🔗 Share link for **{filename}**: {share_url}"
+
+
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
@@ -852,4 +930,5 @@ NAS_SKILLS = {
     "nas_create_folder": nas_create_folder,
     "nas_write_file": nas_write_file,
     "nas_search_files": nas_search_files,
+    "nas_create_share_link": nas_create_share_link,
 }

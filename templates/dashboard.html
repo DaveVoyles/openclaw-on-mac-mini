@@ -3,6 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="manifest" href="/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="OpenClaw">
+    <meta name="theme-color" content="#0d0e1a">
     <title>OpenClaw Dashboard</title>
     <script>
       (() => {
@@ -760,6 +765,20 @@
         transition: background 0.15s, border-color 0.15s;
       }
       .qa-btn:hover { background: var(--accent, #7c3aed); border-color: var(--accent, #7c3aed); }
+      .jump-pill {
+        display: inline-block;
+        padding: 0.35rem 0.75rem;
+        margin-right: 0.4rem;
+        background: rgba(124,58,237,0.15);
+        border: 1px solid rgba(124,58,237,0.3);
+        border-radius: 20px;
+        color: var(--text, #e8e8e8);
+        font-size: 0.78rem;
+        cursor: pointer;
+        white-space: nowrap;
+        min-height: 36px;
+      }
+      .jump-pill:active { background: rgba(124,58,237,0.35); }
 
       /* ── Mobile responsiveness ─────────────────────────────────────── */
       @media (max-width: 768px) {
@@ -800,6 +819,9 @@
         #chat-input-row { flex-direction: column !important; }
         #chat-controls-col { flex-direction: row !important; align-items: center; }
         #agent-model { flex: 1; }
+        #agent-chat-card { order: -1; }
+        #mobile-jump-nav { display: block !important; }
+        #mobile-quick-prompts { display: flex !important; }
 
         /* Copilot hint banner: smaller text */
         #copilot-cli-hint { font-size: 0.78rem; }
@@ -869,6 +891,19 @@
             </div>
           </div>
         </div>
+
+        <!-- Mobile jump navigation — hidden on desktop -->
+        <nav id="mobile-jump-nav" aria-label="Jump to section" style="display:none;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;padding:0.5rem 1rem;background:var(--surface,#13141f);border-bottom:1px solid var(--border,#2a2b3d);position:sticky;top:0;z-index:100;scrollbar-width:none">
+          <style>#mobile-jump-nav::-webkit-scrollbar{display:none}</style>
+          <button onclick="jumpTo('agent-chat-card')" class="jump-pill">💬 Chat</button>
+          <button onclick="jumpTo('hermes-status-card')" class="jump-pill">⚕ Hermes</button>
+          <button onclick="jumpTo('wol-card')" class="jump-pill">⚡ Wake</button>
+          <button onclick="jumpTo('nas-disk-card')" class="jump-pill">💾 NAS</button>
+          <button onclick="jumpTo('docker-status-card')" class="jump-pill">🐳 Docker</button>
+          <button onclick="jumpTo('github-activity-card')" class="jump-pill">🐙 GitHub</button>
+          <button onclick="jumpTo('system-health-card')" class="jump-pill">🖥 Health</button>
+          <button onclick="jumpTo('hermes-sessions-card')" class="jump-pill">📋 Sessions</button>
+        </nav>
 
         <!-- Buttons -->
         <div class="btn-row">
@@ -965,7 +1000,10 @@
         <!-- 💬 Ask OpenClaw Agent (Dashboard Chat) -->
         <div class="card" id="agent-chat-card">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">
-            <h2 style="margin:0">💬 Ask OpenClaw</h2>
+            <div>
+              <h2 style="margin:0">💬 Ask OpenClaw</h2>
+              <div style="font-size:0.72rem;color:var(--muted);margin-top:0.2rem">Powered by <strong style="color:#4ade80">⚕ Hermes</strong> · claude-sonnet-4.6 · GitHub Copilot</div>
+            </div>
             <button id="chat-expand-btn" onclick="toggleChatExpand()" title="Expand chat to fullscreen"
               style="padding:0.3rem 0.65rem;background:transparent;border:1px solid var(--border,#444);border-radius:6px;color:var(--muted,#8b949e);cursor:pointer;font-size:0.8rem;white-space:nowrap">⛶ Expand</button>
           </div>
@@ -987,7 +1025,7 @@
             <button onclick="deleteSelectedPrompt()" style="font-size:0.75rem;padding:0.2rem 0.5rem;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--muted);cursor:pointer" title="Delete selected prompt">🗑</button>
           </div>
           <div id="chat-input-row" style="display:flex;gap:0.5rem;align-items:flex-start">
-            <textarea id="agent-prompt" placeholder="Ask anything… (Shift+Enter for new line, Enter to send)"
+            <textarea id="agent-prompt" placeholder="Ask anything… (Shift+Enter for new line, Enter to send)" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="true"
               style="flex:1;min-height:60px;max-height:200px;padding:0.6rem 0.8rem;background:var(--surface-solid,#1a1b2e);border:1px solid var(--border,#333);border-radius:8px;color:var(--text,#e8e8e8);font-size:0.88rem;resize:vertical;font-family:inherit"
               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();dashAsk();}"></textarea>
             <div id="chat-controls-col" style="display:flex;flex-direction:column;gap:0.4rem">
@@ -1004,8 +1042,11 @@
                 <option value="/Users/davevoyles/ai-files">📁 ai-files</option>
                 <option value="/Users/davevoyles/mnt/ROMs">📁 ROMs (NAS)</option>
               </select>
+              <button id="voice-btn" onclick="toggleVoiceInput()" title="Voice input"
+                style="padding:0.5rem 0.7rem;background:var(--surface-solid,#1a1b2e);border:1px solid var(--border,#333);border-radius:6px;color:var(--muted);cursor:pointer;font-size:1rem;min-height:44px;min-width:44px;display:none"
+                aria-label="Voice input">🎤</button>
               <button id="agent-send-btn" onclick="dashAsk()"
-                style="padding:0.5rem 1rem;background:var(--accent,#7c3aed);border:none;border-radius:6px;color:#fff;font-size:0.85rem;cursor:pointer;font-weight:600;white-space:nowrap">
+                style="padding:0.5rem 1rem;background:var(--accent,#7c3aed);border:none;border-radius:6px;color:#fff;font-size:0.85rem;cursor:pointer;font-weight:600;white-space:nowrap;min-height:44px;min-width:80px">
                 Send ↵
               </button>
             </div>
@@ -1027,6 +1068,12 @@
             <div style="margin-top:0.5rem;color:var(--muted);font-size:0.75rem">Responses stream live. For multi-turn sessions use <strong>/copilot</strong> in Slack.</div>
           </div>
           <!-- Hermes hint (shown when Hermes is selected) -->
+          <div id="mobile-quick-prompts" style="display:none;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.5rem">
+            <button onclick="setQuickPrompt('Give me a quick system status summary')" class="jump-pill" style="font-size:0.72rem">📊 Status</button>
+            <button onclick="setQuickPrompt('What\'s new on Plex this week?')" class="jump-pill" style="font-size:0.72rem">🎬 Plex</button>
+            <button onclick="setQuickPrompt('Any alerts or issues I should know about?')" class="jump-pill" style="font-size:0.72rem">🔔 Alerts</button>
+            <button onclick="setQuickPrompt('What Hermes sessions did I run today?')" class="jump-pill" style="font-size:0.72rem">📋 Today</button>
+          </div>
           <div id="hermes-hint" style="display:none;margin-top:0.6rem;padding:0.75rem 1rem;background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.3);border-radius:8px;font-size:0.82rem;line-height:1.6;color:var(--text)">
             <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem;flex-wrap:wrap">
               <strong style="color:#4ade80;font-size:0.9rem">⚕ Hermes Agent</strong>
@@ -1115,11 +1162,23 @@
                   </tr>
                 </thead>
                 <tbody>
+                  <tr style="border-bottom:1px solid var(--border);background:rgba(74,222,128,0.04)">
+                    <td style="padding:0.6rem 0.75rem;white-space:nowrap">⚕ <strong>Hermes</strong></td>
+                    <td style="padding:0.6rem 0.75rem">Interactive AI, complex tasks, memory</td>
+                    <td style="padding:0.6rem 0.75rem;color:var(--muted)">Persistent memory · Self-improving skills · <code>/h</code> or <code>/hermes</code> in Slack</td>
+                    <td style="padding:0.6rem 0.75rem"><span style="color:#4ade80">Primary AI</span></td>
+                  </tr>
                   <tr style="border-bottom:1px solid var(--border);background:rgba(74,21,75,0.06)">
                     <td style="padding:0.6rem 0.75rem;white-space:nowrap">💬 <strong>Slack</strong></td>
-                    <td style="padding:0.6rem 0.75rem">Daily use, slash commands, notifications</td>
-                    <td style="padding:0.6rem 0.75rem;color:var(--muted)">Primary interface · Slash commands · Threaded sessions · Push alerts · /copilot</td>
+                    <td style="padding:0.6rem 0.75rem">Daily use, phone, quick questions</td>
+                    <td style="padding:0.6rem 0.75rem;color:var(--muted)">Slash commands · <code>/wake</code> <code>/nas</code> <code>/plex</code> <code>/status</code> · Push alerts</td>
                     <td style="padding:0.6rem 0.75rem"><a href="https://dvopenclaw.slack.com" target="_blank" rel="noopener" style="color:#a97cc7">dvopenclaw.slack.com</a></td>
+                  </tr>
+                  <tr style="border-bottom:1px solid var(--border)">
+                    <td style="padding:0.6rem 0.75rem;white-space:nowrap">🌐 <strong>This Dashboard</strong></td>
+                    <td style="padding:0.6rem 0.75rem">Status overview, ops, chat from browser/phone</td>
+                    <td style="padding:0.6rem 0.75rem;color:var(--muted)">Visual status · Voice input · Mobile-friendly · Hermes chat</td>
+                    <td style="padding:0.6rem 0.75rem"><a href="https://openclaw.davevoyles.synology.me" target="_blank" rel="noopener" style="color:var(--gold)">openclaw.dave…</a></td>
                   </tr>
                   <tr style="border-bottom:1px solid var(--border)">
                     <td style="padding:0.6rem 0.75rem;white-space:nowrap">💬 <strong>Open WebUI</strong></td>
@@ -1127,23 +1186,11 @@
                     <td style="padding:0.6rem 0.75rem;color:var(--muted)">Markdown · Tables · Code blocks · Chat history · Regenerate</td>
                     <td style="padding:0.6rem 0.75rem"><a href="https://chat.davevoyles.synology.me" target="_blank" rel="noopener" style="color:var(--mint-green)">chat.davevoyles…</a></td>
                   </tr>
-                  <tr style="border-bottom:1px solid var(--border)">
-                    <td style="padding:0.6rem 0.75rem;white-space:nowrap">💻 <strong>CLI / Terminal</strong></td>
-                    <td style="padding:0.6rem 0.75rem">Power users, scripting, debugging</td>
-                    <td style="padding:0.6rem 0.75rem;color:var(--muted)">Low latency · Scriptable · Pipe-friendly · Full control</td>
-                    <td style="padding:0.6rem 0.75rem"><a href="/terminal" target="_blank" style="color:var(--gold)">/terminal</a></td>
-                  </tr>
-                  <tr style="border-bottom:1px solid var(--border)">
-                    <td style="padding:0.6rem 0.75rem;white-space:nowrap">🖥️ <strong>Open WebUI</strong></td>
-                    <td style="padding:0.6rem 0.75rem">Long chats, rich formatting, any device</td>
-                    <td style="padding:0.6rem 0.75rem;color:var(--muted)">Markdown · Tables · Code blocks · Chat history · Regenerate</td>
-                    <td style="padding:0.6rem 0.75rem"><a href="https://chat.davevoyles.synology.me" target="_blank" rel="noopener" style="color:var(--mint-green)">chat.davevoyles…</a></td>
-                  </tr>
                   <tr>
-                    <td style="padding:0.6rem 0.75rem;white-space:nowrap">🛠️ <strong>This Dashboard</strong></td>
-                    <td style="padding:0.6rem 0.75rem">Status overview, ops &amp; admin tasks</td>
-                    <td style="padding:0.6rem 0.75rem;color:var(--muted)">Live status · Skill list · Route map · Cookie refresh</td>
-                    <td style="padding:0.6rem 0.75rem"><a href="https://openclaw.davevoyles.synology.me" target="_blank" rel="noopener" style="color:var(--gold)">openclaw.dave…</a></td>
+                    <td style="padding:0.6rem 0.75rem;white-space:nowrap">💻 <strong>Terminal (Hermes CLI)</strong></td>
+                    <td style="padding:0.6rem 0.75rem">Power use, scripting, full control</td>
+                    <td style="padding:0.6rem 0.75rem;color:var(--muted)">Full TUI · Token counter · Session history · Skills autocomplete</td>
+                    <td style="padding:0.6rem 0.75rem"><code style="font-size:0.78rem;color:var(--muted)">hermes</code> in terminal</td>
                   </tr>
                 </tbody>
               </table>
@@ -1682,8 +1729,8 @@
               ><span class="stat-value" id="sys-python"></span>
             </div>
             <div class="stat-row">
-              <span class="stat-label">slack_sdk</span
-              ><span class="stat-value" id="sys-discordpy"></span>
+              <span class="stat-label">Slack SDK</span
+              ><span class="stat-value" id="sys-slack"></span>
             </div>
             <div class="stat-row">
               <span class="stat-label">Latency</span
@@ -2495,7 +2542,7 @@
           d.content_extraction || "trafilatura → Jina Reader → Playwright";
         document.getElementById("sys-rates").textContent = d.rate_info;
         document.getElementById("sys-python").textContent = d.python;
-        document.getElementById("sys-discordpy").textContent = d.slack_sdk;
+        document.getElementById("sys-slack").textContent = d.slack_sdk;
         document.getElementById("sys-latency").textContent =
           d.latency_ms + " ms";
 
@@ -2619,9 +2666,6 @@
                     'claude-3-haiku':    {in: 0.25, out: 1.25},
                     'claude-sonnet':     {in: 3.0, out: 15.0},
                     'claude-haiku':      {in: 0.8, out: 4.0},
-                    'gpt-4o':            {in: 2.5, out: 10.0},
-                    'gpt-4o-mini':       {in: 0.15, out: 0.6},
-                    'gpt-4-turbo':       {in: 10.0, out: 30.0},
                     'gpt-4':             {in: 30.0, out: 60.0},
                     'gpt-3.5-turbo':     {in: 0.5, out: 1.5},
                     'gemini-1.5-pro':    {in: 1.25, out: 5.0},
@@ -5168,6 +5212,16 @@
         }
       }
 
+      function jumpTo(cardId) {
+        const el = document.getElementById(cardId);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      function setQuickPrompt(text) {
+        const ta = document.getElementById('agent-prompt');
+        if (ta) { ta.value = text; ta.focus(); }
+      }
+
       async function fetchContainerLogs() {
         const service = document.getElementById('log-service-select').value;
         const lines = document.getElementById('log-lines-select').value;
@@ -5184,6 +5238,63 @@
           out.textContent = 'Fetch error: ' + e.message;
         }
       }
+
+      // Voice input
+      (function() {
+        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRec) return; // browser doesn't support — button stays hidden
+
+        const btn = document.getElementById('voice-btn');
+        if (btn) btn.style.display = 'inline-flex';
+
+        let recognition = null;
+        let recording = false;
+
+        window.toggleVoiceInput = function() {
+          if (recording) {
+            recognition && recognition.stop();
+            return;
+          }
+          recognition = new SpeechRec();
+          recognition.continuous = false;
+          recognition.interimResults = true;
+          recognition.lang = 'en-US';
+
+          const textarea = document.getElementById('agent-prompt');
+          const originalPlaceholder = textarea.placeholder;
+
+          recognition.onstart = () => {
+            recording = true;
+            btn.textContent = '🔴';
+            btn.style.color = '#ef4444';
+            textarea.placeholder = 'Listening…';
+          };
+
+          recognition.onresult = (e) => {
+            let transcript = '';
+            for (let i = e.resultIndex; i < e.results.length; i++) {
+              transcript += e.results[i][0].transcript;
+            }
+            textarea.value = transcript;
+          };
+
+          recognition.onend = () => {
+            recording = false;
+            btn.textContent = '🎤';
+            btn.style.color = '';
+            textarea.placeholder = originalPlaceholder;
+          };
+
+          recognition.onerror = (e) => {
+            recording = false;
+            btn.textContent = '🎤';
+            btn.style.color = '';
+            textarea.placeholder = originalPlaceholder;
+          };
+
+          recognition.start();
+        };
+      })();
     </script>
     <script>
       // =========================================================================

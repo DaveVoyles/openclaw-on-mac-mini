@@ -72,6 +72,39 @@ def _get_quality_retry_count() -> int:
         return 0
 
 
+def _content_extraction_check() -> dict[str, str]:
+    """Report which content-extraction fallback is currently available."""
+    extractor = "unavailable"
+    status = "unavailable"
+    try:
+        import trafilatura  # noqa: F401
+
+        extractor = "trafilatura"
+        status = "ok"
+    except ImportError:
+        try:
+            import newspaper  # noqa: F401
+
+            extractor = "newspaper"
+            status = "ok"
+        except ImportError:
+            try:
+                import playwright.async_api  # noqa: F401
+
+                extractor = "playwright"
+                status = "ok"
+            except ImportError:
+                extractor = "unavailable"
+                status = "unavailable"
+
+    return {
+        "status": status,
+        "chain": "trafilatura → Jina AI Reader → Playwright",
+        "jina_reader": "available",
+        "active": extractor,
+    }
+
+
 def _normalize_event_counts(raw_counts: object) -> dict[str, int]:
     if not isinstance(raw_counts, dict):
         return {}
@@ -1306,11 +1339,7 @@ async def api_status_handler(request):
     }
 
     # Content extraction chain (Jina Reader is free / no key required)
-    checks["content_extraction"] = {
-        "status": "ok",
-        "chain": "trafilatura → Jina AI Reader → Playwright",
-        "jina_reader": "available",
-    }
+    checks["content_extraction"] = _content_extraction_check()
 
     # Copilot proxy
     proxy_url = cfg.copilot_proxy_url
@@ -1498,7 +1527,6 @@ async def api_sms_settings_handler(request: web.Request) -> web.Response:
                 "masked_phone": "not set",
                 "is_verified": False,
                 "verification_status": "unknown",
-                "remaining_sends": 5,
             }
         )
 
@@ -2022,7 +2050,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
         if app_cfg.perplexity_api_key
         else ("Firecrawl" if app_cfg.firecrawl_api_key else ("Tavily" if app_cfg.tavily_api_key else "DuckDuckGo")),
         "firecrawl_tier": "Free (500 pages/mo)" if app_cfg.firecrawl_api_key else "Not configured",
-        "content_extraction": "trafilatura → Jina Reader → Playwright",
+        "content_extraction": _content_extraction_check(),
         "model": MODEL_NAME,
         "local_model": OLLAMA_MODEL if LOCAL_LLM_ENABLED else None,
         "rate_info": get_rate_info(),
@@ -3283,6 +3311,31 @@ async def api_agent_ask_stream_handler(request: web.Request) -> web.StreamRespon
 
     return resp
 
+
+async def api_manifest_handler(request):
+    """Serve PWA web app manifest."""
+    manifest = {
+        "name": "OpenClaw",
+        "short_name": "OpenClaw",
+        "description": "OpenClaw Home Lab AI Dashboard",
+        "start_url": "/dashboard",
+        "display": "standalone",
+        "background_color": "#0d0e1a",
+        "theme_color": "#7c3aed",
+        "orientation": "portrait-primary",
+        "icons": [
+            {
+                "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='24' fill='%237c3aed'/%3E%3Ctext x='96' y='130' font-size='100' text-anchor='middle' font-family='system-ui'%3E⚕%3C/text%3E%3C/svg%3E",
+                "sizes": "192x192",
+                "type": "image/svg+xml",
+                "purpose": "any maskable"
+            }
+        ]
+    }
+    return web.Response(
+        content_type="application/manifest+json",
+        text=json.dumps(manifest)
+    )
 
 
 # ---------------------------------------------------------------------------
