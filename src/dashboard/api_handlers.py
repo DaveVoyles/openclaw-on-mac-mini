@@ -6120,27 +6120,49 @@ async def api_uptime_kuma_handler(request):
     slug = os.environ.get("UPTIME_KUMA_STATUS_SLUG", "main")
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{base}/api/status-page/{slug}",
-                timeout=aiohttp.ClientTimeout(total=5),
-            ) as response:
-                data = await response.json()
+            # Fetch monitor list + heartbeats in parallel
+            page_resp, hb_resp = await asyncio.gather(
+                session.get(f"{base}/api/status-page/{slug}", timeout=aiohttp.ClientTimeout(total=5)),
+                session.get(f"{base}/api/status-page/heartbeat/{slug}", timeout=aiohttp.ClientTimeout(total=5)),
+            )
+            page_data = await page_resp.json()
+            hb_data = await hb_resp.json()
 
-        groups = data.get("publicGroupList", [])
-        services: list[dict[str, object]] = []
-        for group in groups:
+        # heartbeatList: {monitor_id: [{status: 1|0, time, msg, ping}, ...]}
+        # uptimeList: {"{id}_24": float, "{id}_720": float}
+        heartbeats: dict = hb_data.get("heartbeatList", {})
+        uptime_list: dict = hb_data.get("uptimeList", {})
+
+        # Build id→name+group map from status page
+        id_meta: dict = {}
+        for group in page_data.get("publicGroupList", []):
             for monitor in group.get("monitorList", []):
-                services.append(
-                    {
-                        "name": monitor.get("name", "?"),
-                        "group": group.get("name", ""),
-                        "up": not monitor.get("currentDown", True),
-                        "uptime": monitor.get("uptime", 0),
-                        "url": monitor.get("url", ""),
-                    }
-                )
+                id_meta[str(monitor["id"])] = {
+                    "name": monitor.get("name", "?"),
+                    "group": group.get("name", ""),
+                }
 
-        all_up = all(service["up"] for service in services) if services else True
+        services: list[dict] = []
+        for monitor_id, beats in heartbeats.items():
+            meta = id_meta.get(str(monitor_id), {"name": f"Monitor {monitor_id}", "group": ""})
+            last_beat = beats[-1] if beats else {}
+            up = last_beat.get("status", 0) == 1
+            uptime_pct = uptime_list.get(f"{monitor_id}_24", 0)
+            services.append(
+                {
+                    "name": meta["name"],
+                    "group": meta["group"],
+                    "up": up,
+                    "uptime": round(float(uptime_pct) * 100, 1),  # convert 0-1 → percent
+                    "ping": last_beat.get("ping"),
+                    "last_check": last_beat.get("time", ""),
+                }
+            )
+
+        # Sort: down first, then alphabetical within each group
+        services.sort(key=lambda s: (s["up"], s["name"]))
+
+        all_up = all(s["up"] for s in services) if services else True
         return web.Response(
             content_type="application/json",
             text=json.dumps(
@@ -6148,7 +6170,7 @@ async def api_uptime_kuma_handler(request):
                     "services": services,
                     "all_up": all_up,
                     "total": len(services),
-                    "down": sum(1 for service in services if not service["up"]),
+                    "down": sum(1 for s in services if not s["up"]),
                 }
             ),
         )
