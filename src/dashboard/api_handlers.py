@@ -4449,6 +4449,7 @@ async def api_hermes_ask_handler(request: web.Request) -> web.StreamResponse:
 
 
 _DOCKER_CONTAINER_RE = re.compile(r"^[a-zA-Z0-9_.\-]{1,128}$")
+_ORBSTACK_DOCKER = "/Applications/OrbStack.app/Contents/MacOS/xbin/docker"
 
 
 def _docker_bin() -> str:
