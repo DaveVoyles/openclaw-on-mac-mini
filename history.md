@@ -41,3 +41,4 @@
 - 2026-06-04: Added `/plex` Slack controls plus a dashboard Wake-on-LAN button/API for the second MacBook; syntax checks passed and the targeted pytest run stayed green.
 - 2026-06-04: Added a dashboard NAS file browser, surfaced model fallback circuit health in config status, and wired Slack DM alerts when provider circuits open.
 - 2026-06-04: Added Hermes MEMORY.md NAS sync skill plus dashboard/manual and nightly scheduled Hermes upgrade flows with Slack owner notification support.
+- 2026-06-04: Wave 3-5 deployed — hermes upgrade scheduler, memory-sync skill, /plex Slack command, Wake-on-LAN, NAS file browser, model fallback circuit badges + Slack notify (commit 446efc2, 4195 tests passing)
