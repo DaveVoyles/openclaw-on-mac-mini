@@ -62,3 +62,5 @@
 - 2026-06-04: Wave 7 deployed: README/env.example refreshed, Uptime Kuma card live (31 services, real heartbeat data), PWA install banner, Slack home tab rebuilt with all 48 commands, Copilot instructions strengthened with explicit doc-sync rules
 - 2026-06-04: Wave 8B grouped Uptime Kuma dashboard services by group and disabled ChromaDB anonymized telemetry in docker-compose to suppress startup telemetry errors.
 - 2026-06-04: Added `/uptime` and `/morning` Slack commands, expanded morning briefing + `/status` with Sonarr/Radarr/Uptime Kuma visibility, and kept Slack registration tests green.
+- 2026-06-04: Added dashboard retry buttons for media/uptime card error states and debounced Overseerr, research, and skills search inputs; HTML validation passed.
+- 2026-06-04: Renamed the dashboard Gemini status dot to Hermes, switched status checks to SSH bridge reachability, and added copy buttons for install commands, webhook URLs, and the Patreon docker cp command.

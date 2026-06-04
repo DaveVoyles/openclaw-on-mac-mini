@@ -1003,8 +1003,8 @@
               <div>
                 <div style="font-weight:600;color:var(--text);margin-bottom:0.35rem">🐙 OpenClaw CLI</div>
                 <div style="display:flex;flex-direction:column;gap:0.3rem">
-                  <div><span style="color:var(--muted)">On LAN:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">curl -fsSL http://192.168.1.93:8765/install | bash</code></div>
-                  <div><span style="color:var(--muted)">Remote:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">curl -fsSL https://openclaw.davevoyles.synology.me/install | bash</code></div>
+                  <div><span style="color:var(--muted)">On LAN:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">curl -fsSL http://192.168.1.93:8765/install | bash</code><button onclick="(function(btn){navigator.clipboard.writeText('curl -fsSL http://192.168.1.93:8765/install | bash').then(()=>{btn.textContent='✓';setTimeout(()=>{btn.textContent='📋'},1200);})})(this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button></div>
+                  <div><span style="color:var(--muted)">Remote:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">curl -fsSL https://openclaw.davevoyles.synology.me/install | bash</code><button onclick="(function(btn){navigator.clipboard.writeText('curl -fsSL https://openclaw.davevoyles.synology.me/install | bash').then(()=>{btn.textContent='✓';setTimeout(()=>{btn.textContent='📋'},1200);})})(this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button></div>
                   <div><span style="color:var(--muted)">Then:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">source ~/.zshrc</code><span style="color:var(--muted)"> &rarr; </span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">OpenClaw</code></div>
                 </div>
               </div>
@@ -1041,7 +1041,7 @@
             </div>
             <div style="display:flex;flex-direction:column;gap:0.4rem;font-size:0.8rem;min-width:200px">
               <div style="color:var(--muted);font-weight:600;margin-bottom:0.1rem">Install on any Mac:</div>
-              <code style="display:block;background:rgba(0,0,0,0.4);border:1px solid rgba(16,185,129,0.2);border-radius:6px;padding:0.45rem 0.7rem;color:#9ecbff;font-size:0.78rem;word-break:break-all">bash &lt;(curl -fsSL https://openclaw.davevoyles.synology.me/ih)</code>
+              <code style="display:block;background:rgba(0,0,0,0.4);border:1px solid rgba(16,185,129,0.2);border-radius:6px;padding:0.45rem 0.7rem;color:#9ecbff;font-size:0.78rem;word-break:break-all">bash &lt;(curl -fsSL https://openclaw.davevoyles.synology.me/ih)</code><button onclick="(function(btn){navigator.clipboard.writeText('bash <(curl -fsSL https://openclaw.davevoyles.synology.me/ih)').then(()=>{btn.textContent='✓';setTimeout(()=>{btn.textContent='📋'},1200);})})(this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button>
               <div style="color:var(--muted);font-size:0.75rem">Then: <code style="color:#9ecbff">source ~/.zshrc &amp;&amp; hermes</code></div>
               <div style="margin-top:0.3rem;display:flex;gap:0.4rem;flex-wrap:wrap">
                 <a href="https://github.com/NousResearch/hermes-agent" target="_blank" style="font-size:0.75rem;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:4px;padding:0.2em 0.5em">📄 Docs</a>
@@ -1055,7 +1055,7 @@
         <div id="status-banner" style="display:flex;gap:1.2rem;justify-content:center;padding:0.6rem 1rem;margin-bottom:1rem;background:var(--card, var(--surface));border-radius:8px;font-size:0.82rem;flex-wrap:wrap">
           <span>🐳 Docker: <span id="st-docker" class="status-dot">…</span></span>
           <span>🏠 Ollama: <span id="st-ollama" class="status-dot">…</span></span>
-          <span>☁️ Gemini: <span id="st-gemini" class="status-dot">…</span></span>
+          <span>⚕ Hermes: <span id="st-hermes" class="status-dot">…</span></span>
           <span>🔗 Copilot: <span id="st-copilot" class="status-dot">…</span></span>
           <span>🌉 Bridge: <span id="st-bridge" class="status-dot">…</span></span>
           <span>🎭 Patreon: <span id="st-patreon" class="status-dot">…</span></span>
@@ -1376,7 +1376,7 @@
               <li>Click the <strong>EditThisCookie</strong> icon → <strong>Export</strong></li>
               <li>Copy the exported JSON</li>
               <li>Save to <code style="background:var(--surface);padding:0.2rem 0.4rem;border-radius:4px">~/Downloads/cookies.txt</code></li>
-              <li>Run: <code style="background:var(--surface);padding:0.2rem 0.4rem;border-radius:4px;display:block;margin:0.5rem 0">docker cp ~/Downloads/cookies.txt monstervision:/app/cookies/cookies.txt</code></li>
+              <li>Run: <code style="background:var(--surface);padding:0.2rem 0.4rem;border-radius:4px;display:block;margin:0.5rem 0">docker cp ~/Downloads/cookies.txt monstervision:/app/cookies/cookies.txt</code><button onclick="(function(btn){navigator.clipboard.writeText('docker cp ~/Downloads/cookies.txt monstervision:/app/cookies/cookies.txt').then(()=>{btn.textContent='✓';setTimeout(()=>{btn.textContent='📋'},1200);})})(this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button></li>
               <li>Downloads will resume automatically within <strong>30 minutes</strong></li>
             </ol>
             <div style="margin-top:1.5rem;padding:1rem;background:rgba(241,196,0,0.1);border-left:3px solid var(--gold);border-radius:4px">
@@ -1492,8 +1492,8 @@
           </div>
           <div style="margin-top:0.85rem;padding:0.65rem 0.8rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:0.8rem;line-height:1.5">
             <strong style="color:var(--text)">📡 Download webhooks</strong><br>
-            Sonarr: <code style="background:rgba(255,255,255,0.06);padding:0.1rem 0.35rem;border-radius:4px">https://openclaw.davevoyles.synology.me/api/webhooks/sonarr</code><br>
-            Radarr: <code style="background:rgba(255,255,255,0.06);padding:0.1rem 0.35rem;border-radius:4px">https://openclaw.davevoyles.synology.me/api/webhooks/radarr</code>
+            Sonarr: <code style="background:rgba(255,255,255,0.06);padding:0.1rem 0.35rem;border-radius:4px">https://openclaw.davevoyles.synology.me/api/webhooks/sonarr</code><button onclick="(function(btn){navigator.clipboard.writeText('https://openclaw.davevoyles.synology.me/api/webhooks/sonarr').then(()=>{btn.textContent='✓';setTimeout(()=>{btn.textContent='📋'},1200);})})(this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button><br>
+            Radarr: <code style="background:rgba(255,255,255,0.06);padding:0.1rem 0.35rem;border-radius:4px">https://openclaw.davevoyles.synology.me/api/webhooks/radarr</code><button onclick="(function(btn){navigator.clipboard.writeText('https://openclaw.davevoyles.synology.me/api/webhooks/radarr').then(()=>{btn.textContent='✓';setTimeout(()=>{btn.textContent='📋'},1200);})})(this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button>
           </div>
           </details>
         </div>
@@ -2300,7 +2300,7 @@
         <!-- Research History -->
         <div class="card">
           <h2>📊 Research History</h2>
-          <input type="text" class="search-box" id="research-search" placeholder="🔍 Search reports..." oninput="filterResearch()" />
+          <input type="text" class="search-box" id="research-search" placeholder="🔍 Search reports..." />
           <div id="research-list" class="scrollable-list"></div>
         </div>
 
@@ -2348,7 +2348,7 @@
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; font-size: 0.8rem;">
               <div style="text-align: center;">
                 <div id="qs-gemini-calls" style="font-size: 1.8rem; font-weight: 700; color: var(--spirit-blue);">—</div>
-                <div style="color: var(--muted);">Gemini Calls</div>
+                <div style="color: var(--muted);">AI Calls</div>
               </div>
               <div style="text-align: center;">
                 <div id="qs-pplx-calls" style="font-size: 1.8rem; font-weight: 700; color: var(--mint-green);">—</div>
@@ -2399,7 +2399,6 @@
             class="search-box"
             id="skill-search"
             placeholder="&#128269; Search skills..."
-            oninput="filterSkills()"
           />
           <div id="skills-categories"></div>
           <table style="display:none">
@@ -2601,6 +2600,12 @@
         _allCmds = [],
         _skillCategories = {},
         _allRuns = [];
+
+      // Debounce helper
+      function _debounce(fn, ms) {
+        let t;
+        return function(...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), ms); };
+      }
 
       async function loadData() {
         const r = await fetch("/api/dashboard");
@@ -3157,7 +3162,7 @@
 
         if (!data) {
           if (countEl) countEl.textContent = '';
-          el.innerHTML = `<div style="color:#ef4444;font-size:0.82rem">⚠ ${esc(errorMessage || 'Failed')} — <button onclick="loadRadarrWatchlist()" style="background:none;border:none;color:#ef4444;cursor:pointer;text-decoration:underline">retry</button></div>`;
+          el.innerHTML = `<div style="color:var(--muted);font-size:0.82rem;padding:0.5rem">⚠️ Could not load data. <button onclick="loadRadarrWatchlist()" style="font-size:0.75rem;padding:0.2rem 0.5rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;margin-left:0.3rem">↻ Retry</button></div>`;
           return;
         }
 
@@ -3270,7 +3275,7 @@
         } catch (e) {
           if (summaryEl) summaryEl.textContent = 'Unavailable';
           if (missingEl) missingEl.textContent = '';
-          listEl.innerHTML = `<div style="color:var(--muted);font-size:0.82rem;font-style:italic">Failed to load queue: ${esc(e.message || 'unknown error')}</div>`;
+          listEl.innerHTML = `<div style="color:var(--muted);font-size:0.82rem;padding:0.5rem">⚠️ Could not load data. <button onclick="loadArrQueue()" style="font-size:0.75rem;padding:0.2rem 0.5rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;margin-left:0.3rem">↻ Retry</button></div>`;
           historyEl.innerHTML = '';
           renderRadarrWatchlist(null, e.message || 'Failed to load queue');
         }
@@ -3306,7 +3311,7 @@
             </div>`).join('');
         } catch (e) {
           if (setupNote) setupNote.style.display = 'none';
-          if (el) el.innerHTML = '<div style="color:#ef4444;font-size:0.82rem">⚠ Failed to load</div>';
+          if (el) el.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;padding:0.5rem">⚠️ Could not load data. <button onclick="loadOverseerrRequests()" style="font-size:0.75rem;padding:0.2rem 0.5rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;margin-left:0.3rem">↻ Retry</button></div>';
         }
       }
 
@@ -3396,11 +3401,36 @@
             </div>`).join('');
           if (typeof _stampUpdated === 'function') _stampUpdated('sonarr-cal-last-updated');
         } catch (e) {
-          if (el) el.innerHTML = '<div style="color:#ef4444;font-size:0.82rem">⚠ Failed — <button onclick="loadSonarrCalendar()" style="background:none;border:none;color:#ef4444;cursor:pointer;text-decoration:underline">retry</button></div>';
+          if (el) el.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;padding:0.5rem">⚠️ Could not load data. <button onclick="loadSonarrCalendar()" style="font-size:0.75rem;padding:0.2rem 0.5rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;margin-left:0.3rem">↻ Retry</button></div>';
         }
       }
 
-      document.addEventListener('DOMContentLoaded', () => { loadOverseerrRequests(); });
+      function initDashboardSearchInputs() {
+        const overseerrInput = document.getElementById('overseerr-search-input');
+        if (overseerrInput) {
+          const debouncedOverseerr = _debounce(() => {
+            const resultsEl = document.getElementById('overseerr-search-results');
+            if (!overseerrInput.value.trim()) {
+              if (resultsEl) resultsEl.innerHTML = '';
+              return;
+            }
+            searchOverseerr();
+          }, 300);
+          overseerrInput.addEventListener('input', debouncedOverseerr);
+        }
+
+        const researchInput = document.getElementById('research-search');
+        if (researchInput) {
+          researchInput.addEventListener('input', _debounce(filterResearch, 300));
+        }
+
+        const skillInput = document.getElementById('skill-search');
+        if (skillInput) {
+          skillInput.addEventListener('input', _debounce(filterSkills, 300));
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', () => { initDashboardSearchInputs(); loadOverseerrRequests(); });
       document.addEventListener('DOMContentLoaded', () => { loadUptimeStatus(); setInterval(loadUptimeStatus, 60000); });
       document.addEventListener('DOMContentLoaded', () => { loadSonarrCalendar(); setInterval(loadSonarrCalendar, 300000); });
 
@@ -5816,7 +5846,7 @@
           const r = await fetch('/api/uptime/status', { headers });
           const d = await r.json();
           if (d.error) {
-            if (el) el.innerHTML = `<div style="color:#ef4444;font-size:0.82rem">⚠ ${esc(d.error)}</div>`;
+            if (el) el.innerHTML = `<div style="color:var(--muted);font-size:0.82rem;padding:0.5rem">⚠️ Could not load data. <button onclick="loadUptimeStatus()" style="font-size:0.75rem;padding:0.2rem 0.5rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;margin-left:0.3rem">↻ Retry</button></div>`;
             return;
           }
           if (badge) {
@@ -5866,7 +5896,7 @@
           }
           if (typeof _stampUpdated === 'function') _stampUpdated('uptime-last-updated');
         } catch (e) {
-          if (el) el.innerHTML = '<div style="color:#ef4444;font-size:0.82rem">⚠ Failed — <button onclick="loadUptimeStatus()" style="background:none;border:none;color:#ef4444;cursor:pointer;text-decoration:underline">retry</button></div>';
+          if (el) el.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;padding:0.5rem">⚠️ Could not load data. <button onclick="loadUptimeStatus()" style="font-size:0.75rem;padding:0.2rem 0.5rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;margin-left:0.3rem">↻ Retry</button></div>';
         }
       }
 

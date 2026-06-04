@@ -1350,8 +1350,19 @@ async def api_status_handler(request):
         log.debug("Ollama status check failed: %s", exc)
         checks["ollama"] = {"status": "down"}
 
-    # Gemini
-    checks["gemini"] = {"status": "ok" if cfg.google_api_key else "no_key"}
+    # Hermes
+    try:
+        _reader, _writer = await asyncio.wait_for(
+            asyncio.open_connection("192.168.1.93", 22), timeout=2.0
+        )
+        _writer.close()
+        try:
+            await _writer.wait_closed()
+        except Exception:
+            pass
+        checks["hermes"] = {"status": "ok"}
+    except Exception:
+        checks["hermes"] = {"status": "down"}
 
     # Search provider
     perplexity_key = cfg.perplexity_api_key
