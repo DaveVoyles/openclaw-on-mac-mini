@@ -56,3 +56,4 @@
 - 2026-06-04: Wave 6B added Tailscale dashboard/Slack visibility plus Time Machine status via host bridge; Python AST checks and Slack registration tests passed.
 - 2026-06-04: Added Overseerr request/search dashboard controls, Sonarr upcoming episodes views, Sonarr/Radarr ntfy webhook endpoints, and new `/request` + `/upcoming` Slack commands; syntax checks and Slack registration tests passed.
 - 2026-06-04: Wave 6 deployed — Overseerr card (auth TBD), Sonarr calendar card+/upcoming, Radarr watchlist, Tailscale device card+/tailscale, Time Machine status, download webhooks, quick stats strip, persistent card collapse, host.docker.internal URL fix for all local services
+- 2026-06-04: Enabled Sonarr+Radarr download-complete webhooks via their APIs — both firing to openclaw.davevoyles.synology.me/api/webhooks/sonarr|radarr, confirmed in container logs
