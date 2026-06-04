@@ -128,6 +128,28 @@
         text-transform: uppercase;
         letter-spacing: 0.05em;
       }
+      .live-badge {
+        font-size: 0.68rem;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .live-badge.fresh { color: #4ade80; }
+      @keyframes pulse-record {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+      .recording-pill {
+        display: none;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.2rem 0.6rem;
+        background: rgba(239,68,68,0.15);
+        border: 1px solid rgba(239,68,68,0.4);
+        border-radius: 20px;
+        font-size: 0.72rem;
+        color: #ef4444;
+        animation: pulse-record 1.2s ease-in-out infinite;
+      }
 
       /* Header */
       .header {
@@ -1027,9 +1049,12 @@
             <button onclick="deleteSelectedPrompt()" style="font-size:0.75rem;padding:0.2rem 0.5rem;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--muted);cursor:pointer" title="Delete selected prompt">🗑</button>
           </div>
           <div id="chat-input-row" style="display:flex;gap:0.5rem;align-items:flex-start">
-            <textarea id="agent-prompt" placeholder="Ask anything… (Shift+Enter for new line, Enter to send)" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="true"
-              style="flex:1;min-height:60px;max-height:200px;padding:0.6rem 0.8rem;background:var(--surface-solid,#1a1b2e);border:1px solid var(--border,#333);border-radius:8px;color:var(--text,#e8e8e8);font-size:0.88rem;resize:vertical;font-family:inherit"
-              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();dashAsk();}"></textarea>
+            <div style="flex:1;display:flex;flex-direction:column;gap:0.45rem">
+              <textarea id="agent-prompt" placeholder="Ask anything… (Shift+Enter for new line, Enter to send)" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="true"
+                style="width:100%;min-height:60px;max-height:200px;padding:0.6rem 0.8rem;background:var(--surface-solid,#1a1b2e);border:1px solid var(--border,#333);border-radius:8px;color:var(--text,#e8e8e8);font-size:0.88rem;resize:vertical;font-family:inherit"
+                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();dashAsk();}"></textarea>
+              <span id="recording-pill" class="recording-pill">🔴 Recording…</span>
+            </div>
             <div id="chat-controls-col" style="display:flex;flex-direction:column;gap:0.4rem">
               <select id="agent-model" style="padding:0.4rem 0.5rem;background:var(--surface-solid,#1a1b2e);border:1px solid var(--border,#333);border-radius:6px;color:var(--text,#e8e8e8);font-size:0.8rem;cursor:pointer" onchange="onAgentModelChange()">
                 <option value="hermes" selected>⚕ Hermes</option>
@@ -1203,6 +1228,7 @@
         <div class="card" id="wol-card" style="margin-bottom:1rem">
           <h2 style="display:flex;align-items:center;justify-content:space-between">
             <span>💤 Wake-on-LAN</span>
+            <span id="ping-last-updated" class="live-badge"></span>
           </h2>
           <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
             <p style="margin:0;color:var(--muted);font-size:0.82rem">Send a WoL magic packet over the LAN (192.168.1.255).</p>
@@ -1223,6 +1249,7 @@
             <span>🖥️ Mac Mini Health</span>
             <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
               <span id="system-health-updated" style="font-size:0.75rem;color:var(--muted)">Waiting for first refresh…</span>
+              <span id="health-last-updated" class="live-badge"></span>
               <button class="btn btn-sm" onclick="refreshSystemHealth()" style="font-size:0.75rem;padding:0.25rem 0.6rem">↻ Refresh</button>
             </div>
           </div>
@@ -2052,6 +2079,7 @@
             <span>🐙 GitHub Activity</span>
             <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
               <span id="github-activity-status" style="font-size:0.75rem;color:var(--muted)">Auto-refreshes every 5 minutes</span>
+              <span id="github-last-updated" class="live-badge"></span>
               <button id="github-activity-refresh" class="btn btn-sm" onclick="loadGitHubActivity(this)">↻ Refresh</button>
             </div>
           </div>
@@ -2069,6 +2097,7 @@
           <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
             <h2 style="margin:0">🎬 Plex Activity</h2>
             <div style="display:flex;gap:0.5rem;align-items:center">
+              <span id="plex-last-updated" class="live-badge"></span>
               <span id="plex-stream-count" style="font-size:0.75rem;color:var(--muted)"></span>
               <button onclick="loadPlexActivity()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">↻</button>
             </div>
@@ -2085,6 +2114,7 @@
           <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap">
             <h2 style="margin:0">📥 Sonarr / Radarr Queue</h2>
             <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+              <span id="arr-last-updated" class="live-badge"></span>
               <span id="arr-queue-summary" style="font-size:0.75rem;color:var(--muted)">Loading…</span>
               <span id="arr-missing-count" style="font-size:0.75rem;color:var(--muted)"></span>
               <button onclick="loadArrQueue()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">↻</button>
@@ -2707,17 +2737,10 @@
                 const fmt = n => n >= 1000000 ? (n/1000000).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(0)+'k' : n;
 
                 // Estimate cost using per-model pricing ($ per 1M tokens)
-                // Pricing source: published rates as of 2025; local/Ollama models treated as $0
+                // Pricing shown for active models only; local/Ollama models treated as $0
                 const PRICING = {
-                    'claude-3-5-sonnet': {in: 3.0, out: 15.0},
-                    'claude-3-5-haiku':  {in: 0.8, out: 4.0},
-                    'claude-3-opus':     {in: 15.0, out: 75.0},
-                    'claude-3-sonnet':   {in: 3.0, out: 15.0},
-                    'claude-3-haiku':    {in: 0.25, out: 1.25},
                     'claude-sonnet':     {in: 3.0, out: 15.0},
                     'claude-haiku':      {in: 0.8, out: 4.0},
-                    'gpt-4':             {in: 30.0, out: 60.0},
-                    'gpt-3.5-turbo':     {in: 0.5, out: 1.5},
                     'gemini-1.5-pro':    {in: 1.25, out: 5.0},
                     'gemini-1.5-flash':  {in: 0.075, out: 0.3},
                     'gemini-2.0-flash':  {in: 0.1, out: 0.4},
@@ -2740,7 +2763,7 @@
                     ? `· <span style="color:#ffd700" title="Estimated cost based on published model pricing">~$${estCost.toFixed(2)} est.</span>`
                     : hasLocalOnly ? '· <span style="color:var(--mint-green)" title="Running on local model — no API cost">$0 (local)</span>' : '';
 
-                tokenEl.innerHTML = `<div style="font-size:0.78rem;color:var(--muted)">7-day tokens: <span style="color:var(--spirit-blue)">${fmt(totalIn)} in</span> · <span style="color:var(--gold)">${fmt(totalOut)} out</span> · <span style="color:var(--mint-green)">${fmt(totalAll)} total</span> ${costStr}</div>`;
+                tokenEl.innerHTML = `<div style="font-size:0.78rem;color:var(--muted)">7-day tokens: <span style="color:var(--spirit-blue)">${fmt(totalIn)} in</span> · <span style="color:var(--gold)">${fmt(totalOut)} out</span> · <span style="color:var(--mint-green)">${fmt(totalAll)} total</span> ${costStr}<span style="margin-left:0.35rem">Pricing shown for active models only.</span></div>`;
             } else if (tokenEl) {
                 tokenEl.innerHTML = '';
             }
@@ -2785,6 +2808,15 @@
         if (!el) return;
         el.textContent = message;
         el.style.color = isError ? 'var(--danger)' : 'var(--muted)';
+      }
+
+      function _stampUpdated(elId) {
+        const el = document.getElementById(elId);
+        if (!el) return;
+        const now = new Date();
+        el.textContent = `↻ ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+        el.classList.add('fresh');
+        setTimeout(() => el.classList.remove('fresh'), 3000);
       }
 
       function switchGithubActivityTab(tab) {
@@ -2862,6 +2894,9 @@
           const response = await fetch('/api/github/activity');
           const data = await response.json();
           renderGitHubActivity(data);
+          if (!data?.error && Array.isArray(data?.repos) && data.repos.length) {
+            _stampUpdated('github-last-updated');
+          }
         } catch (e) {
           const emptyEl = document.getElementById('github-activity-empty');
           const commitsEl = document.getElementById('github-activity-commits');
@@ -2888,6 +2923,7 @@
         const countEl = document.getElementById('plex-stream-count');
         const nowEl = document.getElementById('plex-now-playing');
         const listEl = document.getElementById('plex-history-list');
+        let renderedOk = true;
 
         try {
           const r = await fetch('/api/tautulli/activity', { headers });
@@ -2911,6 +2947,7 @@
             }
           }
         } catch (e) {
+          renderedOk = false;
           if (countEl) countEl.textContent = 'unavailable';
           if (nowEl) nowEl.innerHTML = `<div style="color:var(--muted);font-size:0.82rem;font-style:italic">Failed to load Plex activity: ${esc(e.message || 'unknown error')}</div>`;
         }
@@ -2930,8 +2967,11 @@
             }).join('') : '<div style="color:var(--muted);font-size:0.82rem;font-style:italic">No recent watch history available</div>';
           }
         } catch (e) {
+          renderedOk = false;
           if (listEl) listEl.innerHTML = `<div style="color:var(--muted);font-size:0.82rem;font-style:italic">Failed to load history: ${esc(e.message || 'unknown error')}</div>`;
         }
+
+        if (renderedOk) _stampUpdated('plex-last-updated');
       }
 
       async function loadArrQueue() {
@@ -2974,6 +3014,7 @@
                 </div>
               </div>`;
             }).join('');
+            _stampUpdated('arr-last-updated');
             return;
           }
 
@@ -2993,6 +3034,7 @@
                 </div>`;
               }).join('')}
             </div>` : '<div style="color:var(--muted);font-size:0.82rem;font-style:italic;margin-top:0.75rem">No recent grabs available</div>';
+          _stampUpdated('arr-last-updated');
         } catch (e) {
           if (summaryEl) summaryEl.textContent = 'Unavailable';
           if (missingEl) missingEl.textContent = '';
@@ -4386,13 +4428,15 @@
 
       // D-4: Scheduled Tasks
       function loadSchedules() {
+          const el = document.getElementById('schedules-list');
+          if (el) el.innerHTML = '<div style="color:var(--muted);font-size:0.8rem">Loading…</div>';
           fetch('/api/schedules').then(r => r.json()).then(data => {
-              const el = document.getElementById('schedules-list');
               _scheduleItems = data.tasks || [];
               if (_scheduleItems.length === 0) {
-                  el.innerHTML = '<p class="muted-text" style="color:var(--muted);text-align:center;padding:1rem">No scheduled tasks. Use /schedule in Slack.</p>';
+                  if (el) el.innerHTML = '<p class="muted-text" style="color:var(--muted);text-align:center;padding:1rem">No scheduled tasks. Use /schedule in Slack.</p>';
                   return;
               }
+              if (!el) return;
               el.innerHTML = '<table style="width:100%"><thead><tr><th>Task</th><th>Schedule</th><th id="type-col-header" style="cursor:help;text-decoration:underline dotted;position:relative" data-tooltip="Skill = runs a built-in automation function (e.g. health check, backup)\nPrompt = sends a text prompt to the AI for a freeform response">Type &#9432;</th><th>Status</th><th>Next Run</th><th>Details</th><th>Actions</th></tr></thead><tbody>' +
                   _scheduleItems.map(t => {
                       const schedule = t.schedule_human || (
@@ -4425,7 +4469,9 @@
                       </tr>`;
                   }).join('') + '</tbody></table>';
               _attachTypeTooltips();
-          }).catch(() => {});
+          }).catch(() => {
+              if (el) el.innerHTML = `<div style="color:#ef4444;font-size:0.8rem">⚠ Failed to load — <button onclick="loadSchedules()" style="background:none;border:none;color:#ef4444;cursor:pointer;text-decoration:underline">retry</button></div>`;
+          });
       }
 
       function toggleTask(taskId) {
@@ -4484,15 +4530,17 @@
       }
 
       function loadPlans() {
+        const el = document.getElementById('plans-list');
+        const detail = document.getElementById('plan-detail');
+        if (el) el.innerHTML = '<div style="color:var(--muted);font-size:0.8rem">Loading…</div>';
         fetch('/api/plans?status=in-progress&limit=10').then(r => r.json()).then(data => {
-          const el = document.getElementById('plans-list');
-          const detail = document.getElementById('plan-detail');
           if (detail) detail.style.display = 'none';
           _planItems = data.plans || [];
           if (_planItems.length === 0) {
-            el.innerHTML = '<p class="muted-text" style="color:var(--muted);text-align:center;padding:1rem">No active persisted plans yet.</p>';
+            if (el) el.innerHTML = '<p class="muted-text" style="color:var(--muted);text-align:center;padding:1rem">No active persisted plans yet.</p>';
             return;
           }
+          if (!el) return;
           el.innerHTML = '<table style="width:100%"><thead><tr><th>Plan</th><th>Status</th><th>Progress</th><th>Updated</th><th>Links</th><th></th></tr></thead><tbody>' +
             _planItems.map(plan => {
               const links = `${Number(plan.linked_session_count || 0)} sess${plan.current_step ? ` • step ${Number((plan.current_step || {}).num || 0)}` : ''}`;
@@ -4505,7 +4553,9 @@
                 <td><button onclick="showPlan('${esc(plan.plan_id || '')}')" style="background:rgba(104,172,229,0.2);color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.75rem">View</button></td>
               </tr>`;
             }).join('') + '</tbody></table>';
-        }).catch(() => {});
+        }).catch(() => {
+          if (el) el.innerHTML = `<div style="color:#ef4444;font-size:0.8rem">⚠ Failed to load — <button onclick="loadPlans()" style="background:none;border:none;color:#ef4444;cursor:pointer;text-decoration:underline">retry</button></div>`;
+        });
       }
 
       function showPlan(planId) {
@@ -4536,15 +4586,17 @@
       }
 
       function loadTaskStatuses() {
+        const el = document.getElementById('task-status-list');
+        const detail = document.getElementById('task-status-detail');
+        if (el) el.innerHTML = '<div style="color:var(--muted);font-size:0.8rem">Loading…</div>';
         fetch('/api/tasks?limit=20').then(r => r.json()).then(data => {
-          const el = document.getElementById('task-status-list');
-          const detail = document.getElementById('task-status-detail');
           if (detail) detail.style.display = 'none';
           _taskStatusItems = data.tasks || [];
           if (_taskStatusItems.length === 0) {
-            el.innerHTML = '<p class="muted-text" style="color:var(--muted);text-align:center;padding:1rem">No Mission Control or scheduler tasks found.</p>';
+            if (el) el.innerHTML = '<p class="muted-text" style="color:var(--muted);text-align:center;padding:1rem">No Mission Control or scheduler tasks found.</p>';
             return;
           }
+          if (!el) return;
           el.innerHTML = '<table style="width:100%"><thead><tr><th>Task</th><th>Source</th><th>Status</th><th>Summary</th><th>Links</th><th></th></tr></thead><tbody>' +
             _taskStatusItems.map(task => {
               const meta = [task.priority ? `priority: ${task.priority}` : '', task.schedule_human ? task.schedule_human : '', task.next_run ? `next: ${task.next_run}` : '']
@@ -4559,7 +4611,9 @@
                 <td><button onclick="showTaskStatus('${esc(task.source || '')}','${esc(task.id || '')}')" style="background:rgba(104,172,229,0.2);color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.75rem">View</button></td>
               </tr>`;
             }).join('') + '</tbody></table>';
-        }).catch(() => {});
+        }).catch(() => {
+          if (el) el.innerHTML = `<div style="color:#ef4444;font-size:0.8rem">⚠ Failed to load — <button onclick="loadTaskStatuses()" style="background:none;border:none;color:#ef4444;cursor:pointer;text-decoration:underline">retry</button></div>`;
+        });
       }
 
       function showTaskStatus(source, taskId) {
@@ -4706,10 +4760,11 @@
       }
 
       function loadAgentSessions() {
+        const el = document.getElementById('agent-sessions-list');
+        const detail = document.getElementById('agent-session-detail');
+        const actions = document.getElementById('agent-session-actions');
+        if (el) el.innerHTML = '<div style="color:var(--muted);font-size:0.8rem">Loading…</div>';
         fetch('/api/agent/sessions?limit=10').then(r => r.json()).then(data => {
-          const el = document.getElementById('agent-sessions-list');
-              const detail = document.getElementById('agent-session-detail');
-              const actions = document.getElementById('agent-session-actions');
               if (detail) detail.style.display = 'none';
               if (actions) {
                 actions.style.display = 'none';
@@ -4717,9 +4772,10 @@
               }
               const sessions = data.sessions || [];
               if (sessions.length === 0) {
-                  el.innerHTML = '<p class="muted-text" style="color:var(--muted);text-align:center;padding:1rem">No terminal CLI sessions yet. Run <code>openclaw analyze</code>, <code>openclaw research</code>, <code>openclaw write</code>, or <code>openclaw watch</code>.</p>';
+                  if (el) el.innerHTML = '<p class="muted-text" style="color:var(--muted);text-align:center;padding:1rem">No terminal CLI sessions yet. Run <code>openclaw analyze</code>, <code>openclaw research</code>, <code>openclaw write</code>, or <code>openclaw watch</code>.</p>';
                   return;
               }
+              if (!el) return;
               el.innerHTML = '<table style="width:100%"><thead><tr><th>Session</th><th>Updated</th><th>Scope</th><th>Automation</th><th>Counts</th><th></th></tr></thead><tbody>' +
                 sessions.map(s => {
                   const scopeParts = [
@@ -4745,7 +4801,9 @@
                     <td><button onclick="showAgentSession('${esc(s.session_id || '')}')" style="background:rgba(104,172,229,0.2);color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.75rem">View</button></td>
                   </tr>`;
                 }).join('') + '</tbody></table>';
-          }).catch(() => {});
+          }).catch(() => {
+              if (el) el.innerHTML = `<div style="color:#ef4444;font-size:0.8rem">⚠ Failed to load — <button onclick="loadAgentSessions()" style="background:none;border:none;color:#ef4444;cursor:pointer;text-decoration:underline">retry</button></div>`;
+          });
       }
 
       function showAgentSession(sessionId) {
@@ -5308,6 +5366,7 @@
             status.textContent = `Last checked ${new Date().toLocaleTimeString()}`;
             status.style.color = 'var(--muted)';
           }
+          _stampUpdated('ping-last-updated');
         } catch (e) {
           setWolStatusBadge('mbp', null);
           setWolStatusBadge('mbp2', null);
@@ -5386,6 +5445,7 @@
           if (uptimeEl) uptimeEl.textContent = d.uptime.human || '—';
           if (updatedEl) updatedEl.textContent = `Updated ${new Date((d.timestamp || Date.now() / 1000) * 1000).toLocaleTimeString()}`;
           if (timestampEl) timestampEl.textContent = d.hostname ? `Host ${d.hostname}` : '';
+          _stampUpdated('health-last-updated');
         } catch (e) {
           if (loadEl) loadEl.textContent = 'Unavailable';
           if (badgeEl) badgeEl.innerHTML = '';
@@ -5516,6 +5576,8 @@
             btn.textContent = '🔴';
             btn.style.color = '#ef4444';
             textarea.placeholder = 'Listening…';
+            const pill = document.getElementById('recording-pill');
+            if (pill) pill.style.display = 'flex';
           };
 
           recognition.onresult = (e) => {
@@ -5531,6 +5593,8 @@
             btn.textContent = '🎤';
             btn.style.color = '';
             textarea.placeholder = originalPlaceholder;
+            const pill = document.getElementById('recording-pill');
+            if (pill) pill.style.display = 'none';
           };
 
           recognition.onerror = (e) => {
@@ -5538,6 +5602,8 @@
             btn.textContent = '🎤';
             btn.style.color = '';
             textarea.placeholder = originalPlaceholder;
+            const pill = document.getElementById('recording-pill');
+            if (pill) pill.style.display = 'none';
           };
 
           recognition.start();
@@ -7030,6 +7096,12 @@
         }
       });
 
+      // Scroll-to-top FAB
+      window.addEventListener('scroll', () => {
+        const btn = document.getElementById('scroll-top-btn');
+        if (btn) btn.style.display = window.scrollY > 300 ? 'block' : 'none';
+      }, {passive: true});
+
       function toggleDockerStatusCard() {
         toggleCardCollapse('docker-status-card');
       }
@@ -7069,5 +7141,9 @@
         }
       }
     </script>
+      <!-- Scroll to top FAB -->
+      <button id="scroll-top-btn" onclick="window.scrollTo({top:0,behavior:'smooth'})"
+        style="display:none;position:fixed;bottom:5rem;right:1rem;z-index:900;width:42px;height:42px;border-radius:50%;background:rgba(124,58,237,0.85);border:none;color:#fff;font-size:1.1rem;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.3);backdrop-filter:blur(4px)"
+        aria-label="Scroll to top">↑</button>
   </body>
 </html>

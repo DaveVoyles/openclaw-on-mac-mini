@@ -660,24 +660,68 @@ _WELCOME_MESSAGE = (
     "Type `/help` anytime to see more examples."
 )
 
-_HELP_TEXT = (
-    "*📚 OpenClaw Quick Help*\n\n"
-    "*Working with files:*\n"
-    '• Drag in a Word doc (.docx) → "proofread this" / "make this more formal" / "summarize in 5 bullet points"\n'
-    '• Drag in an Excel file (.xlsx) → "what is this tracking?" / "explain column C" / "find any errors"\n'
-    '• Drag in a PDF → "summarize this"\n'
-    '• Drop in a photo → "what\'s in this image?"\n\n'
-    "*Just chatting:*\n"
-    '• Ask anything — "what\'s the weather in Boston?" / "explain this email to me" / "help me write a thank-you note"\n\n'
-    "*Tips:*\n"
-    "• `/simple on` — always get plain, easy-to-read answers (no need to type `--simple` every time)\n"
-    "• Add `--simple` to any one message for a one-off plain answer\n"
-    "• `/hermes <question>` or `/h <question>` — always open a Hermes thread for host-side help\n"
-    "• `/wake mbp|mbp2` — send a Wake-on-LAN packet to a configured MacBook Pro\n"
-    "• `/nas df|ls <path>|free` — inspect NAS disk, folders, and resource usage\n"
-    "• Reply in a thread to keep context from earlier messages\n\n"
-    '_Example: Upload Budget2025.xlsx and type: "summarize the totals for me"_'
-)
+_HELP_TEXT = """
+*⚕ OpenClaw Commands*
+
+*🤖 AI & Chat*
+• `/chat <prompt>` — Ask OpenClaw a question in Slack
+• `/hermes <prompt>` — Start a Hermes session
+• `/h <prompt>` — Alias for `/hermes`
+• `/q <prompt>` — Quick ephemeral Hermes answer
+• `/resume [prompt]` — Resume your last Hermes session
+• `/sessions [n|resume n]` — List, inspect, or resume Hermes sessions
+• `/copilot <prompt>` — Start a threaded Copilot CLI session
+• `/copilot-sessions` — List Copilot sessions
+• `/copilot-attach <id>` — Attach to a Copilot session
+• `/copilot-recap <id>` — Recap a Copilot session
+• `/copilot-cancel <id>` — Cancel an active Copilot run
+• `/copilot-end <id>` — End a Copilot session
+• `/research <topic>` — Run the research pipeline
+• `/simple on|off` — Toggle plain-language mode
+• `/clear` — Reset your current session state
+• `/nickname <name>` — Set the name OpenClaw uses for you
+
+*📁 Files & Knowledge*
+• `/files [query]` — Browse synced documents
+• `/filesearch <query>` — Search your recent files
+• `/batch <action>` — Process all uploaded files
+• `/brief` — Show your recent files
+• `/template [name]` — List or download templates
+• `/mypins` — Show your saved notes
+• `/metrics` — View 7-day workspace usage metrics
+• `/mystats` — View your personal usage stats
+• `/digest on|off` — Toggle digest delivery
+• `/schedule <time|off>` — Set your preferred digest time
+
+*📬 Google & Integrations*
+• `/inbox` — List unread Gmail messages
+• `/email <n|setup|forget|query>` — Read or search email
+• `/today` — Show today’s calendar
+• `/calendar [today|week]` — View upcoming calendar events
+• `/drive ...` — Search or read Google Drive files
+• `/contacts ...` — Search Google Contacts
+• `/clawbox <connect|sync|list|status>` — Manage Dropbox access
+• `/clawchan ...` — List or archive Slack channels
+
+*🖥️ Host & Ops*
+• `/status` — Quick system health snapshot
+• `/health` — Detailed OpenClaw bot health card
+• `/host <shortcut>` — Run a saved host-bridge shortcut
+• `/incident ...` — Start, inspect, or resolve incidents
+• `/wake mbp|mbp2` — Send a Wake-on-LAN packet
+• `/nas df|ls <path>|free` — Browse NAS status and folders
+• `/nas-share <path>` — Generate a NAS share link
+
+*🎬 Media*
+• `/watching` — See what Plex is playing right now
+• `/plex <status|recent|search|request>` — Check Plex / Overseerr
+• `/arr` — View Sonarr/Radarr queues
+
+*⚙️ Utilities*
+• `/help` — Show this command list
+
+_Tip: Most slash command replies are ephemeral, so only you can see them._
+"""
 
 _SIMPLE_FLAG_RE = re.compile(r"\s*--simple\b", re.IGNORECASE)
 _SIMPLE_SYSTEM_PREFIX = (
@@ -3774,7 +3818,10 @@ def _register_core_handlers(app: Any) -> None:
     @app.command("/help")
     async def handle_slash_help(ack: Any, say: Any) -> None:
         await ack()
-        await say(text=_HELP_TEXT)
+        try:
+            await say(text=_HELP_TEXT)
+        except Exception as e:
+            log.warning("Slack send failed in /help: %s", e)
 
     # ------------------------------------------------------------------
     # Handler: /health slash command — bot health card
@@ -3965,6 +4012,11 @@ def _register_core_handlers(app: Any) -> None:
             )
             return
 
+        try:
+            await client.chat_postEphemeral(channel=channel, user=user_id, text="⏳ Starting research pipeline…")
+        except Exception:
+            pass
+
         active_file_id = (_user_prefs.get(user_id) or {}).get("active_file_id")
         file_obj_for_research: dict | None = None
         if active_file_id and active_file_id in _file_registry:
@@ -4001,10 +4053,14 @@ def _register_core_handlers(app: Any) -> None:
             return
 
         action = raw_text.split()[0] if raw_text else "summarize"
-        resp = await client.chat_postMessage(
-            channel=channel,
-            text=f"📦 Starting batch {action} on {len(user_files)} file(s)...",
-        )
+        try:
+            resp = await client.chat_postMessage(
+                channel=channel,
+                text=f"📦 Starting batch {action} on {len(user_files)} file(s)...",
+            )
+        except Exception as e:
+            log.warning("Slack send failed in /batch: %s", e)
+            resp = {}
         thread_ts = (resp or {}).get("ts", "")
 
         await _process_batch(client, channel, thread_ts, user_files, action)
@@ -6170,7 +6226,29 @@ def _register_integration_handlers(app: Any) -> None:
         except Exception:
             pass
 
-        await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines))
+        plex_line = ""
+        tautulli_key = os.environ.get("TAUTULLI_API_KEY", "")
+        if tautulli_key:
+            tautulli_url = os.environ.get("TAUTULLI_URL", "http://localhost:8181")
+            try:
+                async with aiohttp.ClientSession() as s:
+                    async with s.get(
+                        f"{tautulli_url}/api/v2",
+                        params={"apikey": tautulli_key, "cmd": "get_activity"},
+                        timeout=aiohttp.ClientTimeout(total=4),
+                    ) as r:
+                        act = (await r.json()).get("response", {}).get("data", {})
+                count = len(act.get("sessions", []))
+                plex_line = f"🎬 Plex: {count} streaming" if count else "🎬 Plex: idle"
+            except Exception:
+                plex_line = "🎬 Plex: unreachable"
+        if plex_line:
+            lines.append(f"• {plex_line}")
+
+        try:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines))
+        except Exception as e:
+            log.warning("Slack send failed in /status: %s", e)
 
     @app.command("/resume")
     async def handle_slash_resume(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
@@ -6252,6 +6330,11 @@ def _register_integration_handlers(app: Any) -> None:
         user_id = body.get("user_id", "")
         channel_id = body.get("channel_id", "")
         text = (body.get("text", "") or "").strip()
+
+        try:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="⏳ Reading Hermes sessions…")
+        except Exception:
+            pass
 
         db_path = "/Users/davevoyles/.hermes/state.db"
 
@@ -6576,7 +6659,8 @@ def _register_integration_handlers(app: Any) -> None:
     @app.command("/plex")
     async def handle_plex_command(ack: Any, respond: Any, command: dict[str, Any], client: Any) -> None:
         await ack()
-        _ = client
+        user_id = command.get("user_id", "")
+        channel_id = command.get("channel_id", "")
         text = (command.get("text") or "").strip()
         plex_url = (os.getenv("PLEX_URL", "") or "").strip().rstrip("/")
         overseerr_url = (os.getenv("OVERSEERR_URL", "") or "").strip().rstrip("/")
@@ -6612,6 +6696,11 @@ def _register_integration_handlers(app: Any) -> None:
             if not remainder:
                 await respond(text=f"Usage: `/plex {subcommand} <title>`")
                 return
+
+        try:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="⏳ Checking Plex…")
+        except Exception:
+            pass
 
         if subcommand in {"status"}:
             if not overseerr_url:
@@ -6797,6 +6886,11 @@ def _register_integration_handlers(app: Any) -> None:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text="TAUTULLI_API_KEY not configured")
             return
 
+        try:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="⏳ Checking Plex…")
+        except Exception:
+            pass
+
         lines = []
         try:
             async with aiohttp.ClientSession() as s:
@@ -6828,7 +6922,10 @@ def _register_integration_handlers(app: Any) -> None:
         except Exception as e:
             lines.append(f"❌ Could not reach Tautulli: {e}")
 
-        await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines))
+        try:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines))
+        except Exception as e:
+            log.warning("Slack send failed in /watching: %s", e)
 
     @app.command("/wake")
     async def handle_slash_wake(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
@@ -6896,7 +6993,10 @@ def _register_integration_handlers(app: Any) -> None:
                     "text": {"type": "mrkdwn", "text": "*Available machines*\n" + "\n".join(available_lines)},
                 },
             ]
-        await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text, blocks=blocks)
+        try:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text, blocks=blocks)
+        except Exception as e:
+            log.warning("Slack send failed in /wake: %s", e)
 
     @app.command("/nas")
     async def handle_slash_nas(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
@@ -6908,6 +7008,12 @@ def _register_integration_handlers(app: Any) -> None:
         parts = text.split(maxsplit=1)
         subcommand = parts[0].lower() if parts else ""
         remainder = parts[1].strip() if len(parts) > 1 else ""
+
+        if subcommand in {"df", "free"} or (subcommand == "ls" and remainder):
+            try:
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text="⏳ Querying NAS…")
+            except Exception:
+                pass
 
         def _usage_blocks() -> tuple[str, list[dict[str, Any]]]:
             usage_text = "❌ Usage: `/nas df`, `/nas ls <path>`, or `/nas free`"
@@ -7447,7 +7553,10 @@ def _register_integration_handlers(app: Any) -> None:
             )
             return
 
-        await client.chat_postMessage(channel=channel_id, text=result, mrkdwn=True)
+        try:
+            await client.chat_postMessage(channel=channel_id, text=result, mrkdwn=True)
+        except Exception as e:
+            log.warning("Slack send failed in /nas-share: %s", e)
 
 
 def _register_action_handlers(app: Any) -> None:
@@ -7911,6 +8020,28 @@ async def create_slack_handler() -> Any | None:  # type: ignore[return]
                 )
         except Exception:
             pass
+
+        tautulli_key = os.environ.get("TAUTULLI_API_KEY", "")
+        media_lines: list[str] = []
+        if tautulli_key:
+            try:
+                tautulli_url = os.environ.get("TAUTULLI_URL", "http://localhost:8181")
+                async with aiohttp.ClientSession() as s:
+                    async with s.get(
+                        f"{tautulli_url}/api/v2",
+                        params={"apikey": tautulli_key, "cmd": "get_history", "length": "3"},
+                        timeout=aiohttp.ClientTimeout(total=4),
+                    ) as r:
+                        hist = (await r.json()).get("response", {}).get("data", {}).get("data", [])
+                if hist:
+                    media_lines.append("🎬 *Recently watched:*")
+                    for item in hist[:3]:
+                        icon = "🎬" if item.get("media_type") == "movie" else "📺"
+                        media_lines.append(f"  {icon} {item.get('full_title', item.get('title', '?'))}")
+            except Exception:
+                pass
+        if media_lines:
+            sections.extend(media_lines)
 
         message = "\n".join(sections)
         try:

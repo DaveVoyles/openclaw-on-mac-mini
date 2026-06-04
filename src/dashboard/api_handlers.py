@@ -29,6 +29,21 @@ from .helpers import GITHUB_REPO, VERSION, _command_list, _command_quickstart, _
 
 _dashboard_sessions = _SessionManager(timeout=10, name="dashboard")
 
+# Simple in-process TTL cache for expensive API calls
+_api_cache: dict = {}  # key -> (value, expires_at_float)
+
+
+def _cache_get(key: str):
+    entry = _api_cache.get(key)
+    if entry and entry[1] > __import__('time').time():
+        return entry[0]
+    return None
+
+
+def _cache_set(key: str, value, ttl_seconds: int = 60):
+    _api_cache[key] = (value, __import__('time').time() + ttl_seconds)
+
+
 _QUALITY_DOMAIN_LIMIT = 6
 _QUALITY_FAILURE_LIMIT = 6
 _QUALITY_SIGNAL_LIMIT = 6
@@ -1409,9 +1424,15 @@ async def api_status_handler(request):
 
 
 async def api_github_activity_handler(request: web.Request) -> web.Response:
-    """Return recent GitHub commits and open PRs for configured repos."""
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+
     import json as _json
     import os
+
+    cached = _cache_get("github_activity")
+    if cached is not None:
+        return web.Response(content_type="application/json", text=json.dumps(cached))
 
     token = os.environ.get("GITHUB_TOKEN", "")
     repos_raw = os.environ.get("GITHUB_DEFAULT_REPOS", "")
@@ -1447,8 +1468,8 @@ async def api_github_activity_handler(request: web.Request) -> web.Response:
                                     "url": str(commit.get("html_url") or ""),
                                 }
                             )
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning("api_github_activity_handler error: %s", e)
 
             try:
                 async with session.get(
@@ -1467,12 +1488,13 @@ async def api_github_activity_handler(request: web.Request) -> web.Response:
                                     "author": str(((pr.get("user") or {}).get("login") or "")),
                                 }
                             )
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning("api_github_activity_handler error: %s", e)
 
     result["commits"].sort(key=lambda item: str(item.get("date") or ""), reverse=True)
     result["commits"] = result["commits"][:10]
-    return web.json_response(result)
+    _cache_set("github_activity", result, 300)
+    return web.Response(content_type="application/json", text=json.dumps(result))
 
 
 async def api_sms_settings_handler(request: web.Request) -> web.Response:
@@ -2579,7 +2601,9 @@ async def api_dream_health_handler(request):
 
 
 async def api_config_status_handler(request):
-    """Return configuration status for every key API/service."""
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+
     from config import cfg
 
     provider_states: dict[str, dict] = {}
@@ -2597,8 +2621,8 @@ async def api_config_status_handler(request):
                 "open_until": state.get("open_until", 0.0) if is_open else None,
                 "badge": "danger" if is_open else "success",
             }
-    except Exception:
-        pass
+    except Exception as e:
+        log.warning("api_config_status_handler error: %s", e)
 
     return web.json_response({"services": cfg.config_status(), "providers": provider_states})
 
@@ -4279,28 +4303,36 @@ async def api_hermes_sessions_handler(request: web.Request) -> web.Response:
         import datetime
         import sqlite3
 
-        conn = sqlite3.connect(f"file:{state_db}?immutable=1", uri=True)
-        rows = conn.execute(
-            "SELECT id, model, started_at, ended_at, message_count, title "
-            "FROM sessions ORDER BY started_at DESC LIMIT 20"
-        ).fetchall()
-        conn.close()
-        sessions = []
-        for row in rows:
-            sid, model, started, ended, msg_count, title = row
+        loop = asyncio.get_event_loop()
+
+        def _read_sessions():
+            conn = sqlite3.connect(f"file:{state_db}?immutable=1", uri=True)
             try:
-                dt = datetime.datetime.fromtimestamp(started).strftime("%Y-%m-%d %H:%M")
-            except Exception:
-                dt = str(started)
-            sessions.append(
-                {
-                    "id": sid,
-                    "model": model or "unknown",
-                    "started_at": dt,
-                    "message_count": msg_count or 0,
-                    "title": title or sid,
-                }
-            )
+                rows = conn.execute(
+                    "SELECT id, model, started_at, ended_at, message_count, title "
+                    "FROM sessions ORDER BY started_at DESC LIMIT 20"
+                ).fetchall()
+                sessions = []
+                for row in rows:
+                    sid, model, started, ended, msg_count, title = row
+                    try:
+                        dt = datetime.datetime.fromtimestamp(started).strftime("%Y-%m-%d %H:%M")
+                    except Exception:
+                        dt = str(started)
+                    sessions.append(
+                        {
+                            "id": sid,
+                            "model": model or "unknown",
+                            "started_at": dt,
+                            "message_count": msg_count or 0,
+                            "title": title or sid,
+                        }
+                    )
+                return sessions
+            finally:
+                conn.close()
+
+        sessions = await loop.run_in_executor(None, _read_sessions)
         return web.json_response({"sessions": sessions})
     except Exception as exc:
         return web.json_response({"sessions": [], "error": str(exc)})
@@ -4315,16 +4347,24 @@ async def api_hermes_session_detail_handler(request: web.Request) -> web.Respons
     try:
         import sqlite3
 
-        conn = sqlite3.connect(f"file:{state_db}?immutable=1", uri=True)
-        rows = conn.execute(
-            "SELECT role, content, timestamp FROM messages "
-            "WHERE session_id = ? AND active = 1 ORDER BY timestamp ASC",
-            (session_id,),
-        ).fetchall()
-        conn.close()
-        messages = []
-        for role, content, ts in rows:
-            messages.append({"role": role, "content": (content or "")[:2000], "timestamp": ts})
+        loop = asyncio.get_event_loop()
+
+        def _read_messages():
+            conn = sqlite3.connect(f"file:{state_db}?immutable=1", uri=True)
+            try:
+                rows = conn.execute(
+                    "SELECT role, content, timestamp FROM messages "
+                    "WHERE session_id = ? AND active = 1 ORDER BY timestamp ASC",
+                    (session_id,),
+                ).fetchall()
+                messages = []
+                for role, content, ts in rows:
+                    messages.append({"role": role, "content": (content or "")[:2000], "timestamp": ts})
+                return messages
+            finally:
+                conn.close()
+
+        messages = await loop.run_in_executor(None, _read_messages)
         return web.json_response({"session_id": session_id, "messages": messages})
     except Exception as exc:
         return web.json_response({"messages": [], "error": str(exc)})
@@ -4955,8 +4995,14 @@ async def api_hermes_skills_handler(request: web.Request) -> web.Response:
 
 
 async def api_docker_status_handler(request: web.Request) -> web.Response:
-    """GET /api/docker/status — return all Docker container states via host bridge."""
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+
     import os
+
+    cached = _cache_get("docker_status")
+    if cached is not None:
+        return web.Response(content_type="application/json", text=json.dumps(cached))
 
     bridge_enabled = os.environ.get("OPENCLAW_HOST_BRIDGE_ENABLED", "false").lower() == "true"
     containers: list[dict[str, str]] = []
@@ -4972,7 +5018,7 @@ async def api_docker_status_handler(request: web.Request) -> web.Response:
             bridge_error = "" if isinstance(bridge_result, str) else getattr(bridge_result, "error", "")
             if bridge_error:
                 error = bridge_error
-                log.warning("api_docker_status: %s", bridge_error)
+                log.warning("api_docker_status_handler error: %s", bridge_error)
             for line in output.strip().splitlines():
                 line = line.strip()
                 if not line:
@@ -4996,23 +5042,23 @@ async def api_docker_status_handler(request: web.Request) -> web.Response:
                             "image": str(c.get("image", "")).split(":")[0].split("/")[-1],
                         }
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.warning("api_docker_status_handler error: %s", e)
         except Exception as exc:
             error = str(exc)
-            log.warning("api_docker_status: %s", exc)
+            log.warning("api_docker_status_handler error: %s", exc)
 
     if not containers and not bridge_enabled:
         error = "Host bridge disabled — set OPENCLAW_HOST_BRIDGE_ENABLED=true"
 
-    return web.json_response(
-        {
-            "containers": containers,
-            "count": len(containers),
-            "running": sum(1 for c in containers if c["badge"] == "up"),
-            "error": error,
-        }
-    )
+    result = {
+        "containers": containers,
+        "count": len(containers),
+        "running": sum(1 for c in containers if c["badge"] == "up"),
+        "error": error,
+    }
+    _cache_set("docker_status", result, 30)
+    return web.Response(content_type="application/json", text=json.dumps(result))
 
 
 async def api_network_wol_handler(request: web.Request) -> web.Response:
@@ -5295,18 +5341,39 @@ def _format_uptime_human(seconds: float) -> str:
 
 
 async def api_system_health_handler(request):
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+
     import os
     import shutil
     import time
 
-    if not _check_auth(request):
-        return web.Response(status=401, text="Unauthorized")
+    loop = asyncio.get_event_loop()
 
+    def _read_proc_files():
+        proc_data = {}
+        try:
+            with open("/proc/loadavg", encoding="utf-8") as f:
+                proc_data["loadavg"] = f.read().strip()
+        except Exception as e:
+            proc_data["loadavg_error"] = str(e)
+        try:
+            with open("/proc/meminfo", encoding="utf-8") as f:
+                proc_data["meminfo"] = f.read().strip()
+        except Exception as e:
+            proc_data["meminfo_error"] = str(e)
+        try:
+            with open("/proc/uptime", encoding="utf-8") as f:
+                proc_data["uptime"] = f.read().strip()
+        except Exception as e:
+            proc_data["uptime_error"] = str(e)
+        return proc_data
+
+    proc_data = await loop.run_in_executor(None, _read_proc_files)
     result = {}
 
     try:
-        with open("/proc/loadavg", encoding="utf-8") as f:
-            loadavg = f.read().strip()
+        loadavg = proc_data["loadavg"]
         load_parts = loadavg.split()
         result["loadavg_raw"] = loadavg
         result["loadavg"] = {
@@ -5315,17 +5382,16 @@ async def api_system_health_handler(request):
             "15m": float(load_parts[2]) if len(load_parts) > 2 else 0.0,
         }
     except Exception as e:
-        result["loadavg_raw"] = f"error: {e}"
+        result["loadavg_raw"] = f"error: {proc_data.get('loadavg_error', e)}"
         result["loadavg"] = {"1m": 0.0, "5m": 0.0, "15m": 0.0}
 
     try:
         meminfo = {}
-        with open("/proc/meminfo", encoding="utf-8") as f:
-            for line in f.read().strip().splitlines():
-                if ":" not in line:
-                    continue
-                key, value = line.split(":", 1)
-                meminfo[key] = value.strip()
+        for line in proc_data["meminfo"].splitlines():
+            if ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            meminfo[key] = value.strip()
         mem_total_kb = int(meminfo.get("MemTotal", "0 kB").split()[0])
         mem_avail_kb = int(meminfo.get("MemAvailable", "0 kB").split()[0])
         mem_used_kb = max(0, mem_total_kb - mem_avail_kb)
@@ -5338,7 +5404,7 @@ async def api_system_health_handler(request):
             "used_gb": round(mem_used_kb / 1024 / 1024, 2),
         }
     except Exception as e:
-        result["memory"] = {"error": str(e), "total_gb": 0.0, "available_gb": 0.0, "used_gb": 0.0}
+        result["memory"] = {"error": str(proc_data.get("meminfo_error", e)), "total_gb": 0.0, "available_gb": 0.0, "used_gb": 0.0}
 
     try:
         disk = shutil.disk_usage("/")
@@ -5354,14 +5420,13 @@ async def api_system_health_handler(request):
         result["disk"] = {"error": str(e), "total_gb": 0.0, "used_gb": 0.0, "free_gb": 0.0}
 
     try:
-        with open("/proc/uptime", encoding="utf-8") as f:
-            uptime_secs = float(f.read().split()[0])
+        uptime_secs = float(proc_data["uptime"].split()[0])
         result["uptime"] = {
             "seconds": uptime_secs,
             "human": _format_uptime_human(uptime_secs),
         }
     except Exception as e:
-        result["uptime"] = {"error": str(e), "seconds": 0.0, "human": "Unavailable"}
+        result["uptime"] = {"error": str(proc_data.get("uptime_error", e)), "seconds": 0.0, "human": "Unavailable"}
 
     result["hostname"] = os.uname().nodename
     result["timestamp"] = time.time()
@@ -5434,6 +5499,9 @@ async def api_tautulli_activity_handler(request):
 
     if not _check_auth(request):
         return web.Response(status=401, text="Unauthorized")
+    cached = _cache_get("tautulli_activity")
+    if cached is not None:
+        return web.Response(content_type="application/json", text=json.dumps(cached))
     url = os.environ.get("TAUTULLI_URL", "http://localhost:8181")
     key = os.environ.get("TAUTULLI_API_KEY", "")
     if not key:
@@ -5446,9 +5514,11 @@ async def api_tautulli_activity_handler(request):
                 timeout=aiohttp.ClientTimeout(total=5),
             ) as r:
                 data = await r.json()
+        activity = data.get("response", {}).get("data", {})
+        _cache_set("tautulli_activity", activity, 30)
         return web.Response(
             content_type="application/json",
-            text=json.dumps(data.get("response", {}).get("data", {})),
+            text=json.dumps(activity),
         )
     except Exception as e:
         return web.Response(
@@ -5608,31 +5678,39 @@ async def api_hermes_session_messages_handler(request: web.Request) -> web.Respo
         )
 
     try:
-        conn = _sqlite3.connect(f"file:{db_path}?immutable=1", uri=True)
-        conn.row_factory = _sqlite3.Row
-        try:
-            session_row = conn.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
-            if not session_row:
-                return web.Response(
-                    content_type="application/json",
-                    text=json.dumps({"error": "Session not found"}),
-                    status=404,
-                )
+        loop = asyncio.get_event_loop()
 
-            message_rows = conn.execute(
-                "SELECT id, session_id, role, content, timestamp, active, tool_name, finish_reason "
-                "FROM messages WHERE session_id=? AND active=1 ORDER BY timestamp ASC",
-                (session_id,),
-            ).fetchall()
-        finally:
-            conn.close()
+        def _read_session_messages():
+            conn = _sqlite3.connect(f"file:{db_path}?immutable=1", uri=True)
+            conn.row_factory = _sqlite3.Row
+            try:
+                session_row = conn.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
+                if not session_row:
+                    return None, None
+
+                message_rows = conn.execute(
+                    "SELECT id, session_id, role, content, timestamp, active, tool_name, finish_reason "
+                    "FROM messages WHERE session_id=? AND active=1 ORDER BY timestamp ASC",
+                    (session_id,),
+                ).fetchall()
+                return dict(session_row), [dict(row) for row in message_rows]
+            finally:
+                conn.close()
+
+        session_row, message_rows = await loop.run_in_executor(None, _read_session_messages)
+        if session_row is None:
+            return web.Response(
+                content_type="application/json",
+                text=json.dumps({"error": "Session not found"}),
+                status=404,
+            )
 
         return web.Response(
             content_type="application/json",
             text=json.dumps(
                 {
-                    "session": dict(session_row),
-                    "messages": [dict(row) for row in message_rows],
+                    "session": session_row,
+                    "messages": message_rows,
                 }
             ),
         )
