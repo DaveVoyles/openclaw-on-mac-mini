@@ -4905,6 +4905,7 @@ async def api_network_wol_handler(request: web.Request) -> web.Response:
     POST body (JSON): {"machine": "mbp"} or {"machine": "mbp2"} or {} for first available.
     """
     import socket
+    import os
 
     broadcast_ip = os.environ.get("WOL_BROADCAST_IP", "192.168.1.255")
 
