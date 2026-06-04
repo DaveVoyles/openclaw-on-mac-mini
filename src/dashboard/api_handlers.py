@@ -4132,22 +4132,86 @@ async def api_hermes_status_handler(request: web.Request) -> web.Response:
     return web.json_response(result)
 
 
+async def api_hermes_sessions_handler(request: web.Request) -> web.Response:
+    """GET /api/hermes/sessions — list recent Hermes sessions."""
+    state_db = Path("/Users/davevoyles/.hermes/state.db")
+    if not state_db.exists():
+        return web.json_response({"sessions": []})
+    try:
+        import datetime
+        import sqlite3
+
+        conn = sqlite3.connect(f"file:{state_db}?immutable=1", uri=True)
+        rows = conn.execute(
+            "SELECT id, model, started_at, ended_at, message_count, title "
+            "FROM sessions ORDER BY started_at DESC LIMIT 20"
+        ).fetchall()
+        conn.close()
+        sessions = []
+        for row in rows:
+            sid, model, started, ended, msg_count, title = row
+            try:
+                dt = datetime.datetime.fromtimestamp(started).strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                dt = str(started)
+            sessions.append(
+                {
+                    "id": sid,
+                    "model": model or "unknown",
+                    "started_at": dt,
+                    "message_count": msg_count or 0,
+                    "title": title or sid,
+                }
+            )
+        return web.json_response({"sessions": sessions})
+    except Exception as exc:
+        return web.json_response({"sessions": [], "error": str(exc)})
+
+
+async def api_hermes_session_detail_handler(request: web.Request) -> web.Response:
+    """GET /api/hermes/sessions/{session_id} — get messages for a session."""
+    session_id = request.match_info.get("session_id", "")
+    state_db = Path("/Users/davevoyles/.hermes/state.db")
+    if not state_db.exists() or not session_id:
+        return web.json_response({"messages": []})
+    try:
+        import sqlite3
+
+        conn = sqlite3.connect(f"file:{state_db}?immutable=1", uri=True)
+        rows = conn.execute(
+            "SELECT role, content, timestamp FROM messages "
+            "WHERE session_id = ? AND active = 1 ORDER BY timestamp ASC",
+            (session_id,),
+        ).fetchall()
+        conn.close()
+        messages = []
+        for role, content, ts in rows:
+            messages.append({"role": role, "content": (content or "")[:2000], "timestamp": ts})
+        return web.json_response({"session_id": session_id, "messages": messages})
+    except Exception as exc:
+        return web.json_response({"messages": [], "error": str(exc)})
+
+
 async def api_hermes_memory_handler(request: web.Request) -> web.Response:
-    """GET/POST /api/hermes/memory — read or update Hermes MEMORY.md."""
-    memory_file = Path("/Users/davevoyles/.hermes/memories/MEMORY.md")
+    """GET/POST /api/hermes/memory — read or update Hermes MEMORY.md (or SOUL.md with ?file=soul)."""
+    file_param = request.rel_url.query.get("file", "memory")
+    if file_param == "soul":
+        target_file = Path("/Users/davevoyles/.hermes/SOUL.md")
+    else:
+        target_file = Path("/Users/davevoyles/.hermes/memories/MEMORY.md")
 
     if request.method == "GET":
-        content = memory_file.read_text(encoding="utf-8") if memory_file.exists() else ""
-        return web.json_response({"content": content, "path": str(memory_file)})
+        content = target_file.read_text(encoding="utf-8") if target_file.exists() else ""
+        return web.json_response({"content": content, "path": str(target_file), "file": file_param})
 
     body = await request.json()
     new_content = body.get("content", "")
     try:
-        memory_file.parent.mkdir(parents=True, exist_ok=True)
-        memory_file.write_text(new_content, encoding="utf-8")
+        target_file.parent.mkdir(parents=True, exist_ok=True)
+        target_file.write_text(new_content, encoding="utf-8")
     except OSError as exc:
         return web.json_response({"ok": False, "error": str(exc)}, status=500)
-    return web.json_response({"ok": True, "bytes": len(new_content.encode("utf-8"))})
+    return web.json_response({"ok": True, "bytes": len(new_content.encode("utf-8")), "file": file_param})
 
 
 async def api_hermes_memory_seed_handler(request: web.Request) -> web.Response:
@@ -4602,3 +4666,211 @@ async def api_tools_share_file_handler(request: web.Request) -> web.Response:
             url = part
             break
     return web.json_response({"url": url, "message": result_msg})
+
+
+
+async def api_changelog_handler(request: web.Request) -> web.Response:
+    """GET /api/changelog — return last N entries from history.md."""
+    history_file = Path(__file__).parent.parent.parent / "history.md"
+    if not history_file.exists():
+        history_file = Path("/app/history.md")
+    if not history_file.exists():
+        return web.json_response({"entries": [], "error": "history.md not found"})
+
+    try:
+        lines = history_file.read_text(encoding="utf-8").strip().splitlines()
+        entries = []
+        for line in reversed(lines):
+            line = line.strip()
+            if not line or not line.startswith("- "):
+                continue
+            content = line[2:]
+            date_str = ""
+            text = content
+            if ": " in content[:15]:
+                parts = content.split(": ", 1)
+                date_str = parts[0].strip()
+                text = parts[1].strip() if len(parts) > 1 else content
+            entries.append({"date": date_str, "text": text, "raw": line})
+            if len(entries) >= 15:
+                break
+        return web.json_response({"entries": entries})
+    except Exception as exc:
+        return web.json_response({"entries": [], "error": str(exc)})
+
+
+async def api_nas_disk_handler(request: web.Request) -> web.Response:
+    """GET /api/nas/disk — return NAS share disk usage via host bridge df."""
+    import os
+    import shutil
+
+    results: list[dict[str, str]] = []
+    source = "local"
+
+    bridge_enabled = os.environ.get("OPENCLAW_HOST_BRIDGE_ENABLED", "false").lower() == "true"
+    if bridge_enabled:
+        try:
+            from host_bridge import run_shell
+
+            cmd = (
+                "df -h /Users/davevoyles/mnt/PlexMediaServer "
+                "/Users/davevoyles/mnt/docker "
+                "/Users/davevoyles/mnt/Misc "
+                "2>/dev/null | tail -n +2 || "
+                "df -h /Users/davevoyles/mnt 2>/dev/null | tail -n +2"
+            )
+            bridge_result = await run_shell(command=cmd, slack_user_id="dashboard", timeout_s=10)
+            output = bridge_result if isinstance(bridge_result, str) else (getattr(bridge_result, "stdout", "") or "")
+            bridge_error = "" if isinstance(bridge_result, str) else getattr(bridge_result, "error", "")
+            if bridge_error:
+                log.warning("api_nas_disk: host bridge error: %s", bridge_error)
+            for line in output.strip().splitlines():
+                parts = line.split()
+                if len(parts) < 6:
+                    continue
+                mount = " ".join(parts[5:])
+                results.append(
+                    {
+                        "filesystem": parts[0],
+                        "size": parts[1],
+                        "used": parts[2],
+                        "avail": parts[3],
+                        "use_pct": parts[4],
+                        "mount": mount,
+                        "label": mount.rstrip("/").split("/")[-1] or mount,
+                    }
+                )
+            if results:
+                source = "host_bridge"
+        except Exception as exc:
+            log.warning("api_nas_disk: host bridge error: %s", exc)
+
+    if not results:
+        for mount_path, label in [
+            ("/Users/davevoyles/mnt/PlexMediaServer", "PlexMediaServer"),
+            ("/Users/davevoyles/mnt/docker", "docker"),
+            ("/Users/davevoyles/mnt/Misc", "Misc"),
+        ]:
+            try:
+                usage = shutil.disk_usage(mount_path)
+                total_gb = usage.total / 1024**3
+                used_gb = usage.used / 1024**3
+                free_gb = usage.free / 1024**3
+                pct = int(usage.used * 100 / usage.total) if usage.total > 0 else 0
+                results.append(
+                    {
+                        "label": label,
+                        "size": f"{total_gb:.0f}G",
+                        "used": f"{used_gb:.0f}G",
+                        "avail": f"{free_gb:.0f}G",
+                        "use_pct": f"{pct}%",
+                        "mount": mount_path,
+                        "filesystem": "local",
+                    }
+                )
+            except OSError:
+                pass
+
+    return web.json_response({"shares": results, "source": source})
+
+
+async def api_hermes_skills_handler(request: web.Request) -> web.Response:
+    """GET /api/hermes/skills — list custom Hermes skills from ~/.hermes/skills/."""
+    skills_dir = Path("/Users/davevoyles/.hermes/skills")
+    if not skills_dir.exists():
+        return web.json_response({"skills": []})
+
+    skills = []
+    for item in sorted(skills_dir.iterdir()):
+        if not item.is_dir():
+            continue
+        description = ""
+        for readme_name in ["README.md", "readme.md", "SKILL.md", f"{item.name}.md"]:
+            readme = item / readme_name
+            if readme.exists():
+                try:
+                    lines = readme.read_text(encoding="utf-8", errors="replace").splitlines()
+                    for ln in lines:
+                        ln = ln.strip()
+                        if ln and not ln.startswith("#"):
+                            description = ln[:120]
+                            break
+                        if ln.startswith("#"):
+                            description = ln.lstrip("#").strip()[:80]
+                            break
+                except Exception:
+                    pass
+                break
+
+        file_count = sum(1 for child in item.rglob("*") if child.is_file())
+        skills.append(
+            {
+                "name": item.name,
+                "description": description,
+                "file_count": file_count,
+                "path": str(item),
+            }
+        )
+
+    return web.json_response({"skills": skills, "count": len(skills)})
+
+
+async def api_docker_status_handler(request: web.Request) -> web.Response:
+    """GET /api/docker/status — return all Docker container states via host bridge."""
+    import os
+
+    bridge_enabled = os.environ.get("OPENCLAW_HOST_BRIDGE_ENABLED", "false").lower() == "true"
+    containers: list[dict[str, str]] = []
+    error = None
+
+    if bridge_enabled:
+        try:
+            from host_bridge import run_shell
+
+            cmd = 'docker ps -a --format \'{"name":"{{.Names}}","status":"{{.Status}}","state":"{{.State}}","image":"{{.Image}}","ports":"{{.Ports}}"}\''
+            bridge_result = await run_shell(command=cmd, slack_user_id="dashboard", timeout_s=10)
+            output = bridge_result if isinstance(bridge_result, str) else (getattr(bridge_result, "stdout", "") or "")
+            bridge_error = "" if isinstance(bridge_result, str) else getattr(bridge_result, "error", "")
+            if bridge_error:
+                error = bridge_error
+                log.warning("api_docker_status: %s", bridge_error)
+            for line in output.strip().splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    c = json.loads(line)
+                    state = str(c.get("state", "")).lower()
+                    if state == "running":
+                        badge = "up"
+                    elif state == "exited":
+                        badge = "down"
+                    elif state in ("paused", "restarting"):
+                        badge = state
+                    else:
+                        badge = state or "unknown"
+                    containers.append(
+                        {
+                            "name": str(c.get("name", "")),
+                            "status": str(c.get("status", "")),
+                            "badge": badge,
+                            "image": str(c.get("image", "")).split(":")[0].split("/")[-1],
+                        }
+                    )
+                except Exception:
+                    pass
+        except Exception as exc:
+            error = str(exc)
+            log.warning("api_docker_status: %s", exc)
+
+    if not containers and not bridge_enabled:
+        error = "Host bridge disabled — set OPENCLAW_HOST_BRIDGE_ENABLED=true"
+
+    return web.json_response(
+        {
+            "containers": containers,
+            "count": len(containers),
+            "running": sum(1 for c in containers if c["badge"] == "up"),
+            "error": error,
+        }
+    )

@@ -15,7 +15,10 @@ from .api_handlers import (
     api_hermes_memory_handler,
     api_hermes_memory_seed_handler,
     api_hermes_skills_seed_handler,
+    api_hermes_sessions_handler,
+    api_hermes_session_detail_handler,
     api_hermes_ask_handler,
+    api_nas_disk_handler,
     api_agent_session_detail_handler,
     api_agent_session_intervention_handler,
     api_agent_sessions_handler,
@@ -29,6 +32,7 @@ from .api_handlers import (
     api_dashboard_handler,
     api_docker_action_handler,
     api_docker_logs_handler,
+    api_docker_status_handler,
     api_dream_health_handler,
     api_errors_handler,
     api_goals_handler,
@@ -64,6 +68,8 @@ from .api_handlers import (
     api_tools_read_file_handler,
     api_tools_run_shell_handler,
     api_tools_share_file_handler,
+    api_changelog_handler,
+    api_hermes_skills_handler,
 )
 from .html_handlers import (
     dashboard_handler,
@@ -191,7 +197,10 @@ def setup_dashboard(
     app.router.add_post("/api/hermes/memory", action(api_hermes_memory_handler))
     app.router.add_get("/api/hermes/memory-seed", api_hermes_memory_seed_handler)
     app.router.add_get("/api/hermes/skills-seed", api_hermes_skills_seed_handler)
+    app.router.add_get("/api/hermes/sessions", api_hermes_sessions_handler)
+    app.router.add_get("/api/hermes/sessions/{session_id}", api_hermes_session_detail_handler)
     app.router.add_post("/api/hermes/ask", action(api_hermes_ask_handler))
+    app.router.add_get("/api/nas/disk", api_nas_disk_handler)
     app.router.add_post("/api/copilot/run", action(api_copilot_run_handler))
     app.router.add_post("/api/copilot/stream", action(api_copilot_stream_handler))
     app.router.add_post("/api/recap/generate", action(api_recap_generate_handler))
@@ -207,3 +216,6 @@ def setup_dashboard(
     app.router.add_post("/tools/read_file", api_tools_read_file_handler)
     app.router.add_post("/tools/run_shell", api_tools_run_shell_handler)
     app.router.add_post("/tools/share_file", api_tools_share_file_handler)
+    app.router.add_get("/api/changelog", api_changelog_handler)
+    app.router.add_get("/api/hermes/skills", api_hermes_skills_handler)
+    app.router.add_get("/api/docker/status", api_docker_status_handler)

@@ -807,6 +807,13 @@
             <button class="qa-btn" onclick="dashAsk('Run a health check on all monitored services and summarize results.')">🏥 Health Check</button>
           </div>
           <!-- Chat Input -->
+          <div id="prompt-library-bar" style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.4rem;flex-wrap:wrap">
+            <select id="prompt-library-select" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);max-width:200px" onchange="loadPromptFromLibrary()">
+              <option value="">📚 Load saved prompt…</option>
+            </select>
+            <button onclick="saveCurrentPrompt()" style="font-size:0.75rem;padding:0.2rem 0.5rem;background:rgba(255,158,27,0.1);border:1px solid rgba(255,158,27,0.25);border-radius:6px;color:var(--orange);cursor:pointer" title="Save current input as a named prompt">💾 Save</button>
+            <button onclick="deleteSelectedPrompt()" style="font-size:0.75rem;padding:0.2rem 0.5rem;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--muted);cursor:pointer" title="Delete selected prompt">🗑</button>
+          </div>
           <div id="chat-input-row" style="display:flex;gap:0.5rem;align-items:flex-start">
             <textarea id="agent-prompt" placeholder="Ask anything… (Shift+Enter for new line, Enter to send)"
               style="flex:1;min-height:60px;max-height:200px;padding:0.6rem 0.8rem;background:var(--surface-solid,#1a1b2e);border:1px solid var(--border,#333);border-radius:8px;color:var(--text,#e8e8e8);font-size:0.88rem;resize:vertical;font-family:inherit"
@@ -1128,6 +1135,22 @@
           <div id="container-grid" class="health-grid">
             <div style="color: var(--muted); font-style: italic">
               Loading container status...
+            </div>
+          </div>
+        </div>
+
+        <div class="card" id="docker-status-card" style="margin-bottom:1rem">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+            <span>🐳 Docker Containers</span>
+            <div style="display:flex;gap:0.5rem;align-items:center">
+              <span id="docker-status-summary" style="font-size:0.75rem;color:var(--muted)"></span>
+              <button onclick="loadDockerStatus()" style="font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(255,158,27,0.1);border:1px solid rgba(255,158,27,0.25);border-radius:6px;color:var(--orange);cursor:pointer">↻ Refresh</button>
+              <button onclick="toggleDockerStatusCard()" style="font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--muted);cursor:pointer">▼</button>
+            </div>
+          </div>
+          <div class="card-body" id="docker-status-body" style="display:none;padding:0.75rem">
+            <div id="docker-status-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:0.5rem">
+              <div style="color:var(--muted);font-size:0.82rem">Loading…</div>
             </div>
           </div>
         </div>
@@ -1492,7 +1515,38 @@
             </div>
           </div>
           <div class="card-body" id="hermes-memory-body" style="display:none;padding:0.75rem">
+            <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem">
+              <button id="tab-memory" onclick="switchHermesFile('memory')" style="font-size:0.75rem;padding:0.25rem 0.7rem;border-radius:6px;cursor:pointer;background:rgba(74,222,128,0.15);border:1px solid rgba(74,222,128,0.4);color:#4ade80">🧠 Memory</button>
+              <button id="tab-soul" onclick="switchHermesFile('soul')" style="font-size:0.75rem;padding:0.25rem 0.7rem;border-radius:6px;cursor:pointer;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--muted)">✨ Soul</button>
+            </div>
             <textarea id="hermes-memory-textarea" style="width:100%;min-height:320px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-family:monospace;font-size:0.78rem;padding:0.5rem;resize:vertical;line-height:1.5" placeholder="Loading..."></textarea>
+          </div>
+        </div>
+
+        <div class="card" id="hermes-sessions-card" style="margin-bottom:1rem">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+            <span>📋 Hermes Sessions</span>
+            <div style="display:flex;gap:0.5rem;align-items:center">
+              <button onclick="loadHermesSessions()" style="font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:6px;color:#4ade80;cursor:pointer">↻ Refresh</button>
+              <button onclick="toggleHermesSessionsCard()" style="font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--muted);cursor:pointer">▼</button>
+            </div>
+          </div>
+          <div class="card-body" id="hermes-sessions-body" style="display:none;padding:0.75rem">
+            <div id="hermes-sessions-list">Loading…</div>
+            <div id="hermes-session-detail" style="display:none;margin-top:1rem;padding:0.75rem;background:rgba(0,0,0,0.3);border-radius:6px;max-height:400px;overflow-y:auto;font-size:0.8rem;font-family:monospace"></div>
+          </div>
+        </div>
+
+        <div class="card" id="hermes-skills-card" style="margin-bottom:1rem">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+            <span>⚡ Hermes Custom Skills</span>
+            <div style="display:flex;gap:0.5rem;align-items:center">
+              <span id="hermes-skills-count" style="font-size:0.75rem;color:var(--muted)"></span>
+              <button onclick="toggleHermesSkillsCard()" style="font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--muted);cursor:pointer">▼</button>
+            </div>
+          </div>
+          <div class="card-body" id="hermes-skills-body" style="display:none;padding:0.75rem">
+            <div id="hermes-skills-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:0.5rem"></div>
           </div>
         </div>
 
@@ -1729,6 +1783,16 @@
           <h2>📊 Research History</h2>
           <input type="text" class="search-box" id="research-search" placeholder="🔍 Search reports..." oninput="filterResearch()" />
           <div id="research-list" class="scrollable-list"></div>
+        </div>
+
+        <div class="card" id="changelog-card" style="margin-bottom:1rem">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+            <span>📋 Recent Changes</span>
+            <button onclick="toggleChangelogCard()" style="font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--muted);cursor:pointer">▼</button>
+          </div>
+          <div class="card-body" id="changelog-body" style="display:none;padding:0.75rem">
+            <div id="changelog-list" style="font-size:0.8rem;line-height:1.7"></div>
+          </div>
         </div>
 
         <!-- Saved Conversations -->
@@ -5346,9 +5410,20 @@
         }
       }
 
+      let _hermesFileTab = 'memory';
+
+      function switchHermesFile(file) {
+        _hermesFileTab = file;
+        const memBtn = document.getElementById('tab-memory');
+        const soulBtn = document.getElementById('tab-soul');
+        if (memBtn) { memBtn.style.background = file === 'memory' ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.05)'; memBtn.style.borderColor = file === 'memory' ? 'rgba(74,222,128,0.4)' : 'rgba(255,255,255,0.1)'; memBtn.style.color = file === 'memory' ? '#4ade80' : 'var(--muted)'; }
+        if (soulBtn) { soulBtn.style.background = file === 'soul' ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.05)'; soulBtn.style.borderColor = file === 'soul' ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.1)'; soulBtn.style.color = file === 'soul' ? '#a78bfa' : 'var(--muted)'; }
+        loadHermesMemory();
+      }
+
       async function loadHermesMemory() {
         try {
-          const r = await fetch('/api/hermes/memory', { headers: _actionAuthHeaders('dashboard-ui') });
+          const r = await fetch(`/api/hermes/memory?file=${_hermesFileTab}`, { headers: _actionAuthHeaders('dashboard-ui') });
           if (!r.ok) return;
           const d = await r.json();
           const ta = document.getElementById('hermes-memory-textarea');
@@ -5361,9 +5436,9 @@
         const st = document.getElementById('hermes-memory-status');
         if (!ta) return;
         try {
-          const r = await fetch('/api/hermes/memory', {
+          const r = await fetch(`/api/hermes/memory?file=${_hermesFileTab}`, {
             method: 'POST',
-            headers: _actionAuthHeaders('dashboard-ui'),
+            headers: { ..._actionAuthHeaders('dashboard-ui'), 'Content-Type': 'application/json' },
             body: JSON.stringify({ content: ta.value })
           });
           const d = await r.json();
@@ -5374,6 +5449,138 @@
         } catch (e) {
           if (st) st.textContent = '❌ Error';
         }
+      }
+
+      function toggleHermesSkillsCard() {
+        const b = document.getElementById('hermes-skills-body');
+        if (!b) return;
+        const show = b.style.display === 'none';
+        b.style.display = show ? 'block' : 'none';
+        if (show) loadHermesSkills();
+      }
+
+      async function loadHermesSkills() {
+        const el = document.getElementById('hermes-skills-list');
+        const ct = document.getElementById('hermes-skills-count');
+        if (!el) return;
+        try {
+          const r = await fetch('/api/hermes/skills', { headers: _actionAuthHeaders('dashboard-ui') });
+          const d = await r.json();
+          if (ct) ct.textContent = `${d.count || 0} custom skills`;
+          if (!d.skills || d.skills.length === 0) {
+            el.innerHTML = '<div style="color:var(--muted);font-size:0.82rem">No custom skills found.</div>';
+            return;
+          }
+          el.innerHTML = d.skills.map(s =>
+            `<div style="padding:0.5rem;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:6px">
+              <div style="font-size:0.8rem;font-weight:600;color:#4ade80;margin-bottom:0.2rem">⚡ ${esc(s.name)}</div>
+              <div style="font-size:0.72rem;color:var(--muted);line-height:1.4">${esc(s.description || 'No description')}</div>
+              <div style="font-size:0.68rem;color:rgba(255,255,255,0.2);margin-top:0.25rem">${s.file_count} file${s.file_count !== 1 ? 's' : ''}</div>
+            </div>`
+          ).join('');
+        } catch (e) {
+          if (el) el.innerHTML = '<div style="color:var(--muted)">Error loading skills.</div>';
+        }
+      }
+
+      function toggleChangelogCard() {
+        const b = document.getElementById('changelog-body');
+        if (!b) return;
+        const show = b.style.display === 'none';
+        b.style.display = show ? 'block' : 'none';
+        if (show) loadChangelog();
+      }
+
+      async function loadChangelog() {
+        const el = document.getElementById('changelog-list');
+        if (!el) return;
+        try {
+          const r = await fetch('/api/changelog', { headers: _actionAuthHeaders('dashboard-ui') });
+          const d = await r.json();
+          if (!d.entries || d.entries.length === 0) {
+            el.innerHTML = '<span style="color:var(--muted)">No changelog entries found.</span>';
+            return;
+          }
+          el.innerHTML = d.entries.map(e =>
+            `<div style="display:flex;gap:0.75rem;padding:0.3rem 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+              <span style="color:var(--muted);white-space:nowrap;min-width:80px;font-size:0.75rem">${esc(e.date || '')}</span>
+              <span style="color:var(--text)">${esc(e.text)}</span>
+            </div>`
+          ).join('');
+        } catch (e) {
+          if (el) el.innerHTML = '<span style="color:var(--muted)">Error loading changelog.</span>';
+        }
+      }
+
+      function toggleHermesSessionsCard() {
+        const b = document.getElementById('hermes-sessions-body');
+        if (!b) return;
+        const show = b.style.display === 'none';
+        b.style.display = show ? 'block' : 'none';
+        if (show) loadHermesSessions();
+      }
+
+      async function loadHermesSessions() {
+        const el = document.getElementById('hermes-sessions-list');
+        if (!el) return;
+        el.textContent = 'Loading…';
+        try {
+          const r = await fetch('/api/hermes/sessions', {headers: _actionAuthHeaders('dashboard-ui')});
+          const d = await r.json();
+          if (!d.sessions || d.sessions.length === 0) {
+            el.textContent = 'No sessions found.';
+            return;
+          }
+          el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:0.8rem">' +
+            '<thead><tr style="color:var(--muted)"><th style="text-align:left;padding:0.3rem 0.5rem">Session</th><th style="text-align:left;padding:0.3rem 0.5rem">Model</th><th style="text-align:left;padding:0.3rem 0.5rem">Date</th><th style="padding:0.3rem 0.5rem">Msgs</th><th style="padding:0.3rem 0.5rem">Actions</th></tr></thead><tbody>' +
+            d.sessions.map(s => `<tr style="border-top:1px solid rgba(255,255,255,0.05)">
+              <td style="padding:0.3rem 0.5rem;font-family:monospace;color:var(--muted);font-size:0.72rem" title="${esc(s.id)}">${s.title && s.title !== s.id ? esc(s.title.substring(0,30)) : esc(s.id.substring(0,20))}</td>
+              <td style="padding:0.3rem 0.5rem;color:#86efac">${esc(s.model)}</td>
+              <td style="padding:0.3rem 0.5rem">${esc(s.started_at)}</td>
+              <td style="padding:0.3rem 0.5rem;text-align:center">${s.message_count}</td>
+              <td style="padding:0.3rem 0.5rem;text-align:center;display:flex;gap:0.3rem">
+                <button onclick="viewHermesSession('${encodeURIComponent(s.id)}')" style="font-size:0.7rem;padding:0.15rem 0.4rem;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.2);border-radius:4px;color:#4ade80;cursor:pointer">View</button>
+                <button onclick="resumeHermesSession('${encodeURIComponent(s.id)}')" style="font-size:0.7rem;padding:0.15rem 0.4rem;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.2);border-radius:4px;color:#a78bfa;cursor:pointer">Resume</button>
+              </td>
+            </tr>`).join('') +
+            '</tbody></table>';
+        } catch(e) {
+          el.textContent = 'Error loading sessions.';
+        }
+      }
+
+      async function viewHermesSession(sessionId) {
+        const detail = document.getElementById('hermes-session-detail');
+        if (!detail) return;
+        detail.style.display = 'block';
+        detail.textContent = 'Loading messages…';
+        try {
+          const resolvedSessionId = decodeURIComponent(sessionId);
+          const r = await fetch(`/api/hermes/sessions/${encodeURIComponent(resolvedSessionId)}`, {headers: _actionAuthHeaders('dashboard-ui')});
+          const d = await r.json();
+          if (!d.messages || d.messages.length === 0) {
+            detail.textContent = 'No messages found.';
+            return;
+          }
+          detail.innerHTML = d.messages.map(m => {
+            const color = m.role === 'user' ? '#60a5fa' : (m.role === 'assistant' ? '#4ade80' : '#f59e0b');
+            const label = m.role === 'user' ? '👤 User' : (m.role === 'assistant' ? '⚕ Hermes' : m.role);
+            return `<div style="margin-bottom:0.75rem"><span style="color:${color};font-weight:bold">${label}</span><div style="margin-top:0.25rem;white-space:pre-wrap;color:var(--text)">${esc(m.content)}</div></div>`;
+          }).join('<hr style="border-color:rgba(255,255,255,0.07);margin:0.5rem 0">');
+        } catch(e) {
+          detail.textContent = 'Error loading messages.';
+        }
+      }
+
+      function resumeHermesSession(sessionId) {
+        const resolvedSessionId = decodeURIComponent(sessionId);
+        window._hermesSessionId = resolvedSessionId;
+        const badge = document.getElementById('hermes-session-badge');
+        if (badge) badge.textContent = `🔁 Session: ${resolvedSessionId}`;
+        const sel = document.getElementById('agent-model');
+        if (sel) { sel.value = 'hermes'; if (typeof onAgentModelChange === 'function') onAgentModelChange(); }
+        const chatCard = document.getElementById('agent-chat-card');
+        if (chatCard) chatCard.scrollIntoView({behavior:'smooth'});
       }
 
       function toggleCard(id) {
@@ -5423,12 +5630,99 @@
           document.body.style.overflow = '';
         }
       }
+      // Prompt library — localStorage based
+      const PROMPT_LIBRARY_KEY = 'openclaw_prompt_library';
+
+      function getPromptLibrary() {
+        try { return JSON.parse(localStorage.getItem(PROMPT_LIBRARY_KEY) || '[]'); } catch { return []; }
+      }
+
+      function savePromptLibrary(lib) {
+        localStorage.setItem(PROMPT_LIBRARY_KEY, JSON.stringify(lib));
+      }
+
+      function refreshPromptLibrarySelect() {
+        const sel = document.getElementById('prompt-library-select');
+        if (!sel) return;
+        const lib = getPromptLibrary();
+        sel.innerHTML = '<option value="">📚 Load saved prompt…</option>' +
+          lib.map((p, i) => `<option value="${i}">${p.name}</option>`).join('');
+      }
+
+      function loadPromptFromLibrary() {
+        const sel = document.getElementById('prompt-library-select');
+        if (!sel || sel.value === '') return;
+        const lib = getPromptLibrary();
+        const p = lib[parseInt(sel.value)];
+        if (!p) return;
+        const chatInput = document.getElementById('user-input') || document.getElementById('chat-input') || document.getElementById('agent-prompt') || document.querySelector('#agent-chat-card textarea') || document.querySelector('#agent-chat-card input[type=text]');
+        if (chatInput) { chatInput.value = p.prompt; chatInput.focus(); }
+      }
+
+      function saveCurrentPrompt() {
+        const chatInput = document.getElementById('user-input') || document.getElementById('chat-input') || document.getElementById('agent-prompt') || document.querySelector('#agent-chat-card textarea') || document.querySelector('#agent-chat-card input[type=text]');
+        const text = chatInput ? chatInput.value.trim() : '';
+        if (!text) { alert('Type a prompt first, then save it.'); return; }
+        const name = prompt('Name for this prompt:', text.substring(0, 40));
+        if (!name) return;
+        const lib = getPromptLibrary();
+        lib.push({ name, prompt: text });
+        savePromptLibrary(lib);
+        refreshPromptLibrarySelect();
+      }
+
+      function deleteSelectedPrompt() {
+        const sel = document.getElementById('prompt-library-select');
+        if (!sel || sel.value === '') return;
+        const lib = getPromptLibrary();
+        lib.splice(parseInt(sel.value), 1);
+        savePromptLibrary(lib);
+        refreshPromptLibrarySelect();
+      }
+
+      document.addEventListener('DOMContentLoaded', refreshPromptLibrarySelect);
       document.addEventListener('keydown', e => {
         if (e.key === 'Escape') {
           const card = document.getElementById('agent-chat-card');
           if (card && card.classList.contains('chat-expanded')) toggleChatExpand();
         }
       });
+
+      function toggleDockerStatusCard() {
+        const b = document.getElementById('docker-status-body');
+        if (!b) return;
+        const show = b.style.display === 'none';
+        b.style.display = show ? 'block' : 'none';
+        if (show) loadDockerStatus();
+      }
+
+      async function loadDockerStatus() {
+        const grid = document.getElementById('docker-status-grid');
+        const summary = document.getElementById('docker-status-summary');
+        if (!grid) return;
+        try {
+          const r = await fetch('/api/docker/status', { headers: _actionAuthHeaders('dashboard-ui') });
+          const d = await r.json();
+          if (summary) summary.textContent = d.error ? '⚠ bridge disabled' : `${d.running}/${d.count} running`;
+          if (!d.containers || d.containers.length === 0) {
+            grid.innerHTML = '<div style="color:var(--muted);font-size:0.82rem">' + esc(d.error || 'No containers found or bridge disabled.') + '</div>';
+            return;
+          }
+          grid.innerHTML = d.containers.map(c => {
+            const color = c.badge === 'up' ? '#4ade80' : (c.badge === 'down' ? '#f87171' : '#f59e0b');
+            return `<div style="padding:0.55rem 0.65rem;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:6px;display:flex;flex-direction:column;gap:0.28rem">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem">
+                <span style="font-size:0.78rem;font-weight:500;color:var(--text)">${esc(c.name || '')}</span>
+                <span style="padding:0.08rem 0.38rem;border-radius:999px;background:${color}22;color:${color};font-size:0.66rem;text-transform:uppercase">${esc(c.badge || 'unknown')}</span>
+              </div>
+              <div style="font-size:0.68rem;color:var(--muted)">${esc(c.image || '')}</div>
+              <div style="font-size:0.68rem;color:var(--muted)">${esc(c.status || '')}</div>
+            </div>`;
+          }).join('');
+        } catch (e) {
+          grid.innerHTML = '<div style="color:var(--muted)">Error loading status.</div>';
+        }
+      }
     </script>
   </body>
 </html>
