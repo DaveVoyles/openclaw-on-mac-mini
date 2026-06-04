@@ -1379,6 +1379,73 @@ async def api_status_handler(request):
     return web.json_response(checks)
 
 
+async def api_github_activity_handler(request: web.Request) -> web.Response:
+    """Return recent GitHub commits and open PRs for configured repos."""
+    import json as _json
+    import os
+
+    token = os.environ.get("GITHUB_TOKEN", "")
+    repos_raw = os.environ.get("GITHUB_DEFAULT_REPOS", "")
+
+    if not token:
+        return web.json_response({"error": "GITHUB_TOKEN not set", "commits": [], "prs": [], "repos": []})
+
+    repos = [repo.strip() for repo in repos_raw.split(",") if repo.strip()] if repos_raw else []
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    result: dict[str, list[dict[str, object]] | list[str]] = {"commits": [], "prs": [], "repos": repos}
+
+    timeout = aiohttp.ClientTimeout(total=10)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        for repo in repos[:5]:
+            try:
+                async with session.get(
+                    f"https://api.github.com/repos/{repo}/commits?per_page=3",
+                    headers=headers,
+                ) as resp:
+                    if resp.status == 200:
+                        commits = _json.loads(await resp.text())
+                        for commit in commits:
+                            result["commits"].append(
+                                {
+                                    "repo": repo,
+                                    "sha": str(commit.get("sha", ""))[:7],
+                                    "message": str(((commit.get("commit") or {}).get("message") or "").split("\n")[0])[:80],
+                                    "author": str((((commit.get("commit") or {}).get("author") or {}).get("name") or "")),
+                                    "date": str((((commit.get("commit") or {}).get("author") or {}).get("date") or "")),
+                                    "url": str(commit.get("html_url") or ""),
+                                }
+                            )
+            except Exception:
+                pass
+
+            try:
+                async with session.get(
+                    f"https://api.github.com/repos/{repo}/pulls?state=open&per_page=5",
+                    headers=headers,
+                ) as resp:
+                    if resp.status == 200:
+                        prs = _json.loads(await resp.text())
+                        for pr in prs:
+                            result["prs"].append(
+                                {
+                                    "repo": repo,
+                                    "number": pr.get("number"),
+                                    "title": str(pr.get("title") or "")[:60],
+                                    "url": str(pr.get("html_url") or ""),
+                                    "author": str(((pr.get("user") or {}).get("login") or "")),
+                                }
+                            )
+            except Exception:
+                pass
+
+    result["commits"].sort(key=lambda item: str(item.get("date") or ""), reverse=True)
+    result["commits"] = result["commits"][:10]
+    return web.json_response(result)
+
+
 async def api_sms_settings_handler(request: web.Request) -> web.Response:
     """Get/update dashboard SMS preferences for a specific Discord user."""
     from config import cfg
@@ -5050,3 +5117,196 @@ async def api_nas_browse_handler(request: web.Request) -> web.Response:
         error = str(exc)
 
     return web.json_response({"path": path, "entries": entries, "error": error})
+
+
+
+def _check_auth(request: web.Request) -> bool:
+    dashboard_token = _os.environ.get("DASHBOARD_API_TOKEN", "").strip()
+    dashboard_auth_required = _os.environ.get("DASHBOARD_API_AUTH_REQUIRED", "true").lower() == "true"
+    if dashboard_token and dashboard_auth_required:
+        auth = request.headers.get("Authorization", "")
+        if auth.lower().startswith("bearer ") and auth[7:].strip() == dashboard_token:
+            return True
+        header_token = request.headers.get("X-OpenClaw-Token", "").strip()
+        query_token = request.rel_url.query.get("api_key", "").strip()
+        return header_token == dashboard_token or query_token == dashboard_token
+    return _v1_auth_ok(request)
+
+
+async def api_network_ping_handler(request):
+    import asyncio
+    import os
+
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+
+    machines = {
+        "mbp": {"label": "MacBook Pro", "ip": "192.168.1.131"},
+        "mbp2": {"label": "MacBook Pro 2", "ip": "192.168.1.136"},
+    }
+    if os.environ.get("WOL_MACBOOK_MAC") and "mbp" not in machines:
+        machines["mbp"] = {"label": "MacBook Pro", "ip": "192.168.1.131"}
+
+    results = {}
+    for key, info in machines.items():
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "ping",
+                "-c",
+                "1",
+                "-W",
+                "1",
+                info["ip"],
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await asyncio.wait_for(proc.wait(), timeout=3.0)
+            online = proc.returncode == 0
+        except Exception:
+            online = False
+        results[key] = {"label": info["label"], "ip": info["ip"], "online": online}
+
+    return web.Response(
+        content_type="application/json",
+        text=json.dumps({"machines": results, "timestamp": time.time()}),
+    )
+
+
+async def api_hermes_memory_get_handler(request):
+    import os
+
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+
+    file_param = (request.rel_url.query.get("file", "memory") or "memory").strip().lower()
+    path = os.path.expanduser("~/.hermes/SOUL.md" if file_param == "soul" else "~/.hermes/memories/MEMORY.md")
+    try:
+        with open(path, encoding="utf-8") as f:
+            content = f.read()
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps({
+                "content": content,
+                "path": path,
+                "file": file_param,
+                "saved_at": os.path.getmtime(path),
+            }),
+        )
+    except Exception as e:
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps({"error": str(e), "content": "", "path": path, "file": file_param}),
+        )
+
+
+async def api_hermes_memory_post_handler(request):
+    import os
+
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+
+    file_param = (request.rel_url.query.get("file", "memory") or "memory").strip().lower()
+    path = os.path.expanduser("~/.hermes/SOUL.md" if file_param == "soul" else "~/.hermes/memories/MEMORY.md")
+    try:
+        data = await request.json()
+        content = data.get("content", "")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps({"ok": True, "path": path, "file": file_param, "saved_at": time.time()}),
+        )
+    except Exception as e:
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps({"ok": False, "error": str(e), "path": path, "file": file_param}),
+        )
+
+
+def _format_uptime_human(seconds: float) -> str:
+    total_seconds = max(0, int(seconds))
+    days, remainder = divmod(total_seconds, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, _ = divmod(remainder, 60)
+    parts = []
+    if days:
+        parts.append(f"{days}d")
+    if hours or days:
+        parts.append(f"{hours}h")
+    parts.append(f"{minutes}m")
+    return " ".join(parts)
+
+
+async def api_system_health_handler(request):
+    import os
+    import shutil
+    import time
+
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+
+    result = {}
+
+    try:
+        with open("/proc/loadavg", encoding="utf-8") as f:
+            loadavg = f.read().strip()
+        load_parts = loadavg.split()
+        result["loadavg_raw"] = loadavg
+        result["loadavg"] = {
+            "1m": float(load_parts[0]) if len(load_parts) > 0 else 0.0,
+            "5m": float(load_parts[1]) if len(load_parts) > 1 else 0.0,
+            "15m": float(load_parts[2]) if len(load_parts) > 2 else 0.0,
+        }
+    except Exception as e:
+        result["loadavg_raw"] = f"error: {e}"
+        result["loadavg"] = {"1m": 0.0, "5m": 0.0, "15m": 0.0}
+
+    try:
+        meminfo = {}
+        with open("/proc/meminfo", encoding="utf-8") as f:
+            for line in f.read().strip().splitlines():
+                if ":" not in line:
+                    continue
+                key, value = line.split(":", 1)
+                meminfo[key] = value.strip()
+        mem_total_kb = int(meminfo.get("MemTotal", "0 kB").split()[0])
+        mem_avail_kb = int(meminfo.get("MemAvailable", "0 kB").split()[0])
+        mem_used_kb = max(0, mem_total_kb - mem_avail_kb)
+        result["memory"] = {
+            "total_kb": mem_total_kb,
+            "available_kb": mem_avail_kb,
+            "used_kb": mem_used_kb,
+            "total_gb": round(mem_total_kb / 1024 / 1024, 2),
+            "available_gb": round(mem_avail_kb / 1024 / 1024, 2),
+            "used_gb": round(mem_used_kb / 1024 / 1024, 2),
+        }
+    except Exception as e:
+        result["memory"] = {"error": str(e), "total_gb": 0.0, "available_gb": 0.0, "used_gb": 0.0}
+
+    try:
+        disk = shutil.disk_usage("/")
+        result["disk"] = {
+            "total_bytes": disk.total,
+            "used_bytes": disk.used,
+            "free_bytes": disk.free,
+            "total_gb": round(disk.total / 1024 / 1024 / 1024, 2),
+            "used_gb": round(disk.used / 1024 / 1024 / 1024, 2),
+            "free_gb": round(disk.free / 1024 / 1024 / 1024, 2),
+        }
+    except Exception as e:
+        result["disk"] = {"error": str(e), "total_gb": 0.0, "used_gb": 0.0, "free_gb": 0.0}
+
+    try:
+        with open("/proc/uptime", encoding="utf-8") as f:
+            uptime_secs = float(f.read().split()[0])
+        result["uptime"] = {
+            "seconds": uptime_secs,
+            "human": _format_uptime_human(uptime_secs),
+        }
+    except Exception as e:
+        result["uptime"] = {"error": str(e), "seconds": 0.0, "human": "Unavailable"}
+
+    result["hostname"] = os.uname().nodename
+    result["timestamp"] = time.time()
+    return web.Response(content_type="application/json", text=json.dumps(result))

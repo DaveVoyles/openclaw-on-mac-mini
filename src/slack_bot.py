@@ -71,6 +71,29 @@ _MENTION_RE = re.compile(r"<@[A-Z0-9]+>")
 _HERMES_SESSION_RE = re.compile(r"^Session:\s*(\S+)", re.MULTILINE)
 
 
+async def _send_ntfy(title: str, message: str, priority: str = "default") -> None:
+    """Send a push notification via ntfy.sh if configured."""
+    import aiohttp
+
+    ntfy_url = os.environ.get("NTFY_URL", "")
+    ntfy_topic = os.environ.get("NTFY_TOPIC", "")
+    if not ntfy_url or not ntfy_topic:
+        return
+    try:
+        url = f"{ntfy_url.rstrip('/')}/{ntfy_topic}"
+        async with aiohttp.ClientSession() as session:
+            await session.post(
+                url,
+                data=message.encode(),
+                headers={
+                    "Title": title,
+                    "Priority": priority,
+                },
+            )
+    except Exception:
+        pass
+
+
 async def _plex_get_text(plex_url: str, path: str) -> tuple[int, str]:
     headers: dict[str, str] = {}
     plex_token = (os.getenv("PLEX_TOKEN", "") or "").strip()
@@ -103,6 +126,59 @@ async def _overseerr_request(
             if "json" in content_type:
                 return resp.status, await resp.json(content_type=None)
             return resp.status, await resp.text()
+
+
+async def _openclaw_local_json(
+    method: str,
+    path: str,
+    *,
+    params: dict[str, str] | None = None,
+    payload: dict[str, Any] | None = None,
+    timeout_s: int = 15,
+) -> tuple[int, dict[str, Any] | list[Any] | str]:
+    base_url = (os.getenv("OPENCLAW_LOCAL_API_BASE", "http://localhost:8765") or "http://localhost:8765").rstrip("/")
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout_s)) as session:
+        async with session.request(method, f"{base_url}{path}", params=params, json=payload) as resp:
+            content_type = (resp.headers.get("Content-Type") or "").lower()
+            if "json" in content_type:
+                return resp.status, await resp.json(content_type=None)
+            return resp.status, await resp.text()
+
+
+def _wol_machine_registry() -> dict[str, dict[str, str | None]]:
+    machines: dict[str, dict[str, str | None]] = {}
+    if os.environ.get("WOL_MACBOOK_PRO_MAC"):
+        machines["mbp"] = {
+            "label": "MacBook Pro",
+            "mac": os.environ["WOL_MACBOOK_PRO_MAC"],
+            "ip": "192.168.1.131",
+        }
+    if os.environ.get("WOL_MACBOOK_PRO2_MAC"):
+        machines["mbp2"] = {
+            "label": "MacBook Pro 2",
+            "mac": os.environ["WOL_MACBOOK_PRO2_MAC"],
+            "ip": "192.168.1.136",
+        }
+    if not machines and os.environ.get("WOL_MACBOOK_MAC"):
+        machines["mbp"] = {
+            "label": "MacBook",
+            "mac": os.environ["WOL_MACBOOK_MAC"],
+            "ip": None,
+        }
+    return machines
+
+
+def _send_wol_magic_packet(mac: str, broadcast_ip: str) -> None:
+    import socket
+
+    mac_clean = re.sub(r"[:\-]", "", mac).upper()
+    if len(mac_clean) != 12:
+        raise ValueError(f"Invalid MAC address format: {mac}")
+    magic = bytes.fromhex("FF" * 6 + mac_clean * 16)
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        sock.sendto(magic, (broadcast_ip, 9))
+        sock.sendto(magic, ("255.255.255.255", 9))
 
 
 def _parse_plex_xml(xml_text: str) -> Any | None:
@@ -596,7 +672,9 @@ _HELP_TEXT = (
     "*Tips:*\n"
     "• `/simple on` — always get plain, easy-to-read answers (no need to type `--simple` every time)\n"
     "• Add `--simple` to any one message for a one-off plain answer\n"
-    "• `/hermes <question>` — always open a Hermes thread for host-side help\n"
+    "• `/hermes <question>` or `/h <question>` — always open a Hermes thread for host-side help\n"
+    "• `/wake mbp|mbp2` — send a Wake-on-LAN packet to a configured MacBook Pro\n"
+    "• `/nas df|ls <path>|free` — inspect NAS disk, folders, and resource usage\n"
     "• Reply in a thread to keep context from earlier messages\n\n"
     '_Example: Upload Budget2025.xlsx and type: "summarize the totals for me"_'
 )
@@ -687,6 +765,7 @@ def _on_model_fallback(provider: str, failures: int) -> None:
                 "Routing to next provider in chain."
             )
             asyncio.ensure_future(_slack_client_ref.chat_postMessage(channel=SLACK_NOTIFY_USER_ID, text=msg))
+            asyncio.ensure_future(_send_ntfy("⚠️ Model Fallback", f"Provider {provider} circuit opened", priority="high"))
     except Exception:
         pass
 
@@ -1406,6 +1485,7 @@ async def _digest_loop(client: Any) -> None:
                 try:
                     await client.chat_postMessage(channel=user_id, text=text)
                     prefs[user_id]["last_sent"] = now
+                    asyncio.create_task(_send_ntfy("📋 Evening Digest Ready", "Your daily digest has been posted to Slack"))
                     log.info("Sent digest to %s (%d files)", user_id, len(recent))
                 except Exception as exc:
                     log.warning("_digest_loop: failed to DM %s: %s", user_id, exc)
@@ -2400,7 +2480,7 @@ async def _send_answer(
     model_pref: str = "auto",
     history: list[dict] | None = None,
     simple: bool = False,
-) -> None:
+) -> str:
     """Ask OpenClaw, update the thinking placeholder, and register the reply for feedback."""
     t0 = time.monotonic()
     progress_task: asyncio.Task | None = None
@@ -2481,6 +2561,8 @@ async def _send_answer(
 
     if sent_ts:
         _register_bot_message(channel, sent_ts, user_id)
+
+    return text
 
 
 # ---------------------------------------------------------------------------
@@ -2963,6 +3045,9 @@ def _build_home_view(user_id: str, name: str) -> dict:
         "*Your commands:*\n"
         "• `/chat <question>` — ask me anything\n"
         "• `/hermes <question>` — always start a Hermes thread\n"
+        "• `/h <question>` — shorthand alias for Hermes\n"
+        "• `/wake mbp|mbp2` — wake a MacBook Pro on the LAN\n"
+        "• `/nas df|ls <path>|free` — inspect NAS storage and files\n"
         "• `/help` — full command list\n"
         "• `/files` — browse your uploaded files\n"
         "• `/brief` — last 5 uploads at a glance\n"
@@ -3593,7 +3678,7 @@ def _register_core_handlers(app: Any) -> None:
         thinking_resp = await say(text="⏳ Thinking…")
         thinking_ts = (thinking_resp or {}).get("ts")
 
-        await _send_answer(
+        response_text = await _send_answer(
             client=client,
             say=say,
             channel=channel,
@@ -3605,6 +3690,8 @@ def _register_core_handlers(app: Any) -> None:
             simple=use_simple,
             history=history,
         )
+        if response_text:
+            asyncio.create_task(_send_ntfy("OpenClaw Reply", f"Bot replied in DM: {response_text[:100]}"))
         _onboarded_users.add(user_id)
 
     # ------------------------------------------------------------------
@@ -5840,20 +5927,18 @@ def _register_integration_handlers(app: Any) -> None:
 
         asyncio.create_task(_bg())
 
-    @app.command("/hermes")
-    async def handle_slash_hermes(ack: Any, body: dict[str, Any], client: Any) -> None:
-        await ack()
+    async def _handle_hermes_slash(body: dict[str, Any], client: Any, *, command_name: str) -> None:
         user_id: str = body.get("user_id", "")
         channel_id: str = body.get("channel_id", user_id)
         text: str = (body.get("text") or "").strip()
 
-        ok, msg = _copilot_owner_check(user_id, command_name="/hermes")
+        ok, msg = _copilot_owner_check(user_id, command_name=command_name)
         if not ok:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg or "🛑 forbidden")
             return
 
         if not text:
-            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="Usage: `/hermes <your question>`")
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"Usage: `{command_name} <your question>`")
             return
 
         prompt_text, cwd_override = _parse_copilot_flags(text)
@@ -5872,6 +5957,7 @@ def _register_integration_handlers(app: Any) -> None:
                     f"🧠 <@{user_id}> opened a Hermes session\n"
                     f"_prompt:_ `{prompt_text[:300]}`\n"
                     f"_cwd:_ `{dir_label}`\n"
+                    f"_command:_ `{command_name}`\n"
                     "_backend:_ `hermes`\n"
                     "_reply in this thread to continue_"
                 ),
@@ -5892,7 +5978,7 @@ def _register_integration_handlers(app: Any) -> None:
                     cwd=cwd_override,
                 )
             except Exception as exc:  # noqa: BLE001
-                log.warning("/hermes start_session crashed: %s", exc)
+                log.warning("%s start_session crashed: %s", command_name, exc)
                 try:
                     await client.chat_postMessage(
                         channel=channel_id, thread_ts=thread_ts,
@@ -5936,6 +6022,17 @@ def _register_integration_handlers(app: Any) -> None:
                     pass
 
         asyncio.create_task(_bg())
+
+    @app.command("/hermes")
+    async def handle_slash_hermes(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        await _handle_hermes_slash(body, client, command_name="/hermes")
+
+    @app.command("/h")
+    async def handle_slash_h(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
+        _ = say
+        await ack()
+        await _handle_hermes_slash(body, client, command_name="/h")
 
     # ------------------------------------------------------------------
     # Companion slash commands for Phase 3 session management
@@ -6294,6 +6391,293 @@ def _register_integration_handlers(app: Any) -> None:
         request_id = request_body.get("id") if isinstance(request_body, dict) else None
         request_suffix = f" (request #{request_id})" if request_id else ""
         await respond(text=f"✅ Requested *{_overseerr_title(match)}* via Overseerr{request_suffix}.")
+
+    @app.command("/wake")
+    async def handle_slash_wake(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
+        _ = say
+        await ack()
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", user_id)
+        requested = (body.get("text") or "").strip().lower()
+        machines = _wol_machine_registry()
+        available_lines = [
+            f"• `{name}` — *{info['label']}*" + (f" (`{info['ip']}`)" if info.get("ip") else "")
+            for name, info in machines.items()
+        ]
+
+        if not machines:
+            text = "❌ No Wake-on-LAN targets are configured. Set `WOL_MACBOOK_PRO_MAC` and/or `WOL_MACBOOK_PRO2_MAC`."
+            blocks = [
+                {"type": "section", "text": {"type": "mrkdwn", "text": "*⚡ Wake-on-LAN*"}},
+                {"type": "section", "text": {"type": "mrkdwn", "text": text}},
+            ]
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text, blocks=blocks)
+            return
+
+        if requested not in machines:
+            text = "❌ Usage: `/wake mbp` or `/wake mbp2`"
+            blocks = [
+                {"type": "section", "text": {"type": "mrkdwn", "text": "*⚡ Wake-on-LAN*"}},
+                {"type": "section", "text": {"type": "mrkdwn", "text": text}},
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": "*Available machines*\n" + "\n".join(available_lines)},
+                },
+            ]
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text, blocks=blocks)
+            return
+
+        machine = machines[requested]
+        broadcast_ip = os.environ.get("WOL_BROADCAST_IP", "192.168.1.255")
+        try:
+            _send_wol_magic_packet(str(machine["mac"]), broadcast_ip)
+            text = f"✅ Sent a Wake-on-LAN packet to {machine['label']} ({requested})."
+            blocks = [
+                {"type": "section", "text": {"type": "mrkdwn", "text": "*⚡ Wake-on-LAN*"}},
+                {"type": "section", "text": {"type": "mrkdwn", "text": text}},
+                {
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": (
+                                f"Target IP: `{machine.get('ip') or 'unknown'}` · "
+                                f"Broadcast: `{broadcast_ip}`"
+                            ),
+                        }
+                    ],
+                },
+            ]
+        except Exception as exc:  # noqa: BLE001
+            text = f"❌ Failed to send Wake-on-LAN packet: {exc}"
+            blocks = [
+                {"type": "section", "text": {"type": "mrkdwn", "text": "*⚡ Wake-on-LAN*"}},
+                {"type": "section", "text": {"type": "mrkdwn", "text": text}},
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": "*Available machines*\n" + "\n".join(available_lines)},
+                },
+            ]
+        await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text, blocks=blocks)
+
+    @app.command("/nas")
+    async def handle_slash_nas(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
+        _ = say
+        await ack()
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", user_id)
+        text = (body.get("text") or "").strip()
+        parts = text.split(maxsplit=1)
+        subcommand = parts[0].lower() if parts else ""
+        remainder = parts[1].strip() if len(parts) > 1 else ""
+
+        def _usage_blocks() -> tuple[str, list[dict[str, Any]]]:
+            usage_text = "❌ Usage: `/nas df`, `/nas ls <path>`, or `/nas free`"
+            return (
+                usage_text,
+                [
+                    {"type": "section", "text": {"type": "mrkdwn", "text": "*💾 NAS tools*"}},
+                    {"type": "section", "text": {"type": "mrkdwn", "text": usage_text}},
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": (
+                                "*Examples*\n"
+                                "• `/nas df`\n"
+                                "• `/nas ls /Users/davevoyles/mnt/ROMs/ROMs`\n"
+                                "• `/nas free`"
+                            ),
+                        },
+                    },
+                ],
+            )
+
+        def _disk_blocks(payload: dict[str, Any], *, heading: str = "*💾 NAS disk usage*") -> tuple[str, list[dict[str, Any]]]:
+            shares = payload.get("shares", []) if isinstance(payload, dict) else []
+            if not shares:
+                text_out = "❌ No NAS disk data is available right now."
+                return (
+                    text_out,
+                    [
+                        {"type": "section", "text": {"type": "mrkdwn", "text": heading}},
+                        {"type": "section", "text": {"type": "mrkdwn", "text": text_out}},
+                    ],
+                )
+
+            lines: list[str] = []
+            for share in shares:
+                pct_raw = str(share.get("use_pct", "0%"))
+                try:
+                    pct_num = int(pct_raw.rstrip("%") or "0")
+                except ValueError:
+                    pct_num = 0
+                emoji = "⚠️" if pct_num >= 85 else "✅"
+                label = str(share.get("label") or share.get("mount") or "share")
+                lines.append(
+                    f"{emoji} *{label}* — {share.get('used', '?')} / {share.get('size', '?')} used "
+                    f"({pct_raw}) · free {share.get('avail', '?')}"
+                )
+            source = payload.get("source", "unknown") if isinstance(payload, dict) else "unknown"
+            text_out = "\n".join(lines)
+            return (
+                text_out,
+                [
+                    {"type": "section", "text": {"type": "mrkdwn", "text": heading}},
+                    {"type": "section", "text": {"type": "mrkdwn", "text": text_out}},
+                    {"type": "context", "elements": [{"type": "mrkdwn", "text": f"source: `{source}`"}]},
+                ],
+            )
+
+        if not subcommand:
+            usage_text, usage_blocks = _usage_blocks()
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=usage_text, blocks=usage_blocks)
+            return
+
+        if subcommand == "df":
+            try:
+                status, payload = await _openclaw_local_json("GET", "/api/nas/disk", timeout_s=20)
+            except Exception as exc:  # noqa: BLE001
+                text_out = f"❌ Could not reach NAS disk endpoint: {exc}"
+                blocks = [
+                    {"type": "section", "text": {"type": "mrkdwn", "text": "*💾 NAS disk usage*"}},
+                    {"type": "section", "text": {"type": "mrkdwn", "text": text_out}},
+                ]
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, blocks=blocks)
+                return
+
+            if status != 200 or not isinstance(payload, dict):
+                detail = payload if isinstance(payload, str) else json.dumps(payload)[:300]
+                text_out = f"❌ NAS disk request failed (HTTP {status}): {detail}"
+                blocks = [
+                    {"type": "section", "text": {"type": "mrkdwn", "text": "*💾 NAS disk usage*"}},
+                    {"type": "section", "text": {"type": "mrkdwn", "text": text_out}},
+                ]
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, blocks=blocks)
+                return
+
+            text_out, blocks = _disk_blocks(payload)
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, blocks=blocks)
+            return
+
+        if subcommand == "ls":
+            if not remainder:
+                usage_text, usage_blocks = _usage_blocks()
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=usage_text, blocks=usage_blocks)
+                return
+
+            try:
+                status, payload = await _openclaw_local_json(
+                    "GET",
+                    "/api/nas/browse",
+                    params={"path": remainder},
+                    timeout_s=20,
+                )
+            except Exception as exc:  # noqa: BLE001
+                text_out = f"❌ Could not reach NAS browse endpoint: {exc}"
+                blocks = [
+                    {"type": "section", "text": {"type": "mrkdwn", "text": "*📁 NAS browse*"}},
+                    {"type": "section", "text": {"type": "mrkdwn", "text": text_out}},
+                ]
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, blocks=blocks)
+                return
+
+            if status != 200 or not isinstance(payload, dict):
+                detail = payload if isinstance(payload, str) else json.dumps(payload)[:300]
+                text_out = f"❌ NAS browse failed (HTTP {status}): {detail}"
+                blocks = [
+                    {"type": "section", "text": {"type": "mrkdwn", "text": "*📁 NAS browse*"}},
+                    {"type": "section", "text": {"type": "mrkdwn", "text": text_out}},
+                ]
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, blocks=blocks)
+                return
+
+            error_text = str(payload.get("error") or "")
+            if error_text:
+                text_out = f"❌ {error_text}"
+                blocks = [
+                    {"type": "section", "text": {"type": "mrkdwn", "text": "*📁 NAS browse*"}},
+                    {"type": "section", "text": {"type": "mrkdwn", "text": text_out}},
+                ]
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, blocks=blocks)
+                return
+
+            entries = payload.get("entries", [])
+            shown = entries[:20] if isinstance(entries, list) else []
+            if shown:
+                lines = []
+                for entry in shown:
+                    icon = "📁" if entry.get("is_dir") else "📄"
+                    size_text = f" — `{entry.get('size')}`" if entry.get("size") else ""
+                    lines.append(f"{icon} `{entry.get('name', '?')}`{size_text}")
+                text_out = "\n".join(lines)
+            else:
+                text_out = "ℹ️ This folder is empty."
+
+            blocks = [
+                {"type": "section", "text": {"type": "mrkdwn", "text": "*📁 NAS browse*"}},
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": f"Path: `{payload.get('path', remainder)}`\n{text_out}"},
+                },
+            ]
+            if isinstance(entries, list) and len(entries) > len(shown):
+                blocks.append(
+                    {
+                        "type": "context",
+                        "elements": [
+                            {"type": "mrkdwn", "text": f"showing first {len(shown)} of {len(entries)} entries"}
+                        ],
+                    }
+                )
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, blocks=blocks)
+            return
+
+        if subcommand == "free":
+            try:
+                from nas import get_nas_storage_health
+
+                summary = await get_nas_storage_health()
+            except Exception as exc:  # noqa: BLE001
+                summary = f"❌ NAS utilization query failed: {exc}"
+
+            if summary and not summary.startswith("❌"):
+                slack_summary = summary.replace("**", "*")
+                text_out = "✅ NAS resource summary loaded."
+                blocks = [
+                    {"type": "section", "text": {"type": "mrkdwn", "text": "*🧠 NAS resources*"}},
+                    {"type": "section", "text": {"type": "mrkdwn", "text": slack_summary}},
+                ]
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, blocks=blocks)
+                return
+
+            try:
+                status, payload = await _openclaw_local_json("GET", "/api/nas/disk", timeout_s=20)
+            except Exception as exc:  # noqa: BLE001
+                text_out = f"❌ NAS resource query failed and disk fallback was unavailable: {exc}"
+                blocks = [
+                    {"type": "section", "text": {"type": "mrkdwn", "text": "*🧠 NAS resources*"}},
+                    {"type": "section", "text": {"type": "mrkdwn", "text": text_out}},
+                ]
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, blocks=blocks)
+                return
+
+            if status != 200 or not isinstance(payload, dict):
+                detail = payload if isinstance(payload, str) else json.dumps(payload)[:300]
+                text_out = f"❌ NAS resource query failed and disk fallback returned HTTP {status}: {detail}"
+                blocks = [
+                    {"type": "section", "text": {"type": "mrkdwn", "text": "*🧠 NAS resources*"}},
+                    {"type": "section", "text": {"type": "mrkdwn", "text": text_out}},
+                ]
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, blocks=blocks)
+                return
+
+            text_out, blocks = _disk_blocks(payload, heading="*🧠 NAS resources*\n⚠️ DSM resource data unavailable — showing disk usage instead.")
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, blocks=blocks)
+            return
+
+        usage_text, usage_blocks = _usage_blocks()
+        await client.chat_postEphemeral(channel=channel_id, user=user_id, text=usage_text, blocks=usage_blocks)
 
     # ------------------------------------------------------------------
     # Phase 5 — /host quick-action shortcuts
@@ -7038,6 +7422,67 @@ async def create_slack_handler() -> Any | None:  # type: ignore[return]
     asyncio.create_task(_digest_loop(app.client))
     log.info("Digest loop started")
 
+    async def _morning_briefing() -> str:
+        """Send morning briefing DM to owner."""
+        import os
+        import shutil
+        import sqlite3
+        import time as _time
+
+        notify_user = os.environ.get("SLACK_NOTIFY_USER_ID", "")
+        if not notify_user:
+            return "Morning briefing skipped: SLACK_NOTIFY_USER_ID not set"
+
+        sections = ["*☀️ Good morning! Here's your daily briefing:*\n"]
+
+        weather_loc = os.environ.get("WEATHER_DEFAULT_LOCATION", "")
+        if weather_loc:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        f"https://wttr.in/{weather_loc}?format=3",
+                        timeout=aiohttp.ClientTimeout(total=5),
+                    ) as resp:
+                        weather = await resp.text()
+                sections.append(f"🌤 *Weather:* {weather.strip()}")
+            except Exception:
+                pass
+
+        try:
+            db_path = os.path.expanduser("~/.hermes/state.db")
+            yesterday = _time.time() - 86400
+            conn = sqlite3.connect(f"file:{db_path}?immutable=1", uri=True)
+            try:
+                count = conn.execute(
+                    "SELECT COUNT(*) FROM sessions WHERE started_at > ?",
+                    (yesterday,),
+                ).fetchone()[0]
+            finally:
+                conn.close()
+            sections.append(f"🤖 *Hermes sessions yesterday:* {count}")
+        except Exception:
+            pass
+
+        try:
+            nas_path = os.environ.get("NAS_BACKUP_PATH", "/Volumes/Misc")
+            if os.path.exists(nas_path):
+                usage = shutil.disk_usage(nas_path)
+                pct = usage.used / usage.total * 100
+                sections.append(
+                    f"💾 *NAS disk:* {pct:.1f}% used ({usage.free // 1_073_741_824:.0f} GB free)"
+                )
+        except Exception:
+            pass
+
+        message = "\n".join(sections)
+        try:
+            await app.client.chat_postMessage(channel=notify_user, text=message)
+            asyncio.create_task(_send_ntfy("☀️ Morning Briefing", "Daily briefing posted to Slack"))
+            return "Morning briefing sent"
+        except Exception as exc:
+            log.error("Morning briefing failed: %s", exc)
+            return f"Morning briefing failed: {exc}"
+
     async def _hermes_nightly_upgrade() -> str:
         try:
             from host_bridge import HERMES_BIN, _enabled as _host_bridge_enabled, run_shell
@@ -7076,7 +7521,29 @@ async def create_slack_handler() -> Any | None:  # type: ignore[return]
     try:
         from scheduler import scheduler
 
-        scheduler.register_skills({"hermes_nightly_upgrade": _hermes_nightly_upgrade})
+        scheduler.register_skills(
+            {
+                "morning_briefing": _morning_briefing,
+                "hermes_nightly_upgrade": _hermes_nightly_upgrade,
+            }
+        )
+
+        briefing_hour = int(os.getenv("MORNING_BRIEFING_HOUR", "8"))
+        morning_task = next((task for task in scheduler.list_tasks() if task.action == "morning_briefing"), None)
+        if morning_task is None:
+            scheduler.create(
+                action="morning_briefing",
+                args={},
+                hour=briefing_hour,
+                minute=0,
+                created_by="system",
+                alert_only=False,
+            )
+            log.info("Registered morning briefing task for %02d:00 UTC", briefing_hour)
+        elif morning_task.cron_hour != briefing_hour or morning_task.cron_minute != 0:
+            scheduler.update(morning_task.task_id, cron_hour=briefing_hour, cron_minute=0, enabled=True)
+            log.info("Updated morning briefing task to %02d:00 UTC", briefing_hour)
+
         if not any(task.action == "hermes_nightly_upgrade" for task in scheduler.list_tasks()):
             scheduler.create(
                 action="hermes_nightly_upgrade",
@@ -7089,7 +7556,7 @@ async def create_slack_handler() -> Any | None:  # type: ignore[return]
             log.info("Registered nightly Hermes upgrade task for 03:00 UTC")
         scheduler.start()
     except Exception as exc:
-        log.warning("Failed to initialize Hermes nightly scheduler task: %s", exc)
+        log.warning("Failed to initialize scheduled Slack tasks: %s", exc)
 
     # Start Dropbox watch loop (no-op when DROPBOX_ACCESS_TOKEN not set)
     try:

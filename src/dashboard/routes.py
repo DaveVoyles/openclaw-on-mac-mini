@@ -12,7 +12,8 @@ from .api_handlers import (
     api_copilot_sessions_handler,
     api_copilot_stream_handler,
     api_hermes_status_handler,
-    api_hermes_memory_handler,
+    api_hermes_memory_get_handler,
+    api_hermes_memory_post_handler,
     api_hermes_memory_seed_handler,
     api_hermes_skills_seed_handler,
     api_hermes_sessions_handler,
@@ -38,8 +39,10 @@ from .api_handlers import (
     api_dream_health_handler,
     api_errors_handler,
     api_goals_handler,
+    api_github_activity_handler,
     api_knowledge_graph_handler,
     api_memories_handler,
+    api_network_ping_handler,
     api_network_wol_handler,
     api_plan_detail_handler,
     api_plans_handler,
@@ -60,6 +63,7 @@ from .api_handlers import (
     api_sms_settings_handler,
     api_sms_status_handler,
     api_status_handler,
+    api_system_health_handler,
     api_task_status_detail_handler,
     api_task_status_handler,
     api_threads_handler,
@@ -166,6 +170,7 @@ def setup_dashboard(
     app.router.add_get("/api/tasks/{source}/{task_id}", api_task_status_detail_handler)
     app.router.add_get("/api/threads", api_threads_handler)
     app.router.add_get("/api/goals", api_goals_handler)
+    app.router.add_get("/api/github/activity", api_github_activity_handler)
     app.router.add_get("/api/research", api_research_handler)
     app.router.add_get("/api/schedules", api_schedules_handler)
     app.router.add_post("/api/schedules/{task_id}", action(api_schedule_update_handler))
@@ -196,8 +201,8 @@ def setup_dashboard(
     app.router.add_post("/api/copilot/ping", action(api_copilot_ping_handler))
     app.router.add_get("/api/copilot/sessions", api_copilot_sessions_handler)
     app.router.add_get("/api/hermes/status", api_hermes_status_handler)
-    app.router.add_get("/api/hermes/memory", api_hermes_memory_handler)
-    app.router.add_post("/api/hermes/memory", action(api_hermes_memory_handler))
+    app.router.add_get("/api/hermes/memory", api_hermes_memory_get_handler)
+    app.router.add_post("/api/hermes/memory", action(api_hermes_memory_post_handler))
     app.router.add_get("/api/hermes/memory-seed", api_hermes_memory_seed_handler)
     app.router.add_get("/api/hermes/skills-seed", api_hermes_skills_seed_handler)
     app.router.add_get("/api/hermes/sessions", api_hermes_sessions_handler)
@@ -222,7 +227,9 @@ def setup_dashboard(
     app.router.add_get("/api/changelog", api_changelog_handler)
     app.router.add_get("/api/hermes/skills", api_hermes_skills_handler)
     app.router.add_get("/api/docker/status", api_docker_status_handler)
+    app.router.add_get("/api/network/ping", api_network_ping_handler)
     app.router.add_get("/api/network/wol", api_network_wol_handler)
     app.router.add_post("/api/network/wol", action(api_network_wol_handler))
+    app.router.add_get("/api/system/health", api_system_health_handler)
     app.router.add_post("/api/hermes/upgrade", action(api_hermes_upgrade_handler))
     app.router.add_get("/api/nas/browse", api_nas_browse_handler)

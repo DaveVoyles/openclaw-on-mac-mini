@@ -4,6 +4,20 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>OpenClaw Dashboard</title>
+    <script>
+      (() => {
+        try {
+          const theme = localStorage.getItem("oc-theme") || "dark";
+          if (theme === "dark") {
+            document.documentElement.setAttribute("data-bs-theme", "dark");
+          } else {
+            document.documentElement.removeAttribute("data-bs-theme");
+          }
+        } catch (_) {
+          document.documentElement.setAttribute("data-bs-theme", "dark");
+        }
+      })();
+    </script>
     <style>
       :root {
         /* JHU Primary */
@@ -145,6 +159,150 @@
         display: flex;
         gap: 0.5rem;
         align-items: center;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+      }
+      .header-statuses {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .header-search {
+        position: relative;
+        flex: 1 1 320px;
+        min-width: 260px;
+        max-width: 420px;
+      }
+      .dashboard-search-input {
+        width: 100%;
+        padding: 0.45rem 0.8rem;
+        background: var(--surface-solid);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        color: var(--text);
+        font-size: 0.82rem;
+      }
+      .dashboard-search-input:focus {
+        outline: none;
+        border-color: var(--spirit-blue);
+        box-shadow: 0 0 0 3px rgba(104, 172, 229, 0.15);
+      }
+      .dashboard-search-input::placeholder {
+        color: var(--muted);
+      }
+      .search-results {
+        position: absolute;
+        top: calc(100% + 0.35rem);
+        left: 0;
+        right: 0;
+        display: none;
+        max-height: 320px;
+        overflow-y: auto;
+        padding: 0.35rem;
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        background: var(--surface-solid);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+        z-index: 25;
+      }
+      .search-results.show {
+        display: block;
+      }
+      .search-result-item {
+        width: 100%;
+        padding: 0.55rem 0.65rem;
+        border: none;
+        border-radius: 0.5rem;
+        background: transparent;
+        color: var(--text);
+        cursor: pointer;
+        text-align: left;
+      }
+      .search-result-item:hover,
+      .search-result-item:focus {
+        background: rgba(104, 172, 229, 0.12);
+        outline: none;
+      }
+      .search-result-title {
+        display: block;
+        font-size: 0.82rem;
+      }
+      .search-result-meta {
+        display: block;
+        margin-top: 0.12rem;
+        color: var(--muted);
+        font-size: 0.72rem;
+      }
+      .search-result-empty {
+        padding: 0.65rem;
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+      #theme-toggle {
+        min-width: 44px;
+        padding: 0.45rem 0.75rem;
+        justify-content: center;
+        font-size: 1rem;
+      }
+      .card-header {
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+      .card-header-actions {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin-left: auto;
+        flex-wrap: wrap;
+      }
+      .card-collapse-btn {
+        padding: 0.2rem 0.55rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 0.85rem;
+        line-height: 1;
+      }
+      .card-collapse-btn:hover {
+        border-color: var(--spirit-blue);
+        background: rgba(104, 172, 229, 0.15);
+        color: var(--text);
+      }
+      .card-search-hit {
+        animation: cardSearchFlash 1.4s ease;
+      }
+      @keyframes cardSearchFlash {
+        0% {
+          box-shadow: 0 0 0 0 rgba(241, 196, 0, 0.65);
+        }
+        35% {
+          box-shadow: 0 0 0 6px rgba(241, 196, 0, 0.28);
+          border-color: rgba(241, 196, 0, 0.9);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(241, 196, 0, 0);
+          border-color: var(--border);
+        }
+      }
+      html:not([data-bs-theme="dark"]) {
+        color-scheme: light;
+        --bg: #f4f7fb;
+        --surface: rgba(255, 255, 255, 0.9);
+        --surface-solid: #ffffff;
+        --border: rgba(0, 45, 114, 0.16);
+        --text: #10213f;
+        --muted: #4d678f;
+        --glow: rgba(0, 119, 216, 0.12);
+      }
+      html[data-bs-theme="dark"] {
+        color-scheme: dark;
+      }
+      html:not([data-bs-theme="dark"]) .card-collapse-btn {
+        border-color: rgba(0, 45, 114, 0.12);
+        background: rgba(0, 45, 114, 0.04);
       }
 
       /* Badges */
@@ -615,7 +773,8 @@
           align-items: flex-start;
           gap: 0.5rem;
         }
-        .header-right { margin-left: 0; }
+        .header-right { margin-left: 0; width: 100%; }
+        .header-search { min-width: 0; max-width: none; width: 100%; }
         h1 { font-size: 1.3rem; }
 
         /* Btn row: wrap and fill width on very small screens */
@@ -691,10 +850,23 @@
             </div>
           </div>
           <div class="header-right">
-            <span id="status-badge" class="badge badge-green"
-              ><span class="badge-dot"></span> Online</span
-            >
-            <span id="uptime-badge" class="badge badge-gold"></span>
+            <div class="header-search">
+              <input
+                id="global-search"
+                class="dashboard-search-input"
+                type="search"
+                placeholder="🔍 Search cards, Hermes sessions, changelog…"
+                autocomplete="off"
+              />
+              <div id="global-search-results" class="search-results"></div>
+            </div>
+            <div class="header-statuses">
+              <span id="status-badge" class="badge badge-green"
+                ><span class="badge-dot"></span> Online</span
+              >
+              <span id="uptime-badge" class="badge badge-gold"></span>
+              <button id="theme-toggle" class="btn" type="button" aria-label="Toggle theme" title="Toggle theme">🌙</button>
+            </div>
           </div>
         </div>
 
@@ -989,9 +1161,47 @@
           </h2>
           <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
             <p style="margin:0;color:var(--muted);font-size:0.82rem">Send a WoL magic packet over the LAN (192.168.1.255).</p>
-            <button class="btn" id="wol-btn-mbp" onclick="sendWol('mbp')" style="font-size:0.8rem;padding:0.35rem 0.8rem">⚡ MacBook Pro <span style="color:var(--muted);font-size:0.75em">(192.168.1.131)</span></button>
-            <button class="btn" id="wol-btn-mbp2" onclick="sendWol('mbp2')" style="font-size:0.8rem;padding:0.35rem 0.8rem">⚡ MacBook Pro 2 <span style="color:var(--muted);font-size:0.75em">(192.168.1.136)</span></button>
+            <div style="display:flex;align-items:center;gap:0.35rem">
+              <button class="btn" id="wol-btn-mbp" onclick="sendWol('mbp')" style="font-size:0.8rem;padding:0.35rem 0.8rem">⚡ MacBook Pro <span style="color:var(--muted);font-size:0.75em">(192.168.1.131)</span></button>
+              <span id="wol-status-mbp" class="badge bg-secondary ms-1">Unknown</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:0.35rem">
+              <button class="btn" id="wol-btn-mbp2" onclick="sendWol('mbp2')" style="font-size:0.8rem;padding:0.35rem 0.8rem">⚡ MacBook Pro 2 <span style="color:var(--muted);font-size:0.75em">(192.168.1.136)</span></button>
+              <span id="wol-status-mbp2" class="badge bg-secondary ms-1">Unknown</span>
+            </div>
             <span id="wol-status" style="font-size:0.82rem"></span>
+          </div>
+        </div>
+
+        <div class="card" id="system-health-card" style="margin-bottom:1rem">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap">
+            <span>🖥️ Mac Mini Health</span>
+            <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+              <span id="system-health-updated" style="font-size:0.75rem;color:var(--muted)">Waiting for first refresh…</span>
+              <button class="btn btn-sm" onclick="refreshSystemHealth()" style="font-size:0.75rem;padding:0.25rem 0.6rem">↻ Refresh</button>
+            </div>
+          </div>
+          <div class="card-body" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0.8rem">
+            <div class="stat-item">
+              <div class="stat-label">Load Average</div>
+              <div class="stat-value" id="system-health-loadavg">…</div>
+              <div id="system-health-load-badges" style="display:flex;gap:0.35rem;flex-wrap:wrap;margin-top:0.4rem"></div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">Memory</div>
+              <div class="stat-value" id="system-health-memory">…</div>
+              <div style="font-size:0.75rem;color:var(--muted)" id="system-health-memory-detail"></div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">Disk /</div>
+              <div class="stat-value" id="system-health-disk">…</div>
+              <div style="font-size:0.75rem;color:var(--muted)" id="system-health-disk-detail"></div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">Uptime</div>
+              <div class="stat-value" id="system-health-uptime">…</div>
+              <div style="font-size:0.75rem;color:var(--muted)" id="system-health-timestamp"></div>
+            </div>
           </div>
         </div>
 
@@ -1540,20 +1750,25 @@
         </div>
 
         <div class="card" id="hermes-memory-card" style="margin-bottom:1rem">
-          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap">
             <span>🧠 Hermes Memory</span>
-            <div style="display:flex;gap:0.5rem;align-items:center">
+            <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+              <span id="hermes-memory-last-saved" style="font-size:0.75rem;color:var(--muted)">Last saved: never</span>
               <span id="hermes-memory-status" style="font-size:0.75rem;color:var(--muted)"></span>
+              <button onclick="loadHermesMemory(true)" style="font-size:0.75rem;padding:0.2rem 0.6rem;background:rgba(96,165,250,0.15);border:1px solid rgba(96,165,250,0.35);border-radius:6px;color:#93c5fd;cursor:pointer">↻ Load</button>
               <button onclick="saveHermesMemory()" style="font-size:0.75rem;padding:0.2rem 0.6rem;background:rgba(74,222,128,0.15);border:1px solid rgba(74,222,128,0.4);border-radius:6px;color:#4ade80;cursor:pointer">💾 Save</button>
               <button onclick="toggleCard('hermes-memory-body')" style="font-size:0.75rem;padding:0.2rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--muted);cursor:pointer">▼</button>
             </div>
           </div>
           <div class="card-body" id="hermes-memory-body" style="display:none;padding:0.75rem">
-            <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem">
-              <button id="tab-memory" onclick="switchHermesFile('memory')" style="font-size:0.75rem;padding:0.25rem 0.7rem;border-radius:6px;cursor:pointer;background:rgba(74,222,128,0.15);border:1px solid rgba(74,222,128,0.4);color:#4ade80">🧠 Memory</button>
-              <button id="tab-soul" onclick="switchHermesFile('soul')" style="font-size:0.75rem;padding:0.25rem 0.7rem;border-radius:6px;cursor:pointer;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--muted)">✨ Soul</button>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem">
+              <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                <button id="tab-memory" onclick="switchHermesFile('memory')" style="font-size:0.75rem;padding:0.25rem 0.7rem;border-radius:6px;cursor:pointer;background:rgba(74,222,128,0.15);border:1px solid rgba(74,222,128,0.4);color:#4ade80">🧠 Memory</button>
+                <button id="tab-soul" onclick="switchHermesFile('soul')" style="font-size:0.75rem;padding:0.25rem 0.7rem;border-radius:6px;cursor:pointer;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--muted)">✨ Soul</button>
+              </div>
+              <span id="hermes-memory-path" style="font-size:0.72rem;color:var(--muted)"></span>
             </div>
-            <textarea id="hermes-memory-textarea" style="width:100%;min-height:320px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-family:monospace;font-size:0.78rem;padding:0.5rem;resize:vertical;line-height:1.5" placeholder="Loading..."></textarea>
+            <textarea id="hermes-memory-textarea" rows="20" style="width:100%;min-height:320px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-family:monospace;font-size:0.78rem;padding:0.5rem;resize:vertical;line-height:1.5" placeholder="Loading..."></textarea>
           </div>
         </div>
 
@@ -1764,6 +1979,23 @@
           </div>
           <p id="activity-empty" style="color:var(--muted);text-align:center;padding:1rem;display:none">No recent activity</p>
           </details>
+        </div>
+
+        <div class="card" id="github-activity-card">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap">
+            <span>🐙 GitHub Activity</span>
+            <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+              <span id="github-activity-status" style="font-size:0.75rem;color:var(--muted)">Auto-refreshes every 5 minutes</span>
+              <button id="github-activity-refresh" class="btn btn-sm" onclick="loadGitHubActivity(this)">↻ Refresh</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.8rem">
+            <button id="github-tab-commits" class="btn btn-sm" onclick="switchGithubActivityTab('commits')">Recent Commits</button>
+            <button id="github-tab-prs" class="btn btn-sm" onclick="switchGithubActivityTab('prs')">Open PRs</button>
+          </div>
+          <div id="github-activity-empty" style="color:var(--muted);font-style:italic">Loading GitHub activity...</div>
+          <div id="github-activity-commits" style="display:none"></div>
+          <div id="github-activity-prs" style="display:none"></div>
         </div>
 
         <!-- Memory Browser -->
@@ -2449,6 +2681,110 @@
           tr.innerHTML = `<td style="white-space:nowrap;color:var(--muted)">${esc(time)}</td><td>${esc(a.user)}</td><td><code>${esc(a.action)}</code></td><td style="color:var(--muted);max-width:20rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.detail)}</td><td style="color:${resultColor}">${esc(a.result)}</td>`;
           tbody.appendChild(tr);
         });
+      }
+
+      let _githubActivityTab = 'commits';
+
+      function _setGithubActivityStatus(message, isError = false) {
+        const el = document.getElementById('github-activity-status');
+        if (!el) return;
+        el.textContent = message;
+        el.style.color = isError ? 'var(--danger)' : 'var(--muted)';
+      }
+
+      function switchGithubActivityTab(tab) {
+        _githubActivityTab = tab === 'prs' ? 'prs' : 'commits';
+        const commitsBtn = document.getElementById('github-tab-commits');
+        const prsBtn = document.getElementById('github-tab-prs');
+        const commitsEl = document.getElementById('github-activity-commits');
+        const prsEl = document.getElementById('github-activity-prs');
+        const activeStyle = 'rgba(104,172,229,0.25)';
+        const inactiveStyle = 'var(--surface)';
+        if (commitsBtn) commitsBtn.style.background = _githubActivityTab === 'commits' ? activeStyle : inactiveStyle;
+        if (prsBtn) prsBtn.style.background = _githubActivityTab === 'prs' ? activeStyle : inactiveStyle;
+        if (commitsEl) commitsEl.style.display = _githubActivityTab === 'commits' ? 'block' : 'none';
+        if (prsEl) prsEl.style.display = _githubActivityTab === 'prs' ? 'block' : 'none';
+      }
+
+      function renderGitHubActivity(data) {
+        const emptyEl = document.getElementById('github-activity-empty');
+        const commitsEl = document.getElementById('github-activity-commits');
+        const prsEl = document.getElementById('github-activity-prs');
+        if (!emptyEl || !commitsEl || !prsEl) return;
+
+        const error = String((data && data.error) || '');
+        const repos = Array.isArray(data?.repos) ? data.repos : [];
+        const commits = Array.isArray(data?.commits) ? data.commits : [];
+        const prs = Array.isArray(data?.prs) ? data.prs : [];
+
+        if (error) {
+          emptyEl.style.display = 'block';
+          emptyEl.textContent = error === 'GITHUB_TOKEN not set'
+            ? 'Not configured — set GITHUB_TOKEN and GITHUB_DEFAULT_REPOS to enable GitHub activity.'
+            : error;
+          commitsEl.style.display = 'none';
+          prsEl.style.display = 'none';
+          _setGithubActivityStatus(error === 'GITHUB_TOKEN not set' ? 'Not configured' : 'Failed to load', true);
+          return;
+        }
+
+        if (!repos.length) {
+          emptyEl.style.display = 'block';
+          emptyEl.textContent = 'No repositories configured in GITHUB_DEFAULT_REPOS.';
+          commitsEl.style.display = 'none';
+          prsEl.style.display = 'none';
+          _setGithubActivityStatus('No repos configured', true);
+          return;
+        }
+
+        emptyEl.style.display = 'none';
+        commitsEl.innerHTML = commits.length
+          ? commits.map((commit) => {
+              const when = commit.date ? new Date(commit.date).toLocaleString() : 'Unknown date';
+              const url = esc(commit.url || '#');
+              return `<div style="padding:0.65rem 0;border-top:1px solid var(--border)">
+                <div style="font-size:0.85rem;font-weight:600"><a href="${url}" target="_blank" rel="noopener">[${esc(commit.repo || 'repo')}] ${esc(commit.sha || '')}</a> — ${esc(commit.message || '')}</div>
+                <div style="font-size:0.78rem;color:var(--muted)">${esc(commit.author || 'unknown')} · ${esc(when)}</div>
+              </div>`;
+            }).join('')
+          : '<div style="color:var(--muted);font-style:italic">No recent commits found.</div>';
+        prsEl.innerHTML = prs.length
+          ? prs.map((pr) => `<div style="padding:0.65rem 0;border-top:1px solid var(--border)">
+              <div style="font-size:0.85rem;font-weight:600"><a href="${esc(pr.url || '#')}" target="_blank" rel="noopener">[${esc(pr.repo || 'repo')}] #${esc(String(pr.number || ''))}</a> — ${esc(pr.title || '')}</div>
+              <div style="font-size:0.78rem;color:var(--muted)">${esc(pr.author || 'unknown')}</div>
+            </div>`).join('')
+          : '<div style="color:var(--muted);font-style:italic">No open pull requests found.</div>';
+        switchGithubActivityTab(_githubActivityTab);
+        _setGithubActivityStatus(`Updated ${new Date().toLocaleTimeString()}`);
+      }
+
+      async function loadGitHubActivity(btn) {
+        if (btn) {
+          btn.classList.add('spinning');
+          btn.disabled = true;
+        }
+        try {
+          const response = await fetch('/api/github/activity');
+          const data = await response.json();
+          renderGitHubActivity(data);
+        } catch (e) {
+          const emptyEl = document.getElementById('github-activity-empty');
+          const commitsEl = document.getElementById('github-activity-commits');
+          const prsEl = document.getElementById('github-activity-prs');
+          if (emptyEl) {
+            emptyEl.style.display = 'block';
+            emptyEl.textContent = `Failed to load GitHub activity: ${e.message}`;
+          }
+          if (commitsEl) commitsEl.style.display = 'none';
+          if (prsEl) prsEl.style.display = 'none';
+          _setGithubActivityStatus('Failed to load', true);
+        }
+        if (btn) {
+          setTimeout(() => {
+            btn.classList.remove('spinning');
+            btn.disabled = false;
+          }, 600);
+        }
       }
 
       function renderSkills(skills) {
@@ -3418,17 +3754,7 @@
 
       let _nasBrowsePath = '/Volumes/Misc';
       function toggleNasBrowse() {
-          const body = document.getElementById('nas-browse-body');
-          const tog = document.getElementById('nas-browse-toggle');
-          if (!body || !tog) return;
-          if (body.style.display === 'none') {
-              body.style.display = '';
-              tog.textContent = '▼';
-              loadNasBrowse(_nasBrowsePath);
-          } else {
-              body.style.display = 'none';
-              tog.textContent = '▶';
-          }
+          toggleCardCollapse('nas-browse-card');
       }
       async function loadNasBrowse(path) {
           _nasBrowsePath = path;
@@ -3548,6 +3874,9 @@
           loadTaskStatuses();
           loadAgentSessions();
           refreshHermesStatus();
+          loadHermesMemory();
+          refreshNetworkPing();
+          refreshSystemHealth();
           refreshCopilotSessions();
           loadApprovals();
           loadRunTimeline();
@@ -3562,6 +3891,7 @@
           loadSkillStats();
           loadConfigStatus();
           loadChannelMemoryInspector({ quietIfMissing: true });
+          loadGitHubActivity();
           refreshStatus();
         } catch (e) {
           document.getElementById("loading").innerHTML =
@@ -3582,6 +3912,9 @@
           if (el) el.textContent = _refreshCountdown + 's';
       }, 1000);
       setInterval(() => { _resetCountdown(); refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadPlans(); loadTaskStatuses(); loadAgentSessions(); refreshHermesStatus(); refreshCopilotSessions(); loadApprovals(); loadRunTimeline(); loadQualityEvals(); loadQualityMetrics(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadQuotaStatus(); loadSkillStats(); loadConfigStatus(); loadChannelMemoryInspector({ quietIfMissing: true }); loadTopology(); refreshStatus(); }, 60000);
+      setInterval(() => { loadGitHubActivity(); }, 300000);
+      setInterval(refreshNetworkPing, 60000);
+      setInterval(refreshSystemHealth, 30000);
       setInterval(refreshCopilotSessions, 15000);
 
       // D-5: Live Status Banner
@@ -4713,6 +5046,46 @@
         }
       }
 
+      function setWolStatusBadge(machine, online) {
+        const badge = document.getElementById(`wol-status-${machine}`);
+        if (!badge) return;
+        badge.classList.remove('bg-success', 'bg-danger', 'bg-secondary');
+        badge.classList.add('badge', 'ms-1');
+        if (online === true) {
+          badge.classList.add('bg-success');
+          badge.textContent = 'Online';
+        } else if (online === false) {
+          badge.classList.add('bg-danger');
+          badge.textContent = 'Offline';
+        } else {
+          badge.classList.add('bg-secondary');
+          badge.textContent = 'Unknown';
+        }
+      }
+
+      async function refreshNetworkPing() {
+        const status = document.getElementById('wol-status');
+        try {
+          const r = await fetch('/api/network/ping', { headers: _actionAuthHeaders('dashboard-ui') });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const d = await r.json();
+          const machines = d.machines || {};
+          setWolStatusBadge('mbp', machines.mbp ? machines.mbp.online : null);
+          setWolStatusBadge('mbp2', machines.mbp2 ? machines.mbp2.online : null);
+          if (status) {
+            status.textContent = `Last checked ${new Date().toLocaleTimeString()}`;
+            status.style.color = 'var(--muted)';
+          }
+        } catch (e) {
+          setWolStatusBadge('mbp', null);
+          setWolStatusBadge('mbp2', null);
+          if (status) {
+            status.textContent = '⚠️ Ping check unavailable';
+            status.style.color = 'var(--gold)';
+          }
+        }
+      }
+
       async function sendWol(machine) {
         const btnId = 'wol-btn-' + (machine || 'mbp');
         const btn = document.getElementById(btnId);
@@ -4730,11 +5103,68 @@
           const d = await r.json();
           status.textContent = d.sent ? '✅ ' + d.message : '❌ ' + (d.error || 'Failed');
           status.style.color = d.sent ? 'var(--mint-green)' : 'var(--danger,#f85149)';
+          if (d.sent) setTimeout(refreshNetworkPing, 1500);
         } catch (e) {
           status.textContent = '❌ ' + e.message;
           status.style.color = 'var(--danger,#f85149)';
         }
         setTimeout(() => { if (btn) btn.disabled = false; }, 3000);
+      }
+
+      function _formatHealthGb(value) {
+        const num = Number(value || 0);
+        return `${num.toFixed(1)} GB`;
+      }
+
+      function _loadBadgeColor(value) {
+        if (value < 2.0) return { bg: 'rgba(74,222,128,0.15)', fg: '#4ade80' };
+        if (value < 4.0) return { bg: 'rgba(250,204,21,0.16)', fg: '#facc15' };
+        return { bg: 'rgba(248,113,113,0.16)', fg: '#f87171' };
+      }
+
+      async function refreshSystemHealth() {
+        const loadEl = document.getElementById('system-health-loadavg');
+        const badgeEl = document.getElementById('system-health-load-badges');
+        const memEl = document.getElementById('system-health-memory');
+        const memDetailEl = document.getElementById('system-health-memory-detail');
+        const diskEl = document.getElementById('system-health-disk');
+        const diskDetailEl = document.getElementById('system-health-disk-detail');
+        const uptimeEl = document.getElementById('system-health-uptime');
+        const updatedEl = document.getElementById('system-health-updated');
+        const timestampEl = document.getElementById('system-health-timestamp');
+        try {
+          const r = await fetch('/api/system/health', { headers: _actionAuthHeaders('dashboard-ui') });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const d = await r.json();
+          const load = d.loadavg || {};
+          const load1 = Number(load['1m'] || 0);
+          const load5 = Number(load['5m'] || 0);
+          const load15 = Number(load['15m'] || 0);
+          if (loadEl) loadEl.textContent = `${load1.toFixed(2)} / ${load5.toFixed(2)} / ${load15.toFixed(2)}`;
+          if (badgeEl) {
+            badgeEl.innerHTML = [['1m', load1], ['5m', load5], ['15m', load15]].map(([label, value]) => {
+              const tone = _loadBadgeColor(value);
+              return `<span style="padding:0.1rem 0.42rem;border-radius:999px;background:${tone.bg};color:${tone.fg};font-size:0.68rem">${label}: ${Number(value).toFixed(2)}</span>`;
+            }).join('');
+          }
+          if (memEl) memEl.textContent = `${_formatHealthGb(d.memory.used_gb)} / ${_formatHealthGb(d.memory.total_gb)}`;
+          if (memDetailEl) memDetailEl.textContent = `${_formatHealthGb(d.memory.available_gb)} available`;
+          if (diskEl) diskEl.textContent = `${_formatHealthGb(d.disk.used_gb)} used`;
+          if (diskDetailEl) diskDetailEl.textContent = `${_formatHealthGb(d.disk.free_gb)} free of ${_formatHealthGb(d.disk.total_gb)}`;
+          if (uptimeEl) uptimeEl.textContent = d.uptime.human || '—';
+          if (updatedEl) updatedEl.textContent = `Updated ${new Date((d.timestamp || Date.now() / 1000) * 1000).toLocaleTimeString()}`;
+          if (timestampEl) timestampEl.textContent = d.hostname ? `Host ${d.hostname}` : '';
+        } catch (e) {
+          if (loadEl) loadEl.textContent = 'Unavailable';
+          if (badgeEl) badgeEl.innerHTML = '';
+          if (memEl) memEl.textContent = 'Unavailable';
+          if (diskEl) diskEl.textContent = 'Unavailable';
+          if (uptimeEl) uptimeEl.textContent = 'Unavailable';
+          if (updatedEl) updatedEl.textContent = '⚠️ Health check unavailable';
+          if (memDetailEl) memDetailEl.textContent = '';
+          if (diskDetailEl) diskDetailEl.textContent = '';
+          if (timestampEl) timestampEl.textContent = '';
+        }
       }
 
       async function fetchContainerLogs() {
@@ -5101,6 +5531,318 @@
     <script>
       // ── Ask OpenClaw Agent ────────────────────────────────────────────────
       let _agentHistory = [];
+      let _hermesSessionSearchEntries = [];
+      let _changelogSearchEntries = [];
+      let _globalSearchPreloadPromise = null;
+
+      const CARD_COLLAPSE_TARGETS = {
+        'docker-status-card': 'docker-status-body',
+        'nas-browse-card': 'nas-browse-body',
+        'hermes-status-card': 'hermes-status-body',
+        'hermes-memory-card': 'hermes-memory-body',
+        'hermes-sessions-card': 'hermes-sessions-body',
+        'hermes-skills-card': 'hermes-skills-body',
+        'changelog-card': 'changelog-body',
+      };
+
+      const CARD_COLLAPSE_LOADERS = {
+        'docker-status-card': () => loadDockerStatus(),
+        'nas-browse-card': () => loadNasBrowse(_nasBrowsePath),
+        'hermes-memory-card': () => loadHermesMemory(),
+        'hermes-sessions-card': () => loadHermesSessions(),
+        'hermes-skills-card': () => loadHermesSkills(),
+        'changelog-card': () => loadChangelog(),
+      };
+
+      function slugifyCardId(text) {
+        return (text || 'section')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '') || 'section';
+      }
+
+      function getCardLabel(card) {
+        if (!card) return '';
+        const headerLabel = card.querySelector(':scope > .card-header span');
+        if (headerLabel && headerLabel.textContent.trim()) return headerLabel.textContent.trim();
+        const heading = card.querySelector(':scope > h2');
+        return heading ? heading.textContent.trim() : '';
+      }
+
+      function ensureDashboardCardIds() {
+        let autoIndex = 0;
+        document.querySelectorAll('.card').forEach(card => {
+          if (card.id) return;
+          const label = getCardLabel(card) || `section-${autoIndex + 1}`;
+          card.id = `oc-card-${slugifyCardId(label)}-${++autoIndex}`;
+        });
+      }
+
+      function getStoredTheme() {
+        try {
+          return localStorage.getItem('oc-theme') === 'light' ? 'light' : 'dark';
+        } catch (_) {
+          return document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
+        }
+      }
+
+      function applyTheme(theme) {
+        if (theme === 'dark') {
+          document.documentElement.setAttribute('data-bs-theme', 'dark');
+        } else {
+          document.documentElement.removeAttribute('data-bs-theme');
+        }
+        try { localStorage.setItem('oc-theme', theme); } catch (_) {}
+        updateThemeToggle();
+      }
+
+      function updateThemeToggle() {
+        const btn = document.getElementById('theme-toggle');
+        if (!btn) return;
+        const theme = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
+        btn.textContent = theme === 'dark' ? '🌙' : '☀️';
+        btn.title = theme === 'dark' ? 'Dark mode enabled — switch to light mode' : 'Light mode enabled — switch to dark mode';
+        btn.setAttribute('aria-label', btn.title);
+      }
+
+      function initThemeToggle() {
+        const btn = document.getElementById('theme-toggle');
+        if (!btn || btn.dataset.bound === 'true') return;
+        btn.dataset.bound = 'true';
+        updateThemeToggle();
+        btn.addEventListener('click', () => {
+          applyTheme(getStoredTheme() === 'dark' ? 'light' : 'dark');
+        });
+      }
+
+      function getCardStorageKey(cardId) {
+        return `oc-card-${cardId.replace(/-card$/, '')}`;
+      }
+
+      function getCardBody(cardId) {
+        const bodyId = CARD_COLLAPSE_TARGETS[cardId];
+        return bodyId ? document.getElementById(bodyId) : null;
+      }
+
+      function setCardExpanded(cardId, expanded, { persist = true, triggerLoad = true } = {}) {
+        const body = getCardBody(cardId);
+        const card = document.getElementById(cardId);
+        if (!body || !card) return;
+        body.style.display = expanded ? '' : 'none';
+        card.dataset.collapsed = expanded ? 'false' : 'true';
+        const btn = card.querySelector('.card-collapse-btn');
+        if (btn) {
+          btn.textContent = expanded ? '▾' : '▸';
+          btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+          btn.title = expanded ? 'Collapse card' : 'Expand card';
+        }
+        if (persist) {
+          try { localStorage.setItem(getCardStorageKey(cardId), expanded ? 'expanded' : 'collapsed'); } catch (_) {}
+        }
+        if (expanded && triggerLoad) {
+          const loader = CARD_COLLAPSE_LOADERS[cardId];
+          if (typeof loader === 'function') loader();
+        }
+      }
+
+      function toggleCardCollapse(cardId, options = {}) {
+        const body = getCardBody(cardId);
+        if (!body) return;
+        const expanded = body.style.display === 'none';
+        setCardExpanded(cardId, expanded, options);
+      }
+
+      function initCardCollapse() {
+        Object.entries(CARD_COLLAPSE_TARGETS).forEach(([cardId, bodyId]) => {
+          const card = document.getElementById(cardId);
+          const body = document.getElementById(bodyId);
+          if (!card || !body) return;
+          const header = card.querySelector(':scope > .card-header');
+          if (!header) return;
+
+          let actionGroup = header.querySelector('.card-header-actions');
+          if (!actionGroup) {
+            const tail = header.lastElementChild;
+            if (tail && tail !== header.firstElementChild && tail.tagName === 'DIV') {
+              actionGroup = tail;
+              actionGroup.classList.add('card-header-actions');
+            } else {
+              actionGroup = document.createElement('div');
+              actionGroup.className = 'card-header-actions';
+              header.appendChild(actionGroup);
+            }
+          }
+
+          const existingToggle = Array.from(header.querySelectorAll('button, span')).find(node => {
+            const label = (node.textContent || '').trim();
+            const onclick = node.getAttribute ? (node.getAttribute('onclick') || '') : '';
+            return ['▼', '▶', '▾', '▸'].includes(label) || /toggle/i.test(onclick);
+          });
+
+          let btn = actionGroup.querySelector('.card-collapse-btn');
+          if (!btn && existingToggle) {
+            if (existingToggle.tagName === 'BUTTON') {
+              btn = existingToggle;
+            } else {
+              btn = document.createElement('button');
+              btn.type = 'button';
+              existingToggle.replaceWith(btn);
+            }
+            actionGroup.appendChild(btn);
+          }
+
+          if (!btn) {
+            btn = document.createElement('button');
+            btn.type = 'button';
+            actionGroup.appendChild(btn);
+          }
+
+          btn.type = 'button';
+          btn.className = 'card-collapse-btn';
+          btn.removeAttribute('onclick');
+          btn.removeAttribute('style');
+
+          if (btn.dataset.bound !== 'true') {
+            btn.dataset.bound = 'true';
+            btn.addEventListener('click', event => {
+              event.preventDefault();
+              event.stopPropagation();
+              toggleCardCollapse(cardId);
+            });
+          }
+
+          const stored = (() => {
+            try { return localStorage.getItem(getCardStorageKey(cardId)); } catch (_) { return null; }
+          })();
+          const defaultExpanded = body.style.display !== 'none';
+          setCardExpanded(cardId, stored ? stored !== 'collapsed' : defaultExpanded, { persist: false, triggerLoad: false });
+        });
+      }
+
+      function debounce(fn, wait = 300) {
+        let timeoutId = null;
+        return (...args) => {
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => fn(...args), wait);
+        };
+      }
+
+      function buildHeaderSearchEntries() {
+        ensureDashboardCardIds();
+        return Array.from(document.querySelectorAll('.card')).map(card => {
+          const title = getCardLabel(card);
+          if (!title) return null;
+          return {
+            title,
+            meta: 'Dashboard card',
+            cardId: card.id,
+            haystack: `${title} dashboard card`.toLowerCase(),
+          };
+        }).filter(Boolean);
+      }
+
+      function preloadGlobalSearchData() {
+        if (_globalSearchPreloadPromise) return _globalSearchPreloadPromise;
+        _globalSearchPreloadPromise = Promise.allSettled([loadHermesSessions(), loadChangelog()]).finally(() => {
+          _globalSearchPreloadPromise = null;
+        });
+        return _globalSearchPreloadPromise;
+      }
+
+      function getGlobalSearchEntries() {
+        return [
+          ...buildHeaderSearchEntries(),
+          ..._hermesSessionSearchEntries,
+          ..._changelogSearchEntries,
+        ];
+      }
+
+      function hideGlobalSearchResults() {
+        const results = document.getElementById('global-search-results');
+        if (!results) return;
+        results.classList.remove('show');
+        results.innerHTML = '';
+      }
+
+      function flashCard(card) {
+        if (!card) return;
+        card.classList.remove('card-search-hit');
+        void card.offsetWidth;
+        card.classList.add('card-search-hit');
+        setTimeout(() => card.classList.remove('card-search-hit'), 1400);
+      }
+
+      function focusSearchResult(cardId) {
+        const card = document.getElementById(cardId);
+        if (!card) return;
+        if (CARD_COLLAPSE_TARGETS[cardId]) {
+          setCardExpanded(cardId, true);
+        }
+        hideGlobalSearchResults();
+        setTimeout(() => {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          flashCard(card);
+        }, 80);
+      }
+
+      function renderGlobalSearchResults(query) {
+        const results = document.getElementById('global-search-results');
+        if (!results) return;
+        const normalized = query.trim().toLowerCase();
+        if (!normalized) {
+          hideGlobalSearchResults();
+          return;
+        }
+        const matches = getGlobalSearchEntries()
+          .filter(entry => entry.haystack.includes(normalized))
+          .slice(0, 8);
+
+        if (!matches.length) {
+          results.innerHTML = '<div class="search-result-empty">No matches found.</div>';
+          results.classList.add('show');
+          return;
+        }
+
+        results.innerHTML = matches.map((entry, index) => `
+          <button type="button" class="search-result-item" data-card-id="${entry.cardId}" data-result-index="${index}">
+            <span class="search-result-title">${esc(entry.title)}</span>
+            <span class="search-result-meta">${esc(entry.meta)}</span>
+          </button>
+        `).join('');
+        results.classList.add('show');
+      }
+
+      function initGlobalSearch() {
+        ensureDashboardCardIds();
+        const input = document.getElementById('global-search');
+        const wrap = input ? input.closest('.header-search') : null;
+        const results = document.getElementById('global-search-results');
+        if (!input || !wrap || !results || input.dataset.bound === 'true') return;
+
+        input.dataset.bound = 'true';
+        const runSearch = debounce(value => renderGlobalSearchResults(value), 300);
+
+        input.addEventListener('input', event => {
+          runSearch(event.target.value);
+        });
+
+        input.addEventListener('focus', () => {
+          preloadGlobalSearchData();
+          if (input.value.trim()) renderGlobalSearchResults(input.value);
+        });
+
+        results.addEventListener('click', event => {
+          const target = event.target.closest('.search-result-item');
+          if (!target) return;
+          focusSearchResult(target.dataset.cardId);
+        });
+
+        document.addEventListener('click', event => {
+          if (!wrap.contains(event.target)) hideGlobalSearchResults();
+        });
+
+        preloadGlobalSearchData();
+      }
 
       // Quick-fill the prompt box and switch to Copilot CLI model
       function setCopilotPrompt(text) {
@@ -5589,20 +6331,41 @@
         loadHermesMemory();
       }
 
-      async function loadHermesMemory() {
+      function _setHermesMemorySavedAt(savedAtSeconds) {
+        const el = document.getElementById('hermes-memory-last-saved');
+        if (!el) return;
+        if (!savedAtSeconds) {
+          el.textContent = 'Last saved: never';
+          return;
+        }
+        el.textContent = `Last saved: ${new Date(savedAtSeconds * 1000).toLocaleString()}`;
+      }
+
+      async function loadHermesMemory(showToastOnSuccess = false) {
+        const ta = document.getElementById('hermes-memory-textarea');
+        const st = document.getElementById('hermes-memory-status');
+        const pathEl = document.getElementById('hermes-memory-path');
+        if (st) st.textContent = 'Loading…';
         try {
           const r = await fetch(`/api/hermes/memory?file=${_hermesFileTab}`, { headers: _actionAuthHeaders('dashboard-ui') });
-          if (!r.ok) return;
           const d = await r.json();
-          const ta = document.getElementById('hermes-memory-textarea');
+          if (!r.ok || d.error) throw new Error(d.error || `HTTP ${r.status}`);
           if (ta) ta.value = d.content || '';
-        } catch (e) {}
+          if (pathEl) pathEl.textContent = d.path || '';
+          _setHermesMemorySavedAt(d.saved_at || 0);
+          if (st) st.textContent = `Loaded ${_hermesFileTab === 'soul' ? 'SOUL.md' : 'MEMORY.md'}`;
+          if (showToastOnSuccess) showToast('✅ Hermes file loaded', 'success');
+          setTimeout(() => { if (st) st.textContent = ''; }, 2500);
+        } catch (e) {
+          if (st) st.textContent = `❌ ${e.message}`;
+        }
       }
 
       async function saveHermesMemory() {
         const ta = document.getElementById('hermes-memory-textarea');
         const st = document.getElementById('hermes-memory-status');
         if (!ta) return;
+        if (st) st.textContent = 'Saving…';
         try {
           const r = await fetch(`/api/hermes/memory?file=${_hermesFileTab}`, {
             method: 'POST',
@@ -5610,21 +6373,19 @@
             body: JSON.stringify({ content: ta.value })
           });
           const d = await r.json();
-          if (st) {
-            st.textContent = d.ok ? '✅ Saved' : '❌ Error';
-            setTimeout(() => { if (st) st.textContent = ''; }, 3000);
-          }
+          if (!r.ok || !d.ok) throw new Error(d.error || `HTTP ${r.status}`);
+          _setHermesMemorySavedAt(d.saved_at || (Date.now() / 1000));
+          if (st) st.textContent = '✅ Saved';
+          showToast('✅ Hermes memory saved', 'success');
+          setTimeout(() => { if (st) st.textContent = ''; }, 3000);
         } catch (e) {
-          if (st) st.textContent = '❌ Error';
+          if (st) st.textContent = `❌ ${e.message}`;
+          showToast(`❌ Save failed: ${e.message}`, 'error');
         }
       }
 
       function toggleHermesSkillsCard() {
-        const b = document.getElementById('hermes-skills-body');
-        if (!b) return;
-        const show = b.style.display === 'none';
-        b.style.display = show ? 'block' : 'none';
-        if (show) loadHermesSkills();
+        toggleCardCollapse('hermes-skills-card');
       }
 
       async function loadHermesSkills() {
@@ -5652,11 +6413,7 @@
       }
 
       function toggleChangelogCard() {
-        const b = document.getElementById('changelog-body');
-        if (!b) return;
-        const show = b.style.display === 'none';
-        b.style.display = show ? 'block' : 'none';
-        if (show) loadChangelog();
+        toggleCardCollapse('changelog-card');
       }
 
       async function loadChangelog() {
@@ -5665,6 +6422,14 @@
         try {
           const r = await fetch('/api/changelog', { headers: _actionAuthHeaders('dashboard-ui') });
           const d = await r.json();
+          _changelogSearchEntries = Array.isArray(d.entries)
+            ? d.entries.map(entry => ({
+                title: entry.text || 'Recent change',
+                meta: `Recent changes${entry.date ? ` • ${entry.date}` : ''}`,
+                cardId: 'changelog-card',
+                haystack: `${entry.date || ''} ${entry.text || ''} recent changes changelog`.toLowerCase(),
+              }))
+            : [];
           if (!d.entries || d.entries.length === 0) {
             el.innerHTML = '<span style="color:var(--muted)">No changelog entries found.</span>';
             return;
@@ -5676,16 +6441,13 @@
             </div>`
           ).join('');
         } catch (e) {
+          _changelogSearchEntries = [];
           if (el) el.innerHTML = '<span style="color:var(--muted)">Error loading changelog.</span>';
         }
       }
 
       function toggleHermesSessionsCard() {
-        const b = document.getElementById('hermes-sessions-body');
-        if (!b) return;
-        const show = b.style.display === 'none';
-        b.style.display = show ? 'block' : 'none';
-        if (show) loadHermesSessions();
+        toggleCardCollapse('hermes-sessions-card');
       }
 
       async function loadHermesSessions() {
@@ -5695,6 +6457,17 @@
         try {
           const r = await fetch('/api/hermes/sessions', {headers: _actionAuthHeaders('dashboard-ui')});
           const d = await r.json();
+          _hermesSessionSearchEntries = Array.isArray(d.sessions)
+            ? d.sessions.map(session => {
+                const title = session.title && session.title !== session.id ? session.title : session.id;
+                return {
+                  title: title || 'Hermes session',
+                  meta: `Hermes session${session.started_at ? ` • ${session.started_at}` : ''}`,
+                  cardId: 'hermes-sessions-card',
+                  haystack: `${title || ''} ${session.model || ''} ${session.started_at || ''} hermes session`.toLowerCase(),
+                };
+              })
+            : [];
           if (!d.sessions || d.sessions.length === 0) {
             el.textContent = 'No sessions found.';
             return;
@@ -5713,6 +6486,7 @@
             </tr>`).join('') +
             '</tbody></table>';
         } catch(e) {
+          _hermesSessionSearchEntries = [];
           el.textContent = 'Error loading sessions.';
         }
       }
@@ -5752,11 +6526,14 @@
       }
 
       function toggleCard(id) {
+        if (id === 'hermes-memory-body') {
+          toggleCardCollapse('hermes-memory-card');
+          return;
+        }
         const el = document.getElementById(id);
         if (!el) return;
         const showing = el.style.display !== 'none';
         el.style.display = showing ? 'none' : 'block';
-        if (!showing && id === 'hermes-memory-body') loadHermesMemory();
       }
 
       function copyAgentResponse() {
@@ -5848,7 +6625,12 @@
         refreshPromptLibrarySelect();
       }
 
-      document.addEventListener('DOMContentLoaded', refreshPromptLibrarySelect);
+      document.addEventListener('DOMContentLoaded', () => {
+        initThemeToggle();
+        initCardCollapse();
+        initGlobalSearch();
+        refreshPromptLibrarySelect();
+      });
       document.addEventListener('keydown', e => {
         if (e.key === 'Escape') {
           const card = document.getElementById('agent-chat-card');
@@ -5857,11 +6639,7 @@
       });
 
       function toggleDockerStatusCard() {
-        const b = document.getElementById('docker-status-body');
-        if (!b) return;
-        const show = b.style.display === 'none';
-        b.style.display = show ? 'block' : 'none';
-        if (show) loadDockerStatus();
+        toggleCardCollapse('docker-status-card');
       }
 
       async function loadDockerStatus() {
