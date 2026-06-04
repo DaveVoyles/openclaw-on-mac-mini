@@ -992,13 +992,9 @@
               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();dashAsk();}"></textarea>
             <div id="chat-controls-col" style="display:flex;flex-direction:column;gap:0.4rem">
               <select id="agent-model" style="padding:0.4rem 0.5rem;background:var(--surface-solid,#1a1b2e);border:1px solid var(--border,#333);border-radius:6px;color:var(--text,#e8e8e8);font-size:0.8rem;cursor:pointer" onchange="onAgentModelChange()">
-                <option value="auto">🤖 Auto</option>
-                <option value="gemini">✨ Gemini</option>
-                <option value="openai">🟢 GPT-4o</option>
-                <option value="anthropic">🟣 Claude</option>
-                <option value="local">🏠 Local</option>
+                <option value="hermes" selected>⚕ Hermes</option>
                 <option value="copilot-cli">🐙 Copilot CLI</option>
-                <option value="hermes">⚕ Hermes</option>
+                <option value="local">🏠 Local (Gemma — offline)</option>
               </select>
               <!-- Working-directory picker: shown only when Copilot CLI is selected -->
               <select id="copilot-workdir-select" style="display:none;padding:0.4rem 0.5rem;background:var(--surface-solid,#1a1b2e);border:1px solid rgba(255,158,27,0.4);border-radius:6px;color:var(--orange,#f59e0b);font-size:0.78rem;cursor:pointer" title="Working directory for Copilot CLI">
@@ -1345,8 +1341,13 @@
           <p style="color:var(--muted);font-size:0.85rem;margin-bottom:1rem;font-style:italic">
             Shows which API keys and services are configured. Missing keys disable the corresponding features.
           </p>
-          <div style="margin-bottom:0.75rem">
-            <div style="color:var(--muted);font-size:0.72rem;margin-bottom:0.35rem;text-transform:uppercase;letter-spacing:0.04em">Model fallback health</div>
+          <div style="margin-bottom:0.75rem;padding:0.6rem 0.9rem;background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.25);border-radius:8px;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+            <span style="font-size:0.85rem">📲 <strong>Push notifications</strong> are active via ntfy.sh</span>
+            <a href="https://ntfy.sh/openclaw-alerts" target="_blank" rel="noopener"
+               style="font-size:0.78rem;padding:0.25rem 0.65rem;background:rgba(74,222,128,0.12);border:1px solid rgba(74,222,128,0.3);border-radius:12px;color:#4ade80;text-decoration:none;white-space:nowrap">📱 Subscribe on phone</a>
+            <span style="font-size:0.75rem;color:var(--muted)">Topic: <code style="background:rgba(255,255,255,0.06);padding:0.1rem 0.35rem;border-radius:4px">openclaw-alerts</code></span>
+          </div>
+          <div style="color:var(--muted);font-size:0.72rem;margin-bottom:0.35rem;text-transform:uppercase;letter-spacing:0.04em">Model fallback health</div>
             <div id="config-provider-health" style="display:flex;flex-wrap:wrap;gap:0.4rem">
               <span style="color:var(--muted);font-style:italic">Loading...</span>
             </div>
