@@ -53,3 +53,6 @@
 - 2026-06-04: Added Hermes session transcripts to the dashboard plus `/sessions`, `/arr`, and a weekly Hermes digest scheduler; Python AST checks and Slack registration tests passed.
 - 2026-06-04: Wave 4 deployed — Tautulli/Plex card, Sonarr/Radarr queue card, Docker action buttons+logs, system alerts panel, Hermes transcript viewer, weekly digest, /watching /sessions /arr Slack commands (45 total)
 - 2026-06-04: Wave 5 deployed — secured 8 unprotected API endpoints, async sqlite, TTL cache, Slack loading messages + error handling, /status+briefing with Plex, /help with all 45 commands, live badges, voice pulse, scroll-to-top FAB
+- 2026-06-04: Wave 6B added Tailscale dashboard/Slack visibility plus Time Machine status via host bridge; Python AST checks and Slack registration tests passed.
+- 2026-06-04: Added Overseerr request/search dashboard controls, Sonarr upcoming episodes views, Sonarr/Radarr ntfy webhook endpoints, and new `/request` + `/upcoming` Slack commands; syntax checks and Slack registration tests passed.
+- 2026-06-04: Wave 6 deployed — Overseerr card (auth TBD), Sonarr calendar card+/upcoming, Radarr watchlist, Tailscale device card+/tailscale, Time Machine status, download webhooks, quick stats strip, persistent card collapse, host.docker.internal URL fix for all local services
