@@ -2487,7 +2487,25 @@ async def api_config_status_handler(request):
     """Return configuration status for every key API/service."""
     from config import cfg
 
-    return web.json_response({"services": cfg.config_status()})
+    provider_states: dict[str, dict] = {}
+    try:
+        from llm.providers import PROVIDER_FALLBACK_CHAIN, _circuit, is_circuit_open
+
+        for prov in PROVIDER_FALLBACK_CHAIN + ["copilot", "gemini", "ollama", "openai", "anthropic"]:
+            if prov in provider_states:
+                continue
+            state = _circuit.get(prov, {})
+            is_open = is_circuit_open(prov)
+            provider_states[prov] = {
+                "open": is_open,
+                "failures": state.get("failures", 0),
+                "open_until": state.get("open_until", 0.0) if is_open else None,
+                "badge": "danger" if is_open else "success",
+            }
+    except Exception:
+        pass
+
+    return web.json_response({"services": cfg.config_status(), "providers": provider_states})
 
 
 async def api_search_stats_handler(request):
@@ -4874,3 +4892,115 @@ async def api_docker_status_handler(request: web.Request) -> web.Response:
             "error": error,
         }
     )
+
+
+async def api_network_wol_handler(request: web.Request) -> web.Response:
+    """Send Wake-on-LAN magic packet to configured MAC address."""
+    import os
+    import socket
+
+    mac = os.environ.get("WOL_MACBOOK_MAC", "")
+    if not mac:
+        return web.json_response({"error": "WOL_MACBOOK_MAC not set in environment", "sent": False}, status=400)
+    mac_clean = re.sub(r"[:\-]", "", mac).upper()
+    if len(mac_clean) != 12:
+        return web.json_response({"error": f"Invalid MAC address format: {mac}", "sent": False}, status=400)
+    try:
+        magic = bytes.fromhex("FF" * 6 + mac_clean * 16)
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            sock.sendto(magic, ("255.255.255.255", 9))
+        return web.json_response({"sent": True, "mac": mac, "message": f"Magic packet sent to {mac}"})
+    except Exception as exc:
+        return web.json_response({"error": str(exc), "sent": False}, status=500)
+
+
+
+async def api_hermes_upgrade_handler(request: web.Request) -> web.Response:
+    from host_bridge import HERMES_BIN, _enabled as _host_bridge_enabled, run_shell
+
+    if not _host_bridge_enabled():
+        return web.json_response({"error": "Host bridge disabled", "updated": False})
+
+    old_ver = ""
+    try:
+        ver_result = await run_shell(command=f"{HERMES_BIN} --version", slack_user_id="dashboard", timeout_s=10)
+        old_stdout = ver_result if isinstance(ver_result, str) else getattr(ver_result, "stdout", "")
+        old_ver = old_stdout.strip().splitlines()[0] if old_stdout else ""
+    except Exception:
+        pass
+
+    output = ""
+    error = ""
+    try:
+        upg_result = await run_shell(
+            command=f"{HERMES_BIN} --version && uv tool upgrade hermes-agent",
+            slack_user_id="dashboard",
+            timeout_s=120,
+        )
+        output = (upg_result if isinstance(upg_result, str) else getattr(upg_result, "stdout", "") or "").strip()
+        err_out = "" if isinstance(upg_result, str) else getattr(upg_result, "error", "") or getattr(upg_result, "stderr", "")
+        if err_out:
+            error = str(err_out)
+    except Exception as exc:
+        error = str(exc)
+
+    new_ver = ""
+    try:
+        ver2_result = await run_shell(command=f"{HERMES_BIN} --version", slack_user_id="dashboard", timeout_s=10)
+        new_stdout = ver2_result if isinstance(ver2_result, str) else getattr(ver2_result, "stdout", "")
+        new_ver = new_stdout.strip().splitlines()[0] if new_stdout else ""
+    except Exception:
+        pass
+
+    updated = bool(new_ver and old_ver and new_ver != old_ver)
+    return web.json_response(
+        {"old_version": old_ver, "new_version": new_ver, "updated": updated, "output": output, "error": error}
+    )
+
+
+async def api_nas_browse_handler(request: web.Request) -> web.Response:
+    """Browse NAS directory via host bridge."""
+    import os
+    import re
+    import shlex
+
+    from host_bridge import _enabled as _host_bridge_enabled, run_shell
+
+    if not _host_bridge_enabled():
+        return web.json_response({"error": "Host bridge disabled", "entries": []})
+
+    raw_path = request.query.get("path", "/Volumes/Misc")
+    path = os.path.normpath(raw_path)
+    if not re.match(r"^(/Volumes(?:/|$)|/Users/davevoyles/mnt(?:/|$))", path):
+        return web.json_response({"error": "Path not allowed", "entries": []}, status=400)
+
+    entries: list[dict[str, str | bool]] = []
+    error = ""
+    try:
+        cmd = f"ls -la --time-style=long-iso {shlex.quote(path)} 2>&1 || ls -la {shlex.quote(path)} 2>&1"
+        result = await run_shell(command=cmd, slack_user_id="dashboard", timeout_s=15)
+        output = result if isinstance(result, str) else getattr(result, "stdout", "")
+        for line in (output or "").strip().splitlines():
+            if line.startswith("total"):
+                continue
+            parts = line.split(None, 8)
+            if len(parts) < 8:
+                continue
+            perms = parts[0]
+            size = parts[4] if len(parts) > 4 else ""
+            name = parts[8] if len(parts) >= 9 else parts[7]
+            if name in (".", ".."):
+                continue
+            entries.append(
+                {
+                    "name": name,
+                    "is_dir": perms.startswith("d"),
+                    "size": "" if perms.startswith("d") else size,
+                    "perms": perms,
+                }
+            )
+    except Exception as exc:
+        error = str(exc)
+
+    return web.json_response({"path": path, "entries": entries, "error": error})

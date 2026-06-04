@@ -11,7 +11,7 @@ import logging
 import os
 import random
 import time as _time
-from typing import TYPE_CHECKING, AsyncGenerator, Optional
+from typing import TYPE_CHECKING, AsyncGenerator, Callable, Optional
 
 if TYPE_CHECKING:
     from llm.provider_plugin import ProviderPlugin
@@ -324,6 +324,13 @@ _CB_THRESHOLD = int(os.getenv("CB_FAILURE_THRESHOLD", "3"))
 _CB_TIMEOUT = float(os.getenv("CB_TIMEOUT_SECONDS", "30.0"))
 
 _circuit: dict[str, dict] = {}  # provider -> {failures: int, open_until: float}
+_fallback_notify_hook: "Callable[[str, int], None] | None" = None
+
+
+def set_fallback_notify_hook(fn: "Callable[[str, int], None]") -> None:
+    """Register a callback called when a provider's circuit opens."""
+    global _fallback_notify_hook
+    _fallback_notify_hook = fn
 
 
 def _is_open(provider: str) -> bool:
@@ -334,12 +341,23 @@ def _is_open(provider: str) -> bool:
     return False
 
 
+def is_circuit_open(provider: str) -> bool:
+    """Return True if the provider circuit is currently open."""
+    return _is_open(provider)
+
+
 def _record_failure(provider: str) -> None:
     state = _circuit.setdefault(provider, {"failures": 0, "open_until": 0.0})
+    was_open = state.get("open_until", 0.0) > _time.monotonic()
     state["failures"] += 1
     if state["failures"] >= _CB_THRESHOLD:
         state["open_until"] = _time.monotonic() + _CB_TIMEOUT
         log.warning("Circuit opened for provider %s for %.0fs", provider, _CB_TIMEOUT)
+        if not was_open and _fallback_notify_hook is not None:
+            try:
+                _fallback_notify_hook(provider, state["failures"])
+            except Exception:
+                pass
 
 
 def _record_success(provider: str) -> None:

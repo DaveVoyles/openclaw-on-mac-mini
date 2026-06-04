@@ -18,6 +18,8 @@ from .api_handlers import (
     api_hermes_sessions_handler,
     api_hermes_session_detail_handler,
     api_hermes_ask_handler,
+    api_hermes_upgrade_handler,
+    api_nas_browse_handler,
     api_nas_disk_handler,
     api_agent_session_detail_handler,
     api_agent_session_intervention_handler,
@@ -38,6 +40,7 @@ from .api_handlers import (
     api_goals_handler,
     api_knowledge_graph_handler,
     api_memories_handler,
+    api_network_wol_handler,
     api_plan_detail_handler,
     api_plans_handler,
     api_quality_eval_handler,
@@ -219,3 +222,6 @@ def setup_dashboard(
     app.router.add_get("/api/changelog", api_changelog_handler)
     app.router.add_get("/api/hermes/skills", api_hermes_skills_handler)
     app.router.add_get("/api/docker/status", api_docker_status_handler)
+    app.router.add_post("/api/network/wol", action(api_network_wol_handler))
+    app.router.add_post("/api/hermes/upgrade", action(api_hermes_upgrade_handler))
+    app.router.add_get("/api/nas/browse", api_nas_browse_handler)

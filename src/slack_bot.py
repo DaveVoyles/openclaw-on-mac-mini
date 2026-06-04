@@ -70,6 +70,143 @@ log = logging.getLogger(__name__)
 _MENTION_RE = re.compile(r"<@[A-Z0-9]+>")
 _HERMES_SESSION_RE = re.compile(r"^Session:\s*(\S+)", re.MULTILINE)
 
+
+async def _plex_get_text(plex_url: str, path: str) -> tuple[int, str]:
+    headers: dict[str, str] = {}
+    plex_token = (os.getenv("PLEX_TOKEN", "") or "").strip()
+    if plex_token:
+        headers["X-Plex-Token"] = plex_token
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+        async with session.get(f"{plex_url.rstrip('/')}{path}", headers=headers) as resp:
+            return resp.status, await resp.text()
+
+
+async def _overseerr_request(
+    method: str,
+    overseerr_url: str,
+    api_key: str,
+    path: str,
+    *,
+    params: dict[str, str] | None = None,
+    payload: dict[str, Any] | None = None,
+) -> tuple[int, dict[str, Any] | list[Any] | str]:
+    headers = {"X-Api-Key": api_key}
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
+        async with session.request(
+            method,
+            f"{overseerr_url.rstrip('/')}{path}",
+            headers=headers,
+            params=params,
+            json=payload,
+        ) as resp:
+            content_type = (resp.headers.get("Content-Type") or "").lower()
+            if "json" in content_type:
+                return resp.status, await resp.json(content_type=None)
+            return resp.status, await resp.text()
+
+
+def _parse_plex_xml(xml_text: str) -> Any | None:
+    import xml.etree.ElementTree as ET
+
+    try:
+        return ET.fromstring(xml_text)
+    except ET.ParseError:
+        return None
+
+
+def _overseerr_title(result: dict[str, Any]) -> str:
+    return str(result.get("title") or result.get("name") or result.get("originalTitle") or "Untitled").strip()
+
+
+def _pick_overseerr_result(results: list[dict[str, Any]], query: str) -> dict[str, Any] | None:
+    query_norm = query.strip().casefold()
+    for result in results:
+        candidates = [result.get("title"), result.get("name"), result.get("originalTitle")]
+        if any(str(candidate).strip().casefold() == query_norm for candidate in candidates if candidate):
+            return result
+    return results[0] if results else None
+
+
+async def _plex_status_summary(plex_url: str) -> str:
+    try:
+        status, body = await _plex_get_text(plex_url, "/identity")
+    except Exception as exc:  # noqa: BLE001
+        return f"❌ Could not reach Plex at `{plex_url}`: {exc}"
+
+    if status != 200:
+        return f"⚠️ Plex responded with HTTP {status} from `{plex_url}`."
+
+    root = _parse_plex_xml(body)
+    if root is None:
+        return f"✅ Plex responded from `{plex_url}`, but the identity payload could not be parsed."
+
+    version = root.attrib.get("version") or "unknown"
+    machine_id = root.attrib.get("machineIdentifier") or "unknown"
+    claimed = "claimed" if root.attrib.get("claimed") == "1" else "not claimed"
+    return (
+        "✅ *Plex server is online*\n"
+        f"• URL: `{plex_url}`\n"
+        f"• Version: `{version}`\n"
+        f"• Machine ID: `{machine_id}`\n"
+        f"• State: `{claimed}`"
+    )
+
+
+async def _plex_recent_summary(plex_url: str) -> str:
+    try:
+        sessions_status, sessions_body = await _plex_get_text(plex_url, "/status/sessions")
+    except Exception as exc:  # noqa: BLE001
+        return f"❌ Could not fetch Plex sessions from `{plex_url}`: {exc}"
+
+    if sessions_status == 200:
+        root = _parse_plex_xml(sessions_body)
+        if root is not None:
+            active_items: list[str] = []
+            for video in root.findall("Video")[:5]:
+                title = video.attrib.get("title") or "Untitled"
+                if video.attrib.get("type") == "episode" and video.attrib.get("grandparentTitle"):
+                    title = f"{video.attrib.get('grandparentTitle')} — {title}"
+                user = "Unknown"
+                user_el = video.find("User")
+                if user_el is not None:
+                    user = user_el.attrib.get("title") or user_el.attrib.get("name") or user
+                active_items.append(f"• {title} — {user}")
+            if active_items:
+                return "📺 *Active Plex sessions*\n" + "\n".join(active_items)
+
+    try:
+        recent_status, recent_body = await _plex_get_text(
+            plex_url,
+            "/library/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=5",
+        )
+    except Exception as exc:  # noqa: BLE001
+        return f"❌ Could not fetch Plex recent additions from `{plex_url}`: {exc}"
+
+    if recent_status != 200:
+        return (
+            "⚠️ Could not fetch Plex recent activity. "
+            f"Sessions HTTP {sessions_status}; recentlyAdded HTTP {recent_status}."
+        )
+
+    root = _parse_plex_xml(recent_body)
+    if root is None:
+        return "⚠️ Plex returned recent activity, but the XML payload could not be parsed."
+
+    items: list[str] = []
+    for media in list(root)[:5]:
+        title = media.attrib.get("title") or media.attrib.get("grandparentTitle") or "Untitled"
+        if media.attrib.get("type") == "episode" and media.attrib.get("grandparentTitle") and media.attrib.get("title"):
+            title = f"{media.attrib.get('grandparentTitle')} — {media.attrib.get('title')}"
+        year = (media.attrib.get("year") or "").strip()
+        suffix = f" ({year})" if year else ""
+        items.append(f"• {title}{suffix}")
+
+    if not items:
+        return "ℹ️ Plex is online, but there are no active sessions or recent additions to show."
+
+    return "🆕 *Recent Plex additions*\n" + "\n".join(items)
+
+
 # ---------------------------------------------------------------------------
 # Per-user preferences (persisted to data/slack_user_prefs.json)
 # ---------------------------------------------------------------------------
@@ -536,6 +673,24 @@ OPENCLAW_UPLOAD_KEY = os.getenv("OPENCLAW_UPLOAD_KEY", "")
 OPENCLAW_UPLOAD_PORT = int(os.getenv("OPENCLAW_UPLOAD_PORT", "8080"))
 SLACK_NOTIFY_USER_ID = os.getenv("SLACK_NOTIFY_USER_ID", "")
 _slack_client_ref: Any = None  # set at startup for use in upload handler
+
+
+def _on_model_fallback(provider: str, failures: int) -> None:
+    """Synchronous hook called by llm.providers when a circuit opens."""
+    try:
+        if not _slack_client_ref or not SLACK_NOTIFY_USER_ID:
+            return
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            msg = (
+                f"⚠️ Model fallback: *{provider}* circuit opened after {failures} failures. "
+                "Routing to next provider in chain."
+            )
+            asyncio.ensure_future(_slack_client_ref.chat_postMessage(channel=SLACK_NOTIFY_USER_ID, text=msg))
+    except Exception:
+        pass
+
+
 _AI_FILES_DIR = Path(os.getenv("AI_FILES_DIR", "/ai-files"))
 _KNOWN_FILES_PATH = Path(__file__).parent.parent / "data" / "known_files.json"
 _LAST_SYNC_PATH = Path(__file__).parent.parent / "data" / "last_sync.json"
@@ -6001,6 +6156,145 @@ def _register_integration_handlers(app: Any) -> None:
         except Exception as exc:  # noqa: BLE001
             log.warning("/copilot-recap post failed: %s", exc)
 
+    @app.command("/plex")
+    async def handle_plex_command(ack: Any, respond: Any, command: dict[str, Any], client: Any) -> None:
+        await ack()
+        _ = client
+        text = (command.get("text") or "").strip()
+        plex_url = (os.getenv("PLEX_URL", "") or "").strip().rstrip("/")
+        overseerr_url = (os.getenv("OVERSEERR_URL", "") or "").strip().rstrip("/")
+        overseerr_api_key = (os.getenv("OVERSEERR_API_KEY", "") or "").strip()
+
+        if not text:
+            subcommand = "status"
+            remainder = ""
+        else:
+            parts = text.split(maxsplit=1)
+            subcommand = parts[0].lower()
+            remainder = parts[1].strip() if len(parts) > 1 else ""
+
+        if subcommand not in {"status", "recent", "search", "request"}:
+            await respond(
+                text=(
+                    "Usage: `/plex status`, `/plex recent`, `/plex search <title>`, or `/plex request <title>`"
+                )
+            )
+            return
+
+        if not plex_url:
+            await respond(text="❌ `PLEX_URL` is not set. Add it to `.env` and redeploy OpenClaw.")
+            return
+
+        if subcommand in {"search", "request"}:
+            if not overseerr_url:
+                await respond(text="❌ `OVERSEERR_URL` is not set. Add it to `.env` and redeploy OpenClaw.")
+                return
+            if not overseerr_api_key:
+                await respond(text="❌ `OVERSEERR_API_KEY` is not set. Add it to `.env` and redeploy OpenClaw.")
+                return
+            if not remainder:
+                await respond(text=f"Usage: `/plex {subcommand} <title>`")
+                return
+
+        if subcommand in {"status"}:
+            if not overseerr_url:
+                await respond(
+                    text=(
+                        f"{await _plex_status_summary(plex_url)}\n\n"
+                        "⚠️ `OVERSEERR_URL` is not set, so search/request actions are unavailable."
+                    )
+                )
+                return
+            await respond(text=await _plex_status_summary(plex_url))
+            return
+
+        if subcommand == "recent":
+            if not overseerr_url:
+                await respond(
+                    text=(
+                        f"{await _plex_recent_summary(plex_url)}\n\n"
+                        "⚠️ `OVERSEERR_URL` is not set, so search/request actions are unavailable."
+                    )
+                )
+                return
+            await respond(text=await _plex_recent_summary(plex_url))
+            return
+
+        try:
+            search_status, search_body = await _overseerr_request(
+                "GET",
+                overseerr_url,
+                overseerr_api_key,
+                "/api/v1/search",
+                params={"query": remainder},
+            )
+        except Exception as exc:  # noqa: BLE001
+            await respond(text=f"❌ Overseerr request failed: {exc}")
+            return
+
+        if search_status != 200:
+            detail = search_body if isinstance(search_body, str) else json.dumps(search_body)[:300]
+            await respond(text=f"❌ Overseerr search failed (HTTP {search_status}): {detail}")
+            return
+
+        results = search_body.get("results", []) if isinstance(search_body, dict) else []
+        media_results = [item for item in results if item.get("mediaType") in {"movie", "tv"}]
+        if not media_results:
+            await respond(text=f"🔎 No Plex/Overseerr matches found for *{remainder}*.")
+            return
+
+        if subcommand == "search":
+            status_map = {2: "requested", 3: "processing", 4: "partially available", 5: "available"}
+            lines = [f"🔎 *Overseerr results for* `{remainder}`"]
+            for item in media_results[:5]:
+                media_type = "TV" if item.get("mediaType") == "tv" else "Movie"
+                year = (item.get("releaseDate") or item.get("firstAirDate") or "")[:4]
+                media_info = item.get("mediaInfo") or {}
+                availability = status_map.get(media_info.get("status"))
+                suffix = f" ({year})" if year else ""
+                status_suffix = f" — {availability}" if availability else ""
+                lines.append(f"• {media_type}: {_overseerr_title(item)}{suffix}{status_suffix}")
+            await respond(text="\n".join(lines))
+            return
+
+        match = _pick_overseerr_result(media_results, remainder)
+        if match is None:
+            await respond(text=f"🔎 No requestable result found for *{remainder}*.")
+            return
+
+        current_status = (match.get("mediaInfo") or {}).get("status")
+        status_map = {2: "requested", 3: "processing", 4: "partially available", 5: "available"}
+        if current_status in status_map:
+            await respond(text=f"ℹ️ *{_overseerr_title(match)}* is already {status_map[current_status]} in Overseerr.")
+            return
+
+        media_type = match.get("mediaType")
+        media_id = match.get("id")
+        if media_type not in {"movie", "tv"} or media_id is None:
+            await respond(text="❌ Overseerr returned a result without a requestable media ID/type.")
+            return
+
+        try:
+            request_status, request_body = await _overseerr_request(
+                "POST",
+                overseerr_url,
+                overseerr_api_key,
+                "/api/v1/request",
+                payload={"mediaType": media_type, "mediaId": media_id},
+            )
+        except Exception as exc:  # noqa: BLE001
+            await respond(text=f"❌ Failed to create Overseerr request: {exc}")
+            return
+
+        if request_status not in {200, 201}:
+            detail = request_body if isinstance(request_body, str) else json.dumps(request_body)[:300]
+            await respond(text=f"❌ Overseerr request failed (HTTP {request_status}): {detail}")
+            return
+
+        request_id = request_body.get("id") if isinstance(request_body, dict) else None
+        request_suffix = f" (request #{request_id})" if request_id else ""
+        await respond(text=f"✅ Requested *{_overseerr_title(match)}* via Overseerr{request_suffix}.")
+
     # ------------------------------------------------------------------
     # Phase 5 — /host quick-action shortcuts
     # Wraps vetted Copilot prompts ("show docker ps", "tail logs", "diagnose
@@ -6667,6 +6961,13 @@ def create_slack_app() -> Any | None:  # type: ignore[return]
 
     app = AsyncApp(token=SLACK_BOT_TOKEN)
 
+    try:
+        from llm.providers import set_fallback_notify_hook
+
+        set_fallback_notify_hook(_on_model_fallback)
+    except Exception:
+        pass
+
     _register_core_handlers(app)
     _register_file_handlers(app)
     _register_slash_commands(app)
@@ -6736,6 +7037,59 @@ async def create_slack_handler() -> Any | None:  # type: ignore[return]
     # Start digest background loop
     asyncio.create_task(_digest_loop(app.client))
     log.info("Digest loop started")
+
+    async def _hermes_nightly_upgrade() -> str:
+        try:
+            from host_bridge import HERMES_BIN, _enabled as _host_bridge_enabled, run_shell
+
+            if not _host_bridge_enabled():
+                return "Host bridge disabled"
+
+            old_result = await run_shell(command=f"{HERMES_BIN} --version", slack_user_id="scheduler", timeout_s=10)
+            old_stdout = old_result if isinstance(old_result, str) else getattr(old_result, "stdout", "")
+            old_ver = old_stdout.strip().splitlines()[0] if old_stdout else ""
+
+            upg_result = await run_shell(
+                command=f"{HERMES_BIN} --version && uv tool upgrade hermes-agent",
+                slack_user_id="scheduler",
+                timeout_s=120,
+            )
+            upgrade_stdout = upg_result if isinstance(upg_result, str) else getattr(upg_result, "stdout", "") or ""
+            new_result = await run_shell(command=f"{HERMES_BIN} --version", slack_user_id="scheduler", timeout_s=10)
+            new_stdout = new_result if isinstance(new_result, str) else getattr(new_result, "stdout", "")
+            new_ver = new_stdout.strip().splitlines()[0] if new_stdout else ""
+
+            if new_ver and old_ver and new_ver != old_ver:
+                msg = f"⚕ Hermes updated: {old_ver} → {new_ver}"
+                if SLACK_NOTIFY_USER_ID:
+                    try:
+                        await app.client.chat_postMessage(channel=SLACK_NOTIFY_USER_ID, text=msg)
+                    except Exception:
+                        pass
+                return msg
+
+            return upgrade_stdout.strip() or (new_ver or old_ver or "Hermes already current")
+        except Exception as exc:
+            log.warning("_hermes_nightly_upgrade failed: %s", exc)
+            return f"Hermes nightly upgrade failed: {exc}"
+
+    try:
+        from scheduler import scheduler
+
+        scheduler.register_skills({"hermes_nightly_upgrade": _hermes_nightly_upgrade})
+        if not any(task.action == "hermes_nightly_upgrade" for task in scheduler.list_tasks()):
+            scheduler.create(
+                action="hermes_nightly_upgrade",
+                args={},
+                hour=3,
+                minute=0,
+                created_by="system",
+                alert_only=False,
+            )
+            log.info("Registered nightly Hermes upgrade task for 03:00 UTC")
+        scheduler.start()
+    except Exception as exc:
+        log.warning("Failed to initialize Hermes nightly scheduler task: %s", exc)
 
     # Start Dropbox watch loop (no-op when DROPBOX_ACCESS_TOKEN not set)
     try:
