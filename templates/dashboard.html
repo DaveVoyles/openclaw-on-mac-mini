@@ -270,6 +270,29 @@
         box-shadow: 0 0 20px var(--glow);
       }
 
+      /* Fullscreen expanded chat card */
+      #agent-chat-card.chat-expanded {
+        position: fixed;
+        inset: 0;
+        z-index: 9000;
+        margin: 0;
+        border-radius: 0;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+      }
+      #agent-chat-card.chat-expanded #agent-response-wrap {
+        flex: 1;
+        display: flex !important;
+        flex-direction: column;
+        min-height: 0;
+      }
+      #agent-chat-card.chat-expanded #agent-response {
+        flex: 1;
+        max-height: none !important;
+        min-height: 60vh;
+      }
+
       /* Stat rows */
       .stat-row {
         display: flex;
@@ -580,13 +603,62 @@
       }
       .qa-btn:hover { background: var(--accent, #7c3aed); border-color: var(--accent, #7c3aed); }
 
+      /* ── Mobile responsiveness ─────────────────────────────────────── */
+      @media (max-width: 768px) {
+        body { font-size: 16px; }
 
-        .grid {
-          grid-template-columns: 1fr;
+        .container { padding: 0.75rem; }
+
+        /* Header: stack title + badges vertically on small screens */
+        .header {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.5rem;
         }
-        .container {
-          padding: 0.75rem;
-        }
+        .header-right { margin-left: 0; }
+        h1 { font-size: 1.3rem; }
+
+        /* Btn row: wrap and fill width on very small screens */
+        .btn-row { gap: 0.4rem; }
+        .btn { font-size: 0.78rem; padding: 0.45rem 0.8rem; }
+
+        /* Grid: single column */
+        .grid { grid-template-columns: 1fr; }
+
+        /* Health grid: 2 cols on mobile */
+        .health-grid { grid-template-columns: repeat(2, 1fr); }
+
+        /* Tables: horizontal scroll to prevent overflow */
+        table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+        /* Fix-width inputs → full width */
+        input[style*="min-width"] { min-width: 0 !important; width: 100% !important; }
+
+        /* Stat chips: wrap */
+        .memory-stats-bar { gap: 0.5rem; }
+
+        /* Agent chat: stack textarea + controls vertically */
+        #chat-input-row { flex-direction: column !important; }
+        #chat-controls-col { flex-direction: row !important; align-items: center; }
+        #agent-model { flex: 1; }
+
+        /* Copilot hint banner: smaller text */
+        #copilot-cli-hint { font-size: 0.78rem; }
+
+        /* Quick-action buttons: wrap and smaller */
+        .qa-btn { font-size: 0.75rem; padding: 0.3rem 0.6rem; }
+
+        /* Status bar: wrap tightly */
+        #status-bar { flex-wrap: wrap; gap: 0.4rem; }
+      }
+
+      @media (max-width: 480px) {
+        .container { padding: 0.5rem; }
+        .health-grid { grid-template-columns: 1fr 1fr; }
+        h1 { font-size: 1.1rem; }
+        .btn { padding: 0.4rem 0.65rem; font-size: 0.74rem; }
+        /* On very small screens, allow btn-row to scroll horizontally */
+        .btn-row { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 0.25rem; }
       }
 
       /* D-5: Status banner dots */
@@ -615,6 +687,7 @@
                 class="badge badge-blue"
                 style="margin-top: 2px"
               ></span>
+              <span class="badge" style="background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);margin-top:2px;margin-left:4px">⚕ Hermes + Copilot active</span>
             </div>
           </div>
           <div class="header-right">
@@ -650,17 +723,61 @@
         <!-- New machine CLI install banner -->
         <details style="margin-bottom:0.75rem">
           <summary style="cursor:pointer;font-size:0.82rem;color:var(--muted);padding:0.4rem 0.6rem;background:var(--surface);border:1px solid var(--border);border-radius:6px;list-style:none;display:flex;align-items:center;gap:0.4rem">
-            <span>&#128187;</span> <strong style="color:var(--gold)">New machine?</strong>&nbsp; Install the OpenClaw CLI
+            <span>&#128187;</span> <strong style="color:var(--gold)">New machine?</strong>&nbsp; Install OpenClaw CLI or Hermes Agent
             <span style="margin-left:auto;font-size:0.75rem">&#9660;</span>
           </summary>
           <div style="background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 6px 6px;padding:0.75rem 1rem;font-size:0.82rem">
-            <div style="display:flex;flex-direction:column;gap:0.4rem">
-              <div><span style="color:var(--muted)">On LAN:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">curl -fsSL http://192.168.1.93:8765/install | bash</code></div>
-              <div><span style="color:var(--muted)">Remote:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">curl -fsSL https://openclaw.davevoyles.synology.me/install | bash</code></div>
-              <div><span style="color:var(--muted)">Then:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">source ~/.zshrc</code><span style="color:var(--muted)"> &rarr; </span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">OpenClaw</code></div>
+            <div style="display:flex;flex-direction:column;gap:0.75rem">
+              <div>
+                <div style="font-weight:600;color:var(--text);margin-bottom:0.35rem">🐙 OpenClaw CLI</div>
+                <div style="display:flex;flex-direction:column;gap:0.3rem">
+                  <div><span style="color:var(--muted)">On LAN:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">curl -fsSL http://192.168.1.93:8765/install | bash</code></div>
+                  <div><span style="color:var(--muted)">Remote:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">curl -fsSL https://openclaw.davevoyles.synology.me/install | bash</code></div>
+                  <div><span style="color:var(--muted)">Then:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">source ~/.zshrc</code><span style="color:var(--muted)"> &rarr; </span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">OpenClaw</code></div>
+                </div>
+              </div>
+              <div style="border-top:1px solid var(--border);padding-top:0.6rem">
+                <div style="font-weight:600;color:#10b981;margin-bottom:0.35rem">⚕ Hermes Agent <span style="background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:4px;font-size:0.7rem;padding:0.1em 0.4em;font-weight:500">Recommended</span> <small style="color:var(--muted);font-weight:400">persistent memory · GitHub Copilot · 90 skills</small></div>
+                <div style="display:flex;flex-direction:column;gap:0.3rem">
+                  <div><span style="color:var(--muted)">Any machine:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">bash &lt;(curl -fsSL https://openclaw.davevoyles.synology.me/ih)</code></div>
+                  <div><span style="color:var(--muted)">On LAN:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">bash &lt;(curl -fsSL http://192.168.1.93:8765/ih)</code></div>
+                  <div style="color:var(--muted);font-size:0.78rem;margin-top:0.1rem">Then: <code style="background:rgba(0,0,0,0.2);border-radius:3px;padding:0.1em 0.3em;color:#9ecbff">source ~/.zshrc</code> → <code style="background:rgba(0,0,0,0.2);border-radius:3px;padding:0.1em 0.3em;color:#9ecbff">hermes</code> &nbsp;·&nbsp; Requires GitHub CLI (<code style="background:rgba(0,0,0,0.2);border-radius:3px;padding:0.1em 0.3em;color:#9ecbff">gh auth login</code>) for Copilot models</div>
+                </div>
+              </div>
             </div>
           </div>
         </details>
+
+        <!-- ⚕ Hermes Quick Start Card -->
+        <div style="background:linear-gradient(135deg,rgba(16,185,129,0.08) 0%,rgba(16,185,129,0.03) 100%);border:1px solid rgba(16,185,129,0.25);border-radius:10px;padding:1rem 1.2rem;margin-bottom:0.9rem">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+            <div style="flex:1;min-width:240px">
+              <div style="font-size:1rem;font-weight:700;color:#10b981;margin-bottom:0.3rem">⚕ Hermes Agent — Preferred Interface</div>
+              <div style="font-size:0.82rem;color:var(--muted);line-height:1.5">
+                Hermes is the primary AI agent for this home lab. It runs locally in iTerm2, uses
+                <strong style="color:var(--text)">GitHub Copilot models</strong> (work-paid, no personal cost),
+                and maintains <strong style="color:var(--text)">persistent memory</strong> across sessions.
+                The <code style="background:rgba(0,0,0,0.3);border-radius:3px;padding:0.1em 0.3em">/copilot</code> Slack command routes through Hermes automatically.
+              </div>
+              <div style="margin-top:0.6rem;display:flex;gap:0.5rem;flex-wrap:wrap;font-size:0.78rem">
+                <span style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:0.15em 0.5em">claude-sonnet-4.6</span>
+                <span style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:0.15em 0.5em">90 skills</span>
+                <span style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:0.15em 0.5em">persistent memory</span>
+                <span style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:0.15em 0.5em">NAS access</span>
+                <span style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:0.15em 0.5em">browser automation</span>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0.4rem;font-size:0.8rem;min-width:200px">
+              <div style="color:var(--muted);font-weight:600;margin-bottom:0.1rem">Install on any Mac:</div>
+              <code style="display:block;background:rgba(0,0,0,0.4);border:1px solid rgba(16,185,129,0.2);border-radius:6px;padding:0.45rem 0.7rem;color:#9ecbff;font-size:0.78rem;word-break:break-all">bash &lt;(curl -fsSL https://openclaw.davevoyles.synology.me/ih)</code>
+              <div style="color:var(--muted);font-size:0.75rem">Then: <code style="color:#9ecbff">source ~/.zshrc &amp;&amp; hermes</code></div>
+              <div style="margin-top:0.3rem;display:flex;gap:0.4rem;flex-wrap:wrap">
+                <a href="https://github.com/NousResearch/hermes-agent" target="_blank" style="font-size:0.75rem;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:4px;padding:0.2em 0.5em">📄 Docs</a>
+                <a href="/dashboard#hermes-status-card" style="font-size:0.75rem;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:4px;padding:0.2em 0.5em">📊 Status Card ↓</a>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <!-- D-5: Live Status Banner -->
         <div id="status-banner" style="display:flex;gap:1.2rem;justify-content:center;padding:0.6rem 1rem;margin-bottom:1rem;background:var(--card, var(--surface));border-radius:8px;font-size:0.82rem;flex-wrap:wrap">
@@ -668,12 +785,18 @@
           <span>🏠 Ollama: <span id="st-ollama" class="status-dot">…</span></span>
           <span>☁️ Gemini: <span id="st-gemini" class="status-dot">…</span></span>
           <span>🔗 Copilot: <span id="st-copilot" class="status-dot">…</span></span>
+          <span>🌉 Bridge: <span id="st-bridge" class="status-dot">…</span></span>
           <span>🎭 Patreon: <span id="st-patreon" class="status-dot">…</span></span>
+          <span id="st-approvals-wrap" style="display:none">🛡️ <span id="st-approvals-count" style="color:var(--danger,#f85149);font-weight:700">0</span> pending approval(s)</span>
         </div>
 
         <!-- 💬 Ask OpenClaw Agent (Dashboard Chat) -->
         <div class="card" id="agent-chat-card">
-          <h2>💬 Ask OpenClaw</h2>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">
+            <h2 style="margin:0">💬 Ask OpenClaw</h2>
+            <button id="chat-expand-btn" onclick="toggleChatExpand()" title="Expand chat to fullscreen"
+              style="padding:0.3rem 0.65rem;background:transparent;border:1px solid var(--border,#444);border-radius:6px;color:var(--muted,#8b949e);cursor:pointer;font-size:0.8rem;white-space:nowrap">⛶ Expand</button>
+          </div>
           <!-- Quick Action Buttons -->
           <div id="quick-actions" style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem">
             <button class="qa-btn" onclick="dashAsk('What is the weather today?')">🌤️ Weather</button>
@@ -684,17 +807,27 @@
             <button class="qa-btn" onclick="dashAsk('Run a health check on all monitored services and summarize results.')">🏥 Health Check</button>
           </div>
           <!-- Chat Input -->
-          <div style="display:flex;gap:0.5rem;align-items:flex-start">
+          <div id="chat-input-row" style="display:flex;gap:0.5rem;align-items:flex-start">
             <textarea id="agent-prompt" placeholder="Ask anything… (Shift+Enter for new line, Enter to send)"
               style="flex:1;min-height:60px;max-height:200px;padding:0.6rem 0.8rem;background:var(--surface-solid,#1a1b2e);border:1px solid var(--border,#333);border-radius:8px;color:var(--text,#e8e8e8);font-size:0.88rem;resize:vertical;font-family:inherit"
               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();dashAsk();}"></textarea>
-            <div style="display:flex;flex-direction:column;gap:0.4rem">
-              <select id="agent-model" style="padding:0.4rem 0.5rem;background:var(--surface-solid,#1a1b2e);border:1px solid var(--border,#333);border-radius:6px;color:var(--text,#e8e8e8);font-size:0.8rem;cursor:pointer">
+            <div id="chat-controls-col" style="display:flex;flex-direction:column;gap:0.4rem">
+              <select id="agent-model" style="padding:0.4rem 0.5rem;background:var(--surface-solid,#1a1b2e);border:1px solid var(--border,#333);border-radius:6px;color:var(--text,#e8e8e8);font-size:0.8rem;cursor:pointer" onchange="onAgentModelChange()">
                 <option value="auto">🤖 Auto</option>
                 <option value="gemini">✨ Gemini</option>
                 <option value="openai">🟢 GPT-4o</option>
                 <option value="anthropic">🟣 Claude</option>
                 <option value="local">🏠 Local</option>
+                <option value="copilot-cli">🐙 Copilot CLI</option>
+                <option value="hermes">⚕ Hermes</option>
+              </select>
+              <!-- Working-directory picker: shown only when Copilot CLI is selected -->
+              <select id="copilot-workdir-select" style="display:none;padding:0.4rem 0.5rem;background:var(--surface-solid,#1a1b2e);border:1px solid rgba(255,158,27,0.4);border-radius:6px;color:var(--orange,#f59e0b);font-size:0.78rem;cursor:pointer" title="Working directory for Copilot CLI">
+                <option value="">📁 docker-stack (default)</option>
+                <option value="/Users/davevoyles/openclaw">📁 openclaw</option>
+                <option value="/Users/davevoyles/docker-stack">📁 docker-stack</option>
+                <option value="/Users/davevoyles/ai-files">📁 ai-files</option>
+                <option value="/Users/davevoyles/mnt/ROMs">📁 ROMs (NAS)</option>
               </select>
               <button id="agent-send-btn" onclick="dashAsk()"
                 style="padding:0.5rem 1rem;background:var(--accent,#7c3aed);border:none;border-radius:6px;color:#fff;font-size:0.85rem;cursor:pointer;font-weight:600;white-space:nowrap">
@@ -702,13 +835,59 @@
               </button>
             </div>
           </div>
+          <!-- Copilot CLI context hint (shown only when Copilot CLI is selected) -->
+          <div id="copilot-cli-hint" style="display:none;margin-top:0.6rem;padding:0.75rem 1rem;background:rgba(255,158,27,0.08);border:1px solid rgba(255,158,27,0.3);border-radius:8px;font-size:0.82rem;line-height:1.6;color:var(--text)">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
+              <strong style="color:var(--orange);font-size:0.9rem">🐙 Copilot CLI</strong>
+              <span id="bridge-status-inline" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:10px;background:rgba(100,100,100,0.2);color:var(--muted)">checking…</span>
+            </div>
+            Runs GitHub Copilot CLI directly on the Mac Mini over SSH. Try these prompts:<br>
+            <div style="display:flex;flex-wrap:wrap;gap:0.35rem;margin-top:0.5rem">
+              <button onclick="setCopilotPrompt('list all open PRs in this repo')" style="font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(255,158,27,0.1);border:1px solid rgba(255,158,27,0.25);border-radius:12px;color:var(--orange);cursor:pointer">📋 Open PRs</button>
+              <button onclick="setCopilotPrompt('summarize the last 10 git commits')" style="font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(255,158,27,0.1);border:1px solid rgba(255,158,27,0.25);border-radius:12px;color:var(--orange);cursor:pointer">📜 Git log</button>
+              <button onclick="setCopilotPrompt('check disk usage on the Mac Mini')" style="font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(255,158,27,0.1);border:1px solid rgba(255,158,27,0.25);border-radius:12px;color:var(--orange);cursor:pointer">💾 Disk usage</button>
+              <button onclick="setCopilotPrompt('list running docker containers and their status')" style="font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(255,158,27,0.1);border:1px solid rgba(255,158,27,0.25);border-radius:12px;color:var(--orange);cursor:pointer">🐳 Docker status</button>
+              <button onclick="setCopilotPrompt('show me what files changed in the last commit')" style="font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(255,158,27,0.1);border:1px solid rgba(255,158,27,0.25);border-radius:12px;color:var(--orange);cursor:pointer">🔍 Last commit</button>
+            </div>
+            <div style="margin-top:0.5rem;color:var(--muted);font-size:0.75rem">Responses stream live. For multi-turn sessions use <strong>/copilot</strong> in Slack.</div>
+          </div>
+          <!-- Hermes hint (shown when Hermes is selected) -->
+          <div id="hermes-hint" style="display:none;margin-top:0.6rem;padding:0.75rem 1rem;background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.3);border-radius:8px;font-size:0.82rem;line-height:1.6;color:var(--text)">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
+              <strong style="color:#4ade80;font-size:0.9rem">⚕ Hermes Agent</strong>
+              <span style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:10px;background:rgba(74,222,128,0.15);color:#4ade80">claude-sonnet-4.6 · Copilot</span>
+            </div>
+            Hermes has persistent memory and custom skills for this home lab. Try these:
+            <div style="display:flex;flex-wrap:wrap;gap:0.35rem;margin-top:0.5rem">
+              <button onclick="dashAsk('What do you remember about this home lab?')" style="font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:12px;color:#4ade80;cursor:pointer">🧠 What do you remember?</button>
+              <button onclick="dashAsk('List running Docker containers and their status')" style="font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:12px;color:#4ade80;cursor:pointer">🐳 Docker status</button>
+              <button onclick="dashAsk('Check disk usage on the Mac Mini')" style="font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:12px;color:#4ade80;cursor:pointer">💾 Disk usage</button>
+              <button onclick="dashAsk('What skills do you have available?')" style="font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:12px;color:#4ade80;cursor:pointer">🛠️ List skills</button>
+              <button onclick="dashAsk('Check NAS connectivity and show available shares')" style="font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:12px;color:#4ade80;cursor:pointer">💾 NAS status</button>
+            </div>
+            <div style="margin-top:0.5rem;color:var(--muted);font-size:0.75rem">Single-turn queries only. For multi-turn sessions with full memory use <strong>/copilot</strong> in Slack.</div>
+          </div>
+          <!-- Conversation Thread (prior exchanges) -->
+          <div id="chat-thread" style="display:none;margin-top:0.75rem;display:flex;flex-direction:column;gap:0.5rem"></div>
           <!-- Response Area -->
           <div id="agent-response-wrap" style="display:none;margin-top:0.75rem">
-            <div id="agent-response-meta" style="font-size:0.75rem;color:var(--muted,#8b949e);margin-bottom:0.4rem"></div>
-            <div id="agent-response" style="padding:0.9rem 1rem;background:var(--surface-solid,#0d1117);border:1px solid var(--border,#333);border-radius:8px;white-space:pre-wrap;word-break:break-word;font-size:0.88rem;max-height:400px;overflow:auto;line-height:1.55"></div>
-            <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+            <div id="agent-response-meta" style="font-size:0.75rem;color:var(--muted,#8b949e);margin-bottom:0.4rem;display:flex;align-items:center;gap:0.75rem">
+              <span id="agent-response-meta-text"></span>
+              <span style="margin-left:auto;display:flex;align-items:center;gap:0.4rem">
+                <button id="chat-raw-btn" onclick="toggleRawMode()" title="Switch between rendered and raw log view"
+                  style="font-size:0.72rem;padding:0.15rem 0.45rem;background:transparent;border:1px solid var(--border,#444);border-radius:4px;color:var(--muted,#8b949e);cursor:pointer">📜 Raw</button>
+                <button onclick="changeFontSize(-1)" title="Decrease font size"
+                  style="font-size:0.72rem;padding:0.15rem 0.4rem;background:transparent;border:1px solid var(--border,#444);border-radius:4px;color:var(--muted,#8b949e);cursor:pointer">A-</button>
+                <button onclick="changeFontSize(1)" title="Increase font size"
+                  style="font-size:0.72rem;padding:0.15rem 0.4rem;background:transparent;border:1px solid var(--border,#444);border-radius:4px;color:var(--muted,#8b949e);cursor:pointer">A+</button>
+              </span>
+            </div>
+            <div id="agent-response" style="padding:0.9rem 1rem;background:var(--surface-solid,#0d1117);border:1px solid var(--border,#333);border-radius:8px;white-space:pre-wrap;word-break:break-word;font-size:0.88rem;max-height:480px;overflow:auto;line-height:1.55"></div>
+            <div style="display:flex;gap:0.5rem;margin-top:0.5rem;flex-wrap:wrap">
               <button onclick="copyAgentResponse()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:transparent;border:1px solid var(--border,#444);border-radius:5px;color:var(--muted,#8b949e);cursor:pointer">📋 Copy</button>
               <button onclick="clearAgentChat()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:transparent;border:1px solid var(--border,#444);border-radius:5px;color:var(--muted,#8b949e);cursor:pointer">🗑️ Clear</button>
+              <button onclick="toggleChatExpand()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:transparent;border:1px solid var(--border,#444);border-radius:5px;color:var(--muted,#8b949e);cursor:pointer" id="chat-expand-inline-btn">⛶ Expand</button>
+              <a id="open-terminal-link" href="/terminal" target="_blank" style="display:none;font-size:0.75rem;padding:0.25rem 0.6rem;background:transparent;border:1px solid rgba(255,158,27,0.35);border-radius:5px;color:var(--orange);cursor:pointer;text-decoration:none">💻 Full Terminal</a>
             </div>
           </div>
           <div id="agent-loading" style="display:none;padding:0.5rem 0;color:var(--muted,#8b949e);font-size:0.85rem">⏳ Thinking…</div>
@@ -718,19 +897,19 @@
         <div class="card" id="interfaces-card" style="margin-bottom:1rem">
           <h2>🌐 Access Points</h2>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0.75rem;margin-top:0.75rem">
-            <a href="https://discord.com" target="_blank" rel="noopener"
-              style="display:flex;align-items:center;gap:0.6rem;padding:0.7rem 0.9rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);transition:border-color 0.2s"
-              onmouseover="this.style.borderColor='#5865F2'" onmouseout="this.style.borderColor=''">
-              <span style="font-size:1.3rem">🎮</span>
+            <a href="https://dvopenclaw.slack.com" target="_blank" rel="noopener"
+              style="display:flex;align-items:center;gap:0.6rem;padding:0.7rem 0.9rem;background:var(--surface);border:2px solid #4A154B;border-radius:8px;text-decoration:none;color:var(--text);transition:border-color 0.2s"
+              onmouseover="this.style.borderColor='#7C3085'" onmouseout="this.style.borderColor='#4A154B'">
+              <span style="font-size:1.3rem">💬</span>
               <div>
-                <div style="font-weight:600;font-size:0.88rem">Discord</div>
+                <div style="font-weight:600;font-size:0.88rem">Slack</div>
                 <div style="font-size:0.75rem;color:var(--muted)">Primary interface</div>
               </div>
             </a>
             <a href="https://chat.davevoyles.synology.me" target="_blank" rel="noopener"
               style="display:flex;align-items:center;gap:0.6rem;padding:0.7rem 0.9rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);transition:border-color 0.2s"
               onmouseover="this.style.borderColor='var(--mint-green)'" onmouseout="this.style.borderColor=''">
-              <span style="font-size:1.3rem">💬</span>
+              <span style="font-size:1.3rem">🖥️</span>
               <div>
                 <div style="font-weight:600;font-size:0.88rem">Open WebUI</div>
                 <div style="font-size:0.75rem;color:var(--muted)">Browser chat</div>
@@ -743,15 +922,6 @@
               <div>
                 <div style="font-weight:600;font-size:0.88rem">CLI</div>
                 <div style="font-size:0.75rem;color:var(--muted)">Terminal interface</div>
-              </div>
-            </a>
-            <a href="https://dvopenclaw.slack.com" target="_blank" rel="noopener"
-              style="display:flex;align-items:center;gap:0.6rem;padding:0.7rem 0.9rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);transition:border-color 0.2s"
-              onmouseover="this.style.borderColor='#4A154B'" onmouseout="this.style.borderColor=''">
-              <span style="font-size:1.3rem">📨</span>
-              <div>
-                <div style="font-weight:600;font-size:0.88rem">Slack</div>
-                <div style="font-size:0.75rem;color:var(--muted)">Slack bot</div>
               </div>
             </a>
           </div>
@@ -768,11 +938,11 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr style="border-bottom:1px solid var(--border)">
-                    <td style="padding:0.6rem 0.75rem;white-space:nowrap">🎮 <strong>Discord</strong></td>
-                    <td style="padding:0.6rem 0.75rem">Quick Q&amp;A, group use, notifications</td>
-                    <td style="padding:0.6rem 0.75rem;color:var(--muted)">Shared with others · Slash commands · Skill routing · Push alerts</td>
-                    <td style="padding:0.6rem 0.75rem"><a href="https://discord.com" target="_blank" rel="noopener" style="color:var(--spirit-blue)">discord.com</a></td>
+                  <tr style="border-bottom:1px solid var(--border);background:rgba(74,21,75,0.06)">
+                    <td style="padding:0.6rem 0.75rem;white-space:nowrap">💬 <strong>Slack</strong></td>
+                    <td style="padding:0.6rem 0.75rem">Daily use, slash commands, notifications</td>
+                    <td style="padding:0.6rem 0.75rem;color:var(--muted)">Primary interface · Slash commands · Threaded sessions · Push alerts · /copilot</td>
+                    <td style="padding:0.6rem 0.75rem"><a href="https://dvopenclaw.slack.com" target="_blank" rel="noopener" style="color:#a97cc7">dvopenclaw.slack.com</a></td>
                   </tr>
                   <tr style="border-bottom:1px solid var(--border)">
                     <td style="padding:0.6rem 0.75rem;white-space:nowrap">💬 <strong>Open WebUI</strong></td>
@@ -787,10 +957,10 @@
                     <td style="padding:0.6rem 0.75rem"><a href="/terminal" target="_blank" style="color:var(--gold)">/terminal</a></td>
                   </tr>
                   <tr style="border-bottom:1px solid var(--border)">
-                    <td style="padding:0.6rem 0.75rem;white-space:nowrap">📨 <strong>Slack</strong></td>
-                    <td style="padding:0.6rem 0.75rem">Work context, async queries, integrations</td>
-                    <td style="padding:0.6rem 0.75rem;color:var(--muted)">Workspace-aware · Threaded replies · DM or channel</td>
-                    <td style="padding:0.6rem 0.75rem"><a href="https://slack.com" target="_blank" rel="noopener" style="color:#a97cc7">Slack app</a></td>
+                    <td style="padding:0.6rem 0.75rem;white-space:nowrap">🖥️ <strong>Open WebUI</strong></td>
+                    <td style="padding:0.6rem 0.75rem">Long chats, rich formatting, any device</td>
+                    <td style="padding:0.6rem 0.75rem;color:var(--muted)">Markdown · Tables · Code blocks · Chat history · Regenerate</td>
+                    <td style="padding:0.6rem 0.75rem"><a href="https://chat.davevoyles.synology.me" target="_blank" rel="noopener" style="color:var(--mint-green)">chat.davevoyles…</a></td>
                   </tr>
                   <tr>
                     <td style="padding:0.6rem 0.75rem;white-space:nowrap">🛠️ <strong>This Dashboard</strong></td>
@@ -861,7 +1031,7 @@
         <!-- Active Goals -->
         <div class="card">
           <h2 id="goals-heading" style="cursor:help"
-              data-tooltip="Goals are automatically detected from your Discord conversations — things like projects you're working on, features you want to build, or tasks you've mentioned repeatedly. Tracking them helps OpenClaw give you more relevant answers and remind you of unfinished work.">🎯 Active Goals</h2>
+              data-tooltip="Goals are automatically detected from your Slack conversations — things like projects you're working on, features you want to build, or tasks you've mentioned repeatedly. Tracking them helps OpenClaw give you more relevant answers and remind you of unfinished work.">🎯 Active Goals</h2>
           <div id="goals-list"></div>
         </div>
 
@@ -878,6 +1048,10 @@
             <summary style="cursor:pointer;color:var(--muted);font-size:0.82rem">Recent Errors</summary>
             <div id="recent-errors" class="scrollable-list" style="max-height:200px"></div>
           </details>
+          <div style="margin-top:0.75rem">
+            <div style="font-size:0.78rem;color:var(--muted);margin-bottom:0.35rem">Message volume · last 24h <span style="color:var(--danger,#f85149)">(errors highlighted in red)</span></div>
+            <div id="volume-chart-bars" style="display:flex;gap:2px;align-items:flex-end;height:52px"></div>
+          </div>
         </div>
 
         <!-- Response Time Stats -->
@@ -913,6 +1087,10 @@
             <div><span id="dream-last" style="font-size:1.1rem;font-weight:bold;color:var(--muted)">—</span><br><span style="font-size:0.78rem;color:var(--muted)">Last Dream</span></div>
           </div>
           <div id="dream-metrics" style="display:flex;flex-direction:column;gap:0.5rem"></div>
+          <div style="margin-top:0.75rem">
+            <div style="font-size:0.78rem;color:var(--muted);margin-bottom:0.25rem">Health trend (last 14 dream cycles)</div>
+            <svg id="dream-trend-sparkline" width="100%" height="36" viewBox="0 0 300 36" preserveAspectRatio="none" style="display:block;overflow:visible"></svg>
+          </div>
         </div>
 
         <!-- Network Topology (2D Canvas) -->
@@ -921,7 +1099,7 @@
             <summary style="cursor:pointer;user-select:none">
               <h2 style="display:inline">🌐 Network Topology</h2>
             </summary>
-            <div id="topology-container" style="width:100%;height:550px;position:relative;background:#0d1117;border-radius:8px;overflow:hidden">
+            <div id="topology-container" style="width:100%;height:clamp(300px,50vh,550px);position:relative;background:#0d1117;border-radius:8px;overflow:hidden">
               <canvas id="topo-canvas" style="width:100%;height:100%"></canvas>
               <div id="topo-info" style="position:absolute;top:8px;right:8px;font-size:0.75rem;color:#8b949e"></div>
               <div id="topo-tooltip" style="position:absolute;display:none;padding:8px 12px;background:#1a1b2e;border:1px solid #555;border-radius:8px;font-size:0.8rem;color:#e8e8e8;box-shadow:0 6px 20px rgba(0,0,0,0.7);pointer-events:none;z-index:10"></div>
@@ -1238,7 +1416,7 @@
               ><span class="stat-value" id="sys-python"></span>
             </div>
             <div class="stat-row">
-              <span class="stat-label">discord.py</span
+              <span class="stat-label">slack_sdk</span
               ><span class="stat-value" id="sys-discordpy"></span>
             </div>
             <div class="stat-row">
@@ -1263,6 +1441,7 @@
         <div class="card">
           <h2>🤖 Model Usage (7 days)</h2>
           <div id="model-usage"></div>
+          <div id="model-token-summary" style="margin-top:0.6rem;padding-top:0.5rem;border-top:1px solid var(--border)"></div>
         </div>
 
 
@@ -1290,6 +1469,28 @@
           <pre id="task-status-detail" style="display:none;margin-top:0.8rem;padding:0.9rem 1rem;background:var(--surface-solid,#0d1117);border:1px solid var(--border,#333);border-radius:8px;white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto"></pre>
         </div>
 
+        <!-- ⚕ Hermes Agent Status -->
+        <div class="card" id="hermes-status-card">
+          <div class="card-header">
+            <span>⚕ Hermes Agent</span>
+            <button class="btn btn-sm" onclick="refreshHermesStatus()" title="Refresh">↻</button>
+          </div>
+          <div class="card-body" id="hermes-status-body">
+            <div class="loading">Loading…</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 style="display:flex;align-items:center;gap:0.5rem">
+            🐙 Copilot Sessions
+            <button onclick="refreshCopilotSessions()" title="Refresh" style="font-size:0.75rem;padding:0.15rem 0.45rem;background:transparent;border:1px solid var(--border,#444);border-radius:4px;color:var(--muted);cursor:pointer;margin-left:auto">⟳</button>
+          </h2>
+          <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.6rem">
+            Active Copilot CLI sessions started via Slack or the dashboard.
+          </p>
+          <div id="copilot-sessions-list"><span style="color:var(--muted);font-size:0.82rem">Loading…</span></div>
+        </div>
+
         <div class="card">
           <h2>🖥️ Terminal Agent Sessions</h2>
           <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.6rem">
@@ -1303,7 +1504,7 @@
 
         <!-- Approvals Control Plane -->
         <div class="card">
-          <h2>🛡️ Approvals Control Plane</h2>
+          <h2>🛡️ Approvals Control Plane <span id="approvals-pending-badge" style="display:none;background:var(--danger,#f85149);color:#fff;border-radius:12px;font-size:0.65rem;padding:0.1rem 0.5rem;font-weight:700;vertical-align:middle;margin-left:0.35rem">0</span></h2>
           <h3 style="margin:0.3rem 0 0.6rem 0;font-size:0.9rem;color:var(--muted)">Pending</h3>
           <div class="scrollable-list" style="max-height:220px">
             <table style="width:100%">
@@ -1483,16 +1684,16 @@
         <div class="card" id="channel-memory-inspector-card">
           <h2>🧪 Channel Memory Inspector</h2>
           <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.6rem">
-            Inspect scoped vector memory for a Discord channel/thread, verify guardrail alerts, then run clear/retrain actions when needed. Clear now uses a preview + confirmation guard.
+            Inspect scoped vector memory for a Slack channel/thread, verify guardrail alerts, then run clear/retrain actions when needed. Clear now uses a preview + confirmation guard.
           </p>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:0.6rem">
             <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.78rem;color:var(--muted)">
-              Discord Channel ID (required)
-              <input id="inspector-channel-id" type="text" placeholder="123456789012345678" style="min-width:220px;padding:0.38rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)" />
+              Slack Channel ID (required)
+              <input id="inspector-channel-id" type="text" placeholder="C0123ABC456" style="min-width:220px;padding:0.38rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)" />
             </label>
             <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.78rem;color:var(--muted)">
-              Discord Thread ID (optional)
-              <input id="inspector-thread-id" type="text" placeholder="987654321098765432" style="min-width:220px;padding:0.38rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)" />
+              Thread ts (optional)
+              <input id="inspector-thread-id" type="text" placeholder="1234567890.123456" style="min-width:220px;padding:0.38rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)" />
             </label>
           </div>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.6rem">
@@ -1530,9 +1731,9 @@
           </div>
         </div>
 
-        <!-- Discord Answer Quality Telemetry -->
+        <!-- Answer Quality Telemetry -->
         <div class="card">
-          <h2>🎯 Discord Answer Quality Telemetry</h2>
+          <h2>🎯 Answer Quality Telemetry</h2>
           <div id="quality-metrics-summary" class="memory-stats-bar">
             <span class="stat-chip"><span class="stat-chip-label">Status:</span> Loading…</span>
           </div>
@@ -1615,10 +1816,10 @@
           </details>
         </div>
 
-        <!-- Discord Commands (collapsed by default) -->
+        <!-- Slack Commands (collapsed by default) -->
         <div class="card">
           <details>
-          <summary style="cursor:pointer;user-select:none"><h2 style="display:inline">&#128172; Discord Commands</h2></summary>
+          <summary style="cursor:pointer;user-select:none"><h2 style="display:inline">&#128172; Slack Commands</h2></summary>
           <p
             style="
               color: var(--muted);
@@ -1627,7 +1828,7 @@
               font-style: italic;
             "
           >
-            Manual slash commands you type directly in Discord to control the
+            Slash commands you type directly in Slack to control the
             bot.
           </p>
           <div
@@ -1947,7 +2148,7 @@
           d.content_extraction || "trafilatura → Jina Reader → Playwright";
         document.getElementById("sys-rates").textContent = d.rate_info;
         document.getElementById("sys-python").textContent = d.python;
-        document.getElementById("sys-discordpy").textContent = d.discord_py;
+        document.getElementById("sys-discordpy").textContent = d.slack_sdk;
         document.getElementById("sys-latency").textContent =
           d.latency_ms + " ms";
 
@@ -2051,6 +2252,56 @@
                         </div>
                     </div>`;
                 }).join('');
+            }
+
+            // 7-day token summary with cost estimate
+            const tokenEl = document.getElementById('model-token-summary');
+            if (tokenEl && d.daily_tokens && d.daily_tokens.length > 0) {
+                const totalIn = d.daily_tokens.reduce((s, dt) => s + (dt.input || 0), 0);
+                const totalOut = d.daily_tokens.reduce((s, dt) => s + (dt.output || 0), 0);
+                const totalAll = d.daily_tokens.reduce((s, dt) => s + (dt.total || 0), 0);
+                const fmt = n => n >= 1000000 ? (n/1000000).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(0)+'k' : n;
+
+                // Estimate cost using per-model pricing ($ per 1M tokens)
+                // Pricing source: published rates as of 2025; local/Ollama models treated as $0
+                const PRICING = {
+                    'claude-3-5-sonnet': {in: 3.0, out: 15.0},
+                    'claude-3-5-haiku':  {in: 0.8, out: 4.0},
+                    'claude-3-opus':     {in: 15.0, out: 75.0},
+                    'claude-3-sonnet':   {in: 3.0, out: 15.0},
+                    'claude-3-haiku':    {in: 0.25, out: 1.25},
+                    'claude-sonnet':     {in: 3.0, out: 15.0},
+                    'claude-haiku':      {in: 0.8, out: 4.0},
+                    'gpt-4o':            {in: 2.5, out: 10.0},
+                    'gpt-4o-mini':       {in: 0.15, out: 0.6},
+                    'gpt-4-turbo':       {in: 10.0, out: 30.0},
+                    'gpt-4':             {in: 30.0, out: 60.0},
+                    'gpt-3.5-turbo':     {in: 0.5, out: 1.5},
+                    'gemini-1.5-pro':    {in: 1.25, out: 5.0},
+                    'gemini-1.5-flash':  {in: 0.075, out: 0.3},
+                    'gemini-2.0-flash':  {in: 0.1, out: 0.4},
+                };
+                const DEFAULT_PRICE = {in: 3.0, out: 15.0}; // fallback for unknown cloud models
+                const modelUsage = d.model_usage || {};
+                const totalCalls = Object.values(modelUsage).reduce((s, v) => s + v, 0) || 1;
+                let estCost = 0;
+                let hasLocalOnly = false;
+                Object.entries(modelUsage).forEach(([model, calls]) => {
+                    const frac = calls / totalCalls;
+                    const mLower = model.toLowerCase();
+                    const isLocal = mLower.includes('ollama') || mLower.includes('gemma') || mLower.includes('llama') || mLower.includes('mistral') || mLower.includes('local');
+                    if (isLocal) { hasLocalOnly = true; return; }
+                    const priceKey = Object.keys(PRICING).find(k => mLower.includes(k));
+                    const price = priceKey ? PRICING[priceKey] : DEFAULT_PRICE;
+                    estCost += (totalIn * frac / 1e6) * price.in + (totalOut * frac / 1e6) * price.out;
+                });
+                const costStr = estCost > 0
+                    ? `· <span style="color:#ffd700" title="Estimated cost based on published model pricing">~$${estCost.toFixed(2)} est.</span>`
+                    : hasLocalOnly ? '· <span style="color:var(--mint-green)" title="Running on local model — no API cost">$0 (local)</span>' : '';
+
+                tokenEl.innerHTML = `<div style="font-size:0.78rem;color:var(--muted)">7-day tokens: <span style="color:var(--spirit-blue)">${fmt(totalIn)} in</span> · <span style="color:var(--gold)">${fmt(totalOut)} out</span> · <span style="color:var(--mint-green)">${fmt(totalAll)} total</span> ${costStr}</div>`;
+            } else if (tokenEl) {
+                tokenEl.innerHTML = '';
             }
         }
 
@@ -2643,7 +2894,7 @@
       function renderResearch(reports) {
           const el = document.getElementById('research-list');
           if (reports.length === 0) {
-              el.innerHTML = '<p class="muted-text">No research reports yet. Use /research in Discord.</p>';
+              el.innerHTML = '<p class="muted-text">No research reports yet. Use /research in Slack.</p>';
               return;
           }
           el.innerHTML = reports.map(r => {
@@ -2719,7 +2970,70 @@
                     });
                   });
               } else {
-                  metricsEl.innerHTML = '<p class="muted-text">No dream data yet. Run /dream in Discord.</p>';
+                  metricsEl.innerHTML = '<p class="muted-text">No dream data yet. Run /dream in Slack.</p>';
+              }
+
+              // Health history sparkline
+              const sparkSvg = document.getElementById('dream-trend-sparkline');
+              if (sparkSvg) {
+                  const history = (data.health_history || []).slice(-14);
+                  if (history.length >= 2) {
+                      const vals = history.map(h => typeof h === 'number' ? h : (typeof h === 'object' ? (h.score || h.overall || 0) : 0));
+                      const maxV = Math.max(...vals, 1);
+                      const minV = Math.min(...vals, 0);
+                      const range = maxV - minV || 1;
+                      const W = 300, H = 34, PAD = 2;
+                      const points = vals.map((v, i) => {
+                          const x = PAD + (i / (vals.length - 1)) * (W - PAD * 2);
+                          const y = H - PAD - ((v - minV) / range) * (H - PAD * 2);
+                          return `${x.toFixed(1)},${y.toFixed(1)}`;
+                      }).join(' ');
+                      const lastVal = vals[vals.length - 1];
+                      const trendColor = lastVal >= 70 ? '#4caf50' : lastVal >= 40 ? '#ff9800' : '#f44336';
+                      // Build dots with tooltip data attributes for JS hover handler
+                      const dots = vals.map((v, i) => {
+                          const x = PAD + (i / (vals.length - 1)) * (W - PAD * 2);
+                          const y = H - PAD - ((v - minV) / range) * (H - PAD * 2);
+                          const cycleLabel = history.length - vals.length + i + 1;
+                          const dotColor = v >= 70 ? '#4caf50' : v >= 40 ? '#ff9800' : '#f44336';
+                          return `<circle class="dream-dot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" fill="${dotColor}" stroke="var(--bg,#0d1117)" stroke-width="1.5" data-val="${v}" data-cycle="${cycleLabel}" style="cursor:pointer"/>`;
+                      }).join('');
+                      sparkSvg.innerHTML = `<polyline points="${points}" fill="none" stroke="${trendColor}" stroke-width="2" stroke-linejoin="round"/>` + dots +
+                          `<rect id="dream-tip-bg" x="0" y="0" width="60" height="18" rx="4" fill="#222" stroke="#555" stroke-width="0.5" style="display:none"/>` +
+                          `<text id="dream-tip-text" x="30" y="13" font-size="10" fill="#fff" text-anchor="middle" style="display:none;pointer-events:none"></text>`;
+
+                      // Attach tooltip events
+                      sparkSvg.querySelectorAll('.dream-dot').forEach(dot => {
+                          dot.addEventListener('mouseenter', e => {
+                              const tipBg = sparkSvg.querySelector('#dream-tip-bg');
+                              const tipTxt = sparkSvg.querySelector('#dream-tip-text');
+                              if (!tipBg || !tipTxt) return;
+                              const cx = parseFloat(dot.getAttribute('cx'));
+                              const cy = parseFloat(dot.getAttribute('cy'));
+                              const val = dot.getAttribute('data-val');
+                              const cycle = dot.getAttribute('data-cycle');
+                              const label = `cycle ${cycle}: ${val}%`;
+                              const bgW = Math.max(label.length * 6.5, 60);
+                              let tipX = cx - bgW / 2;
+                              // keep inside viewBox
+                              tipX = Math.max(2, Math.min(tipX, W - bgW - 2));
+                              const tipY = cy > 18 ? cy - 22 : cy + 8;
+                              tipBg.setAttribute('x', tipX); tipBg.setAttribute('y', tipY);
+                              tipBg.setAttribute('width', bgW);
+                              tipTxt.setAttribute('x', tipX + bgW / 2); tipTxt.setAttribute('y', tipY + 13);
+                              tipTxt.textContent = label;
+                              tipBg.style.display = ''; tipTxt.style.display = '';
+                          });
+                          dot.addEventListener('mouseleave', () => {
+                              const tipBg = sparkSvg.querySelector('#dream-tip-bg');
+                              const tipTxt = sparkSvg.querySelector('#dream-tip-text');
+                              if (tipBg) tipBg.style.display = 'none';
+                              if (tipTxt) tipTxt.style.display = 'none';
+                          });
+                      });
+                  } else {
+                      sparkSvg.innerHTML = '<text x="4" y="20" fill="var(--muted)" font-size="11">Not enough history yet</text>';
+                  }
               }
           }).catch(() => {
               document.getElementById('dream-score').textContent = '—';
@@ -2839,7 +3153,7 @@
                 ].join('');
 
                 const feedbackHtml = [
-                  '<div class="section-subheading" style="margin-top:0.6rem">Discord answer feedback loop</div>',
+                  '<div class="section-subheading" style="margin-top:0.6rem">Slack answer feedback loop</div>',
                   '<div class="memory-stats-bar" style="margin-bottom:0.2rem">',
                   _statusChip('Helpful', feedbackHelpful, feedbackHelpful > 0 ? 'good' : 'neutral'),
                   _statusChip('Not helpful', feedbackNotHelpful, feedbackNotHelpful > 0 ? 'warn' : 'neutral'),
@@ -3037,6 +3351,8 @@
           loadPlans();
           loadTaskStatuses();
           loadAgentSessions();
+          refreshHermesStatus();
+          refreshCopilotSessions();
           loadApprovals();
           loadRunTimeline();
           loadQualityEvals();
@@ -3069,7 +3385,8 @@
           const el = document.getElementById('refresh-countdown');
           if (el) el.textContent = _refreshCountdown + 's';
       }, 1000);
-      setInterval(() => { _resetCountdown(); refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadPlans(); loadTaskStatuses(); loadAgentSessions(); loadApprovals(); loadRunTimeline(); loadQualityEvals(); loadQualityMetrics(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadQuotaStatus(); loadSkillStats(); loadConfigStatus(); loadChannelMemoryInspector({ quietIfMissing: true }); loadTopology(); refreshStatus(); }, 60000);
+      setInterval(() => { _resetCountdown(); refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadPlans(); loadTaskStatuses(); loadAgentSessions(); refreshHermesStatus(); refreshCopilotSessions(); loadApprovals(); loadRunTimeline(); loadQualityEvals(); loadQualityMetrics(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadQuotaStatus(); loadSkillStats(); loadConfigStatus(); loadChannelMemoryInspector({ quietIfMissing: true }); loadTopology(); refreshStatus(); }, 60000);
+      setInterval(refreshCopilotSessions, 15000);
 
       // D-5: Live Status Banner
       function refreshStatus() {
@@ -3092,7 +3409,7 @@
               if (s.patreon) {
                   updatePatreonWidget(s.patreon);
               }
-          }).catch(() => {});
+          }).catch(e => { log.debug?.('refreshStatus error', e); });
       }
 
       function updatePatreonWidget(data) {
@@ -3177,10 +3494,11 @@
               } else {
                   errList.innerHTML = '<p class="muted-text">No errors in the last 24 hours 🎉</p>';
               }
-          }).catch(() => {});
+          }).catch(() => {
+              const errList = document.getElementById('recent-errors');
+              if (errList) errList.innerHTML = '<p class="muted-text" style="color:var(--danger,#f85149)">⚠️ Failed to load error stats.</p>';
+          });
       }
-
-      // Response Time Stats
       function loadResponseStats() {
           fetch('/api/response-stats').then(r => r.json()).then(data => {
               document.getElementById('resp-count').textContent = data.count || 0;
@@ -3228,7 +3546,10 @@
                           '</tbody></table>';
                   }
               }
-          }).catch(() => {});
+          }).catch(() => {
+              const el = document.getElementById('resp-sparkline');
+              if (el) el.innerHTML = '<span style="color:var(--danger,#f85149);font-size:0.78rem">⚠️ Failed to load</span>';
+          });
       }
 
       function _qualityMetricLabel(name) {
@@ -3306,16 +3627,26 @@
       let _planItems = [];
       let _taskStatusItems = [];
 
+      function _nextRunBadge(nextRunStr) {
+          const s = (nextRunStr || '').trim();
+          if (!s) return '<span style="color:var(--muted);font-size:0.78rem">—</span>';
+          const isOverdue = s === 'overdue';
+          const isSoon = s.startsWith('in ') && !s.includes('h');
+          const color = isOverdue ? 'var(--danger,#f85149)' : isSoon ? 'var(--gold)' : 'var(--mint-green)';
+          const icon = isOverdue ? '⚠️ ' : '';
+          return `<span style="color:${color};font-size:0.78rem;font-weight:600;white-space:nowrap">${icon}${esc(s)}</span>`;
+      }
+
       // D-4: Scheduled Tasks
       function loadSchedules() {
           fetch('/api/schedules').then(r => r.json()).then(data => {
               const el = document.getElementById('schedules-list');
               _scheduleItems = data.tasks || [];
               if (_scheduleItems.length === 0) {
-                  el.innerHTML = '<p class="muted-text" style="color:var(--muted);text-align:center;padding:1rem">No scheduled tasks. Use /schedule in Discord.</p>';
+                  el.innerHTML = '<p class="muted-text" style="color:var(--muted);text-align:center;padding:1rem">No scheduled tasks. Use /schedule in Slack.</p>';
                   return;
               }
-              el.innerHTML = '<table style="width:100%"><thead><tr><th>Task</th><th>Schedule</th><th id="type-col-header" style="cursor:help;text-decoration:underline dotted;position:relative" data-tooltip="Skill = runs a built-in automation function (e.g. health check, backup)\nPrompt = sends a text prompt to the AI for a freeform response">Type &#9432;</th><th>Status</th><th>Details</th><th>Actions</th></tr></thead><tbody>' +
+              el.innerHTML = '<table style="width:100%"><thead><tr><th>Task</th><th>Schedule</th><th id="type-col-header" style="cursor:help;text-decoration:underline dotted;position:relative" data-tooltip="Skill = runs a built-in automation function (e.g. health check, backup)\nPrompt = sends a text prompt to the AI for a freeform response">Type &#9432;</th><th>Status</th><th>Next Run</th><th>Details</th><th>Actions</th></tr></thead><tbody>' +
                   _scheduleItems.map(t => {
                       const schedule = t.schedule_human || (
                           t.cron_expression ? `<code>${esc(t.cron_expression)}</code>` :
@@ -3330,7 +3661,6 @@
                       const details = t.prompt
                           ? esc(t.prompt).substring(0, 80) + (t.prompt.length > 80 ? '…' : '')
                           : esc(t.args || '');
-                      const nextRun = t.next_run ? ` • next: ${esc(t.next_run)}` : '';
                       const taskId = esc(t.id || t.name);
                       const toggleLabel = t.enabled ? 'Pause' : 'Resume';
                       return `<tr id="task-row-${taskId}">
@@ -3338,7 +3668,8 @@
                           <td>${schedule}</td>
                           <td>${type}</td>
                           <td>${status}</td>
-                          <td style="font-size:0.75rem;color:var(--muted)">${details}${nextRun}</td>
+                          <td>${_nextRunBadge(t.next_run)}</td>
+                          <td style="font-size:0.75rem;color:var(--muted)">${details}</td>
                           <td style="white-space:nowrap">
                             <button onclick="editTask('${taskId}')" style="background:rgba(104,172,229,0.2);color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.75rem;margin-right:0.25rem" title="Edit task">Edit</button>
                             <button onclick="toggleTask('${taskId}')" style="background:rgba(241,196,0,0.2);color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.75rem;margin-right:0.25rem" title="Toggle task">${toggleLabel}</button>
@@ -3514,9 +3845,94 @@
           .catch(err => alert('Failed to load task: ' + err));
       }
 
+      async function refreshHermesStatus() {
+        const body = document.getElementById('hermes-status-body');
+        if (!body) return;
+        try {
+          const r = await fetch('/api/hermes/status');
+          const d = await r.json();
+          if (!d.installed) {
+            const note = d.note ? `<span class="text-muted">${esc(d.note)}</span>` : '';
+            body.innerHTML = `<p class="text-muted">Hermes not installed</p>${note}`;
+            return;
+          }
+          const backendBadge = d.copilot_backend === 'hermes'
+            ? '<span class="badge badge-green">active backend</span>'
+            : '<span class="badge badge-blue">standby</span>';
+          const skillLabel = d.skill_count_label || `${d.skill_count || 0} loaded`;
+          const recentSessions = (d.recent_sessions || []);
+          const recentHtml = recentSessions.length === 0
+            ? '<tr><td>Recent Sessions</td><td class="text-muted small">No sessions yet</td></tr>'
+            : recentSessions.map((s, i) => {
+                const sid = esc((s.id || '').substring(0, 16));
+                const ts = esc(s.created_at || '');
+                return `<tr><td>${i === 0 ? 'Recent Sessions' : ''}</td><td class="text-muted small"><code title="${ts}">${sid}…</code> · ${s.messages || 0} msgs</td></tr>`;
+              }).join('');
+          body.innerHTML = `
+            <table class="table table-sm">
+              <tr><td>Model</td><td><strong>${esc(d.model || '—')}</strong> <small class="text-muted">(${esc(d.provider || '—')})</small></td></tr>
+              <tr><td>Slack /copilot</td><td>${backendBadge}</td></tr>
+              <tr><td>Skills</td><td>${skillLabel}</td></tr>
+              <tr><td>MEMORY.md</td><td>${d.memory_md_chars || 0} chars</td></tr>
+              ${recentHtml}
+            </table>
+            <div class="mt-2">
+              <a href="https://github.com/NousResearch/hermes-agent" target="_blank" class="btn btn-sm btn-outline">Hermes Docs</a>
+            </div>`;
+        } catch (e) {
+          body.innerHTML = `<p class="text-danger">Error: ${esc(e.message)}</p>`;
+        }
+      }
+
+      function refreshCopilotSessions() {
+        fetch('/api/copilot/sessions').then(r => r.json()).then(data => {
+          const el = document.getElementById('copilot-sessions-list');
+          if (!el) return;
+          const sessions = data.sessions || [];
+          if (sessions.length === 0) {
+            el.innerHTML = '<p style="color:var(--muted);font-size:0.82rem;padding:0.5rem 0">No active sessions. Start one with <strong>/copilot</strong> in Slack or pick Copilot CLI in the chat above.</p>';
+            return;
+          }
+          const fmtAge = s => s < 60 ? `${s}s` : s < 3600 ? `${Math.round(s/60)}m` : `${Math.round(s/3600)}h`;
+          el.innerHTML = '<table style="width:100%;font-size:0.8rem"><thead><tr>' +
+            '<th>ID</th><th>Status</th><th>cwd</th><th>Turns</th><th>Age / Idle</th><th></th>' +
+            '</tr></thead><tbody>' +
+            sessions.map(s => {
+              const live = s.live ? '🟢' : '⚫';
+              const sid = esc(s.session_id || '');
+              return `<tr>
+                <td><code style="font-size:0.75rem">${sid}</code></td>
+                <td>${live} ${esc(s.status || '')}</td>
+                <td style="color:var(--muted)">${esc((s.cwd || '').replace('/Users/davevoyles/', '~/'))}</td>
+                <td style="text-align:center">${s.turns || 0}</td>
+                <td style="color:var(--muted)">${fmtAge(s.age_s)} / ${fmtAge(s.idle_s)} idle</td>
+                <td style="display:flex;gap:0.3rem">
+                  <button onclick="copilotSessionAction('cancel','${sid}')" title="Ctrl-C current turn"
+                    style="font-size:0.72rem;padding:0.1rem 0.35rem;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:var(--orange);border-radius:4px;cursor:pointer">⏸</button>
+                  <button onclick="copilotSessionAction('end','${sid}')" title="End session"
+                    style="font-size:0.72rem;padding:0.1rem 0.35rem;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;border-radius:4px;cursor:pointer">✕</button>
+                </td></tr>`;
+            }).join('') + '</tbody></table>';
+        }).catch(() => {
+          const el = document.getElementById('copilot-sessions-list');
+          if (el) el.innerHTML = '<span style="color:var(--muted);font-size:0.82rem">Unable to load sessions.</span>';
+        });
+      }
+
+      async function copilotSessionAction(action, sessionId) {
+        // Delegate to Slack commands via Tool Server isn't available here;
+        // display instructions since session management requires Slack commands.
+        const cmds = { cancel: `/copilot-cancel ${sessionId}`, end: `/copilot-end ${sessionId}` };
+        const cmd = cmds[action];
+        if (cmd) {
+          try { await navigator.clipboard.writeText(cmd); } catch {}
+          alert(`Run in Slack:\n${cmd}\n\n(copied to clipboard)`);
+        }
+      }
+
       function loadAgentSessions() {
-          fetch('/api/agent/sessions?limit=10').then(r => r.json()).then(data => {
-              const el = document.getElementById('agent-sessions-list');
+        fetch('/api/agent/sessions?limit=10').then(r => r.json()).then(data => {
+          const el = document.getElementById('agent-sessions-list');
               const detail = document.getElementById('agent-session-detail');
               const actions = document.getElementById('agent-session-actions');
               if (detail) detail.style.display = 'none';
@@ -3738,6 +4154,21 @@
               const recent = data.recent || [];
               const pBody = document.getElementById('approvals-pending-body');
               const pEmpty = document.getElementById('approvals-pending-empty');
+
+              // Update pending badge and status banner
+              const pendingCount = pending.length;
+              const badge = document.getElementById('approvals-pending-badge');
+              const bannerWrap = document.getElementById('st-approvals-wrap');
+              const bannerCount = document.getElementById('st-approvals-count');
+              if (badge) {
+                  badge.textContent = pendingCount;
+                  badge.style.display = pendingCount > 0 ? '' : 'none';
+              }
+              if (bannerWrap && bannerCount) {
+                  bannerCount.textContent = pendingCount;
+                  bannerWrap.style.display = pendingCount > 0 ? '' : 'none';
+              }
+
               pBody.innerHTML = '';
               if (pending.length === 0) {
                   pEmpty.style.display = 'block';
@@ -3810,6 +4241,7 @@
       function loadRunTimeline() {
           fetch('/api/runs?limit=300&hours=168').then(r => r.json()).then(data => {
               _allRuns = data.runs || [];
+              renderVolumeChart();
               const statusSel = document.getElementById('run-filter-status');
               const modelSel = document.getElementById('run-filter-model');
               const userSel = document.getElementById('run-filter-user');
@@ -3824,6 +4256,45 @@
               _allRuns = [];
               applyRunFilters();
           });
+      }
+
+      function renderVolumeChart() {
+          const el = document.getElementById('volume-chart-bars');
+          if (!el) return;
+          const runs = (_allRuns || []).filter(r => r.timestamp);
+          if (runs.length === 0) {
+              el.innerHTML = '<span style="color:var(--muted);font-size:0.78rem">No run data yet — chart will populate as messages arrive.</span>';
+              return;
+          }
+          const now = Math.floor(Date.now() / 1000);
+          const buckets = Array.from({length: 24}, () => ({total: 0, errors: 0}));
+          runs.forEach(run => {
+              const ageH = (now - run.timestamp) / 3600;
+              if (ageH < 0 || ageH >= 24) return;
+              const idx = 23 - Math.floor(ageH);
+              if (idx >= 0 && idx < 24) {
+                  buckets[idx].total++;
+                  if (run.status === 'error') buckets[idx].errors++;
+              }
+          });
+          const maxTotal = Math.max(...buckets.map(b => b.total), 1);
+          el.innerHTML = buckets.map((b, i) => {
+              const heightPct = Math.round((b.total / maxTotal) * 100);
+              const errFrac = b.total > 0 ? b.errors / b.total : 0;
+              const bg = b.errors > 0
+                  ? `linear-gradient(to top, var(--danger,#f85149) ${Math.round(errFrac * 100)}%, var(--spirit-blue) ${Math.round(errFrac * 100)}%)`
+                  : 'var(--spirit-blue)';
+              const hLabel = new Date((now - (23 - i) * 3600) * 1000).getHours();
+              const tooltip = b.total > 0
+                  ? `${b.total} msg${b.total > 1 ? 's' : ''}${b.errors ? ', ' + b.errors + ' err' : ''} @ ${hLabel}:00`
+                  : `No messages @ ${hLabel}:00`;
+              return `<div title="${tooltip}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;cursor:default">
+                  <div style="width:100%;height:44px;background:var(--border);border-radius:2px;overflow:hidden;display:flex;align-items:flex-end">
+                      <div style="width:100%;height:${Math.max(heightPct, b.total > 0 ? 4 : 0)}%;background:${bg};transition:height 0.3s"></div>
+                  </div>
+                  <span style="font-size:0.55rem;color:var(--muted)">${i % 4 === 0 ? hLabel + 'h' : ''}</span>
+              </div>`;
+          }).join('');
       }
 
       function renderRunDetails(run) {
@@ -4383,7 +4854,145 @@
       // ── Ask OpenClaw Agent ────────────────────────────────────────────────
       let _agentHistory = [];
 
+      // Quick-fill the prompt box and switch to Copilot CLI model
+      function setCopilotPrompt(text) {
+        const sel = document.getElementById('agent-model');
+        sel.value = 'copilot-cli';
+        onAgentModelChange();
+        const ta = document.getElementById('agent-prompt');
+        ta.value = text;
+        ta.focus();
+      }
+
+      // ── Ping cache (30 s TTL) ────────────────────────────────────────────
+      let _bridgePingCache = { ts: 0, result: null };
+      const BRIDGE_PING_TTL = 30_000;
+
+      function _applyBridgeStatus(d) {
+        const dot = document.getElementById('st-bridge');
+        const inline = document.getElementById('bridge-status-inline');
+        if (d.ok) {
+          if (dot) { dot.textContent='✅'; dot.style.color='var(--success,#3fb950)'; dot.title=''; }
+          if (inline) { inline.textContent=`✅ connected (${d.latency_ms}ms)`; inline.style.color='var(--success,#3fb950)'; inline.style.background='rgba(63,185,80,0.1)'; }
+        } else {
+          const msg = d.error || 'unreachable';
+          if (dot) { dot.textContent='❌'; dot.style.color='var(--danger,#f85149)'; dot.title=msg; }
+          if (inline) { inline.textContent=`❌ ${msg}`; inline.style.color='var(--danger,#f85149)'; inline.style.background='rgba(248,81,73,0.1)'; inline.title=msg; }
+        }
+      }
+
+      // Poll bridge reachability; cached for 30 s to avoid SSH spam
+      async function checkBridgeStatus(force=false) {
+        const now = Date.now();
+        if (!force && _bridgePingCache.result && (now - _bridgePingCache.ts) < BRIDGE_PING_TTL) {
+          _applyBridgeStatus(_bridgePingCache.result);
+          return;
+        }
+        try {
+          const r = await fetch('/api/copilot/ping', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+          const d = await r.json();
+          _bridgePingCache = { ts: Date.now(), result: d };
+          _applyBridgeStatus(d);
+        } catch(e) {
+          const d = { ok: false, latency_ms: null, error: e.message || 'network error' };
+          _applyBridgeStatus(d);
+        }
+      }
+
+      // ── Minimal markdown renderer (for Copilot CLI output) ──────────────
+      let _cbCount = 0;
+      function _renderMd(text) {
+        const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const parts = text.split(/(```[^\n]*\n[\s\S]*?```)/g);
+        return parts.map((p, i) => {
+          if (i % 2 === 1) {
+            const m = p.match(/```([^\n]*)\n([\s\S]*?)```/);
+            const rawCode = m ? m[2] : p;
+            const id = 'cb' + (++_cbCount);
+            return `<div style="position:relative;margin:0.4rem 0">` +
+              `<pre id="${id}" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:0.75rem 1rem;overflow-x:auto;font-size:0.8rem;margin:0"><code>${esc(rawCode)}</code></pre>` +
+              `<button onclick="copyCodeBlock('${id}')" style="position:absolute;top:0.35rem;right:0.35rem;font-size:0.65rem;padding:0.15rem 0.4rem;background:#21262d;border:1px solid #30363d;border-radius:4px;color:#8b949e;cursor:pointer">📋</button>` +
+              `</div>`;
+          }
+          let s = esc(p);
+          s = s.replace(/`([^`\n]+)`/g, '<code style="background:#161b22;padding:0.1em 0.35em;border-radius:3px;font-size:0.88em">$1</code>');
+          s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+          s = s.replace(/^### (.+)$/gm, '<strong style="color:var(--gold,#d4a027)">$1</strong>');
+          s = s.replace(/^## (.+)$/gm, '<span style="color:var(--gold,#d4a027);font-size:1.05em;font-weight:700">$1</span>');
+          s = s.replace(/^# (.+)$/gm, '<span style="color:var(--gold,#d4a027);font-size:1.15em;font-weight:700">$1</span>');
+          s = s.replace(/\n/g, '<br>');
+          return s;
+        }).join('');
+      }
+
+      function copyCodeBlock(id) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        navigator.clipboard.writeText(el.textContent).then(() => {
+          const btn = el.nextElementSibling;
+          if (btn) { const o = btn.textContent; btn.textContent = '✅'; setTimeout(() => { btn.textContent = o; }, 1200); }
+        });
+      }
+
+      // ── Abort controller for in-flight requests ──────────────────────────
+      let _currentAbort = null;
+
+      // ── Chat state ────────────────────────────────────────────────────────
+      let _chatRawMode = false;       // raw vs rendered view
+      let _chatRawBuf = '';           // all text including stderr, unformatted
+      let _chatTextBuf = '';          // clean text for markdown rendering
+      let _chatFontSize = 0.88;       // rem, current response font size
+      let _chatThreadItems = [];      // [{prompt, response, meta}] — prior exchanges
+
+      function _cancelRequest() {
+        if (_currentAbort) { _currentAbort.abort('user-stop'); _currentAbort = null; }
+      }
+
+      function onAgentModelChange() {
+        const model = document.getElementById('agent-model').value;
+        const hint = document.getElementById('copilot-cli-hint');
+        const hermesHint = document.getElementById('hermes-hint');
+        const wdSelect = document.getElementById('copilot-workdir-select');
+        const terminalLink = document.getElementById('open-terminal-link');
+        const responseEl = document.getElementById('agent-response');
+        if (model === 'copilot-cli') {
+          hint.style.display = 'block';
+          hermesHint.style.display = 'none';
+          wdSelect.style.display = 'inline-block';
+          if (terminalLink) terminalLink.style.display = 'inline-block';
+          responseEl.style.fontFamily = '"SF Mono","Fira Code","Cascadia Code",monospace';
+          responseEl.style.fontSize = '0.82rem';
+          responseEl.style.background = '#0d1117';
+          responseEl.style.color = '#a8d8a8';
+          checkBridgeStatus();
+        } else if (model === 'hermes') {
+          hint.style.display = 'none';
+          hermesHint.style.display = 'block';
+          wdSelect.style.display = 'none';
+          if (terminalLink) terminalLink.style.display = 'none';
+          responseEl.style.fontFamily = '"SF Mono","Fira Code","Cascadia Code",monospace';
+          responseEl.style.fontSize = '0.82rem';
+          responseEl.style.background = '#0d1117';
+          responseEl.style.color = '#86efac';
+        } else {
+          hint.style.display = 'none';
+          hermesHint.style.display = 'none';
+          wdSelect.style.display = 'none';
+          if (terminalLink) terminalLink.style.display = 'none';
+          responseEl.style.fontFamily = 'inherit';
+          responseEl.style.fontSize = '0.88rem';
+          responseEl.style.background = 'var(--surface-solid,#0d1117)';
+          responseEl.style.color = 'var(--text,#e8e8e8)';
+        }
+      }
+
+      // Check bridge on page load (quiet — just updates the header dot, uses cache)
+      document.addEventListener('DOMContentLoaded', () => { checkBridgeStatus(); });
+
       async function dashAsk(quickPrompt) {
+        // If already in flight, act as Stop button
+        if (_currentAbort) { _cancelRequest(); return; }
+
         const promptEl = document.getElementById('agent-prompt');
         const prompt = (quickPrompt || promptEl.value || '').trim();
         if (!prompt) return;
@@ -4393,51 +5002,284 @@
         const loadingEl = document.getElementById('agent-loading');
         const wrapEl = document.getElementById('agent-response-wrap');
         const responseEl = document.getElementById('agent-response');
-        const metaEl = document.getElementById('agent-response-meta');
+        const metaTextEl = document.getElementById('agent-response-meta-text');
 
-        sendBtn.disabled = true;
+        // Save previous response to thread before starting a new one
+        if (responseEl.textContent.trim() || responseEl.innerHTML.trim()) {
+          _pushToThread(responseEl, metaTextEl ? metaTextEl.textContent : '');
+        }
+
+        _currentAbort = new AbortController();
+        _chatRawBuf = '';
+        _chatTextBuf = '';
+        sendBtn.disabled = false;
+        sendBtn.textContent = '⏹ Stop';
+        sendBtn.style.background = 'var(--danger,#f85149)';
         loadingEl.style.display = 'block';
         wrapEl.style.display = 'none';
+        responseEl.innerHTML = '';
+
+        const _setMeta = (t) => { if (metaTextEl) metaTextEl.textContent = t; };
+        const _renderCurrent = () => {
+          if (_chatRawMode) {
+            responseEl.textContent = _chatRawBuf;
+          } else {
+            responseEl.innerHTML = _renderMd(_chatTextBuf);
+          }
+          responseEl.scrollTop = responseEl.scrollHeight;
+        };
 
         const startMs = Date.now();
         try {
-          const res = await fetch('/api/agent/ask', {
-            method: 'POST',
-            headers: _actionAuthHeaders('dashboard-ui'),
-            body: JSON.stringify({ prompt, model, history: _agentHistory }),
-          });
-          const data = await res.json();
-          const elapsed = ((Date.now() - startMs) / 1000).toFixed(1);
+          if (model === 'copilot-cli') {
+            // ── Streaming path via SSE ──────────────────────────────────
+            wrapEl.style.display = 'block';
+            loadingEl.style.display = 'none';
+            const wdSelect = document.getElementById('copilot-workdir-select');
+            const workdir = wdSelect ? wdSelect.value : '';
+            _setMeta('🐙 Copilot CLI — connecting to Mac Mini…');
 
-          if (data.error) {
-            responseEl.textContent = '\u274c ' + data.error;
+            const res = await fetch('/api/copilot/stream', {
+              method: 'POST',
+              headers: _actionAuthHeaders('dashboard-ui'),
+              body: JSON.stringify({ prompt, ...(workdir ? { workdir } : {}) }),
+              signal: _currentAbort.signal,
+            });
+
+            if (!res.ok || !res.body) {
+              responseEl.textContent = '❌ Stream failed (HTTP ' + res.status + ')';
+              _setMeta('');
+            } else {
+              const reader = res.body.getReader();
+              const decoder = new TextDecoder();
+              let sseBuf = '';
+              let sessionId = '';
+
+              const parseEvents = (raw) => {
+                const events = [];
+                const chunks = raw.split(/\n\n/);
+                for (const chunk of chunks) {
+                  const lines = chunk.split('\n');
+                  let eventType = 'chunk', dataStr = '';
+                  for (const line of lines) {
+                    if (line.startsWith('event: ')) eventType = line.slice(7).trim();
+                    else if (line.startsWith('data: ')) dataStr = line.slice(6).trim();
+                  }
+                  if (dataStr) {
+                    try { events.push({ type: eventType, data: JSON.parse(dataStr) }); }
+                    catch { /* ignore malformed */ }
+                  }
+                }
+                return events;
+              };
+
+              outer: while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                sseBuf += decoder.decode(value, { stream: true });
+
+                const boundary = sseBuf.lastIndexOf('\n\n');
+                if (boundary === -1) continue;
+                const toProcess = sseBuf.slice(0, boundary + 2);
+                sseBuf = sseBuf.slice(boundary + 2);
+
+                for (const { type, data } of parseEvents(toProcess)) {
+                  if (type === 'chunk') {
+                    _chatTextBuf += data.text || '';
+                    _chatRawBuf += data.text || '';
+                    _renderCurrent();
+                    _setMeta('🐙 Copilot CLI — streaming…');
+                  } else if (type === 'stderr') {
+                    const stderrText = data.text || '';
+                    _chatRawBuf += stderrText ? `\n[stderr] ${stderrText}` : '';
+                    // In formatted mode, include stderr only as a subtle note; in raw always show
+                    if (_chatRawMode) _renderCurrent();
+                  } else if (type === 'done') {
+                    sessionId = data.session_id || '';
+                    const elapsed = ((Date.now() - startMs) / 1000).toFixed(1);
+                    _setMeta('🐙 Copilot CLI (Mac Mini SSH)  •  ' + elapsed + 's' +
+                      (sessionId ? '  •  session ' + sessionId.slice(-8) : '') +
+                      (data.success ? '' : '  ⚠️ non-zero exit'));
+                    if (!data.success && data.error) {
+                      _chatTextBuf += '\n\n❌ ' + data.error;
+                      _chatRawBuf += '\n\n❌ ' + data.error;
+                      _renderCurrent();
+                    }
+                    if (data.success) _bridgePingCache.ts = 0;
+                    break outer;
+                  } else if (type === 'error') {
+                    const elapsed = ((Date.now() - startMs) / 1000).toFixed(1);
+                    _chatRawBuf += '\n\n❌ ' + (data.error || 'Unknown error');
+                    _chatTextBuf += '\n\n❌ ' + (data.error || 'Unknown error');
+                    _renderCurrent();
+                    _setMeta('🐙 Copilot CLI  •  ' + elapsed + 's  •  error');
+                    break outer;
+                  }
+                }
+              }
+            }
+            if (!quickPrompt) promptEl.value = '';
+          } else if (model === 'hermes') {
+            // ── Hermes Agent streaming path ─────────────────────────────
+            wrapEl.style.display = 'block';
+            loadingEl.style.display = 'none';
+            _setMeta('⚕ Hermes — running…');
+
+            const res = await fetch('/api/hermes/ask', {
+              method: 'POST',
+              headers: _actionAuthHeaders('dashboard-ui'),
+              body: JSON.stringify({ prompt }),
+              signal: _currentAbort.signal,
+            });
+
+            if (!res.ok || !res.body) {
+              responseEl.textContent = '❌ Hermes stream failed (HTTP ' + res.status + ')';
+              _setMeta('');
+            } else {
+              const reader = res.body.getReader();
+              const decoder = new TextDecoder();
+              let sseBuf = '';
+              outer: while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                sseBuf += decoder.decode(value, { stream: true });
+                const blocks = sseBuf.split('\n\n');
+                sseBuf = blocks.pop() || '';
+                for (const block of blocks) {
+                  const lines = block.split('\n');
+                  let type = 'chunk', rawData = '';
+                  for (const line of lines) {
+                    if (line.startsWith('event: ')) type = line.slice(7).trim();
+                    else if (line.startsWith('data: ')) rawData = line.slice(6);
+                  }
+                  let data = {};
+                  try { data = JSON.parse(rawData); } catch (_) {}
+                  if (type === 'chunk') {
+                    const text = data.text || '';
+                    _chatRawBuf += text;
+                    _chatTextBuf += text;
+                    _renderCurrent();
+                    _setMeta('⚕ Hermes — streaming…');
+                  } else if (type === 'done') {
+                    const elapsed = ((Date.now() - startMs) / 1000).toFixed(1);
+                    _setMeta('⚕ Hermes (claude-sonnet-4.6 · Copilot)  •  ' + elapsed + 's' +
+                      (data.success ? '' : '  ⚠️ non-zero exit'));
+                    break outer;
+                  } else if (type === 'error') {
+                    const elapsed = ((Date.now() - startMs) / 1000).toFixed(1);
+                    _chatRawBuf += '\n\n❌ ' + (data.error || 'Unknown error');
+                    _chatTextBuf += '\n\n❌ ' + (data.error || 'Unknown error');
+                    _renderCurrent();
+                    _setMeta('⚕ Hermes  •  ' + elapsed + 's  •  error');
+                    break outer;
+                  }
+                }
+              }
+            }
+            if (!quickPrompt) promptEl.value = '';
           } else {
-            responseEl.textContent = data.response || '(empty response)';
-            _agentHistory.push({ role: 'user', content: prompt });
-            _agentHistory.push({ role: 'model', content: data.response || '' });
-            if (_agentHistory.length > 20) _agentHistory = _agentHistory.slice(-20);
+            // ── Standard LLM proxy path ─────────────────────────────────
+            const res = await fetch('/api/agent/ask', {
+              method: 'POST',
+              headers: _actionAuthHeaders('dashboard-ui'),
+              body: JSON.stringify({ prompt, model, history: _agentHistory }),
+              signal: _currentAbort.signal,
+            });
+            const data = await res.json();
+            const elapsed = ((Date.now() - startMs) / 1000).toFixed(1);
+
+            if (data.error) {
+              _chatTextBuf = '❌ ' + data.error;
+              _chatRawBuf = _chatTextBuf;
+            } else {
+              _chatTextBuf = data.response || '(empty response)';
+              _chatRawBuf = _chatTextBuf;
+              _agentHistory.push({ role: 'user', content: prompt });
+              _agentHistory.push({ role: 'model', content: data.response || '' });
+              if (_agentHistory.length > 20) _agentHistory = _agentHistory.slice(-20);
+            }
+            _renderCurrent();
+            _setMeta('Model: ' + (data.model || model) + '  •  ' + elapsed + 's' + (data.tokens ? '  •  ~' + data.tokens + ' tokens' : ''));
+
+            wrapEl.style.display = 'block';
+            if (!quickPrompt) promptEl.value = '';
           }
-          metaEl.textContent = 'Model: ' + (data.model || model) + '  \u2022  ' + elapsed + 's' + (data.tokens ? '  \u2022  ~' + data.tokens + ' tokens' : '');
-          wrapEl.style.display = 'block';
-          if (!quickPrompt) promptEl.value = '';
         } catch (err) {
-          responseEl.textContent = '\u274c Request failed: ' + err.message;
-          metaEl.textContent = '';
-          wrapEl.style.display = 'block';
+          if (err.name === 'AbortError' || err.message === 'user-stop') {
+            const elapsed = ((Date.now() - startMs) / 1000).toFixed(1);
+            _setMeta('⏹ Stopped  •  ' + elapsed + 's');
+            if (!responseEl.innerHTML && !responseEl.textContent) {
+              responseEl.textContent = '(stopped before response)';
+            }
+            wrapEl.style.display = 'block';
+          } else {
+            _chatTextBuf = '❌ Request failed: ' + err.message;
+            _chatRawBuf = _chatTextBuf;
+            responseEl.textContent = _chatTextBuf;
+            _setMeta('');
+            wrapEl.style.display = 'block';
+          }
         } finally {
+          _currentAbort = null;
           sendBtn.disabled = false;
+          sendBtn.textContent = 'Send ↵';
+          sendBtn.style.background = 'var(--accent,#7c3aed)';
           loadingEl.style.display = 'none';
         }
       }
 
+      function toggleRawMode() {
+        _chatRawMode = !_chatRawMode;
+        const btn = document.getElementById('chat-raw-btn');
+        if (btn) btn.textContent = _chatRawMode ? '✨ Formatted' : '📜 Raw';
+        const responseEl = document.getElementById('agent-response');
+        if (!responseEl) return;
+        if (_chatRawMode) {
+          responseEl.innerHTML = '';
+          responseEl.textContent = _chatRawBuf || responseEl.textContent;
+          responseEl.style.fontFamily = '"SF Mono","Fira Code",monospace';
+        } else {
+          responseEl.style.fontFamily = 'inherit';
+          responseEl.innerHTML = _renderMd(_chatTextBuf);
+        }
+        responseEl.scrollTop = responseEl.scrollHeight;
+      }
+
+      function changeFontSize(delta) {
+        _chatFontSize = Math.max(0.6, Math.min(1.4, _chatFontSize + delta * 0.08));
+        const el = document.getElementById('agent-response');
+        if (el) el.style.fontSize = _chatFontSize + 'rem';
+        // Also update thread entries
+        document.querySelectorAll('.chat-thread-response').forEach(e => { e.style.fontSize = _chatFontSize + 'rem'; });
+      }
+
+      function _pushToThread(responseEl, meta) {
+        const threadEl = document.getElementById('chat-thread');
+        if (!threadEl) return;
+        const content = responseEl.innerHTML || responseEl.textContent;
+        if (!content.trim()) return;
+
+        const entry = document.createElement('details');
+        entry.style.cssText = 'background:rgba(0,0,0,0.2);border:1px solid var(--border,#333);border-radius:8px;padding:0.5rem 0.75rem;font-size:0.82rem';
+        entry.innerHTML = `<summary style="cursor:pointer;color:var(--muted,#8b949e);list-style:none;display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:0.72rem">${meta || 'prior response'}</span>
+          <span style="font-size:0.68rem;opacity:0.6">▼ expand</span>
+        </summary>
+        <div class="chat-thread-response" style="margin-top:0.5rem;white-space:pre-wrap;word-break:break-word;font-size:${_chatFontSize}rem;line-height:1.5;max-height:300px;overflow:auto">${content}</div>`;
+        threadEl.appendChild(entry);
+        threadEl.style.display = 'flex';
+      }
+
+
+
       async function generateWeeklyRecap() {
-        const sendBtn = document.getElementById('agent-send-btn');
+        const recapBtn = event?.currentTarget || document.querySelector('.qa-btn[onclick*="generateWeeklyRecap"]');
         const loadingEl = document.getElementById('agent-loading');
         const wrapEl = document.getElementById('agent-response-wrap');
         const responseEl = document.getElementById('agent-response');
-        const metaEl = document.getElementById('agent-response-meta');
+        const metaTextEl = document.getElementById('agent-response-meta-text');
 
-        sendBtn.disabled = true;
+        if (recapBtn) { recapBtn.disabled = true; recapBtn.textContent = '⏳ Generating…'; }
         loadingEl.style.display = 'block';
         wrapEl.style.display = 'none';
 
@@ -4450,14 +5292,23 @@
           });
           const data = await res.json();
           const elapsed = ((Date.now() - startMs) / 1000).toFixed(1);
-          responseEl.textContent = data.report || data.error || '(no content)';
-          metaEl.textContent = 'Weekly Recap  \u2022  Model: ' + (data.model || 'auto') + '  \u2022  ' + elapsed + 's';
+          if (!res.ok || data.error) {
+            _chatTextBuf = '❌ Recap failed: ' + (data.error || `HTTP ${res.status}`);
+          } else {
+            _chatTextBuf = data.report || '(no content)';
+          }
+          _chatRawBuf = _chatTextBuf;
+          responseEl.textContent = _chatTextBuf;
+          if (metaTextEl) metaTextEl.textContent = 'Weekly Recap  •  Model: ' + (data.model || 'auto') + '  •  ' + elapsed + 's';
           wrapEl.style.display = 'block';
         } catch (err) {
-          responseEl.textContent = '\u274c Recap failed: ' + err.message;
+          _chatTextBuf = '❌ Recap failed: ' + err.message;
+          _chatRawBuf = _chatTextBuf;
+          responseEl.textContent = _chatTextBuf;
+          if (metaTextEl) metaTextEl.textContent = '';
           wrapEl.style.display = 'block';
         } finally {
-          sendBtn.disabled = false;
+          if (recapBtn) { recapBtn.disabled = false; recapBtn.textContent = '📋 Weekly Recap'; }
           loadingEl.style.display = 'none';
         }
       }
@@ -4474,10 +5325,39 @@
 
       function clearAgentChat() {
         _agentHistory = [];
+        _chatRawBuf = '';
+        _chatTextBuf = '';
         document.getElementById('agent-response-wrap').style.display = 'none';
         document.getElementById('agent-prompt').value = '';
         document.getElementById('agent-prompt').focus();
+        const threadEl = document.getElementById('chat-thread');
+        if (threadEl) { threadEl.innerHTML = ''; threadEl.style.display = 'none'; }
       }
+
+      function toggleChatExpand() {
+        const card = document.getElementById('agent-chat-card');
+        const expanded = card.classList.toggle('chat-expanded');
+        const label = expanded ? '✕ Collapse' : '⛶ Expand';
+        const hdrBtn = document.getElementById('chat-expand-btn');
+        const inlineBtn = document.getElementById('chat-expand-inline-btn');
+        if (hdrBtn) hdrBtn.textContent = label;
+        if (inlineBtn) inlineBtn.textContent = label;
+        if (expanded) {
+          document.body.style.overflow = 'hidden';
+          // Scroll response to bottom in case content already filled
+          const r = document.getElementById('agent-response');
+          if (r) r.scrollTop = r.scrollHeight;
+          card.scrollTop = 0;
+        } else {
+          document.body.style.overflow = '';
+        }
+      }
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') {
+          const card = document.getElementById('agent-chat-card');
+          if (card && card.classList.contains('chat-expanded')) toggleChatExpand();
+        }
+      });
     </script>
   </body>
 </html>

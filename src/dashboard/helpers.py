@@ -75,380 +75,96 @@ def _cron_to_human(expr: str) -> str:
 
 
 def _raw_command_groups() -> list[dict]:
-    """Canonical command metadata grouped by category."""
+    """Canonical Slack slash command metadata grouped by category."""
     return [
         {
-            "category": "🏛️ Foundation",
+            "category": "💬 Conversation & AI",
             "commands": [
-                {"name": "/ping", "desc": "Check if bot is alive"},
-                {"name": "/about", "desc": "Version and system info"},
-                {"name": "/whoami", "desc": "Your Discord identity & permissions"},
-                {"name": "/help", "desc": "List all commands"},
+                {"name": "/chat <question> [--model <alias>] [--simple]", "desc": "Ask OpenClaw anything — routes through the agent pipeline with your preferred model."},
+                {"name": "/research <query>", "desc": "Deep multi-source research: Perplexity → Tavily → DDG, synthesized report with sources."},
+                {"name": "/simple [on|off]", "desc": "Toggle simple/plain response mode — shorter answers without rich formatting."},
+                {"name": "/clear", "desc": "Clear active comparison state and file context for your session."},
             ],
         },
         {
-            "category": "🐳 Docker & System",
+            "category": "📁 Files & Batch Processing",
             "commands": [
-                {"name": "/containers", "desc": "List running containers"},
-                {"name": "/status <service>", "desc": "Container detail + resources"},
-                {"name": "/logs <service> [lines]", "desc": "View container logs"},
-                {"name": "/system", "desc": "CPU, memory, disk usage"},
-                {"name": "/dockerstats", "desc": "Per-container resource usage"},
-                {"name": "/restart <service>", "desc": "Restart a container (requires approval)"},
+                {"name": "/files [recent|history|list|delete <name>]", "desc": "Manage uploaded files — list recent, view history, or delete a file by name."},
+                {"name": "/batch [prompt]", "desc": "Run a prompt against all currently uploaded files at once (batch analysis)."},
+                {"name": "/filesearch <keyword>", "desc": "Search your uploaded file history by filename keyword."},
+                {"name": "/brief", "desc": "AI-generated brief of your most recently uploaded file."},
             ],
         },
         {
-            "category": "🤖 AI & LLM",
+            "category": "📬 Email & Inbox",
             "commands": [
-                {
-                    "name": "/ask <question> [model] [scope] [reset_context] [anchor]",
-                    "desc": "AI-powered query — auto mode follows the active routing profile for non-tool asks and keeps Gemini for tool-native flows. Context controls are first-class slash options: scope (current/cross-channel/prior-report), reset_context, and anchor override ('none' disables anchor). Legacy inline flags (e.g. --cross-channel, --reset-context, --anchor, --no-anchor) still work.",
-                },
-                {"name": "/model show", "desc": "Show your current LLM routing preference and Ollama status."},
-                {
-                    "name": "/model set <preference>",
-                    "desc": "Set your default LLM routing: auto (routing profile), local (Gemma), gemini (cloud), openai (GPT-4o), anthropic (Claude), or copilot (enterprise proxy). Alias accepted: claude → anthropic.",
-                },
-                {
-                    "name": "/research <query> [deep:true]",
-                    "desc": "Deep multi-step research — Discord thread, planned sub-queries, 4-tier search (Perplexity → Tavily → DDG → Bing Lite), source ranking, cross-referencing, confidence levels, synthesized report with methodology section",
-                },
-                {
-                    "name": "/weather [location]",
-                    "desc": "Current conditions + 3-day forecast for any location (default: WEATHER_DEFAULT_LOCATION env var)",
-                },
-                {"name": "/clear", "desc": "Clear active conversation history"},
-                {"name": "/save <name>", "desc": "Save current conversation as a named thread (persisted to disk)"},
-                {"name": "/resume <name>", "desc": "Resume a previously saved conversation thread"},
-                {"name": "/threads", "desc": "List all your saved conversation threads"},
-                {"name": "/forget <name>", "desc": "Delete a saved conversation thread"},
-                {"name": "/analyze <service> [lines]", "desc": "AI log analysis"},
+                {"name": "/inbox [count]", "desc": "Show recent Gmail inbox messages (ephemeral, metadata only)."},
+                {"name": "/email inbox [count]", "desc": "Show recent emails."},
+                {"name": "/email search <query>", "desc": "Search Gmail inbox by keyword."},
+                {"name": "/email read <id>", "desc": "Read a full email by message ID."},
+                {"name": "/email send <to> <subject> <body>", "desc": "Send email via Gmail (requires approval)."},
             ],
         },
         {
-            "category": "🗓️ Recaps & Watch Guides",
+            "category": "🗓️ Calendar & Scheduling",
             "commands": [
-                {
-                    "name": "/recap weekly [days] [style]",
-                    "desc": "Summarize the current Discord channel or thread with highlights, action items, or a compact table. Optional save-to-vault and Monday scheduling.",
-                },
-                {
-                    "name": "/sports upcoming [query]",
-                    "desc": "Create a sports watch guide with matchups, ET kickoff times, and where-to-watch details from live web research. Optional save-to-vault and Monday scheduling.",
-                },
-                {
-                    "name": "Create recap from thread",
-                    "desc": "Right-click a Discord message or thread to generate a recap without typing a slash command.",
-                },
-            ],
-        },
-        {
-            "category": "🎬 Media & Downloads",
-            "commands": [
-                {"name": "/search <query> [type]", "desc": "Search Sonarr/Radarr catalogs"},
-                {"name": "/queue", "desc": "Active downloads (SABnzbd + qBit)"},
-                {"name": "/recent [count]", "desc": "Recently added Plex media"},
-                {"name": "/health", "desc": "Check *arr + download client health"},
-                {"name": "/ports", "desc": "Service port connectivity check"},
-                {"name": "/report", "desc": "Comprehensive status report"},
+                {"name": "/calendar today", "desc": "List today's Google Calendar events."},
+                {"name": "/calendar upcoming [days]", "desc": "Show next N days of calendar events."},
+                {"name": "/calendar add <title> <when>", "desc": "Create a new calendar event."},
+                {"name": "/today", "desc": "Morning briefing: today's calendar, weather, and tasks in one shot."},
+                {"name": "/schedule [list|add|delete <id>]", "desc": "Manage recurring scheduled tasks — list, create, or delete automations."},
             ],
         },
         {
             "category": "🚨 Incident Operations",
             "commands": [
-                {
-                    "name": "/incident start <title> <severity> [details] [services]",
-                    "desc": "Create an incident and post Copilot triage summary + recommended actions in the incident thread.",
-                },
-                {
-                    "name": "/incident create <title> <severity> [details]",
-                    "desc": "Create a manual incident room entry without Copilot triage.",
-                },
-                {
-                    "name": "/incident status <id> [state] [note]",
-                    "desc": "Check or update incident state (open/investigating/monitoring).",
-                },
-                {
-                    "name": "/incident list [state] [limit]",
-                    "desc": "List recent incidents (active/all/open/investigating/monitoring/resolved).",
-                },
-                {
-                    "name": "/incident timeline [id] [limit]",
-                    "desc": "Show timeline events for an incident; defaults to current incident thread when possible.",
-                },
-                {
-                    "name": "/incident resolve <id> <summary> [action_items] [notes]",
-                    "desc": "Resolve an incident and capture postmortem notes/actions.",
-                },
+                {"name": "/incident start <title> <severity> [details]", "desc": "Create an incident and post Copilot triage summary + recommended actions."},
+                {"name": "/incident status <id> [state] [note]", "desc": "Check or update incident state (open/investigating/monitoring/resolved)."},
+                {"name": "/incident list [state]", "desc": "List recent incidents filtered by state."},
+                {"name": "/incident resolve <id> <summary>", "desc": "Resolve an incident and capture postmortem notes."},
             ],
         },
         {
-            "category": "🧠 Memory & Automation",
+            "category": "🤖 Copilot CLI",
             "commands": [
-                {"name": "/remember <fact> [tags]", "desc": "Store a fact in long-term memory"},
-                {"name": "/recall <query>", "desc": "Search long-term memory"},
-                {"name": "/schedule", "desc": "Manage scheduled tasks (CRUD via slash command)"},
-                {"name": "/skills", "desc": "List all LLM-callable skills"},
-                {"name": "/briefing", "desc": "On-demand morning briefing (weather + health + calendar)"},
-                {"name": "/audit-summary", "desc": "Analytics on today's audit log"},
-                {"name": "/nowplaying", "desc": "Live Plex active streams"},
-                {"name": "/dream", "desc": "Run cognitive dream cycle (memory consolidation)"},
-                {"name": "/memory-health", "desc": "Show memory health score and 5 metrics"},
-                {"name": "/memory-export", "desc": "Export memory bundle"},
+                {"name": "/copilot <prompt>", "desc": "Run GitHub Copilot CLI on the Mac Mini host via SSH. Starts or resumes your Copilot session."},
+                {"name": "/copilot-sessions", "desc": "List your active Copilot CLI sessions."},
+                {"name": "/copilot-cancel", "desc": "Cancel the current Copilot task."},
+                {"name": "/copilot-end", "desc": "End your Copilot session and release the host connection."},
+                {"name": "/copilot-attach", "desc": "Attach to an existing Copilot session by ID."},
+                {"name": "/host <command>", "desc": "Run an arbitrary command on the Mac Mini host via the host bridge."},
             ],
         },
         {
-            "category": "🌐 Network & Monitoring",
+            "category": "💾 Storage & Drive",
             "commands": [
-                {"name": "/network", "desc": "LAN, internet, DNS connectivity"},
-                {"name": "/tailscale", "desc": "Tailscale VPN status"},
-                {"name": "/speedtest", "desc": "Network speed test"},
-                {"name": "/spending [breakdown]", "desc": "Gemini API cost tracking"},
+                {"name": "/clawbox [list|get|upload|delete]", "desc": "Manage files in Dropbox via OpenClaw."},
+                {"name": "/clawchan [list|send|get]", "desc": "Cross-channel file transfer and Dropbox sync."},
+                {"name": "/drive [list|search|open]", "desc": "Browse and search Google Drive files."},
             ],
         },
         {
-            "category": "Security & Admin",
+            "category": "👤 Contacts & People",
             "commands": [
-                {"name": "/pending", "desc": "Pending approval requests"},
-                {"name": "/auditlog [lines]", "desc": "View audit trail"},
-                {"name": "/estop [stop|resume]", "desc": "Emergency stop all actions"},
-                {"name": "/mail <to> <subject> <body>", "desc": "Send email via AgentMail"},
+                {"name": "/contacts [search <name>|add|list]", "desc": "Search, add, or list Google Contacts."},
+                {"name": "/nickname <name>", "desc": "Set your preferred display name for OpenClaw responses."},
+                {"name": "/mystats", "desc": "View your personal usage stats (anonymised, local only)."},
+                {"name": "/mypins", "desc": "View your saved/pinned notes and messages."},
             ],
         },
         {
-            "category": "📋 Copy/Paste Workflow",
+            "category": "📋 Templates & Output",
             "commands": [
-                {
-                    "name": "/recap copy-latest",
-                    "desc": "Copy-ready export of your latest OpenClaw response in the current channel/thread",
-                },
-                {
-                    "name": "/recap copy-thread [days] [style]",
-                    "desc": "Generate and export a copy-ready recap for the current channel/thread",
-                },
-                {
-                    "name": "Context menu: Copy Workflow Context",
-                    "desc": "Right-click any message to export a mobile-friendly copy block",
-                },
+                {"name": "/template [list|use <name>|save <name>]", "desc": "Manage reusable prompt templates — list, apply, or save new ones."},
+                {"name": "/metrics", "desc": "Show Slack bot usage metrics: commands run, files processed, error rate."},
             ],
         },
         {
-            "category": "Document Review & Interview",
+            "category": "❓ Help & Health",
             "commands": [
-                {"name": "/review text [mode]", "desc": "Paste text for structured critique (writing/technical/quick)"},
-                {"name": "/review file [mode]", "desc": "Upload DOCX/PDF/TXT/etc for structured critique"},
-                {"name": "/interview <goal>", "desc": "Sequential Q&A modals → personalized output"},
-            ],
-        },
-        {
-            "category": "Calendar & Email",
-            "commands": [
-                {"name": "/calendar today", "desc": "List today's Google Calendar events"},
-                {"name": "/calendar upcoming [days]", "desc": "Next N days of events"},
-                {"name": "/calendar add <title> <when>", "desc": "Create event"},
-                {"name": "/email inbox [count]", "desc": "Show recent emails (ephemeral)"},
-                {"name": "/email search <query>", "desc": "Search inbox"},
-                {"name": "/email read <id>", "desc": "Read full email"},
-                {"name": "/email send <to> <subject> <body>", "desc": "Send email (requires approval)"},
-            ],
-        },
-        {
-            "category": "Journal & GitHub",
-            "commands": [
-                {"name": "/journal write [entry]", "desc": "Save today's journal entry to vault"},
-                {"name": "/journal read [date]", "desc": "Read past entry"},
-                {"name": "/journal streak", "desc": "Streak counter"},
-                {"name": "/journal prompt", "desc": "AI writing prompt"},
-                {"name": "/github prs [repo]", "desc": "List open pull requests"},
-                {"name": "/github issues [repo]", "desc": "List open issues"},
-                {"name": "/github watch <repo>", "desc": "Subscribe to activity DMs"},
-            ],
-        },
-        {
-            "category": "🎨 Image Generation",
-            "commands": [
-                {
-                    "name": "/imagine generate <prompt> [size] [negative]",
-                    "desc": "Generate image via Stable Diffusion txt2img",
-                },
-                {"name": "/imagine status", "desc": "Check SD online status and list models"},
-            ],
-        },
-        {
-            "category": "🌐 DNS Management",
-            "commands": [
-                {"name": "/dns status", "desc": "AdGuard Home status and filtering toggle"},
-                {"name": "/dns stats", "desc": "Query/block counts and top domains"},
-                {"name": "/dns block <domain>", "desc": "Block domain via DNS rewrite"},
-                {"name": "/dns allow <domain>", "desc": "Unblock a domain"},
-                {"name": "/dns blocked", "desc": "List all manually blocked domains"},
-            ],
-        },
-        {
-            "category": "📝 Notion",
-            "commands": [
-                {"name": "/notion search <query>", "desc": "Search Notion pages and databases"},
-                {"name": "/notion page <title> <content>", "desc": "Create a new Notion page"},
-                {"name": "/notion todo <item>", "desc": "Add item to Notion todo database"},
-            ],
-        },
-        {
-            "category": "📄 Google Docs",
-            "commands": [
-                {"name": "/gdoc save <title> <content>", "desc": "Create a new Google Doc"},
-                {"name": "/gdoc list", "desc": "List recent Google Docs"},
-            ],
-        },
-        {
-            "category": "🖥️ System Performance",
-            "commands": [
-                {"name": "/perf", "desc": "CPU, memory, disk, load average via Glances"},
-            ],
-        },
-        {
-            "category": "📱 Push Notifications",
-            "commands": [
-                {"name": "/ntfy send <message> [title] [priority]", "desc": "Send phone push notification via ntfy"},
-                {"name": "/ntfy test", "desc": "Send test notification to verify setup"},
-            ],
-        },
-        {
-            "category": "📲 SMS One-Tap",
-            "commands": [
-                {
-                    "name": "/sms config <phone> [send_verification]",
-                    "desc": "Save phone number for one-tap SMS; can trigger verification send",
-                },
-                {"name": "/sms test [code]", "desc": "Start verification or submit code from SMS"},
-                {"name": "/sms status", "desc": "Show masked phone, verification state, and remaining send budget"},
-                {"name": "/sms send <message>", "desc": "Confirmation-based SMS send to configured phone"},
-                {
-                    "name": "Context menu: Send to SMS",
-                    "desc": "Right-click a Discord message and forward it via SMS with confirmation",
-                },
-            ],
-        },
-        {
-            "category": "🎬 Movie & TV",
-            "commands": [
-                {"name": "/media movie <title>", "desc": "Look up a movie with poster and ratings"},
-                {"name": "/media tv <title>", "desc": "Look up a TV show with season/episode info"},
-                {"name": "/media search <query>", "desc": "Search movies and TV via OMDb"},
-            ],
-        },
-        {
-            "category": "🐛 Error Monitoring",
-            "commands": [
-                {"name": "/sentry issues [project]", "desc": "List unresolved Sentry issues"},
-                {"name": "/sentry projects", "desc": "List Sentry org projects"},
-                {"name": "/sentry resolve <issue_id>", "desc": "Resolve a Sentry issue"},
-                {"name": "/sentry stats [project]", "desc": "Hourly error rate stats"},
-            ],
-        },
-        {
-            "category": "Third-Party API Gateway (via /ask)",
-            "commands": [
-                {
-                    "name": "gateway_request",
-                    "desc": "Call any of 100+ APIs (Slack, GitHub, Notion, HubSpot, Stripe…) via Maton managed OAuth. Invoked by /ask.",
-                },
-                {
-                    "name": "gateway_list_connections",
-                    "desc": "List active Maton OAuth connections (optionally filter by app). Invoked by /ask.",
-                },
-                {
-                    "name": "gateway_create_connection",
-                    "desc": "Create a new Maton OAuth connection for an app and return the authorization URL. Invoked by /ask.",
-                },
-            ],
-        },
-        {
-            "category": "Knowledge Graph & Ontology (via /ask)",
-            "commands": [
-                {
-                    "name": "ontology_create_entity",
-                    "desc": "Create a new typed entity (Person, Project, Task, etc.) in graph memory.",
-                },
-                {
-                    "name": "ontology_get_entity",
-                    "desc": "Retrieve all details and relations for a specific entity name.",
-                },
-                {
-                    "name": "ontology_relate",
-                    "desc": "Create a typed link between two entities (e.g., 'blocks', 'manages').",
-                },
-                {"name": "ontology_query", "desc": "Search the knowledge graph for entities by name or type."},
-            ],
-        },
-        {
-            "category": "Self-Management & Autonomy (via /ask)",
-            "commands": [
-                {
-                    "name": "spawn_worker",
-                    "desc": "Spawn a focused AI sub-agent to accomplish a specific goal autonomously using its own tool loop.",
-                },
-                {
-                    "name": "create_scheduled_task",
-                    "desc": "Create a recurring scheduled task (LLM-controlled). Supports cron expressions, prompt jobs, or interval-based.",
-                },
-                {"name": "cancel_scheduled_task", "desc": "Cancel a scheduled task by ID."},
-                {
-                    "name": "list_scheduled_tasks",
-                    "desc": "List all active scheduled tasks with cron expressions, run counts, and next run times.",
-                },
-                {"name": "webfetch_md", "desc": "Smartly scrape any URL and convert main content to clean Markdown."},
-                {"name": "git_status", "desc": "Check project repository status for code changes."},
-                {"name": "git_log", "desc": "View recent code change history (commit log)."},
-                {"name": "git_diff", "desc": "Compare code changes or view uncommitted changes."},
-                {"name": "git_commit", "desc": "Commit all current changes with a brief summary message."},
-                {
-                    "name": "init_planning_files",
-                    "desc": "Initialize task_plan.md, findings.md, progress.md for complex tasks.",
-                },
-                {"name": "update_plan_status", "desc": "Log progress or update status of a phase in planning files."},
-            ],
-        },
-        {
-            "category": "📝 Notes & Vault",
-            "commands": [
-                {"name": "/note create", "desc": "Create a note in the Obsidian vault"},
-                {"name": "/note list", "desc": "Browse recent vault notes"},
-                {"name": "/note view", "desc": "View a vault note's content"},
-                {"name": "/note search", "desc": "Search vault notes by content"},
-            ],
-        },
-        {
-            "category": "📋 Agent Loop & Plans",
-            "commands": [
-                {
-                    "name": "/plans [status]",
-                    "desc": "List active/recent agent plans. Filter: all, in-progress, completed, interrupted.",
-                },
-                {
-                    "name": "/plan-detail <plan_id>",
-                    "desc": "Show full details of a specific plan (steps, status, outputs).",
-                },
-                {"name": "/resume-plan <plan_id>", "desc": "Resume an interrupted plan from where it left off."},
-                {
-                    "name": "/cancel-plan <plan_id>",
-                    "desc": "Cancel an active plan (marks interrupted, resets in-progress steps).",
-                },
-                {
-                    "name": "create_plan",
-                    "desc": "(via /ask) Create a new task plan with a goal and ordered steps. Returns plan_id.",
-                },
-                {
-                    "name": "update_plan_step",
-                    "desc": "(via /ask) Update a step's status (done/failed/skipped) with output summary.",
-                },
-                {
-                    "name": "read_plan",
-                    "desc": "(via /ask) Read the current state of a plan including all step statuses.",
-                },
-                {"name": "list_plans", "desc": "(via /ask) List plans filtered by status."},
-                {"name": "adjust_plan", "desc": "(via /ask) Add, remove, or reorder steps in an active plan."},
-                {"name": "cancel_plan", "desc": "(via /ask) Cancel an active plan and mark it interrupted."},
-                {"name": "resume_plan", "desc": "(via /ask) Resume an interrupted plan from where it left off."},
+                {"name": "/help", "desc": "Show a guide to available Slack commands with examples."},
+                {"name": "/health", "desc": "Bot health check — uptime, model status, container connectivity."},
+                {"name": "/digest [on|off]", "desc": "Enable or disable the daily file digest DM."},
             ],
         },
     ]
@@ -479,11 +195,11 @@ def _command_quickstart() -> list[dict]:
     """Quick-start commands to improve discoverability surfaces."""
     return [
         {"name": "/help", "desc": "Browse commands by category"},
-        {"name": "/ask", "desc": "Use plain English and let OpenClaw route tools"},
+        {"name": "/chat", "desc": "Ask OpenClaw anything in Slack"},
         {"name": "/research", "desc": "Run deep multi-source research"},
-        {"name": "/schedule", "desc": "Create and manage automations"},
+        {"name": "/copilot", "desc": "Launch GitHub Copilot CLI on the Mac Mini"},
         {"name": "/incident start", "desc": "Kick off guided incident triage"},
-        {"name": "/recap weekly", "desc": "Summarize a channel/thread quickly"},
+        {"name": "/schedule", "desc": "Create and manage automations"},
     ]
 
 
@@ -854,3 +570,137 @@ EOF
     return template.replace("__DEFAULT_BASE_URL__", default_base_url).replace(
         "__ENABLE_REMOTE_LOGIN__", "1" if enable_remote_login_default else "0"
     )
+
+
+def build_hermes_installer(openclaw_base_url: str) -> str:
+    """Build a shell installer that installs Hermes agent and seeds the Copilot config."""
+    template = r"""#!/usr/bin/env bash
+# Hermes Agent Installer — generated by OpenClaw dashboard
+# Usage: curl -fsSL __OPENCLAW_BASE_URL__/install-hermes | bash
+set -euo pipefail
+
+HERMES_HOME="${HOME}/.hermes"
+BIN_DIR="${HOME}/.local/bin"
+OPENCLAW_BASE_URL="__OPENCLAW_BASE_URL__"
+
+die() { echo "❌ $*" >&2; exit 1; }
+info() { echo "  $*"; }
+ok() { echo "✅ $*"; }
+
+echo ""
+echo "⚕ Hermes Agent Installer"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# ── 1. Prerequisites ──────────────────────────────────────────────────────────
+command -v curl >/dev/null 2>&1 || die "curl is required"
+command -v python3 >/dev/null 2>&1 || die "python3 is required (install via Homebrew: brew install python)"
+
+# ── 2. Install uv (fast Python package manager used by Hermes) ────────────────
+if ! command -v uv >/dev/null 2>&1; then
+  info "Installing uv..."
+  curl -fsSL https://astral.sh/uv/install.sh | sh
+  export PATH="${HOME}/.cargo/bin:${HOME}/.local/bin:$PATH"
+fi
+command -v uv >/dev/null 2>&1 || export PATH="${HOME}/.cargo/bin:${HOME}/.local/bin:$PATH"
+ok "uv ready: $(uv --version 2>/dev/null || echo 'found')"
+
+# ── 3. Install Hermes via pip ─────────────────────────────────────────────────
+info "Installing Hermes..."
+uv tool install hermes-agent --upgrade 2>/dev/null || pip3 install --user --upgrade hermes-agent
+export PATH="${HOME}/.local/bin:$PATH"
+command -v hermes >/dev/null 2>&1 || die "hermes binary not found in PATH after install. Try: export PATH=~/.local/bin:\$PATH"
+HERMES_VER="$(hermes --version 2>/dev/null | head -1 || echo 'installed')"
+ok "Hermes installed: ${HERMES_VER}"
+
+# ── 4. Bootstrap config dir ───────────────────────────────────────────────────
+mkdir -p "${HERMES_HOME}/memories" "${HERMES_HOME}/skills" "${HERMES_HOME}/logs"
+
+# ── 5. Seed config.yaml (Copilot provider) ────────────────────────────────────
+CONFIG_FILE="${HERMES_HOME}/config.yaml"
+if [[ ! -f "${CONFIG_FILE}" ]]; then
+  info "Writing default config (Copilot provider)..."
+  cat > "${CONFIG_FILE}" <<'YAML'
+model:
+  provider: copilot
+  default: claude-sonnet-4.6
+terminal:
+  backend: docker
+display:
+  compact: false
+YAML
+  ok "Config written: ${CONFIG_FILE}"
+else
+  info "Config already exists — skipping (${CONFIG_FILE})"
+fi
+
+# ── 6. GitHub Copilot Authentication ─────────────────────────────────────────
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🔑 GitHub Copilot Authentication"
+echo ""
+# Hermes uses the system `gh` CLI for Copilot auth — no separate login needed.
+if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+  ok "gh CLI authenticated — Copilot provider ready automatically"
+else
+  echo "  ⚠️  GitHub CLI (gh) is not authenticated."
+  echo "  Hermes uses gh for Copilot auth. Run after install:"
+  echo ""
+  echo "  → brew install gh    # if not installed"
+  echo "  → gh auth login      # authenticate with GitHub"
+  echo ""
+  echo "  Then start Hermes: hermes"
+fi
+
+# ── 7. Seed MEMORY.md ─────────────────────────────────────────────────────────
+MEMORY_FILE="${HERMES_HOME}/memories/MEMORY.md"
+if [[ ! -f "${MEMORY_FILE}" ]]; then
+  info "Seeding memory from OpenClaw..."
+  curl -fsSL "${OPENCLAW_BASE_URL}/api/hermes/memory-seed" -o "${MEMORY_FILE}" 2>/dev/null || \
+    echo "# Hermes Memory — $(hostname)" > "${MEMORY_FILE}"
+  ok "Memory file seeded"
+fi
+
+# ── 7b. Seed custom skills ────────────────────────────────────────────────────
+SKILLS_DIR="${HERMES_HOME}/skills"
+mkdir -p "${SKILLS_DIR}"
+SKILLS_TAR="/tmp/hermes-skills.tar.gz"
+if curl -fsSL "${OPENCLAW_BASE_URL}/api/hermes/skills-seed" -o "${SKILLS_TAR}" 2>/dev/null && \
+   [[ -s "${SKILLS_TAR}" ]]; then
+  tar -xzf "${SKILLS_TAR}" -C "${SKILLS_DIR}" --skip-old-files 2>/dev/null || true
+  rm -f "${SKILLS_TAR}"
+  ok "Custom skills seeded"
+fi
+
+# ── 8. Add to PATH in shell RC ────────────────────────────────────────────────
+SHELL_RC="${HOME}/.zshrc"
+[[ "$(basename "${SHELL:-zsh}")" == "bash" ]] && SHELL_RC="${HOME}/.bashrc"
+
+if ! grep -q 'hermes\|\.local/bin' "${SHELL_RC}" 2>/dev/null; then
+  echo '' >> "${SHELL_RC}"
+  echo '# Hermes agent PATH' >> "${SHELL_RC}"
+  echo 'export PATH="${HOME}/.local/bin:$PATH"' >> "${SHELL_RC}"
+  ok "Added ~/.local/bin to ${SHELL_RC}"
+fi
+
+# ── 9. Verify ─────────────────────────────────────────────────────────────────
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "✅ Hermes installed"
+echo ""
+echo "  Config:  ${CONFIG_FILE}"
+echo "  Memory:  ${MEMORY_FILE}"
+echo "  Binary:  $(command -v hermes 2>/dev/null || echo '~/.local/bin/hermes')"
+echo ""
+echo "Next steps:"
+echo "  1. source ${SHELL_RC}"
+if ! command -v gh >/dev/null 2>&1 || ! gh auth status >/dev/null 2>&1; then
+  echo "  2. gh auth login   # authenticate GitHub CLI for Copilot"
+  echo "  3. hermes"
+else
+  echo "  2. hermes"
+fi
+echo ""
+echo "  Docs:  https://github.com/NousResearch/hermes-agent"
+echo "  Home:  ${OPENCLAW_BASE_URL}"
+"""
+    return template.replace("__OPENCLAW_BASE_URL__", openclaw_base_url)

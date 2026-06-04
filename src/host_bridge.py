@@ -63,6 +63,7 @@ KEY_PATH = _env("OPENCLAW_HOST_BRIDGE_KEY", "/home/openclaw/.ssh/host_bridge_ed2
 KNOWN_HOSTS = _env("OPENCLAW_HOST_BRIDGE_KNOWN_HOSTS", "/home/openclaw/.ssh/known_hosts")
 WORKDIR = _env("OPENCLAW_HOST_BRIDGE_WORKDIR", "/Users/davevoyles/docker-stack")
 COPILOT_BIN = _env("OPENCLAW_HOST_BRIDGE_COPILOT_BIN", "/opt/homebrew/bin/copilot")
+HERMES_BIN = _env("OPENCLAW_HOST_BRIDGE_HERMES_BIN", "/Users/davevoyles/.local/bin/hermes")
 TIMEOUT_S = int(_env("OPENCLAW_HOST_BRIDGE_TIMEOUT_S", "600") or "600")
 MAX_OUTPUT = int(_env("OPENCLAW_HOST_BRIDGE_MAX_OUTPUT", "200000") or "200000")
 
@@ -174,11 +175,15 @@ def _build_remote_cmd(prompt: str, workdir: str) -> str:
     The prompt is shell-quoted; ``bash -lc`` is used so the host's PATH and
     Copilot CLI auth profile (~/.config/copilot) are picked up the same way
     as an interactive davevoyles shell.
+
+    TERM=dumb + NO_COLOR=1 prevent the Copilot CLI from rendering its TUI
+    spinner, splash screen, and terminal capability queries — we only want
+    plain text output suitable for Slack/SSE streaming.
     """
     q_prompt = shlex.quote(prompt)
     q_workdir = shlex.quote(workdir)
     q_bin = shlex.quote(COPILOT_BIN)
-    inner = f"cd {q_workdir} && {q_bin} --allow-all-tools -p {q_prompt}"
+    inner = f"cd {q_workdir} && TERM=dumb NO_COLOR=1 {q_bin} --allow-all-tools -p {q_prompt}"
     return f"bash -lc {shlex.quote(inner)}"
 
 
@@ -282,8 +287,8 @@ async def run_copilot(
         truncated = True
         stderr_buf = stderr_buf[:MAX_OUTPUT] + f"\n…[truncated]"
 
-    stdout_buf = sanitize(stdout_buf)
-    stderr_buf = sanitize(stderr_buf)
+    stdout_buf = sanitize(strip_ansi(stdout_buf))
+    stderr_buf = sanitize(strip_ansi(stderr_buf))
 
     duration = time.monotonic() - start_ts
     success = (error is None) and (exit_code == 0)
@@ -363,8 +368,26 @@ OUTPUT_CHUNK_BYTES = int(_env("OPENCLAW_HOST_BRIDGE_CHUNK_BYTES", "3500") or "35
 SESSION_TURN_TIMEOUT_S = int(_env("OPENCLAW_HOST_BRIDGE_TURN_TIMEOUT_S", "1800") or "1800")  # 30 min hard cap on a single session
 
 
-# Strip ANSI escape codes from streamed output before posting to Slack.
-_ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07|\x1b[=>]|\r")
+# Strip ANSI / terminal control sequences from output before posting to Slack.
+# Handles:
+#   ESC [ ... letter        — CSI sequences (SGR, cursor movement, mode set/reset)
+#   ESC [ ... $ p           — DEC private mode queries/replies (e.g. ?2026$p)
+#   ESC ] ... BEL           — OSC sequences terminated by BEL (e.g. ]10;? colour queries)
+#   ESC ] ... ESC \         — OSC sequences terminated by ST
+#   ESC P ... ESC \         — DCS sequences
+#   ESC _ ... ESC \         — APC sequences
+#   ESC ^ ... ESC \         — PM sequences
+#   ESC X ... ESC \         — SOS sequences
+#   ESC [=>]                — SS2/SS3/DECPNM/DECPAM single chars
+#   \r                      — carriage returns from PTY output
+_ANSI_RE = re.compile(
+    r"\x1b\[[0-9;?]*[$A-Za-z~]"       # CSI sequences (including $p parameterized)
+    r"|\x1b[PX_^]\x1b\\"               # DCS / APC / PM / SOS (short ST form)
+    r"|\x1b[PX_^][^\x1b]*\x1b\\"      # DCS / APC / PM / SOS (content + ST)
+    r"|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)"  # OSC (BEL or ST terminated)
+    r"|\x1b[=>NOM\\c]"                  # SS2, SS3, DECPNM, DECPAM, RIS, etc.
+    r"|\r"
+)
 
 
 def strip_ansi(text: str) -> str:
@@ -477,18 +500,18 @@ class SessionManager:
             return None, f"SSH connect failed: {type(exc).__name__}: {exc}"
 
         # Build the remote invocation. We use bash -lc to pick up PATH/auth and
-        # cd before launching copilot in interactive mode (no -p). Output goes
-        # to a PTY so the CLI renders as it would for the user.
+        # cd before launching copilot in interactive mode (no -p). TERM=dumb keeps
+        # the CLI from emitting capability queries and TUI decoration to Slack.
         q_workdir = shlex.quote(workdir)
         q_bin = shlex.quote(COPILOT_BIN)
-        inner = f"cd {q_workdir} && {q_bin} --allow-all-tools"
+        inner = f"cd {q_workdir} && TERM=dumb NO_COLOR=1 {q_bin} --allow-all-tools"
         remote_cmd = f"bash -lc {shlex.quote(inner)}"
 
         try:
             process = await conn.create_process(
                 remote_cmd,
-                term_type="xterm-256color",
-                term_size=(120, 32),
+                term_type="dumb",
+                term_size=(220, 50),
             )
         except Exception as exc:  # noqa: BLE001
             try:
@@ -794,13 +817,515 @@ def get_session_manager() -> SessionManager:
     return _SESSION_MANAGER
 
 
+async def run_copilot_stream(
+    *,
+    prompt: str,
+    slack_user_id: str,
+    workdir: str | None = None,
+    timeout_s: int | None = None,
+):
+    """Async generator that streams output from ``copilot -p <prompt>`` line by line.
+
+    Yields dicts:
+        {"type": "chunk",  "text": str}                     — partial stdout line
+        {"type": "stderr", "text": str}                     — partial stderr line
+        {"type": "done",   "success": bool, "duration_s": float,
+         "exit_code": int|None, "session_id": str}          — terminal event
+        {"type": "error",  "error": str, "session_id": str} — fatal error (SSH/auth/disabled)
+    """
+    session_id = uuid.uuid4().hex[:12]
+    workdir = workdir or WORKDIR
+    timeout = timeout_s if (timeout_s and timeout_s > 0) else TIMEOUT_S
+    start_ts = time.monotonic()
+
+    if not _enabled():
+        yield {"type": "error", "error": "host bridge disabled — set OPENCLAW_HOST_BRIDGE_ENABLED=true", "session_id": session_id}
+        return
+
+    if not prompt or not prompt.strip():
+        yield {"type": "error", "error": "empty prompt", "session_id": session_id}
+        return
+
+    key_file = Path(KEY_PATH)
+    if not key_file.exists():
+        yield {"type": "error", "error": f"SSH key not found at {KEY_PATH}", "session_id": session_id}
+        return
+
+    try:
+        import asyncssh  # lazy import — optional at install time
+    except ImportError as exc:
+        yield {"type": "error", "error": f"asyncssh not installed: {exc}", "session_id": session_id}
+        return
+
+    remote_cmd = _build_remote_cmd(prompt, workdir)
+    log.info(
+        "host_bridge[%s]: stream user=%s host=%s timeout=%ss prompt=%r",
+        session_id, slack_user_id, HOST, timeout, prompt[:120],
+    )
+
+    stdout_buf: list[str] = []
+    stderr_buf: list[str] = []
+    exit_code: int | None = None
+    error: str | None = None
+
+    try:
+        known_hosts = KNOWN_HOSTS if Path(KNOWN_HOSTS).exists() else None
+        async with asyncssh.connect(
+            HOST,
+            username=USER,
+            client_keys=[str(key_file)],
+            known_hosts=known_hosts,
+        ) as conn:
+            async with conn.create_process(remote_cmd) as proc:
+                # Stream stdout and stderr concurrently
+                async def _drain_stream(stream, stream_type: str):
+                    async for raw_line in stream:
+                        line = raw_line if isinstance(raw_line, str) else raw_line.decode("utf-8", "replace")
+                        line = sanitize(line)
+                        if stream_type == "stdout":
+                            stdout_buf.append(line)
+                        else:
+                            stderr_buf.append(line)
+                        yield {"type": "chunk" if stream_type == "stdout" else "stderr", "text": line}
+
+                # Collect and yield from stdout
+                async for event in _drain_stream(proc.stdout, "stdout"):
+                    yield event
+
+                # Drain stderr after stdout closes
+                if proc.stderr is not None:
+                    async for event in _drain_stream(proc.stderr, "stderr"):
+                        yield event
+
+                try:
+                    exit_code = await asyncio.wait_for(proc.wait_closed(), timeout=max(5, timeout - (time.monotonic() - start_ts)))
+                    if hasattr(exit_code, 'exit_status'):
+                        exit_code = exit_code.exit_status
+                except asyncio.TimeoutError:
+                    error = f"command timed out after {timeout}s"
+
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"
+        log.warning("host_bridge[%s]: stream SSH/exec failed: %s", session_id, error)
+        yield {"type": "error", "error": error, "session_id": session_id}
+        return
+
+    duration = time.monotonic() - start_ts
+    success = (error is None) and (exit_code == 0)
+
+    # Write audit record using the buffered output
+    full_stdout = "".join(stdout_buf)
+    full_stderr = "".join(stderr_buf)
+    transcript_path = _write_transcript(
+        session_id,
+        {
+            "prompt": prompt,
+            "slack_user_id": slack_user_id,
+            "workdir": workdir,
+            "exit_code": exit_code,
+            "duration_s": duration,
+            "stdout": full_stdout,
+            "stderr": full_stderr,
+        },
+    )
+    _write_audit_row(
+        {
+            "ts": time.time(),
+            "session_id": session_id,
+            "slack_user_id": slack_user_id,
+            "host": HOST,
+            "user": USER,
+            "workdir": workdir,
+            "prompt": prompt,
+            "exit_code": exit_code,
+            "duration_s": round(duration, 3),
+            "error": error,
+            "transcript": transcript_path,
+            "streamed": True,
+        }
+    )
+
+    yield {
+        "type": "done",
+        "success": success,
+        "duration_s": round(duration, 2),
+        "exit_code": exit_code,
+        "session_id": session_id,
+        "error": error,
+    }
+
+
+async def run_hermes_stream(
+    *,
+    prompt: str,
+    slack_user_id: str,
+    hermes_session_id: str | None = None,
+    timeout_s: int | None = None,
+):
+    """Async generator that streams output from ``hermes chat -q <prompt>`` over SSH.
+
+    Yields dicts:
+        {"type": "chunk",  "text": str}                              — partial stdout
+        {"type": "done",   "success": bool, "duration_s": float,
+         "exit_code": int|None, "session_id": str}                   — terminal event
+        {"type": "error",  "error": str, "session_id": str}         — fatal error
+    """
+    session_id = uuid.uuid4().hex[:12]
+    timeout = timeout_s if (timeout_s and timeout_s > 0) else TIMEOUT_S
+    start_ts = time.monotonic()
+
+    if not _enabled():
+        yield {"type": "error", "error": "host bridge disabled — set OPENCLAW_HOST_BRIDGE_ENABLED=true", "session_id": session_id}
+        return
+
+    if not prompt or not prompt.strip():
+        yield {"type": "error", "error": "empty prompt", "session_id": session_id}
+        return
+
+    key_file = Path(KEY_PATH)
+    if not key_file.exists():
+        yield {"type": "error", "error": f"SSH key not found at {KEY_PATH}", "session_id": session_id}
+        return
+
+    try:
+        import asyncssh
+    except ImportError as exc:
+        yield {"type": "error", "error": f"asyncssh not installed: {exc}", "session_id": session_id}
+        return
+
+    q_prompt = shlex.quote(prompt)
+    q_bin = shlex.quote(HERMES_BIN)
+    resume_part = f"--resume {shlex.quote(hermes_session_id)} " if hermes_session_id else ""
+    inner = f"TERM=dumb NO_COLOR=1 {q_bin} chat {resume_part}-q {q_prompt}"
+    remote_cmd = f"bash -lc {shlex.quote(inner)}"
+
+    log.info(
+        "host_bridge[%s]: hermes stream user=%s host=%s prompt=%r",
+        session_id, slack_user_id, HOST, prompt[:120],
+    )
+
+    exit_code: int | None = None
+    error: str | None = None
+
+    try:
+        known_hosts = KNOWN_HOSTS if Path(KNOWN_HOSTS).exists() else None
+        async with asyncssh.connect(
+            HOST,
+            username=USER,
+            client_keys=[str(key_file)],
+            known_hosts=known_hosts,
+        ) as conn:
+            async with conn.create_process(remote_cmd) as proc:
+                async def _drain_stdout():
+                    async for raw_line in proc.stdout:
+                        line = raw_line if isinstance(raw_line, str) else raw_line.decode("utf-8", "replace")
+                        yield {"type": "chunk", "text": line}
+
+                async for event in _drain_stdout():
+                    yield event
+
+                try:
+                    await asyncio.wait_for(
+                        proc.wait_closed(),
+                        timeout=max(5, timeout - (time.monotonic() - start_ts)),
+                    )
+                except asyncio.TimeoutError:
+                    error = f"hermes timed out after {timeout}s"
+                # asyncssh wait_closed() returns None; exit status is on the proc
+                try:
+                    es = proc.exit_status
+                    exit_code = es if isinstance(es, int) else (0 if error is None else 1)
+                except Exception:
+                    exit_code = 0 if error is None else 1
+
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"
+        log.warning("host_bridge[%s]: hermes stream SSH/exec failed: %s", session_id, error)
+        yield {"type": "error", "error": error, "session_id": session_id}
+        return
+
+    duration = time.monotonic() - start_ts
+    success = (error is None) and (exit_code is None or exit_code == 0)
+
+    yield {
+        "type": "done",
+        "success": success,
+        "duration_s": round(duration, 2),
+        "exit_code": exit_code,
+        "session_id": session_id,
+        "error": error,
+    }
+
+
+def _build_shell_cmd(command: str, workdir: str) -> str:
+    """Build the SSH command for executing a raw bash command on the host.
+
+    Unlike :func:`_build_remote_cmd`, *command* is not quoted — it is expected
+    to be a valid bash command already, e.g. ``ls /Volumes/ROMs``.
+    """
+    q_workdir = shlex.quote(workdir)
+    inner = f"cd {q_workdir} && {command}"
+    return f"bash -lc {shlex.quote(inner)}"
+
+
+async def run_shell(
+    *,
+    command: str,
+    slack_user_id: str,
+    workdir: str | None = None,
+    timeout_s: int | None = None,
+) -> BridgeResult:
+    """Run a raw bash *command* on the Mac Mini host over SSH and return its output.
+
+    Returns a :class:`BridgeResult` whether or not execution succeeded.
+    """
+    session_id = uuid.uuid4().hex[:12]
+    workdir = workdir or WORKDIR
+    timeout = timeout_s if (timeout_s and timeout_s > 0) else TIMEOUT_S
+    start_ts = time.monotonic()
+    started_at = time.time()
+
+    if not _enabled():
+        return BridgeResult(
+            session_id=session_id, success=False, exit_code=None,
+            stdout="", stderr="", duration_s=0.0,
+            error="host bridge disabled — set OPENCLAW_HOST_BRIDGE_ENABLED=true",
+        )
+
+    if not command or not command.strip():
+        return BridgeResult(
+            session_id=session_id, success=False, exit_code=None,
+            stdout="", stderr="", duration_s=0.0,
+            error="empty command",
+        )
+
+    key_file = Path(KEY_PATH)
+    if not key_file.exists():
+        return BridgeResult(
+            session_id=session_id, success=False, exit_code=None,
+            stdout="", stderr="", duration_s=0.0,
+            error=f"SSH key not found at {KEY_PATH}",
+        )
+
+    try:
+        import asyncssh  # lazy import — optional at install time
+    except ImportError as exc:
+        return BridgeResult(
+            session_id=session_id, success=False, exit_code=None,
+            stdout="", stderr="", duration_s=0.0,
+            error=f"asyncssh not installed: {exc}",
+        )
+
+    remote_cmd = _build_shell_cmd(command, workdir)
+    log.info(
+        "host_bridge[%s]: shell user=%s host=%s timeout=%ss cmd=%r",
+        session_id, slack_user_id, HOST, timeout, command[:120],
+    )
+
+    stdout_buf = ""
+    stderr_buf = ""
+    exit_code: int | None = None
+    error: str | None = None
+    truncated = False
+
+    try:
+        known_hosts = KNOWN_HOSTS if Path(KNOWN_HOSTS).exists() else None
+        async with asyncssh.connect(  # type: ignore[attr-defined]
+            HOST,
+            username=USER,
+            client_keys=[str(key_file)],
+            known_hosts=known_hosts,
+        ) as conn:
+            result = await conn.run(remote_cmd, check=False, timeout=timeout)
+            stdout_buf = (result.stdout or "") if isinstance(result.stdout, str) else (result.stdout.decode("utf-8", "replace") if result.stdout else "")
+            stderr_buf = (result.stderr or "") if isinstance(result.stderr, str) else (result.stderr.decode("utf-8", "replace") if result.stderr else "")
+            exit_code = result.exit_status if result.exit_status is not None else None
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"
+        log.warning("host_bridge[%s]: shell SSH/exec failed: %s", session_id, error)
+
+    if len(stdout_buf) > MAX_OUTPUT:
+        truncated = True
+        stdout_buf = stdout_buf[:MAX_OUTPUT] + f"\n…[truncated {len(stdout_buf)-MAX_OUTPUT} bytes]"
+    if len(stderr_buf) > MAX_OUTPUT:
+        truncated = True
+        stderr_buf = stderr_buf[:MAX_OUTPUT] + "\n…[truncated]"
+
+    stdout_buf = sanitize(strip_ansi(stdout_buf))
+    stderr_buf = sanitize(strip_ansi(stderr_buf))
+
+    duration = time.monotonic() - start_ts
+    success = (error is None) and (exit_code == 0)
+
+    _write_audit_row({
+        "ts": started_at, "session_id": session_id,
+        "slack_user_id": slack_user_id, "host": HOST, "user": USER,
+        "workdir": workdir, "command": command,
+        "exit_code": exit_code, "duration_s": round(duration, 3),
+        "truncated": truncated, "error": error, "type": "shell",
+    })
+
+    return BridgeResult(
+        session_id=session_id, success=success, exit_code=exit_code,
+        stdout=stdout_buf, stderr=stderr_buf, duration_s=duration,
+        truncated=truncated, error=error,
+    )
+
+
+async def run_shell_stream(
+    *,
+    command: str,
+    slack_user_id: str,
+    workdir: str | None = None,
+    timeout_s: int | None = None,
+):
+    """Async generator that streams output from a raw bash command on the host.
+
+    Yields the same event dicts as :func:`run_copilot_stream`.
+    """
+    session_id = uuid.uuid4().hex[:12]
+    workdir = workdir or WORKDIR
+    timeout = timeout_s if (timeout_s and timeout_s > 0) else TIMEOUT_S
+    start_ts = time.monotonic()
+
+    if not _enabled():
+        yield {"type": "error", "error": "host bridge disabled — set OPENCLAW_HOST_BRIDGE_ENABLED=true", "session_id": session_id}
+        return
+
+    if not command or not command.strip():
+        yield {"type": "error", "error": "empty command", "session_id": session_id}
+        return
+
+    key_file = Path(KEY_PATH)
+    if not key_file.exists():
+        yield {"type": "error", "error": f"SSH key not found at {KEY_PATH}", "session_id": session_id}
+        return
+
+    try:
+        import asyncssh  # lazy import — optional at install time
+    except ImportError as exc:
+        yield {"type": "error", "error": f"asyncssh not installed: {exc}", "session_id": session_id}
+        return
+
+    remote_cmd = _build_shell_cmd(command, workdir)
+    log.info(
+        "host_bridge[%s]: shell stream user=%s host=%s timeout=%ss cmd=%r",
+        session_id, slack_user_id, HOST, timeout, command[:120],
+    )
+
+    stdout_buf: list[str] = []
+    stderr_buf: list[str] = []
+    exit_code: int | None = None
+    error: str | None = None
+
+    try:
+        known_hosts = KNOWN_HOSTS if Path(KNOWN_HOSTS).exists() else None
+        async with asyncssh.connect(  # type: ignore[attr-defined]
+            HOST, username=USER, client_keys=[str(key_file)], known_hosts=known_hosts,
+        ) as conn:
+            async with conn.create_process(remote_cmd) as proc:
+                async def _drain_stream(stream, stream_type: str):
+                    async for raw_line in stream:
+                        line = raw_line if isinstance(raw_line, str) else raw_line.decode("utf-8", "replace")
+                        line = sanitize(line)
+                        if stream_type == "stdout":
+                            stdout_buf.append(line)
+                        else:
+                            stderr_buf.append(line)
+                        yield {"type": "chunk" if stream_type == "stdout" else "stderr", "text": line}
+
+                async for event in _drain_stream(proc.stdout, "stdout"):
+                    yield event
+
+                if proc.stderr is not None:
+                    async for event in _drain_stream(proc.stderr, "stderr"):
+                        yield event
+
+                try:
+                    exit_code = await asyncio.wait_for(
+                        proc.wait_closed(),
+                        timeout=max(5, timeout - (time.monotonic() - start_ts)),
+                    )
+                    if hasattr(exit_code, "exit_status"):
+                        exit_code = exit_code.exit_status
+                except asyncio.TimeoutError:
+                    error = f"command timed out after {timeout}s"
+
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"
+        log.warning("host_bridge[%s]: shell stream SSH/exec failed: %s", session_id, error)
+        yield {"type": "error", "error": error, "session_id": session_id}
+        return
+
+    duration = time.monotonic() - start_ts
+    success = (error is None) and (exit_code == 0)
+
+    _write_audit_row({
+        "ts": time.time(), "session_id": session_id,
+        "slack_user_id": slack_user_id, "host": HOST, "user": USER,
+        "workdir": workdir, "command": command,
+        "exit_code": exit_code, "duration_s": round(duration, 3),
+        "error": error, "streamed": True, "type": "shell",
+    })
+
+    yield {
+        "type": "done", "success": success,
+        "duration_s": round(duration, 2),
+        "exit_code": exit_code, "session_id": session_id, "error": error,
+    }
+
+
 __all__ = [
     "BridgeResult",
     "ChunkPoster",
     "SessionManager",
     "SessionRecord",
     "get_session_manager",
+    "ping_bridge",
     "run_copilot",
+    "run_copilot_stream",
+    "run_shell",
+    "run_shell_stream",
     "sanitize",
     "strip_ansi",
 ]
+
+
+async def ping_bridge(timeout_s: int = 8) -> dict:
+    """Lightweight SSH connectivity test — runs ``echo __ping_ok__`` on the host.
+
+    Returns a dict with keys ``ok`` (bool), ``latency_ms`` (float|None), ``error`` (str|None).
+    Does NOT invoke the Copilot CLI binary; this is purely an SSH reachability check.
+    """
+    import time as _time
+
+    if not _enabled():
+        return {"ok": False, "latency_ms": None, "error": "host bridge disabled"}
+
+    key_file = Path(KEY_PATH)
+    if not key_file.exists():
+        return {"ok": False, "latency_ms": None, "error": f"SSH key not found: {KEY_PATH}"}
+
+    try:
+        import asyncssh  # type: ignore[import]
+    except ImportError as exc:
+        return {"ok": False, "latency_ms": None, "error": f"asyncssh not installed: {exc}"}
+
+    known_hosts = KNOWN_HOSTS if Path(KNOWN_HOSTS).exists() else None
+    t0 = _time.monotonic()
+    try:
+        async with asyncssh.connect(
+            HOST,
+            username=USER,
+            client_keys=[str(key_file)],
+            known_hosts=known_hosts,
+        ) as conn:
+            result = await conn.run("echo __ping_ok__", check=False, timeout=timeout_s)
+            latency_ms = round((_time.monotonic() - t0) * 1000, 1)
+            stdout = (result.stdout or "").strip()
+            if "__ping_ok__" in stdout:
+                return {"ok": True, "latency_ms": latency_ms, "error": None}
+            return {"ok": False, "latency_ms": latency_ms, "error": f"unexpected output: {stdout!r}"}
+    except Exception as exc:
+        latency_ms = round((_time.monotonic() - t0) * 1000, 1)
+        return {"ok": False, "latency_ms": latency_ms, "error": f"{type(exc).__name__}: {exc}"}

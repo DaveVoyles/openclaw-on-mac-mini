@@ -7,6 +7,14 @@ from aiohttp import web
 from .api_handlers import (
     api_agent_ask_handler,
     api_agent_ask_stream_handler,
+    api_copilot_ping_handler,
+    api_copilot_run_handler,
+    api_copilot_sessions_handler,
+    api_copilot_stream_handler,
+    api_hermes_status_handler,
+    api_hermes_memory_seed_handler,
+    api_hermes_skills_seed_handler,
+    api_hermes_ask_handler,
     api_agent_session_detail_handler,
     api_agent_session_intervention_handler,
     api_agent_sessions_handler,
@@ -48,6 +56,13 @@ from .api_handlers import (
     api_task_status_handler,
     api_threads_handler,
     api_topology_handler,
+    api_v1_models_handler,
+    api_v1_chat_completions_handler,
+    api_tools_openapi_handler,
+    api_tools_search_files_handler,
+    api_tools_read_file_handler,
+    api_tools_run_shell_handler,
+    api_tools_share_file_handler,
 )
 from .html_handlers import (
     dashboard_handler,
@@ -59,6 +74,7 @@ from .html_handlers import (
     openclaw_cli_remote_installer_handler,
     openclaw_cli_support_download_handler,
     openclaw_cli_windows_installer_handler,
+    hermes_installer_handler,
     parents_guide_handler,
     terminal_handler,
     webui_guide_handler,
@@ -108,6 +124,8 @@ def setup_dashboard(
     app.router.add_get("/install", page(openclaw_cli_installer_handler))
     app.router.add_get("/install-remote", page(openclaw_cli_remote_installer_handler))
     app.router.add_get("/install.ps1", page(openclaw_cli_windows_installer_handler))
+    app.router.add_get("/install-hermes", hermes_installer_handler)
+    app.router.add_get("/ih", hermes_installer_handler)  # short alias for single-line terminal use
     app.router.add_get("/downloads/openclaw_cli.py", page(openclaw_cli_download_handler))
     app.router.add_get("/downloads/openclaw-cli-support/{name}", page(openclaw_cli_support_download_handler))
     app.router.add_get("/downloads/openclaw-cli-installer.sh", page(openclaw_cli_installer_handler))
@@ -165,4 +183,24 @@ def setup_dashboard(
 
     # Agent interaction
     app.router.add_post("/api/agent/ask", action(api_agent_ask_handler))
+    app.router.add_post("/api/copilot/ping", action(api_copilot_ping_handler))
+    app.router.add_get("/api/copilot/sessions", api_copilot_sessions_handler)
+    app.router.add_get("/api/hermes/status", api_hermes_status_handler)
+    app.router.add_get("/api/hermes/memory-seed", api_hermes_memory_seed_handler)
+    app.router.add_get("/api/hermes/skills-seed", api_hermes_skills_seed_handler)
+    app.router.add_post("/api/hermes/ask", action(api_hermes_ask_handler))
+    app.router.add_post("/api/copilot/run", action(api_copilot_run_handler))
+    app.router.add_post("/api/copilot/stream", action(api_copilot_stream_handler))
     app.router.add_post("/api/recap/generate", action(api_recap_generate_handler))
+
+    # OpenAI-compatible API for Open WebUI / external clients
+    app.router.add_get("/v1/models", api_v1_models_handler)
+    app.router.add_post("/v1/chat/completions", api_v1_chat_completions_handler)
+
+    # Tool Server — OpenAPI-compatible endpoints for Open WebUI tool calling
+    # Configure in Open WebUI: Admin → Tools → Tool Servers → http://openclaw:8765
+    app.router.add_get("/tools/openapi.json", api_tools_openapi_handler)
+    app.router.add_post("/tools/search_files", api_tools_search_files_handler)
+    app.router.add_post("/tools/read_file", api_tools_read_file_handler)
+    app.router.add_post("/tools/run_shell", api_tools_run_shell_handler)
+    app.router.add_post("/tools/share_file", api_tools_share_file_handler)

@@ -68,6 +68,7 @@ from trace_context import set_trace as _set_trace
 log = logging.getLogger(__name__)
 
 _MENTION_RE = re.compile(r"<@[A-Z0-9]+>")
+_HERMES_SESSION_RE = re.compile(r"^Session:\s*(\S+)", re.MULTILINE)
 
 # ---------------------------------------------------------------------------
 # Per-user preferences (persisted to data/slack_user_prefs.json)
@@ -515,6 +516,9 @@ _model_last_success: dict[str, float] = {}
 _daily_query_count: int = 0
 _error_window: list[float] = []
 _last_alert_ts: float = 0.0
+_ws_connection_count: int = 0  # incremented on every Socket Mode open; >1 means reconnect
+_ws_last_reconnect_notify_ts: float = 0.0  # epoch of last reconnect DM (cooldown gate)
+_WS_RECONNECT_NOTIFY_COOLDOWN = 3600.0  # seconds — suppress routine Slack 408 reconnect noise
 
 # ---------------------------------------------------------------------------
 # Feature flag check
@@ -537,9 +541,15 @@ _LAST_SYNC_PATH = Path(__file__).parent.parent / "data" / "last_sync.json"
 _FILE_POLL_INTERVAL = int(os.getenv("OPENCLAW_FILE_POLL_INTERVAL", "60"))
 
 # --- Wave 5: digest ---
-_DIGEST_PREFS_PATH = Path(__file__).parent.parent / "data" / "digest_prefs.json"
+# Use /tmp (bind-mounted rw from host) because /app/data is read-only at runtime.
+_DIGEST_PREFS_PATH = Path("/tmp/digest_prefs.json")
 _DIGEST_CHECK_INTERVAL: int = int(os.getenv("DIGEST_CHECK_INTERVAL", "3600"))  # check every hour
 _DIGEST_LOOKBACK_HOURS: int = int(os.getenv("DIGEST_LOOKBACK_HOURS", "24"))  # show files modified in last N hours
+
+# --- Missed-message catch-up ---
+# Written to /tmp (bind-mounted rw from host) so it survives container restarts.
+_LAST_SEEN_PATH = Path("/tmp/slack_last_seen.json")
+_last_seen_ts: dict[str, str] = {}  # channel_id → last processed message ts
 
 # --- /incident: incident-copilot bridge (mirrors Discord IncidentCog) ---
 # Allowed users defaults to the proactive-alert owner when not explicitly set.
@@ -1040,6 +1050,160 @@ def _save_digest_prefs(prefs: dict[str, dict]) -> None:
         _DIGEST_PREFS_PATH.write_text(json.dumps(prefs, indent=2))
     except Exception as exc:
         log.warning("_save_digest_prefs: %s", exc)
+
+
+def _load_last_seen_ts() -> dict[str, str]:
+    """Load per-channel last-seen timestamps from /tmp (survives restarts via host bind-mount)."""
+    try:
+        if _LAST_SEEN_PATH.exists():
+            return json.loads(_LAST_SEEN_PATH.read_text())
+    except Exception:
+        pass
+    return {}
+
+
+def _save_last_seen_ts(data: dict[str, str]) -> None:
+    try:
+        _LAST_SEEN_PATH.write_text(json.dumps(data))
+    except Exception as exc:
+        log.warning("_save_last_seen_ts: %s", exc)
+
+
+def _record_last_seen(channel: str, ts: str) -> None:
+    """Update last-seen ts for a DM channel after processing a message."""
+    global _last_seen_ts
+    if ts and ts > _last_seen_ts.get(channel, "0"):
+        _last_seen_ts[channel] = ts
+        _save_last_seen_ts(_last_seen_ts)
+
+
+async def _catchup_missed_dms(client: Any) -> int:
+    """On startup, replay any DMs received while the bot was offline or reconnecting.
+
+    Fetches IM history since the last recorded timestamp for each known channel
+    and processes missed messages through the standard DM pipeline.
+
+    Returns the number of messages replayed.
+    """
+    global _last_seen_ts
+    _last_seen_ts = _load_last_seen_ts()
+
+    if not _last_seen_ts:
+        log.info("_catchup_missed_dms: no prior state — skipping catch-up on first run")
+        return 0
+
+    try:
+        result = await client.conversations_list(types="im", limit=200)
+        channels = result.get("channels") or []
+    except Exception as exc:
+        log.warning("_catchup_missed_dms: conversations.list failed: %s", exc)
+        return 0
+
+    caught_up = 0
+    for ch in channels:
+        ch_id = ch.get("id", "")
+        oldest = _last_seen_ts.get(ch_id)
+        if not ch_id or not oldest:
+            continue
+        try:
+            hist = await client.conversations_history(channel=ch_id, oldest=oldest, limit=50, inclusive=False)
+            messages = hist.get("messages") or []
+        except Exception as exc:
+            log.warning("_catchup_missed_dms: conversations.history failed for %s: %s", ch_id, exc)
+            continue
+
+        # Slack returns newest-first; reverse for chronological replay.
+        for msg in reversed(messages):
+            if msg.get("bot_id") or msg.get("user") == _BOT_USER_ID:
+                continue
+            if msg.get("subtype"):  # joins, leaves, file shares, etc.
+                continue
+            text = (msg.get("text") or "").strip()
+            if not text:
+                continue
+
+            user_id = msg.get("user", "unknown")
+            msg_ts = msg.get("ts", "")
+            log.info("_catchup_missed_dms: replaying missed DM from %s in %s (ts=%s)", user_id, ch_id, msg_ts)
+            try:
+                prompt, model_pref, use_simple = _parse_flags(text)
+                use_simple = use_simple or _get_user_simple(user_id)
+
+                await client.chat_postMessage(
+                    channel=ch_id,
+                    text="🔁 I was briefly offline and noticed I missed your message — catching up now!",
+                )
+                thinking_resp = await client.chat_postMessage(channel=ch_id, text="⏳ Thinking…")
+                thinking_ts = (thinking_resp.get("ts") if thinking_resp else None)
+
+                # Minimal say() shim so _send_answer can post replies to this channel.
+                _ch = ch_id  # capture for closure
+
+                async def _say(text: str = "", **kwargs: Any) -> Any:  # noqa: E731
+                    return await client.chat_postMessage(channel=_ch, text=text, **kwargs)
+
+                await _send_answer(
+                    client=client,
+                    say=_say,
+                    channel=ch_id,
+                    thread_ts=None,
+                    thinking_ts=thinking_ts,
+                    prompt=prompt,
+                    user_id=user_id,
+                    model_pref=model_pref,
+                    simple=use_simple,
+                )
+                _record_last_seen(ch_id, msg_ts)
+                caught_up += 1
+            except Exception as exc:
+                log.warning("_catchup_missed_dms: failed to replay message ts=%s: %s", msg_ts, exc)
+
+    if caught_up:
+        log.info("_catchup_missed_dms: replayed %d missed DM(s)", caught_up)
+    else:
+        log.info("_catchup_missed_dms: no missed DMs found")
+    return caught_up
+
+
+def _install_ws_reconnect_hook(handler: Any, slack_client: Any) -> None:
+    """Monkey-patch connect_to_new_endpoint so every WS reconnect:
+      1. logs the event,
+      2. runs missed-DM catch-up, and
+      3. DMs SLACK_NOTIFY_USER_ID to confirm the bot is back.
+
+    The initial connection uses connect() directly and is NOT intercepted here,
+    so this fires only on true reconnects (after a drop/408/timeout).
+    """
+    _orig = handler.client.connect_to_new_endpoint
+
+    async def _notify_reconnect() -> None:
+        global _ws_connection_count, _ws_last_reconnect_notify_ts
+        _ws_connection_count += 1
+        log.info("Slack WS reconnected (reconnect #%d) — running catch-up", _ws_connection_count)
+        missed = await _catchup_missed_dms(slack_client)
+        now = time.monotonic()
+        # Always notify if messages were missed; only notify on plain reconnects every hour.
+        should_notify = bool(missed) or (now - _ws_last_reconnect_notify_ts) > _WS_RECONNECT_NOTIFY_COOLDOWN
+        if SLACK_NOTIFY_USER_ID and should_notify:
+            try:
+                msg = (
+                    f"⚡ Slack WebSocket reconnected — caught up {missed} missed message(s)."
+                    if missed
+                    else "⚡ Slack WebSocket reconnected — no missed messages."
+                )
+                await slack_client.chat_postMessage(channel=SLACK_NOTIFY_USER_ID, text=msg)
+                _ws_last_reconnect_notify_ts = now
+            except Exception as exc:
+                log.warning("WS reconnect notify failed: %s", exc)
+
+    async def _patched(force: bool = False) -> None:
+        await _orig(force=force)
+        try:
+            asyncio.get_event_loop().create_task(_notify_reconnect())
+        except Exception as exc:
+            log.warning("_install_ws_reconnect_hook: could not schedule reconnect task: %s", exc)
+
+    handler.client.connect_to_new_endpoint = _patched
 
 
 async def _digest_loop(client: Any) -> None:
@@ -3138,7 +3302,7 @@ def _register_core_handlers(app: Any) -> None:
         if event.get("bot_id") or event.get("subtype"):
             return
 
-        # --- Phase 3: route thread replies to active host Copilot sessions ---
+        # --- Phase 3: route thread replies to active /copilot sessions ---
         # This runs BEFORE the channel-type guard so it works in both DMs and
         # channels. We only act when the thread matches a registered session.
         thread_ts_evt: str | None = event.get("thread_ts")
@@ -3148,8 +3312,9 @@ def _register_core_handlers(app: Any) -> None:
                 _mgr = get_session_manager()
                 _rec = _mgr.find_by_thread(event.get("channel", ""), thread_ts_evt)
             except Exception:  # noqa: BLE001
+                _mgr = None
                 _rec = None
-            if _rec is not None and _mgr.is_live(_rec.session_id):
+            if _rec is not None and (_is_hermes_session(_rec) or _session_is_live(_mgr, _rec.session_id)):
                 _txt = (event.get("text") or "").strip()
                 _uid = event.get("user", "")
                 if not _txt:
@@ -3163,6 +3328,15 @@ def _register_core_handlers(app: Any) -> None:
                     except Exception:  # noqa: BLE001
                         pass
                     return
+                if _is_hermes_session(_rec) and _rec.status == "ended":
+                    try:
+                        await client.chat_postEphemeral(
+                            channel=event.get("channel", ""), user=_uid,
+                            text="🙅 this Copilot session is already closed",
+                        )
+                    except Exception:  # noqa: BLE001
+                        pass
+                    return
                 # React with ⏳ so the user knows it was accepted as a turn
                 try:
                     await client.reactions_add(
@@ -3172,7 +3346,10 @@ def _register_core_handlers(app: Any) -> None:
                     )
                 except Exception:  # noqa: BLE001
                     pass
-                _err = await _mgr.send_turn(_rec.session_id, _txt, slack_user=_uid)
+                if _is_hermes_session(_rec):
+                    _err = await _run_hermes_turn(_rec, _txt)
+                else:
+                    _err = await _mgr.send_turn(_rec.session_id, _txt, slack_user=_uid)
                 if _err:
                     try:
                         await client.chat_postMessage(
@@ -3190,6 +3367,9 @@ def _register_core_handlers(app: Any) -> None:
         channel: str = event.get("channel", "")
         raw_text: str = (event.get("text") or "").strip()
         files: list[dict] = event.get("files", [])
+
+        # Record this message so catch-up logic knows the latest processed ts.
+        _record_last_seen(channel, event.get("ts", ""))
 
         _set_trace(command="dm")
         asyncio.create_task(_check_new_user_onboarding(user_id, client))
@@ -5024,25 +5204,71 @@ def _register_integration_handlers(app: Any) -> None:
     # ------------------------------------------------------------------
     # Handler: /copilot — Phase 3 threaded interactive sessions
     #
-    # HIGH-RISK: opens a long-lived `copilot --allow-all-tools` process on
-    # the Mac Mini host via SSH. Each /copilot invocation creates a Slack
-    # thread; thread replies are routed as subsequent user turns to the same
-    # process. Identity-equivalent access to the host, owner-gated.
+    # HIGH-RISK: `/copilot` is owner-gated and creates a Slack thread-backed
+    # agent session. By default it opens a long-lived `copilot --allow-all-tools`
+    # process on the Mac Mini host via SSH; when `COPILOT_BACKEND=hermes`, it
+    # runs the local Hermes CLI instead and reuses the session ID for thread turns.
     # ------------------------------------------------------------------
+
+    def _is_code_chunk(text: str) -> bool:
+        """Return True if text looks like terminal/code output rather than prose."""
+        lines = [l for l in text.splitlines() if l.strip()]
+        if not lines:
+            return False
+        code_like = sum(
+            1 for l in lines
+            if l.startswith(("$", ">", "    ", "\t", "```"))
+            or l.startswith(("│", "┃", "╭", "╰", "├", "─"))
+            or l.lstrip().startswith(("//", "#!", "/*"))
+        )
+        return (code_like / len(lines)) >= 0.35
 
     # --- chunk poster: invoked by SessionManager to stream stdout back ---
     async def _copilot_chunk_poster(record: Any, chunk: str) -> None:
         if not chunk or not chunk.strip():
             return
-        # Slack message safety: keep code blocks, hard-cap length.
-        body = chunk
+
+        # Check if any line is a tool-progress indicator — post those as lightweight italic updates.
+        try:
+            from dashboard.api_handlers import _copilot_tool_label  # type: ignore[import]
+        except ImportError:
+            _copilot_tool_label = None  # type: ignore[assignment]
+
+        lines = chunk.splitlines()
+        tool_lines = []
+        content_lines = []
+        for line in lines:
+            if _copilot_tool_label and _copilot_tool_label(line):
+                tool_lines.append(_copilot_tool_label(line))
+            else:
+                content_lines.append(line)
+
+        if tool_lines:
+            try:
+                await app.client.chat_postMessage(
+                    channel=record.slack_channel,
+                    thread_ts=record.slack_thread_ts,
+                    text="\n".join(f"_{t}_" for t in tool_lines),
+                    mrkdwn=True,
+                )
+            except Exception:  # noqa: BLE001
+                pass
+
+        body = "\n".join(content_lines).strip()
+        if not body:
+            return
         if len(body) > 3800:
             body = body[:3800] + "\n…[truncated]"
         try:
+            if _is_code_chunk(body):
+                text = f"```\n{body}\n```"
+            else:
+                text = body
             await app.client.chat_postMessage(
                 channel=record.slack_channel,
                 thread_ts=record.slack_thread_ts,
-                text=f"```\n{body}\n```",
+                text=text,
+                mrkdwn=True,
             )
         except Exception as exc:  # noqa: BLE001
             log.warning("/copilot chunk post failed: %s", exc)
@@ -5067,6 +5293,256 @@ def _register_integration_handlers(app: Any) -> None:
             return False, "🛑 You are not allowed to run `/copilot` on this workspace."
         return True, None
 
+    # Directory shortcuts for --dir flag
+    _COPILOT_DIR_SHORTCUTS: dict[str, str] = {
+        "openclaw":     "/Users/davevoyles/openclaw",
+        "docker-stack": "/Users/davevoyles/docker-stack",
+        "docker_stack": "/Users/davevoyles/docker-stack",
+        "ai-files":     "/Users/davevoyles/ai-files",
+        "roms":         "/Users/davevoyles/mnt/ROMs",
+    }
+
+    def _parse_copilot_flags(text: str) -> tuple[str, str | None]:
+        """Strip --dir <value> from text, return (cleaned_prompt, workdir_or_None)."""
+        import re as _re
+        m = _re.search(r"--dir\s+(\S+)", text)
+        if not m:
+            return text, None
+        raw = m.group(1)
+        workdir = _COPILOT_DIR_SHORTCUTS.get(raw.lower(), raw if raw.startswith("/") else None)
+        cleaned = (text[: m.start()] + text[m.end() :]).strip()
+        return cleaned, workdir
+
+    COPILOT_BACKEND = os.environ.get("COPILOT_BACKEND", "ssh").lower()
+    _HERMES_BIN = Path.home() / ".local" / "bin" / "hermes"
+    _HERMES_AUDIT_DIR = Path(__file__).parent.parent / "data" / "audit" / "host_bridge"
+    _hermes_live_procs: dict[str, asyncio.subprocess.Process] = {}
+
+    def _copilot_backend() -> str:
+        return "hermes" if COPILOT_BACKEND == "hermes" else "ssh"
+
+    def _copilot_backend_label() -> str:
+        return "Hermes CLI" if _copilot_backend() == "hermes" else "Copilot CLI (SSH)"
+
+    def _is_hermes_session(record: Any) -> bool:
+        meta = getattr(record, "meta", {}) or {}
+        return meta.get("backend") == "hermes"
+
+    def _hermes_session_id(record: Any) -> str | None:
+        meta = getattr(record, "meta", {}) or {}
+        session_id = meta.get("hermes_session_id")
+        return str(session_id).strip() if session_id else None
+
+    def _extract_hermes_session_id(text: str) -> str | None:
+        if not text:
+            return None
+        match = _HERMES_SESSION_RE.search(text)
+        return match.group(1).strip() if match else None
+
+    def _session_is_live(mgr: Any, session_id: str) -> bool:
+        return session_id in _hermes_live_procs or (mgr is not None and mgr.is_live(session_id))
+
+    def _append_copilot_transcript(path: str | None, text: str) -> None:
+        if not path or not text:
+            return
+        try:
+            transcript_path = Path(path)
+            transcript_path.parent.mkdir(parents=True, exist_ok=True)
+            with transcript_path.open("a", encoding="utf-8") as fh:
+                fh.write(text)
+        except OSError as exc:
+            log.warning("/copilot transcript append failed: %s", exc)
+
+    async def _start_hermes_session(
+        *,
+        slack_user: str,
+        slack_channel: str,
+        slack_thread_ts: str,
+        cwd: str | None,
+    ) -> tuple[Any | None, str | None]:
+        mgr = await _ensure_session_manager()
+        if mgr is None:
+            return None, "host_bridge module unavailable"
+        try:
+            from host_bridge_persistence import SessionRecord
+        except ImportError as exc:
+            return None, f"host_bridge_persistence unavailable: {exc}"
+
+        active = [
+            r for r in mgr.list_sessions(slack_user)
+            if r.status in ("active", "idle") and (r.session_id in _hermes_live_procs or _is_hermes_session(r) or mgr.is_live(r.session_id))
+        ]
+        if len(active) >= 3:
+            return None, "per-user session cap reached (3). End an existing session first."
+
+        session_id = secrets.token_hex(6)
+        workdir = cwd or os.getenv("OPENCLAW_HOST_BRIDGE_WORKDIR", "/Users/davevoyles/docker-stack")
+        now = time.time()
+        transcript_path = _HERMES_AUDIT_DIR / f"{session_id}.log"
+        _append_copilot_transcript(
+            str(transcript_path),
+            (
+                f"# session {session_id} (hermes)\n"
+                f"# user:   {slack_user}\n"
+                f"# cwd:    {workdir}\n"
+                f"# opened: {now}\n"
+                "# =====\n"
+            ),
+        )
+        record = SessionRecord(
+            session_id=session_id,
+            slack_user=slack_user,
+            slack_channel=slack_channel,
+            slack_thread_ts=slack_thread_ts,
+            started_at=now,
+            last_activity=now,
+            cwd=workdir,
+            status="idle",
+            transcript_path=str(transcript_path),
+            turns=0,
+            meta={"backend": "hermes"},
+        )
+        await mgr.registry.add(record)
+        return record, None
+
+    async def _run_hermes_turn(record: Any, prompt: str) -> str | None:
+        if record.session_id in _hermes_live_procs:
+            return "a Hermes turn is already running for this session"
+        if not _HERMES_BIN.exists():
+            return f"Hermes binary not found at {_HERMES_BIN}"
+
+        mgr = await _ensure_session_manager()
+        if mgr is None:
+            return "host_bridge module unavailable"
+
+        prior_hermes_session_id = _hermes_session_id(record)
+        turn_num = int(getattr(record, "turns", 0)) + 1
+        if turn_num > 1 and not prior_hermes_session_id:
+            await mgr.registry.update(record.session_id, status="crashed", last_activity=time.time())
+            record.status = "crashed"
+            record.last_activity = time.time()
+            return "Hermes session ID is missing for this thread; start a new /copilot session."
+
+        now = time.time()
+        await mgr.registry.update(record.session_id, last_activity=now, turns=turn_num, status="active")
+        record.turns = turn_num
+        record.last_activity = now
+        record.status = "active"
+        _append_copilot_transcript(
+            record.transcript_path,
+            f"\n>>> USER TURN {turn_num} ({record.slack_user})\n{prompt}\n",
+        )
+
+        cmd = [str(_HERMES_BIN), "chat"]
+        if prior_hermes_session_id:
+            cmd.extend(["--resume", prior_hermes_session_id])
+        cmd.extend(["-q", prompt])
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                cwd=record.cwd or None,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except Exception as exc:  # noqa: BLE001
+            await mgr.registry.update(record.session_id, status="crashed", last_activity=time.time())
+            record.status = "crashed"
+            return f"Hermes failed to start: {type(exc).__name__}: {exc}"
+
+        _hermes_live_procs[record.session_id] = proc
+
+        async def _pump_stdout() -> str:
+            parts: list[str] = []
+            if proc.stdout is None:
+                return ""
+            while True:
+                chunk = await proc.stdout.read(2048)
+                if not chunk:
+                    break
+                text = chunk.decode("utf-8", errors="replace")
+                parts.append(text)
+                _append_copilot_transcript(record.transcript_path, text)
+                await _copilot_chunk_poster(record, text)
+            return "".join(parts)
+
+        async def _read_stderr() -> str:
+            if proc.stderr is None:
+                return ""
+            return (await proc.stderr.read()).decode("utf-8", errors="replace")
+
+        try:
+            stdout_text, stderr_text = await asyncio.gather(_pump_stdout(), _read_stderr())
+            return_code = await proc.wait()
+        finally:
+            _hermes_live_procs.pop(record.session_id, None)
+
+        if stderr_text:
+            _append_copilot_transcript(record.transcript_path, f"\n[stderr]\n{stderr_text}\n")
+
+        finished_at = time.time()
+        hermes_session_id = prior_hermes_session_id or _extract_hermes_session_id(stdout_text)
+        final_status = "idle" if return_code == 0 else "crashed"
+        update_fields: dict[str, Any] = {"status": final_status, "last_activity": finished_at}
+        if hermes_session_id and hermes_session_id != prior_hermes_session_id:
+            meta = dict(getattr(record, "meta", {}) or {})
+            meta["backend"] = "hermes"
+            meta["hermes_session_id"] = hermes_session_id
+            update_fields["meta"] = meta
+            record.meta = meta
+        elif return_code == 0 and turn_num == 1 and not hermes_session_id:
+            final_status = "crashed"
+            update_fields["status"] = final_status
+        await mgr.registry.update(record.session_id, **update_fields)
+        record.status = final_status
+        record.last_activity = finished_at
+
+        if return_code != 0:
+            return stderr_text.strip() or f"Hermes exited with status {return_code}"
+        if not hermes_session_id:
+            return "Hermes completed, but did not emit a session ID; thread replies cannot resume."
+        if not stdout_text.strip():
+            try:
+                await app.client.chat_postMessage(
+                    channel=record.slack_channel,
+                    thread_ts=record.slack_thread_ts,
+                    text="_Hermes returned no output._",
+                )
+            except Exception:  # noqa: BLE001
+                pass
+        return None
+
+    async def _cancel_hermes_session(record: Any, *, slack_user: str) -> str | None:
+        if record.slack_user != slack_user:
+            return "not your session"
+        proc = _hermes_live_procs.get(record.session_id)
+        if proc is None:
+            return "no active Hermes turn to cancel"
+        try:
+            proc.terminate()
+        except Exception as exc:  # noqa: BLE001
+            return f"cancel failed: {type(exc).__name__}: {exc}"
+        return None
+
+    async def _end_hermes_session(mgr: Any, record: Any, *, slack_user: str) -> str | None:
+        if record.slack_user != slack_user:
+            return "not your session"
+        proc = _hermes_live_procs.get(record.session_id)
+        if proc is not None:
+            try:
+                proc.terminate()
+                await asyncio.wait_for(proc.wait(), timeout=5)
+            except (asyncio.TimeoutError, Exception):  # noqa: BLE001
+                try:
+                    proc.kill()
+                except Exception:  # noqa: BLE001
+                    pass
+            finally:
+                _hermes_live_procs.pop(record.session_id, None)
+        await mgr.registry.update(record.session_id, status="ended", last_activity=time.time())
+        record.status = "ended"
+        record.last_activity = time.time()
+        return None
+
     @app.command("/copilot")
     async def handle_slash_copilot(ack: Any, body: dict[str, Any], client: Any) -> None:
         await ack()
@@ -5083,37 +5559,59 @@ def _register_integration_handlers(app: Any) -> None:
             await client.chat_postEphemeral(
                 channel=channel_id, user=user_id,
                 text=(
-                    "🤖 *Copilot CLI — interactive sessions*\n"
-                    "• `/copilot <prompt>` — open a thread, run `copilot --allow-all-tools` on the host\n"
+                    f"🤖 *{_copilot_backend_label()} — interactive sessions*\n"
+                    "• `/copilot <prompt>` — open a thread and run the selected backend\n"
+                    "• `/copilot --dir openclaw <prompt>` — run in the openclaw repo\n"
+                    "• `/copilot --dir docker-stack <prompt>` — run in docker-stack repo (default)\n"
                     "• Reply in the thread to send another turn to the same session\n"
-                    "• `/copilot-cancel <id>` — SIGINT current turn (Ctrl-C)\n"
+                    "• `/copilot-cancel <id>` — stop the current turn\n"
                     "• `/copilot-end <id>` — end the session\n"
                     "• `/copilot-sessions` — list your sessions\n"
                     "• `/copilot-attach <id>` — show details and last activity\n"
-                    f"• Per-user cap: 3 active sessions. Idle timeout: {os.getenv('OPENCLAW_HOST_BRIDGE_IDLE_TIMEOUT_S','600')}s.\n"
+                    "• `/copilot-recap <id>` — summarize a session\n"
+                    f"• Backend: `{_copilot_backend()}` • Per-user cap: 3 active sessions. Idle timeout: {os.getenv('OPENCLAW_HOST_BRIDGE_IDLE_TIMEOUT_S','600')}s.\n"
                 ),
             )
             return
 
-        if os.getenv("OPENCLAW_HOST_BRIDGE_ENABLED", "false").lower() != "true":
+        backend = _copilot_backend()
+        mgr = None
+        if backend == "ssh":
+            if os.getenv("OPENCLAW_HOST_BRIDGE_ENABLED", "false").lower() != "true":
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id,
+                    text="🛑 Host bridge disabled. Set `OPENCLAW_HOST_BRIDGE_ENABLED=true` and redeploy.",
+                )
+                return
+
+            mgr = await _ensure_session_manager()
+            if mgr is None:
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id, text="❌ host_bridge module unavailable",
+                )
+                return
+
+        # Parse --dir flag from prompt text.
+        prompt_text, cwd_override = _parse_copilot_flags(text)
+        if not prompt_text:
             await client.chat_postEphemeral(
-                channel=channel_id, user=user_id,
-                text="🛑 Host bridge disabled. Set `OPENCLAW_HOST_BRIDGE_ENABLED=true` and redeploy.",
+                channel=channel_id, user=user_id, text="❌ prompt is empty after parsing flags."
             )
             return
 
-        mgr = await _ensure_session_manager()
-        if mgr is None:
-            await client.chat_postEphemeral(
-                channel=channel_id, user=user_id, text="❌ host_bridge module unavailable",
-            )
-            return
+        dir_label = cwd_override or os.getenv("OPENCLAW_HOST_BRIDGE_WORKDIR", "/Users/davevoyles/docker-stack")
 
         # Post the parent thread message and use its ts as the thread anchor.
         try:
             parent = await client.chat_postMessage(
                 channel=channel_id,
-                text=f"🤖 <@{user_id}> opened a Copilot session\n_prompt:_ `{text[:300]}`\n_reply in this thread to continue_",
+                text=(
+                    f"🤖 <@{user_id}> opened a {_copilot_backend_label()} session\n"
+                    f"_prompt:_ `{prompt_text[:300]}`\n"
+                    f"_cwd:_ `{dir_label}`\n"
+                    f"_backend:_ `{backend}`\n"
+                    "_reply in this thread to continue_"
+                ),
             )
             thread_ts = parent.get("ts") or parent.get("message", {}).get("ts") or ""
         except Exception as exc:  # noqa: BLE001
@@ -5124,12 +5622,21 @@ def _register_integration_handlers(app: Any) -> None:
 
         async def _bg() -> None:
             try:
-                record, err = await mgr.start_session(
-                    slack_user=user_id,
-                    slack_channel=channel_id,
-                    slack_thread_ts=thread_ts,
-                    initial_prompt=text,
-                )
+                if backend == "hermes":
+                    record, err = await _start_hermes_session(
+                        slack_user=user_id,
+                        slack_channel=channel_id,
+                        slack_thread_ts=thread_ts,
+                        cwd=cwd_override,
+                    )
+                else:
+                    record, err = await mgr.start_session(
+                        slack_user=user_id,
+                        slack_channel=channel_id,
+                        slack_thread_ts=thread_ts,
+                        initial_prompt=prompt_text,
+                        cwd=cwd_override,
+                    )
             except Exception as exc:  # noqa: BLE001
                 log.warning("/copilot start_session crashed: %s", exc)
                 try:
@@ -5155,13 +5662,24 @@ def _register_integration_handlers(app: Any) -> None:
                 await client.chat_postMessage(
                     channel=channel_id, thread_ts=thread_ts,
                     text=(
-                        f"✅ session `{record.session_id}` open — "
+                        f"✅ session `{record.session_id}` open via `{backend}` — "
                         f"`/copilot-end {record.session_id}` to close, "
-                        f"`/copilot-cancel {record.session_id}` to Ctrl-C the current turn"
+                        f"`/copilot-cancel {record.session_id}` to stop the current turn"
                     ),
                 )
             except Exception:  # noqa: BLE001
                 pass
+
+            if backend == "hermes":
+                err = await _run_hermes_turn(record, prompt_text)
+                if err:
+                    try:
+                        await client.chat_postMessage(
+                            channel=channel_id, thread_ts=thread_ts,
+                            text=f"❌ {err}",
+                        )
+                    except Exception:  # noqa: BLE001
+                        pass
 
         asyncio.create_task(_bg())
 
@@ -5188,10 +5706,11 @@ def _register_integration_handlers(app: Any) -> None:
             return
         lines = ["🧵 *Your Copilot sessions:*"]
         for r in rows:
-            live = "🟢" if mgr.is_live(r.session_id) else ("💀" if r.status == "crashed" else "⚫")
+            live = "🟢" if _session_is_live(mgr, r.session_id) else ("💀" if r.status == "crashed" else "⚫")
             age = int(time.time() - r.started_at)
+            backend_label = "hermes" if _is_hermes_session(r) else "ssh"
             lines.append(
-                f"{live} `{r.session_id}` — {r.status} — turns:{r.turns} — age:{age}s — "
+                f"{live} `{r.session_id}` — {backend_label} — {r.status} — turns:{r.turns} — age:{age}s — "
                 f"thread:<#{r.slack_channel}>"
             )
         await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines))
@@ -5213,11 +5732,18 @@ def _register_integration_handlers(app: Any) -> None:
         if mgr is None:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text="❌ host_bridge unavailable")
             return
-        err = await mgr.cancel(sid, slack_user=user_id)
+        rec = mgr.get_record(sid)
+        if rec is None:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="❌ session not found")
+            return
+        if _is_hermes_session(rec):
+            err = await _cancel_hermes_session(rec, slack_user=user_id)
+        else:
+            err = await mgr.cancel(sid, slack_user=user_id)
         if err:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ {err}")
         else:
-            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"⏹ SIGINT sent to `{sid}`")
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"⏹ stop signal sent to `{sid}`")
 
     @app.command("/copilot-end")
     async def handle_slash_copilot_end(ack: Any, body: dict[str, Any], client: Any) -> None:
@@ -5236,7 +5762,14 @@ def _register_integration_handlers(app: Any) -> None:
         if mgr is None:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text="❌ host_bridge unavailable")
             return
-        err = await mgr.end(sid, slack_user=user_id, reason="user_ended")
+        rec = mgr.get_record(sid)
+        if rec is None:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="❌ session not found")
+            return
+        if _is_hermes_session(rec):
+            err = await _end_hermes_session(mgr, rec, slack_user=user_id)
+        else:
+            err = await mgr.end(sid, slack_user=user_id, reason="user_ended")
         if err:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ {err}")
         else:
@@ -5265,17 +5798,109 @@ def _register_integration_handlers(app: Any) -> None:
             return
         age = int(time.time() - rec.started_at)
         idle = int(time.time() - rec.last_activity)
-        live = "🟢 live" if mgr.is_live(sid) else f"⚫ {rec.status}"
+        backend_label = "hermes" if _is_hermes_session(rec) else "ssh"
+        live = "🟢 live" if _session_is_live(mgr, sid) else f"⚫ {rec.status}"
         await client.chat_postEphemeral(
             channel=channel_id, user=user_id,
             text=(
                 f"📎 session `{sid}` — {live}\n"
+                f"• backend: `{backend_label}`\n"
                 f"• channel: <#{rec.slack_channel}> (thread `{rec.slack_thread_ts}`)\n"
                 f"• cwd: `{rec.cwd}` • turns: {rec.turns}\n"
                 f"• started: {age}s ago • idle: {idle}s\n"
                 f"• transcript: `{rec.transcript_path}`"
             ),
         )
+
+    # ------------------------------------------------------------------
+    # /copilot-recap — summarise a session transcript via Gemini
+    # ------------------------------------------------------------------
+
+    @app.command("/copilot-recap")
+    async def handle_slash_copilot_recap(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", user_id)
+        sid = (body.get("text") or "").strip().split()[0] if (body.get("text") or "").strip() else ""
+        ok, msg = _copilot_owner_check(user_id)
+        if not ok:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg or "🛑 forbidden")
+            return
+        if not sid:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="usage: `/copilot-recap <session_id>`")
+            return
+
+        # Locate transcript file — try manager first, fall back to audit dir glob.
+        transcript_text: str | None = None
+        transcript_path: str | None = None
+        mgr = await _ensure_session_manager()
+        if mgr is not None:
+            rec = mgr.get_record(sid)
+            if rec and rec.transcript_path:
+                transcript_path = rec.transcript_path
+        if transcript_path is None:
+            import glob as _glob
+            audit_dir = os.path.join(os.path.dirname(__file__), "..", "..", "data", "audit", "host_bridge")
+            matches = _glob.glob(os.path.join(audit_dir, f"*{sid}*"))
+            if matches:
+                transcript_path = sorted(matches)[-1]
+        if transcript_path and os.path.exists(transcript_path):
+            try:
+                with open(transcript_path) as fh:
+                    transcript_text = fh.read()
+            except OSError:
+                pass
+
+        if not transcript_text:
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id,
+                text=f"❌ No transcript found for session `{sid}`. Is the session ID correct?",
+            )
+            return
+
+        await client.chat_postEphemeral(
+            channel=channel_id, user=user_id,
+            text=f"⏳ Generating recap for session `{sid}`…",
+        )
+
+        recap_prompt = (
+            "You are summarising a GitHub Copilot CLI session transcript. "
+            "Produce a concise, structured recap with these sections:\n"
+            "1. **Goal** — what the user asked Copilot to do\n"
+            "2. **Actions** — key steps Copilot took (tools used, commands run)\n"
+            "3. **Files changed** — list any files created or modified (paths)\n"
+            "4. **Outcome** — what was accomplished or left unfinished\n\n"
+            "Keep it brief (< 300 words). Here is the transcript:\n\n"
+            f"{transcript_text[:12000]}"
+        )
+        try:
+            from ask_orchestrator import ask_question  # type: ignore[import]
+            recap = await ask_question(recap_prompt, model_pref="gemini")
+        except Exception as exc:  # noqa: BLE001
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id, text=f"❌ recap generation failed: `{exc}`",
+            )
+            return
+
+        # Post to the session thread if we have it, otherwise as ephemeral.
+        thread_ts_for_recap = None
+        if mgr is not None:
+            rec = mgr.get_record(sid)
+            if rec:
+                thread_ts_for_recap = rec.slack_thread_ts
+        try:
+            if thread_ts_for_recap:
+                await client.chat_postMessage(
+                    channel=channel_id, thread_ts=thread_ts_for_recap,
+                    text=f"📋 *Session recap — `{sid}`*\n\n{recap}",
+                )
+            else:
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id,
+                    text=f"📋 *Session recap — `{sid}`*\n\n{recap}",
+                )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("/copilot-recap post failed: %s", exc)
 
     # ------------------------------------------------------------------
     # Phase 5 — /host quick-action shortcuts
@@ -5571,6 +6196,43 @@ def _register_integration_handlers(app: Any) -> None:
             user=user_id,
             text=f"❓ Unknown subcommand `{sub}`. Try `/incident help`.",
         )
+
+    # ------------------------------------------------------------------
+    # /nas-share <path>
+    # ------------------------------------------------------------------
+    @app.command("/nas-share")
+    async def handle_nas_share(ack: Any, command: dict, client: Any) -> None:
+        """Generate a Synology share link for a file or folder on the NAS."""
+        await ack()
+        user_id = command.get("user_id", "")
+        channel_id = command.get("channel_id", "")
+        path = (command.get("text") or "").strip()
+
+        if not path:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=(
+                    "Usage: `/nas-share <path>`\n"
+                    "Example: `/nas-share /Volumes/ROMs/ROMs/Sega - Saturn/shmups.md`\n"
+                    "Also accepts NAS FileStation paths: `/nas-share /ROMs/...`"
+                ),
+            )
+            return
+
+        try:
+            from nas import nas_create_share_link
+            result = await nas_create_share_link(path)
+        except Exception as exc:
+            log.warning("/nas-share failed: %s", exc)
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=f"❌ Error generating share link: {exc}",
+            )
+            return
+
+        await client.chat_postMessage(channel=channel_id, text=result, mrkdwn=True)
 
 
 def _register_action_handlers(app: Any) -> None:
@@ -5944,8 +6606,15 @@ async def create_slack_handler() -> Any | None:  # type: ignore[return]
     except Exception as exc:
         log.warning("Could not resolve Slack bot user ID: %s", exc)
 
+    # Replay any DMs that arrived while the bot was offline or reconnecting.
+    asyncio.create_task(_catchup_missed_dms(app.client))
+
     handler = AsyncSocketModeHandler(app, SLACK_APP_TOKEN)
     log.info("Slack Socket Mode handler created")
+
+    # Hook into connect_to_new_endpoint (called only on reconnects, not initial connect)
+    # to send a DM notification and replay any missed messages after each WS drop.
+    _install_ws_reconnect_hook(handler, app.client)
 
     # Start proactive file-alert loop (works whether bot is started via
     # start_slack_bot() or the main Discord bot's create_slack_handler()).
@@ -6071,7 +6740,28 @@ async def _start_health_server() -> None:
         log.warning("Dashboard unavailable: %s", _exc)
 
     port = int(os.getenv("HEALTH_PORT", "8765"))
-    runner = web.AppRunner(app)
+
+    # Suppress INFO log noise from high-frequency polling endpoints.
+    class _QuietAccessLogger(aiohttp.abc.AbstractAccessLogger):
+        _QUIET_PATHS = frozenset({"/health", "/", "/api/agent/sessions", "/api/copilot/sessions", "/api/hermes/status", "/api/hermes/memory-seed", "/api/hermes/skills-seed", "/install-hermes"})
+
+        def log(self, request: Any, response: Any, time: float) -> None:
+            if response.status == 200 and request.path in self._QUIET_PATHS:
+                logging.getLogger("aiohttp.access").debug(
+                    '%s "%s %s" %d', request.remote, request.method, request.path, response.status
+                )
+            else:
+                logging.getLogger("aiohttp.access").info(
+                    '%s [%s] "%s %s HTTP/%s" %d',
+                    request.remote,
+                    request.headers.get("Date", "-"),
+                    request.method,
+                    request.path,
+                    f"{request.version.major}.{request.version.minor}",
+                    response.status,
+                )
+
+    runner = web.AppRunner(app, access_log_class=_QuietAccessLogger)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()

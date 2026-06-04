@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.metadata
 import json
 import math
 import platform
 import re
 import time
+import uuid
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -928,7 +930,7 @@ def _list_serialized_plans(
 
 async def api_approvals_handler(request: web.Request) -> web.Response:
     """List pending and recent approval requests for dashboard tables."""
-    from approvals import approval_store
+    from approval_store import approval_store
 
     limit_raw = request.query.get("limit", "40")
     try:
@@ -953,7 +955,7 @@ async def api_approvals_handler(request: web.Request) -> web.Response:
 
 async def api_approval_decision_handler(request: web.Request) -> web.Response:
     """Resolve a pending approval request from dashboard actions."""
-    from approvals import approval_store
+    from approval_store import approval_store
 
     request_id = str(request.match_info.get("request_id", "")).strip()
     if not request_id:
@@ -1948,7 +1950,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
         "guilds": len(bot.guilds) if bot else 0,
         "latency_ms": round(bot.latency * 1000, 1) if bot and bot.latency else 0,
         "python": platform.python_version(),
-        "discord_py": "n/a (Slack interface)",
+        "slack_sdk": importlib.metadata.version("slack_sdk"),
         "search_provider": "Perplexity AI"
         if app_cfg.perplexity_api_key
         else ("Firecrawl" if app_cfg.firecrawl_api_key else ("Tavily" if app_cfg.tavily_api_key else "DuckDuckGo")),
@@ -3197,6 +3199,606 @@ async def api_agent_ask_stream_handler(request: web.Request) -> web.StreamRespon
     return resp
 
 
+
+# ---------------------------------------------------------------------------
+# OpenAI-compatible API  (/v1/models  +  /v1/chat/completions)
+# These endpoints let Open WebUI (or any OpenAI SDK client) talk to OpenClaw.
+# ---------------------------------------------------------------------------
+
+# Models exposed to Open WebUI — matches the model_pref values accepted by
+# api_agent_ask_handler.
+_OAI_MODELS = [
+    {"id": "auto",      "label": "OpenClaw Auto"},
+    {"id": "gemini",    "label": "Gemini"},
+    {"id": "openai",    "label": "OpenAI"},
+    {"id": "anthropic", "label": "Anthropic / Claude"},
+    {"id": "local",     "label": "Local (Ollama)"},
+    {"id": "copilot",   "label": "Copilot CLI (SSH)"},
+    {"id": "shell",     "label": "Mac Mini Shell (bash)"},
+]
+
+import os as _os
+
+# Regex to strip the "_via Model Name_" attribution footer OpenClaw appends to
+# LLM responses.  It's useful in Slack/dashboard but is noise in Open WebUI.
+_VIA_FOOTER_RE = re.compile(r"\n_via [^\n]+_[ \t]*$", re.MULTILINE)
+
+# Copilot CLI emits terminal status bar lines at the end of every run (even with
+# TERM=dumb).  These are noise in Open WebUI and should be filtered from /v1 output.
+_COPILOT_NOISE_RE = re.compile(
+    r"^(Changes\s+[+-]\d|AI Credits\s+\d|Tokens\s+[↑↓]|"
+    r"Duration\s+\d|\u25cf\s*(Load|Loading)|❯\s*$)",
+    re.IGNORECASE,
+)
+
+# Lines that indicate Copilot is using a tool — extracted and emitted as ⚙️ progress.
+_COPILOT_TOOL_RE = re.compile(
+    r"^\s*[●•✦✶◆▸→⚡]\s*"
+    r"(?:Using tool|Running tool|Executing|Tool call|Calling tool|Running):\s*(.+)$",
+    re.IGNORECASE,
+)
+# Also match lines like "  bash" or "  read_file" that are bare tool names after a tool-use header.
+_COPILOT_TOOL_NAME_RE = re.compile(
+    r"^\s*(bash|python|read_file|write_file|search_files?|run_shell|share_file|"
+    r"list_dir|grep|glob|web_search|web_fetch|get_file|create_file|edit_file)\s*$",
+    re.IGNORECASE,
+)
+
+
+def _is_copilot_noise_line(line: str) -> bool:
+    stripped = line.strip()
+    return bool(_COPILOT_NOISE_RE.match(stripped)) or not stripped
+
+
+def _copilot_tool_label(line: str) -> str | None:
+    """Return a short ⚙️ label if the line describes tool usage, else None."""
+    stripped = line.strip()
+    m = _COPILOT_TOOL_RE.match(stripped)
+    if m:
+        return f"⚙️ tool: {m.group(1).strip()}"
+    if _COPILOT_TOOL_NAME_RE.match(stripped):
+        return f"⚙️ tool: {stripped}"
+    return None
+
+
+
+# ---------------------------------------------------------------------------
+# NAS path detection — auto-generate share links for file paths in responses
+# ---------------------------------------------------------------------------
+_NAS_PATH_RE = re.compile(
+    r"(/(?:Volumes/ROMs|ROMs)/[^\s\n\"'`\)>]+\.[a-zA-Z0-9]{1,6})",
+)
+
+
+def _extract_nas_paths(text: str) -> list[str]:
+    """Return unique NAS file paths found in *text* (deduplicated, order-preserved)."""
+    seen: set[str] = set()
+    result: list[str] = []
+    for m in _NAS_PATH_RE.finditer(text):
+        p = m.group(1).rstrip(".,;:")
+        if p not in seen:
+            seen.add(p)
+            result.append(p)
+    return result
+
+
+async def _try_share_links(text: str) -> str:
+    """Scan *text* for NAS file paths and return a formatted share-links block.
+
+    Returns an empty string if no paths are found or all share-link attempts fail.
+    Silently swallows errors so callers never need to handle exceptions.
+    """
+    paths = _extract_nas_paths(text)
+    if not paths:
+        return ""
+    try:
+        from nas import nas_create_share_link
+    except ImportError:
+        return ""
+    lines: list[str] = []
+    for p in paths[:5]:  # cap at 5 to avoid flooding
+        try:
+            result = await nas_create_share_link(p)
+            if not result.startswith("❌"):
+                lines.append(result)
+        except Exception:
+            pass
+    if not lines:
+        return ""
+    return "\n\n---\n" + "\n".join(lines)
+
+
+def _v1_auth_ok(request: web.Request) -> bool:
+    """Return True if the request carries a valid /v1 API key.
+
+    Accepts the key via ``Authorization: Bearer <key>`` header.
+    If ``OPENCLAW_V1_API_KEY`` is not set (or empty) the check is skipped
+    and all requests are allowed, preserving backward compatibility.
+    """
+    expected = _os.environ.get("OPENCLAW_V1_API_KEY", "").strip()
+    if not expected:
+        return True
+    auth = request.headers.get("Authorization", "")
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip() == expected
+    # Also accept as query param for curl-friendly testing
+    return request.rel_url.query.get("api_key", "") == expected
+
+
+async def api_v1_models_handler(request: web.Request) -> web.Response:
+    """GET /v1/models — OpenAI-compatible model list for Open WebUI."""
+    if not _v1_auth_ok(request):
+        return web.json_response(
+            {"error": {"message": "Invalid API key", "type": "invalid_request_error", "code": "invalid_api_key"}},
+            status=401,
+        )
+    created = 1700000000
+    data = [
+        {
+            "id": m["id"],
+            "object": "model",
+            "created": created,
+            "owned_by": "openclaw",
+            "name": m["label"],
+        }
+        for m in _OAI_MODELS
+    ]
+    return web.json_response({"object": "list", "data": data})
+
+
+async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
+    """POST /v1/chat/completions — OpenAI-compatible chat endpoint for Open WebUI.
+
+    Maps OpenAI ``messages`` format onto OpenClaw's prompt/history model.
+    Supports both non-streaming (default) and streaming (``stream: true``)
+    responses.  Streaming emits OpenAI-format SSE delta chunks.
+    """
+    if not _v1_auth_ok(request):
+        return web.json_response(
+            {"error": {"message": "Invalid API key", "type": "invalid_request_error", "code": "invalid_api_key"}},
+            status=401,
+        )
+
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return web.json_response({"error": {"message": "Invalid JSON", "type": "invalid_request_error"}}, status=400)
+
+    messages: list[dict] = body.get("messages") or []
+    model_pref: str = str(body.get("model") or "auto").strip()
+    do_stream: bool = bool(body.get("stream", False))
+
+    if not messages:
+        return web.json_response(
+            {"error": {"message": "messages is required", "type": "invalid_request_error"}},
+            status=400,
+        )
+
+    # Estimate prompt token count before we transform messages (rough approximation).
+    prompt_tokens_est = len(json.dumps(messages).encode("utf-8")) // 4
+
+    # Extract the last user message as the prompt; everything before is history.
+    prompt = ""
+    history: list[dict] = []
+    for msg in messages:
+        role = msg.get("role", "")
+        content = str(msg.get("content") or "").strip()
+        if role == "user":
+            if prompt:
+                history.append({"role": "user", "content": prompt})
+            prompt = content
+        elif role in ("assistant", "model"):
+            history.append({"role": "model", "content": content})
+        elif role == "system":
+            history.append({"role": "user", "content": f"[system] {content}"})
+            history.append({"role": "model", "content": "Understood."})
+
+    if not prompt:
+        return web.json_response(
+            {"error": {"message": "No user message found in messages array", "type": "invalid_request_error"}},
+            status=400,
+        )
+
+    completion_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
+    created_ts = int(time.time())
+
+    # ------------------------------------------------------------------
+    # Copilot CLI path — route directly to SSH bridge (skips LLM dispatch)
+    # ------------------------------------------------------------------
+    if model_pref == "copilot":
+        try:
+            from host_bridge import run_copilot, run_copilot_stream
+        except ImportError as exc:
+            return web.json_response(
+                {"error": {"message": f"host_bridge unavailable: {exc}", "type": "server_error"}},
+                status=500,
+            )
+
+        # Inject Mac Mini system context so Copilot CLI knows the local environment.
+        _bridge_workdir = _os.environ.get("OPENCLAW_HOST_BRIDGE_WORKDIR", "/Users/davevoyles/docker-stack")
+        context_lines = [
+            "[System context — Mac Mini environment]",
+            "Host: Mac Mini M4 (macOS), user: davevoyles",
+            f"Working directory: {_bridge_workdir}",
+            "",
+            "## NAS access (Synology DS920+, IP 192.168.1.8)",
+            "SMB shares mounted on Mac Mini:",
+            "  /Users/davevoyles/mnt/ROMs          — ROMs library (NAS /volume1/ROMs)",
+            "  /Users/davevoyles/mnt/PlexMediaServer — Plex media (NAS /volume1/PlexMediaServer)",
+            "  /Users/davevoyles/mnt/Misc           — Misc/comics (NAS /volume1/Misc)",
+            "  /Volumes/ROMs                        — same ROMs share via Finder mount (alias)",
+            "SSH to NAS:  ssh -p 24 dave@192.168.1.8 '<command>'",
+            "NAS files live at /volume1/<share> when accessed over SSH.",
+            "Example: find ROMs on NAS via SSH: ssh -p 24 dave@192.168.1.8 'ls /volume1/ROMs/ROMs/'",
+            "DSM web API: https://192.168.1.8:5001  (TLS verify=false)",
+            "Public NAS URL: https://davevoyles.synology.me:5001",
+            "",
+            "## ROMs library path map",
+            "Mac Mini path:  /Users/davevoyles/mnt/ROMs/ROMs/<system>/",
+            "NAS SSH path:   /volume1/ROMs/ROMs/<system>/",
+            "Systems include: Sega - Saturn, Sega - Genesis, Nintendo - NES, Sony - PlayStation, etc.",
+            "",
+            "## Other paths",
+            "AI files: /Users/davevoyles/ai-files",
+            "OpenClaw repo: /Users/davevoyles/openclaw",
+            "Docker stack:  /Users/davevoyles/docker-stack",
+            "",
+            "## Instruction files — read these for the relevant task type",
+            "Base execution rules (always apply):    /Users/davevoyles/openclaw/.github/copilot-instructions.md",
+            "Fleet/multi-agent orchestration rules:  /Users/davevoyles/openclaw/.github/agents/autonomous-fleet-agent.md",
+            "OpenClaw context entrypoint (load first for openclaw tasks): /Users/davevoyles/openclaw/.github/docs/README.md",
+            "Docker-stack agent guide (load for infra/Docker/NAS tasks):  /Users/davevoyles/docker-stack/docs/AGENT-GUIDE.md",
+            "NAS access quick-reference:             /Users/davevoyles/openclaw/.github/docs/NAS-ACCESS.md",
+            "",
+            "## Preferred approach for NAS file tasks",
+            "1. Read/list files: use the SMB mount at /Users/davevoyles/mnt/ROMs/ directly.",
+            "2. Run NAS-side commands (Docker, DSM): ssh -p 24 dave@192.168.1.8 '<cmd>'",
+            "3. Create share links: POST https://openclaw.davevoyles.synology.me/tools/share_file",
+            "   with JSON body: {\"path\": \"/Users/davevoyles/mnt/ROMs/ROMs/<system>/<file>\"}",
+            "",
+        ]
+        prompt = "\n".join(context_lines) + prompt
+
+        # Prepend conversation history so Copilot CLI has context for multi-turn chats.
+        if history:
+            history_lines = ["[Conversation history]"]
+            for turn in history:
+                role_label = "User" if turn.get("role") == "user" else "Assistant"
+                history_lines.append(f"{role_label}: {turn.get('content', '').strip()}")
+            history_lines.append("")  # blank line separator
+            prompt = "\n".join(history_lines) + f"Current question: {prompt}"
+
+        if do_stream:
+            stream_resp = web.StreamResponse(
+                status=200,
+                headers={
+                    "Content-Type": "text/event-stream",
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
+            await stream_resp.prepare(request)
+
+            role_chunk = {
+                "id": completion_id, "object": "chat.completion.chunk",
+                "created": created_ts, "model": "copilot-cli",
+                "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}],
+            }
+            await stream_resp.write(f"data: {json.dumps(role_chunk)}\n\n".encode())
+
+            _accumulated_copilot: list[str] = []
+            try:
+                async for event in run_copilot_stream(prompt=prompt, slack_user_id="open-webui"):
+                    if event.get("type") in ("chunk", "stderr"):
+                        text = event.get("text", "")
+                        if _is_copilot_noise_line(text):
+                            continue
+                        tool_label = _copilot_tool_label(text)
+                        if tool_label:
+                            # Emit as a special tool-progress chunk so the dashboard can style it.
+                            progress_chunk = {
+                                "id": completion_id, "object": "chat.completion.chunk",
+                                "created": created_ts, "model": "copilot-cli",
+                                "choices": [{"index": 0, "delta": {"content": tool_label + "\n"}, "finish_reason": None}],
+                                "x_tool_progress": True,
+                            }
+                            await stream_resp.write(f"data: {json.dumps(progress_chunk)}\n\n".encode())
+                            continue
+                        _accumulated_copilot.append(text)
+                        chunk = {
+                            "id": completion_id, "object": "chat.completion.chunk",
+                            "created": created_ts, "model": "copilot-cli",
+                            "choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}],
+                        }
+                        await stream_resp.write(f"data: {json.dumps(chunk)}\n\n".encode())
+                    elif event.get("type") == "error":
+                        err_text = f"\n⚠️ Copilot error: {event.get('error', 'Unknown error')}"
+                        err_chunk = {
+                            "id": completion_id, "object": "chat.completion.chunk",
+                            "created": created_ts, "model": "copilot-cli",
+                            "choices": [{"index": 0, "delta": {"content": err_text}, "finish_reason": "stop"}],
+                        }
+                        await stream_resp.write(f"data: {json.dumps(err_chunk)}\n\n".encode())
+            except Exception as exc:
+                log.error("api_v1_chat_completions_handler copilot stream error: %s", exc)
+                err_chunk = {
+                    "id": completion_id, "object": "chat.completion.chunk",
+                    "created": created_ts, "model": "copilot-cli",
+                    "choices": [{"index": 0, "delta": {"content": f"\n[error: {exc}]"}, "finish_reason": "stop"}],
+                }
+                await stream_resp.write(f"data: {json.dumps(err_chunk)}\n\n".encode())
+
+            share_suffix = await _try_share_links("".join(_accumulated_copilot))
+            if share_suffix:
+                share_chunk = {
+                    "id": completion_id, "object": "chat.completion.chunk",
+                    "created": created_ts, "model": "copilot-cli",
+                    "choices": [{"index": 0, "delta": {"content": share_suffix}, "finish_reason": None}],
+                }
+                await stream_resp.write(f"data: {json.dumps(share_chunk)}\n\n".encode())
+
+            stop_chunk = {
+                "id": completion_id, "object": "chat.completion.chunk",
+                "created": created_ts, "model": "copilot-cli",
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+            }
+            await stream_resp.write(f"data: {json.dumps(stop_chunk)}\n\n".encode())
+            await stream_resp.write(b"data: [DONE]\n\n")
+            await stream_resp.write_eof()
+            return stream_resp
+
+        # Non-streaming copilot path
+        try:
+            bridge_result = await run_copilot(prompt=prompt, slack_user_id="open-webui")
+        except Exception as exc:
+            log.error("api_v1_chat_completions_handler copilot run error: %s", exc)
+            return web.json_response(
+                {"error": {"message": str(exc), "type": "server_error"}}, status=500
+            )
+        if bridge_result.error:
+            # Return error as an assistant message so Open WebUI displays it inline.
+            copilot_text = f"⚠️ Copilot error: {bridge_result.error}"
+        else:
+            copilot_text = "\n".join(
+                line for line in (bridge_result.stdout or "").splitlines()
+                if not _is_copilot_noise_line(line)
+            ).strip()
+        copilot_text += await _try_share_links(copilot_text)
+        completion_tokens_est = len(copilot_text.encode()) // 4
+        return web.json_response({
+            "id": completion_id, "object": "chat.completion", "created": created_ts,
+            "model": "copilot-cli",
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": copilot_text}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": prompt_tokens_est, "completion_tokens": completion_tokens_est, "total_tokens": prompt_tokens_est + completion_tokens_est},
+        })
+
+    # ------------------------------------------------------------------
+    # Shell model path — run raw bash command on Mac Mini via SSH bridge
+    # ------------------------------------------------------------------
+    if model_pref == "shell":
+        try:
+            from host_bridge import run_shell, run_shell_stream
+        except ImportError as exc:
+            return web.json_response(
+                {"error": {"message": f"host_bridge unavailable: {exc}", "type": "server_error"}},
+                status=500,
+            )
+
+        if do_stream:
+            stream_resp = web.StreamResponse(
+                status=200,
+                headers={
+                    "Content-Type": "text/event-stream",
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
+            await stream_resp.prepare(request)
+
+            role_chunk = {
+                "id": completion_id, "object": "chat.completion.chunk",
+                "created": created_ts, "model": "shell",
+                "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}],
+            }
+            await stream_resp.write(f"data: {json.dumps(role_chunk)}\n\n".encode())
+
+            _accumulated_shell: list[str] = []
+            try:
+                async for event in run_shell_stream(command=prompt, slack_user_id="open-webui"):
+                    if event.get("type") in ("chunk", "stderr"):
+                        text = event.get("text", "")
+                        _accumulated_shell.append(text)
+                        chunk = {
+                            "id": completion_id, "object": "chat.completion.chunk",
+                            "created": created_ts, "model": "shell",
+                            "choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}],
+                        }
+                        await stream_resp.write(f"data: {json.dumps(chunk)}\n\n".encode())
+                    elif event.get("type") == "error":
+                        err_text = f"\n⚠️ Shell error: {event.get('error', 'Unknown error')}"
+                        err_chunk = {
+                            "id": completion_id, "object": "chat.completion.chunk",
+                            "created": created_ts, "model": "shell",
+                            "choices": [{"index": 0, "delta": {"content": err_text}, "finish_reason": "stop"}],
+                        }
+                        await stream_resp.write(f"data: {json.dumps(err_chunk)}\n\n".encode())
+            except Exception as exc:
+                log.error("api_v1_chat_completions_handler shell stream error: %s", exc)
+                err_chunk = {
+                    "id": completion_id, "object": "chat.completion.chunk",
+                    "created": created_ts, "model": "shell",
+                    "choices": [{"index": 0, "delta": {"content": f"\n[error: {exc}]"}, "finish_reason": "stop"}],
+                }
+                await stream_resp.write(f"data: {json.dumps(err_chunk)}\n\n".encode())
+
+            share_suffix = await _try_share_links("".join(_accumulated_shell))
+            if share_suffix:
+                share_chunk = {
+                    "id": completion_id, "object": "chat.completion.chunk",
+                    "created": created_ts, "model": "shell",
+                    "choices": [{"index": 0, "delta": {"content": share_suffix}, "finish_reason": None}],
+                }
+                await stream_resp.write(f"data: {json.dumps(share_chunk)}\n\n".encode())
+
+            stop_chunk = {
+                "id": completion_id, "object": "chat.completion.chunk",
+                "created": created_ts, "model": "shell",
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+            }
+            await stream_resp.write(f"data: {json.dumps(stop_chunk)}\n\n".encode())
+            await stream_resp.write(b"data: [DONE]\n\n")
+            await stream_resp.write_eof()
+            return stream_resp
+
+        # Non-streaming shell path
+        try:
+            bridge_result = await run_shell(command=prompt, slack_user_id="open-webui")
+        except Exception as exc:
+            log.error("api_v1_chat_completions_handler shell run error: %s", exc)
+            return web.json_response(
+                {"error": {"message": str(exc), "type": "server_error"}}, status=500
+            )
+        if bridge_result.error:
+            shell_text = f"⚠️ Shell error: {bridge_result.error}"
+        else:
+            shell_text = (bridge_result.stdout or "").rstrip()
+            if bridge_result.stderr and not bridge_result.success:
+                shell_text += f"\n\n[stderr]\n{bridge_result.stderr.rstrip()}"
+        shell_text += await _try_share_links(shell_text)
+        completion_tokens_est = len(shell_text.encode()) // 4
+        return web.json_response({
+            "id": completion_id, "object": "chat.completion", "created": created_ts,
+            "model": "shell",
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": shell_text}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": prompt_tokens_est, "completion_tokens": completion_tokens_est, "total_tokens": prompt_tokens_est + completion_tokens_est},
+        })
+
+    # ------------------------------------------------------------------
+    # Streaming path — LLM dispatch via _execute_agent_ask
+    # ------------------------------------------------------------------
+    if do_stream:
+        stream_resp = web.StreamResponse(
+            status=200,
+            headers={
+                "Content-Type": "text/event-stream",
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+        await stream_resp.prepare(request)
+
+        # Buffer to hold the last chunk; lets us strip _via footer before emitting stop.
+        _stream_pending: list[str] = []
+
+        async def _send_chunk(delta_content: str) -> None:
+            # Flush any previously held chunk before buffering the new one.
+            if _stream_pending:
+                prev = _stream_pending.pop()
+                ch = {
+                    "id": completion_id, "object": "chat.completion.chunk",
+                    "created": created_ts, "model": model_pref,
+                    "choices": [{"index": 0, "delta": {"content": prev}, "finish_reason": None}],
+                }
+                await stream_resp.write(f"data: {json.dumps(ch)}\n\n".encode())
+            _stream_pending.append(delta_content)
+
+        # First chunk carries role
+        role_chunk = {
+            "id": completion_id,
+            "object": "chat.completion.chunk",
+            "created": created_ts,
+            "model": model_pref,
+            "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}],
+        }
+        await stream_resp.write(f"data: {json.dumps(role_chunk)}\n\n".encode())
+
+        try:
+            await _execute_agent_ask(
+                prompt=prompt,
+                model_pref=model_pref,
+                history=history,
+                user_name="open-webui",
+                on_partial_chunk=_send_chunk,
+            )
+        except Exception as exc:
+            log.error("api_v1_chat_completions_handler (stream) error: %s", exc)
+            err_chunk = {
+                "id": completion_id,
+                "object": "chat.completion.chunk",
+                "created": created_ts,
+                "model": model_pref,
+                "choices": [{"index": 0, "delta": {"content": f"\n[error: {exc}]"}, "finish_reason": "stop"}],
+            }
+            await stream_resp.write(f"data: {json.dumps(err_chunk)}\n\n".encode())
+
+        # Flush final pending chunk with _via footer stripped, then emit stop.
+        if _stream_pending:
+            last = _strip_via_footer(_stream_pending.pop())
+            if last:
+                final_ch = {
+                    "id": completion_id, "object": "chat.completion.chunk",
+                    "created": created_ts, "model": model_pref,
+                    "choices": [{"index": 0, "delta": {"content": last}, "finish_reason": None}],
+                }
+                await stream_resp.write(f"data: {json.dumps(final_ch)}\n\n".encode())
+
+        # Final stop chunk
+        stop_chunk = {
+            "id": completion_id,
+            "object": "chat.completion.chunk",
+            "created": created_ts,
+            "model": model_pref,
+            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+        }
+        await stream_resp.write(f"data: {json.dumps(stop_chunk)}\n\n".encode())
+        await stream_resp.write(b"data: [DONE]\n\n")
+        await stream_resp.write_eof()
+        return stream_resp
+
+    # ------------------------------------------------------------------
+    # Non-streaming path — LLM dispatch
+    # ------------------------------------------------------------------
+    try:
+        result = await _execute_agent_ask(
+            prompt=prompt,
+            model_pref=model_pref,
+            history=history,
+            user_name="open-webui",
+        )
+    except Exception as exc:
+        log.error("api_v1_chat_completions_handler error: %s", exc)
+        return web.json_response(
+            {"error": {"message": str(exc), "type": "server_error"}},
+            status=500,
+        )
+
+    response_text = _strip_via_footer(str(result.get("response") or ""))
+    model_used = str(result.get("model") or model_pref)
+    completion_tokens = int(result.get("tokens") or 0)
+
+    return web.json_response({
+        "id": completion_id,
+        "object": "chat.completion",
+        "created": created_ts,
+        "model": model_used,
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": response_text},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {
+            "prompt_tokens": prompt_tokens_est,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens_est + completion_tokens,
+        },
+    })
+
+
 async def api_recap_generate_handler(request: web.Request) -> web.Response:
     """POST /api/recap/generate — Generate a recap report on demand.
 
@@ -3252,7 +3854,347 @@ async def api_recap_generate_handler(request: web.Request) -> web.Response:
         return web.json_response({"error": str(exc)}, status=500)
 
 
-_ORBSTACK_DOCKER = "/Applications/OrbStack.app/Contents/MacOS/xbin/docker"
+async def api_copilot_ping_handler(request: web.Request) -> web.Response:
+    """POST /api/copilot/ping — Lightweight SSH connectivity test for the host bridge.
+
+    Runs ``echo __ping_ok__`` over SSH (no copilot invocation).  Used by the
+    dashboard status indicator to show whether the bridge is reachable.
+
+    Returns JSON: {"ok": bool, "latency_ms": float|null, "error": str|null}
+    """
+    from host_bridge import ping_bridge
+
+    result = await ping_bridge(timeout_s=8)
+    return web.json_response(result)
+
+
+async def api_copilot_stream_handler(request: web.Request) -> web.StreamResponse:
+    """POST /api/copilot/stream — Stream Copilot CLI output as Server-Sent Events.
+
+    Body (JSON):
+        prompt     (str, required)  — prompt to pass to `copilot -p <prompt>`
+        timeout_s  (int, optional)  — max seconds (default: host_bridge default)
+        workdir    (str, optional)  — working directory on host (overrides OPENCLAW_HOST_BRIDGE_WORKDIR)
+
+    SSE events emitted:
+        event: chunk   data: {"text": str}               — stdout line
+        event: stderr  data: {"text": str}               — stderr line
+        event: done    data: {"success": bool, "duration_s": float, ...}
+        event: error   data: {"error": str}
+    """
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return web.json_response({"error": "Invalid JSON body"}, status=400)
+
+    prompt = (body.get("prompt") or "").strip()
+    if not prompt:
+        return web.json_response({"error": "prompt is required"}, status=400)
+
+    timeout_s: int | None = None
+    raw_timeout = body.get("timeout_s")
+    if raw_timeout is not None:
+        try:
+            timeout_s = int(raw_timeout)
+        except (TypeError, ValueError):
+            pass
+
+    workdir: str | None = (body.get("workdir") or "").strip() or None
+
+    try:
+        from host_bridge import run_copilot_stream
+    except ImportError as exc:
+        return web.json_response({"error": f"host_bridge not available: {exc}"}, status=500)
+
+    resp = web.StreamResponse(
+        status=200,
+        headers={
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+    await resp.prepare(request)
+
+    try:
+        async for event in run_copilot_stream(
+            prompt=prompt,
+            slack_user_id="dashboard-ui",
+            timeout_s=timeout_s,
+            workdir=workdir,
+        ):
+            event_type = event.get("type", "chunk")
+            payload = json.dumps(event, ensure_ascii=False)
+            await resp.write(f"event: {event_type}\ndata: {payload}\n\n".encode("utf-8"))
+    except Exception as exc:
+        log.error("api_copilot_stream_handler error: %s", exc)
+        payload = json.dumps({"error": str(exc)}, ensure_ascii=False)
+        await resp.write(f"event: error\ndata: {payload}\n\n".encode("utf-8"))
+    finally:
+        await resp.write_eof()
+
+    return resp
+
+
+async def api_copilot_run_handler(request: web.Request) -> web.Response:
+    """POST /api/copilot/run — Run a single Copilot CLI prompt on the Mac Mini host.
+
+    Body (JSON):
+        prompt     (str, required)  — the prompt to pass to `copilot -p <prompt>`
+        timeout_s  (int, optional)  — max seconds to wait (default: host_bridge default)
+
+    Returns JSON:
+        response   (str)   — combined stdout (+ stderr on failure)
+        model      (str)   — always "copilot-cli"
+        session_id (str)   — audit session ID
+        duration_s (float) — wall-clock seconds
+        success    (bool)  — whether the command exited cleanly
+    """
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return web.json_response({"error": "Invalid JSON body"}, status=400)
+
+    prompt = (body.get("prompt") or "").strip()
+    if not prompt:
+        return web.json_response({"error": "prompt is required"}, status=400)
+
+    timeout_s: int | None = None
+    raw_timeout = body.get("timeout_s")
+    if raw_timeout is not None:
+        try:
+            timeout_s = int(raw_timeout)
+        except (TypeError, ValueError):
+            pass
+
+    try:
+        from host_bridge import run_copilot
+    except ImportError as exc:
+        return web.json_response({"error": f"host_bridge not available: {exc}"}, status=500)
+
+    result = await run_copilot(
+        prompt=prompt,
+        slack_user_id="dashboard-ui",
+        timeout_s=timeout_s,
+    )
+
+    if result.error:
+        return web.json_response(
+            {
+                "error": result.error,
+                "response": result.error,
+                "model": "copilot-cli",
+                "session_id": result.session_id,
+                "duration_s": result.duration_s,
+                "success": False,
+            },
+            status=200,  # surface error in the UI rather than as HTTP error
+        )
+
+    response_text = result.stdout or ""
+    if result.stderr and not result.success:
+        response_text = f"{response_text}\n\n[stderr]\n{result.stderr}".strip()
+
+    return web.json_response(
+        {
+            "response": response_text,
+            "model": "copilot-cli",
+            "session_id": result.session_id,
+            "duration_s": round(result.duration_s, 2),
+            "success": result.success,
+        }
+    )
+
+
+async def api_copilot_sessions_handler(request: web.Request) -> web.Response:
+    """GET /api/copilot/sessions — List active Copilot CLI sessions."""
+    import time as _time
+    try:
+        from host_bridge import get_session_manager
+    except ImportError:
+        return web.json_response({"sessions": [], "error": "host_bridge unavailable"})
+
+    mgr = get_session_manager()
+    sessions = []
+    for rec in mgr.list_sessions():
+        sessions.append({
+            "session_id": rec.session_id,
+            "slack_user": rec.slack_user,
+            "cwd": getattr(rec, "cwd", ""),
+            "status": rec.status,
+            "turns": getattr(rec, "turns", 0),
+            "started_at": getattr(rec, "started_at", 0),
+            "last_activity": getattr(rec, "last_activity", 0),
+            "age_s": int(_time.time() - getattr(rec, "started_at", _time.time())),
+            "idle_s": int(_time.time() - getattr(rec, "last_activity", _time.time())),
+            "live": mgr.is_live(rec.session_id),
+        })
+    return web.json_response({"sessions": sessions})
+
+
+async def api_hermes_status_handler(request: web.Request) -> web.Response:
+    """Return Hermes agent status and stats."""
+    import os
+    import sqlite3
+
+    import yaml
+
+    hermes_home = Path("/Users/davevoyles/.hermes")
+    binary = Path("/Users/davevoyles/.local/bin/hermes")
+    result: dict[str, object] = {"installed": False}
+
+    if not hermes_home.exists() and not binary.exists():
+        return web.json_response({
+            "installed": False,
+            "note": "Hermes runs on host, not in container",
+        })
+
+    try:
+        result["installed"] = binary.exists()
+
+        config_path = hermes_home / "config.yaml"
+        if config_path.exists():
+            cfg = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+            model_cfg = cfg.get("model", {}) if isinstance(cfg, dict) else {}
+            if isinstance(model_cfg, dict):
+                result["model"] = model_cfg.get("default", "unknown")
+                result["provider"] = model_cfg.get("provider", "unknown")
+
+        memories_path = hermes_home / "memories"
+        memory_md = memories_path / "MEMORY.md"
+        user_md = memories_path / "USER.md"
+        result["memory_md_chars"] = len(memory_md.read_text(encoding="utf-8")) if memory_md.exists() else 0
+        result["user_md_chars"] = len(user_md.read_text(encoding="utf-8")) if user_md.exists() else 0
+
+        skills_path = hermes_home / "skills"
+        custom_skill_count = len(list(skills_path.iterdir())) if skills_path.exists() else 0
+        result["skill_count"] = custom_skill_count
+        result["skill_count_label"] = f"{custom_skill_count} custom + 90 bundled"
+
+        state_db = hermes_home / "state.db"
+        result["state_db_exists"] = state_db.exists()
+        if state_db.exists():
+            try:
+                # Use immutable=1 URI so SQLite skips locking (safe on a read-only mount)
+                conn = sqlite3.connect(f"file:{state_db}?immutable=1", uri=True)
+                rows = conn.execute(
+                    "SELECT id, started_at, message_count FROM sessions ORDER BY started_at DESC LIMIT 3"
+                ).fetchall()
+                conn.close()
+                if rows:
+                    result["last_session_id"] = rows[0][0]
+                    result["last_session_at"] = rows[0][1]
+                    result["recent_sessions"] = [
+                        {"id": r[0], "created_at": r[1], "messages": r[2] or 0}
+                        for r in rows
+                    ]
+            except Exception:
+                pass
+
+        result["copilot_backend"] = os.environ.get("COPILOT_BACKEND", "ssh")
+    except Exception as exc:
+        result["error"] = str(exc)
+
+    return web.json_response(result)
+
+
+async def api_hermes_memory_seed_handler(request: web.Request) -> web.Response:
+    """GET /api/hermes/memory-seed — Serve MEMORY.md for new machine installs."""
+    memory_file = Path("/Users/davevoyles/.hermes/memories/MEMORY.md")
+    if not memory_file.exists():
+        return web.Response(text=f"# Hermes Memory — {os.uname().nodename}\n", content_type="text/plain")
+    return web.Response(
+        text=memory_file.read_text(encoding="utf-8"),
+        content_type="text/plain",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+async def api_hermes_skills_seed_handler(request: web.Request) -> web.Response:
+    """GET /api/hermes/skills-seed — Serve custom skills as tar.gz for new machine installs."""
+    import io
+    import tarfile
+
+    skills_path = Path("/Users/davevoyles/.hermes/skills")
+    if not skills_path.exists():
+        return web.Response(status=204, text="no custom skills")
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        for skill_file in skills_path.iterdir():
+            if skill_file.is_file():
+                tar.add(str(skill_file), arcname=skill_file.name)
+    buf.seek(0)
+
+    return web.Response(
+        body=buf.read(),
+        content_type="application/gzip",
+        headers={
+            "Content-Disposition": "attachment; filename=hermes-skills.tar.gz",
+            "Cache-Control": "no-cache",
+        },
+    )
+
+
+async def api_hermes_ask_handler(request: web.Request) -> web.StreamResponse:
+    """POST /api/hermes/ask — Stream a single Hermes query as Server-Sent Events.
+
+    Body (JSON):
+        prompt             (str, required)  — prompt for Hermes
+        hermes_session_id  (str, optional)  — resume a prior Hermes session
+
+    SSE events emitted:
+        event: chunk   data: {"text": str}
+        event: done    data: {"success": bool, "duration_s": float}
+        event: error   data: {"error": str}
+    """
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return web.json_response({"error": "Invalid JSON body"}, status=400)
+
+    prompt = (body.get("prompt") or "").strip()
+    if not prompt:
+        return web.json_response({"error": "prompt is required"}, status=400)
+
+    hermes_session_id: str | None = (body.get("hermes_session_id") or "").strip() or None
+
+    try:
+        from host_bridge import run_hermes_stream
+    except ImportError as exc:
+        return web.json_response({"error": f"host_bridge not available: {exc}"}, status=500)
+
+    resp = web.StreamResponse(
+        status=200,
+        headers={
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+    await resp.prepare(request)
+
+    try:
+        async for event in run_hermes_stream(
+            prompt=prompt,
+            slack_user_id="dashboard-ui",
+            hermes_session_id=hermes_session_id,
+        ):
+            event_type = event.get("type", "chunk")
+            payload = json.dumps(event, ensure_ascii=False)
+            await resp.write(f"event: {event_type}\ndata: {payload}\n\n".encode("utf-8"))
+    except Exception as exc:
+        log.error("api_hermes_ask_handler error: %s", exc)
+        err_payload = json.dumps({"error": str(exc)}, ensure_ascii=False)
+        await resp.write(f"event: error\ndata: {err_payload}\n\n".encode("utf-8"))
+    finally:
+        await resp.write_eof()
+
+    return resp
+
+
 _DOCKER_CONTAINER_RE = re.compile(r"^[a-zA-Z0-9_.\-]{1,128}$")
 
 
@@ -3359,3 +4301,253 @@ async def api_docker_logs_handler(request: web.Request) -> web.Response:
     except OSError as exc:
         log.error("api_docker_logs_handler OSError: %s", exc)
         return web.json_response({"error": str(exc)}, status=500)
+
+
+# ---------------------------------------------------------------------------
+# OpenClaw Tool Server — OpenAPI-compatible endpoints for Open WebUI tool calling
+# ---------------------------------------------------------------------------
+# Configure in Open WebUI: Admin → Tools → Tool Servers → add http://openclaw:8765
+# Works automatically with function-calling models (Claude, GPT-4o).
+# Gemma (no native tool calling) can use the /v1 shell model directly instead.
+# ---------------------------------------------------------------------------
+
+_TOOL_SERVER_SPEC = {
+    "openapi": "3.1.0",
+    "info": {
+        "title": "OpenClaw Tool Server",
+        "version": "1.0.0",
+        "description": "Access Mac Mini files and shell via OpenClaw SSH bridge",
+    },
+    "servers": [{"url": "/tools"}],
+    "paths": {
+        "/search_files": {
+            "post": {
+                "operationId": "search_files",
+                "summary": "Search for files by name pattern on the Mac Mini / NAS",
+                "description": "Runs `find <path> -name '<query>'` on the Mac Mini host. The NAS is mounted at /Volumes/ROMs. Returns up to 50 results.",
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["query"],
+                                "properties": {
+                                    "query": {"type": "string", "description": "File name glob pattern (e.g. '*.md', 'shmups*')"},
+                                    "path": {"type": "string", "description": "Directory to search (default: /)", "default": "/"},
+                                },
+                            }
+                        }
+                    },
+                },
+                "responses": {
+                    "200": {
+                        "description": "Matching file paths",
+                        "content": {"application/json": {"schema": {"type": "object", "properties": {"results": {"type": "string"}}}}},
+                    }
+                },
+            }
+        },
+        "/read_file": {
+            "post": {
+                "operationId": "read_file",
+                "summary": "Read the contents of a file on the Mac Mini / NAS",
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["path"],
+                                "properties": {
+                                    "path": {"type": "string", "description": "Absolute file path to read"},
+                                },
+                            }
+                        }
+                    },
+                },
+                "responses": {
+                    "200": {
+                        "description": "File contents",
+                        "content": {"application/json": {"schema": {"type": "object", "properties": {"content": {"type": "string"}}}}},
+                    }
+                },
+            }
+        },
+        "/share_file": {
+            "post": {
+                "operationId": "share_file",
+                "summary": "Create a Synology share link for a file or folder on the NAS",
+                "description": "Calls the Synology FileStation Sharing API to generate a shareable download URL. Accepts Mac Mini paths (/Volumes/ROMs/...) or NAS FileStation paths (/ROMs/...).",
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["path"],
+                                "properties": {
+                                    "path": {"type": "string", "description": "File or folder path (Mac or NAS format)"},
+                                    "expire_days": {"type": "integer", "description": "Days until link expires (0 = never)", "default": 0},
+                                },
+                            }
+                        }
+                    },
+                },
+                "responses": {
+                    "200": {
+                        "description": "Share link URL",
+                        "content": {"application/json": {"schema": {"type": "object", "properties": {"url": {"type": "string"}, "message": {"type": "string"}}}}},
+                    }
+                },
+            }
+        },
+        "/run_shell": {
+            "post": {
+                "operationId": "run_shell",
+                "summary": "Run a bash command on the Mac Mini host",
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["command"],
+                                "properties": {
+                                    "command": {"type": "string", "description": "Bash command to execute"},
+                                },
+                            }
+                        }
+                    },
+                },
+                "responses": {
+                    "200": {
+                        "description": "Command output",
+                        "content": {"application/json": {"schema": {"type": "object", "properties": {"output": {"type": "string"}}}}},
+                    }
+                },
+            }
+        },
+    },
+}
+
+
+async def api_tools_openapi_handler(request: web.Request) -> web.Response:
+    """GET /tools/openapi.json — OpenAPI 3.1 spec for the OpenClaw Tool Server."""
+    return web.json_response(_TOOL_SERVER_SPEC)
+
+
+async def api_tools_search_files_handler(request: web.Request) -> web.Response:
+    """POST /tools/search_files — find files by name pattern via SSH bridge."""
+    if not _v1_auth_ok(request):
+        return web.json_response({"error": "Unauthorized"}, status=401)
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON body"}, status=400)
+
+    query = (body.get("query") or "").strip()
+    if not query:
+        return web.json_response({"error": "query is required"}, status=400)
+    path = (body.get("path") or "/").strip() or "/"
+
+    import shlex as _shlex
+    command = f"find {_shlex.quote(path)} -name {_shlex.quote(query)} 2>/dev/null | head -50"
+
+    try:
+        from host_bridge import run_shell
+    except ImportError as exc:
+        return web.json_response({"error": f"host_bridge unavailable: {exc}"}, status=500)
+
+    result = await run_shell(command=command, slack_user_id="tool-server")
+    if result.error:
+        return web.json_response({"error": result.error}, status=500)
+    return web.json_response({"results": result.stdout.strip() or "(no results)"})
+
+
+async def api_tools_read_file_handler(request: web.Request) -> web.Response:
+    """POST /tools/read_file — read a file by absolute path via SSH bridge."""
+    if not _v1_auth_ok(request):
+        return web.json_response({"error": "Unauthorized"}, status=401)
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON body"}, status=400)
+
+    path = (body.get("path") or "").strip()
+    if not path:
+        return web.json_response({"error": "path is required"}, status=400)
+
+    import shlex as _shlex
+    command = f"cat {_shlex.quote(path)}"
+
+    try:
+        from host_bridge import run_shell
+    except ImportError as exc:
+        return web.json_response({"error": f"host_bridge unavailable: {exc}"}, status=500)
+
+    result = await run_shell(command=command, slack_user_id="tool-server")
+    if result.error:
+        return web.json_response({"error": result.error}, status=500)
+    if not result.success:
+        return web.json_response({"error": result.stderr or "File not found or permission denied"}, status=404)
+    return web.json_response({"content": result.stdout})
+
+
+async def api_tools_run_shell_handler(request: web.Request) -> web.Response:
+    """POST /tools/run_shell — execute an arbitrary bash command on the Mac Mini."""
+    if not _v1_auth_ok(request):
+        return web.json_response({"error": "Unauthorized"}, status=401)
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON body"}, status=400)
+
+    command = (body.get("command") or "").strip()
+    if not command:
+        return web.json_response({"error": "command is required"}, status=400)
+
+    try:
+        from host_bridge import run_shell
+    except ImportError as exc:
+        return web.json_response({"error": f"host_bridge unavailable: {exc}"}, status=500)
+
+    result = await run_shell(command=command, slack_user_id="tool-server")
+    if result.error:
+        return web.json_response({"error": result.error}, status=500)
+    output = result.stdout or ""
+    if result.stderr:
+        output += f"\n[stderr]\n{result.stderr}"
+    return web.json_response({"output": output.rstrip()})
+
+
+async def api_tools_share_file_handler(request: web.Request) -> web.Response:
+    """POST /tools/share_file — create a Synology share link for a file or folder."""
+    if not _v1_auth_ok(request):
+        return web.json_response({"error": "Unauthorized"}, status=401)
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON body"}, status=400)
+
+    path = (body.get("path") or "").strip()
+    if not path:
+        return web.json_response({"error": "path is required"}, status=400)
+    expire_days = int(body.get("expire_days") or 0)
+
+    try:
+        from nas import nas_create_share_link
+    except ImportError as exc:
+        return web.json_response({"error": f"nas module unavailable: {exc}"}, status=500)
+
+    result_msg = await nas_create_share_link(path, expire_days=expire_days)
+    if result_msg.startswith("❌"):
+        return web.json_response({"error": result_msg}, status=500)
+
+    # Extract the URL from the message for clean JSON response
+    url = ""
+    for part in result_msg.split():
+        if part.startswith("http"):
+            url = part
+            break
+    return web.json_response({"url": url, "message": result_msg})
