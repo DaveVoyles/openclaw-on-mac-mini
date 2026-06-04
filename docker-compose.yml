@@ -90,6 +90,10 @@ services:
       - ${SSH_KEY_PATH:-~/.ssh/id_ed25519}:/home/openclaw/.ssh/id_ed25519:ro
       - ${SSH_KNOWN_HOSTS:-~/.ssh/known_hosts}:/home/openclaw/.ssh/known_hosts:ro
 
+      # Hermes host install (read-only) for dashboard status reporting
+      - /Users/davevoyles/.hermes:/Users/davevoyles/.hermes:rw
+      - /Users/davevoyles/.local/bin/hermes:/Users/davevoyles/.local/bin/hermes:ro
+
       # Audiobook library on NAS (read-only browse access for search queries)
       - /Users/davevoyles/mnt/Misc/audiobooks:/audiobooks:ro
 
@@ -163,8 +167,9 @@ services:
       - WEBUI_AUTH=True
       # Persistent secret key — keeps sessions valid across container restarts
       - WEBUI_SECRET_KEY=***REMOVED***
-      # Disable Ollama (we're using OpenAI-compat only)
-      - ENABLE_OLLAMA_API=False
+      # Ollama — local Gemma model running on Mac Mini at host.docker.internal:11434
+      - ENABLE_OLLAMA_API=True
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
       # Cookie settings for reverse proxy / cross-origin access
       - WEBUI_SESSION_COOKIE_SAME_SITE=lax
       - WEBUI_SESSION_COOKIE_SECURE=False

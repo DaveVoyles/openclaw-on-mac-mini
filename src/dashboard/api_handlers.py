@@ -5135,7 +5135,7 @@ def _check_auth(request: web.Request) -> bool:
 
 async def api_network_ping_handler(request):
     import asyncio
-    import os
+    import socket
 
     if not _check_auth(request):
         return web.Response(status=401, text="Unauthorized")
@@ -5144,27 +5144,27 @@ async def api_network_ping_handler(request):
         "mbp": {"label": "MacBook Pro", "ip": "192.168.1.131"},
         "mbp2": {"label": "MacBook Pro 2", "ip": "192.168.1.136"},
     }
-    if os.environ.get("WOL_MACBOOK_MAC") and "mbp" not in machines:
-        machines["mbp"] = {"label": "MacBook Pro", "ip": "192.168.1.131"}
+
+    async def _tcp_reachable(ip: str, port: int = 22, timeout: float = 2.0) -> bool:
+        """Check if a host is reachable by attempting a TCP connection (SSH port)."""
+        try:
+            _, writer = await asyncio.wait_for(
+                asyncio.open_connection(ip, port), timeout=timeout
+            )
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
+            return True
+        except Exception:
+            return False
 
     results = {}
-    for key, info in machines.items():
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "ping",
-                "-c",
-                "1",
-                "-W",
-                "1",
-                info["ip"],
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            await asyncio.wait_for(proc.wait(), timeout=3.0)
-            online = proc.returncode == 0
-        except Exception:
-            online = False
-        results[key] = {"label": info["label"], "ip": info["ip"], "online": online}
+    checks = {key: _tcp_reachable(info["ip"]) for key, info in machines.items()}
+    for key, coro in checks.items():
+        online = await coro
+        results[key] = {"label": machines[key]["label"], "ip": machines[key]["ip"], "online": online}
 
     return web.Response(
         content_type="application/json",
@@ -5179,7 +5179,8 @@ async def api_hermes_memory_get_handler(request):
         return web.Response(status=401, text="Unauthorized")
 
     file_param = (request.rel_url.query.get("file", "memory") or "memory").strip().lower()
-    path = os.path.expanduser("~/.hermes/SOUL.md" if file_param == "soul" else "~/.hermes/memories/MEMORY.md")
+    hermes_base = "/Users/davevoyles/.hermes"
+    path = f"{hermes_base}/SOUL.md" if file_param == "soul" else f"{hermes_base}/memories/MEMORY.md"
     try:
         with open(path, encoding="utf-8") as f:
             content = f.read()
@@ -5206,7 +5207,8 @@ async def api_hermes_memory_post_handler(request):
         return web.Response(status=401, text="Unauthorized")
 
     file_param = (request.rel_url.query.get("file", "memory") or "memory").strip().lower()
-    path = os.path.expanduser("~/.hermes/SOUL.md" if file_param == "soul" else "~/.hermes/memories/MEMORY.md")
+    hermes_base = "/Users/davevoyles/.hermes"
+    path = f"{hermes_base}/SOUL.md" if file_param == "soul" else f"{hermes_base}/memories/MEMORY.md"
     try:
         data = await request.json()
         content = data.get("content", "")
