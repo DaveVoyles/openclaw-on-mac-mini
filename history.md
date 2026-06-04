@@ -51,3 +51,4 @@
 - 2026-06-04: Phone-first UX wave deployed: voice input, PWA manifest, mobile jump nav, /status /resume /q Slack commands, dashboard cleanup (Discord refs removed, Hermes-first interface guide), 7 test failures fixed → 5875 passed (commit 8344b24)
 - 2026-06-04: Added Tautulli and Sonarr/Radarr dashboard cards plus a `/watching` Slack command; syntax checks passed, Slack registration stayed green, and Tautulli API remained responsive.
 - 2026-06-04: Added Hermes session transcripts to the dashboard plus `/sessions`, `/arr`, and a weekly Hermes digest scheduler; Python AST checks and Slack registration tests passed.
+- 2026-06-04: Wave 4 deployed — Tautulli/Plex card, Sonarr/Radarr queue card, Docker action buttons+logs, system alerts panel, Hermes transcript viewer, weekly digest, /watching /sessions /arr Slack commands (45 total)
