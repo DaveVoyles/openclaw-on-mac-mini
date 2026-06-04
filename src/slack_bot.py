@@ -94,6 +94,15 @@ async def _send_ntfy(title: str, message: str, priority: str = "default") -> Non
         pass
 
 
+def _decode_overseerr_api_key(raw_key: str) -> str:
+    import base64
+
+    try:
+        return base64.b64decode((raw_key or "").strip()).decode()
+    except Exception:
+        return (raw_key or "").strip()
+
+
 async def _plex_get_text(plex_url: str, path: str) -> tuple[int, str]:
     headers: dict[str, str] = {}
     plex_token = (os.getenv("PLEX_TOKEN", "") or "").strip()
@@ -709,13 +718,16 @@ _HELP_TEXT = """
 • `/host <shortcut>` — Run a saved host-bridge shortcut
 • `/incident ...` — Start, inspect, or resolve incidents
 • `/wake mbp|mbp2` — Send a Wake-on-LAN packet
+• `/tailscale` — Show current Tailscale device status
 • `/nas df|ls <path>|free` — Browse NAS status and folders
 • `/nas-share <path>` — Generate a NAS share link
 
 *🎬 Media*
 • `/watching` — See what Plex is playing right now
 • `/plex <status|recent|search|request>` — Check Plex / Overseerr
+• `/request <title>` — Search Overseerr and request media
 • `/arr` — View Sonarr/Radarr queues
+• `/upcoming` — Show Sonarr episodes airing soon
 
 *⚙️ Utilities*
 • `/help` — Show this command list
@@ -3091,6 +3103,7 @@ def _build_home_view(user_id: str, name: str) -> dict:
         "• `/hermes <question>` — always start a Hermes thread\n"
         "• `/h <question>` — shorthand alias for Hermes\n"
         "• `/wake mbp|mbp2` — wake a MacBook Pro on the LAN\n"
+        "• `/tailscale` — view Tailscale device status\n"
         "• `/nas df|ls <path>|free` — inspect NAS storage and files\n"
         "• `/help` — full command list\n"
         "• `/files` — browse your uploaded files\n"
@@ -6664,7 +6677,7 @@ def _register_integration_handlers(app: Any) -> None:
         text = (command.get("text") or "").strip()
         plex_url = (os.getenv("PLEX_URL", "") or "").strip().rstrip("/")
         overseerr_url = (os.getenv("OVERSEERR_URL", "") or "").strip().rstrip("/")
-        overseerr_api_key = (os.getenv("OVERSEERR_API_KEY", "") or "").strip()
+        overseerr_api_key = _decode_overseerr_api_key(os.getenv("OVERSEERR_API_KEY", ""))
 
         if not text:
             subcommand = "status"
@@ -6801,6 +6814,102 @@ def _register_integration_handlers(app: Any) -> None:
         request_suffix = f" (request #{request_id})" if request_id else ""
         await respond(text=f"✅ Requested *{_overseerr_title(match)}* via Overseerr{request_suffix}.")
 
+    @app.command("/request")
+    async def handle_slash_request(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        import aiohttp
+
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", "")
+        query = (body.get("text", "") or "").strip()
+
+        if not query:
+            try:
+                await client.chat_postEphemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="Usage: `/request <movie or TV show title>`\nExample: `/request Toy Story 5`",
+                )
+            except Exception:
+                pass
+            return
+
+        try:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"🔍 Searching for _{query}_…")
+        except Exception:
+            pass
+
+        overseerr_url = os.environ.get("OVERSEERR_URL", "http://localhost:5055")
+        api_key = _decode_overseerr_api_key(os.environ.get("OVERSEERR_API_KEY", ""))
+        headers = {"X-Api-Key": api_key}
+
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.get(
+                    f"{overseerr_url}/api/v1/search",
+                    params={"query": query, "page": 1},
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=6),
+                ) as r:
+                    data = await r.json()
+            results = [item for item in data.get("results", []) if item.get("mediaType") in {"movie", "tv"}][:5]
+            if not results:
+                try:
+                    await client.chat_postEphemeral(
+                        channel=channel_id,
+                        user=user_id,
+                        text=f"❌ No results found for _{query}_",
+                    )
+                except Exception:
+                    pass
+                return
+
+            status_map = {1: "⏳ Pending", 2: "✅ Approved", 3: "❌ Declined", 4: "🟢 Available", 5: "🔄 Processing"}
+            lines = [f'*🔍 Results for "{query}"*\n']
+            for i, item in enumerate(results, 1):
+                icon = "🎬" if item.get("mediaType") == "movie" else "📺"
+                title = item.get("originalTitle") or item.get("originalName") or item.get("name", "?")
+                year = str(item.get("releaseDate", "") or item.get("firstAirDate", ""))[:4]
+                media_info = item.get("mediaInfo")
+                if media_info and media_info.get("status"):
+                    status = status_map.get(media_info["status"], f"#{media_info['status']}")
+                    lines.append(f"{i}. {icon} *{title}* ({year}) — {status}")
+                else:
+                    lines.append(f"{i}. {icon} *{title}* ({year}) — not requested yet")
+
+            auto_match = results[0] if len(results) == 1 else _pick_overseerr_result(results, query)
+            if auto_match and (len(results) == 1 or _overseerr_title(auto_match).strip().casefold() == query.casefold()):
+                media_id = auto_match.get("id")
+                media_type = auto_match.get("mediaType", "movie")
+                payload = {"mediaType": media_type, "mediaId": media_id}
+                if media_type == "tv":
+                    payload["seasons"] = "all"
+                async with aiohttp.ClientSession() as s:
+                    async with s.post(
+                        f"{overseerr_url}/api/v1/request",
+                        json=payload,
+                        headers={**headers, "Content-Type": "application/json"},
+                        timeout=aiohttp.ClientTimeout(total=8),
+                    ) as rr:
+                        request_status = rr.status
+                        req_data = await rr.json()
+                if request_status in (200, 201):
+                    lines.append(f"\n✅ Requested: *{_overseerr_title(auto_match)}*")
+                else:
+                    lines.append(f"\n⚠ Could not auto-request: {req_data.get('message', 'unknown error')}")
+            else:
+                lines.append("\n_Refine the title and rerun `/request`, or use the dashboard search card for one-tap requesting._")
+
+            try:
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines))
+            except Exception as e:
+                log.warning("Slack send failed in /request: %s", e)
+        except Exception as e:
+            try:
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ Overseerr error: {e}")
+            except Exception:
+                pass
+
     @app.command("/arr")
     async def handle_slash_arr(ack: Any, body: dict[str, Any], client: Any) -> None:
         await ack()
@@ -6870,6 +6979,75 @@ def _register_integration_handlers(app: Any) -> None:
                 pass
 
         await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines))
+
+    @app.command("/upcoming")
+    async def handle_slash_upcoming(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        import aiohttp
+        import os
+        from datetime import datetime, timedelta, timezone
+
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", "")
+
+        try:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="📅 Fetching upcoming episodes…")
+        except Exception:
+            pass
+
+        sonarr_url = os.environ.get("SONARR_URL", "http://localhost:8989")
+        sonarr_key = os.environ.get("SONARR_API_KEY", "")
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        end = (datetime.now(timezone.utc) + timedelta(days=7)).strftime("%Y-%m-%d")
+
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.get(
+                    f"{sonarr_url}/api/v3/calendar",
+                    params={"apikey": sonarr_key, "start": today, "end": end, "includeSeries": "true"},
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as r:
+                    episodes = await r.json()
+
+            if not episodes:
+                try:
+                    await client.chat_postEphemeral(
+                        channel=channel_id,
+                        user=user_id,
+                        text="📅 No episodes airing in the next 7 days",
+                    )
+                except Exception:
+                    pass
+                return
+
+            by_date = {}
+            for ep in sorted(episodes, key=lambda e: e.get("airDateUtc", "")):
+                date = ep.get("airDateUtc", "")[:10]
+                by_date.setdefault(date, []).append(ep)
+
+            today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            tomorrow_str = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%d")
+
+            lines = ["*📅 Upcoming Episodes (next 7 days)*"]
+            for date, eps in by_date.items():
+                label = "Today" if date == today_str else "Tomorrow" if date == tomorrow_str else date
+                lines.append(f"\n*{label}*")
+                for ep in eps:
+                    series = ep.get("series", {}).get("title", ep.get("title", "?"))
+                    s_num = ep.get("seasonNumber", 0)
+                    e_num = ep.get("episodeNumber", 0)
+                    has_file = "✓" if ep.get("hasFile") else "·"
+                    lines.append(f"  {has_file} _{series}_ S{s_num:02d}E{e_num:02d}")
+
+            try:
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines))
+            except Exception as e:
+                log.warning("Slack send failed in /upcoming: %s", e)
+        except Exception as e:
+            try:
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ Sonarr error: {e}")
+            except Exception:
+                pass
 
     @app.command("/watching")
     async def handle_slash_watching(ack: Any, body: dict[str, Any], client: Any) -> None:
@@ -6997,6 +7175,49 @@ def _register_integration_handlers(app: Any) -> None:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text, blocks=blocks)
         except Exception as e:
             log.warning("Slack send failed in /wake: %s", e)
+
+    @app.command("/tailscale")
+    async def handle_slash_tailscale(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        import asyncio
+
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", "")
+        output = ""
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "tailscale",
+                "status",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            out, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+            if proc.returncode == 0:
+                output = out.decode().strip()
+        except Exception:
+            output = ""
+
+        if not output:
+            try:
+                from host_bridge import _enabled as _host_bridge_enabled, run_shell as _run_shell_ts
+
+                if _host_bridge_enabled():
+                    result = await _run_shell_ts(command="tailscale status", slack_user_id="slack", timeout_s=10)
+                    output = result if isinstance(result, str) else (getattr(result, "stdout", "") or "")
+            except Exception as exc:
+                output = f"tailscale not available: {exc}"
+
+        if not output:
+            output = "No devices found"
+
+        lines = output.splitlines()[:20]
+        msg = f"*🌐 Tailscale Status*\n```\n{chr(10).join(lines)}\n```"
+
+        try:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg)
+        except Exception as e:
+            log.warning("Slack send failed in /tailscale: %s", e)
 
     @app.command("/nas")
     async def handle_slash_nas(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:

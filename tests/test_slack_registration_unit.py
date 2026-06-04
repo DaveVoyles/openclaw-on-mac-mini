@@ -6,16 +6,16 @@ these tests will catch it before CI smoke tests do.
 
 Counts at time of last update (src/slack_bot.py):
   @app.event:   5  (app_home_opened, app_mention, message, reaction_added, file_shared)
-  @app.command: 45 (/arr, /batch, /brief, /calendar, /chat, /clawbox, /clawchan, /clear,
+  @app.command: 48 (/arr, /batch, /brief, /calendar, /chat, /clawbox, /clawchan, /clear,
                      /contacts, /copilot ×5, /digest, /drive, /email, /files, /filesearch,
                      /h, /health, /help, /hermes, /host, /inbox, /incident, /metrics,
-                     /mypins, /mystats, /nas, /nickname, /plex, /q, /research, /resume,
-                     /schedule, /sessions, /simple, /status, /template, /today, /wake,
-                     /watching)
+                     /mypins, /mystats, /nas, /nickname, /plex, /q, /request, /research,
+                     /resume, /schedule, /sessions, /simple, /status, /tailscale,
+                     /template, /today, /upcoming, /wake, /watching)
   @app.action:  9  (file_compare_start, file_translate, translate_lang_selected,
                      retry_last_prompt, clarify_file, clarify_question, clarify_write,
                      gmail_summarize, incident_action_run)
-  Total:        59
+  Total:        62
 """
 
 import ast
@@ -27,9 +27,9 @@ SLACK_BOT_SRC = Path(__file__).parent.parent / "src" / "slack_bot.py"
 
 # Exact counts at authoring time — update intentionally when adding new handlers.
 EXPECTED_EVENT_COUNT = 5
-EXPECTED_COMMAND_COUNT = 45  # includes /arr, /copilot ×5 subcommand handlers, /h, /hermes, /host, /incident, /nas, /plex, /q, /resume, /sessions, /status, /wake, /watching, etc.
+EXPECTED_COMMAND_COUNT = 48  # includes /arr, /copilot ×5 subcommand handlers, /h, /hermes, /host, /incident, /nas, /plex, /q, /request, /resume, /sessions, /status, /tailscale, /upcoming, /wake, /watching, etc.
 EXPECTED_ACTION_COUNT = 9    # includes incident_action_run
-EXPECTED_TOTAL_COUNT = EXPECTED_EVENT_COUNT + EXPECTED_COMMAND_COUNT + EXPECTED_ACTION_COUNT  # 59
+EXPECTED_TOTAL_COUNT = EXPECTED_EVENT_COUNT + EXPECTED_COMMAND_COUNT + EXPECTED_ACTION_COUNT  # 62
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +125,7 @@ class TestSlackHandlerRegistration:
         )
 
     def test_slack_registration_ast_total_count(self):
-        """Total @app.* registrations must equal the expected baseline (53).
+        """Total @app.* registrations must equal the expected baseline (62).
 
         This is the primary characterization guard: any accidental drop in handler
         count will fail CI immediately. Update EXPECTED_TOTAL_COUNT intentionally.

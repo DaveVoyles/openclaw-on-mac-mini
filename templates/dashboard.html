@@ -298,6 +298,22 @@
         background: rgba(104, 172, 229, 0.15);
         color: var(--text);
       }
+      .stat-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.3rem 0.65rem;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid var(--border, rgba(255,255,255,0.1));
+        border-radius: 20px;
+        font-size: 0.78rem;
+        color: var(--text);
+        transition: background 0.15s;
+        white-space: nowrap;
+        user-select: none;
+      }
+      .stat-pill:hover { background: rgba(255,255,255,0.09); }
+      .stat-pill .stat-icon { font-size: 0.85rem; }
       .card-search-hit {
         animation: cardSearchFlash 1.4s ease;
       }
@@ -925,10 +941,27 @@
           <button onclick="jumpTo('github-activity-card')" class="jump-pill">🐙 GitHub</button>
           <button onclick="jumpTo('plex-activity-card')" class="jump-pill">🎬 Plex</button>
           <button onclick="jumpTo('arr-queue-card')" class="jump-pill">⬇️ Queue</button>
+          <button onclick="jumpTo('tailscale-card')" class="jump-pill">🌐 Tailscale</button>
           <button onclick="jumpTo('system-health-card')" class="jump-pill">🖥 Health</button>
           <button onclick="jumpTo('hermes-sessions-card')" class="jump-pill">📋 Sessions</button>
         </nav>
 
+        <!-- Quick Stats Strip -->
+        <div id="quick-stats-strip" style="display:flex;flex-wrap:wrap;gap:0.5rem;padding:0.5rem 0;margin-bottom:0.5rem">
+          <div class="stat-pill" id="stat-plex" onclick="document.getElementById('plex-activity-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Plex">
+            <span class="stat-icon">🎬</span><span id="stat-plex-val">—</span>
+          </div>
+          <div class="stat-pill" id="stat-arr" onclick="document.getElementById('arr-queue-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Downloads">
+            <span class="stat-icon">📥</span><span id="stat-arr-val">—</span>
+          </div>
+          <div class="stat-pill" id="stat-disk" onclick="document.getElementById('system-health-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Health">
+            <span class="stat-icon">💾</span><span id="stat-disk-val">—</span>
+          </div>
+          <div class="stat-pill" id="stat-hermes" onclick="document.getElementById('hermes-sessions-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Hermes">
+            <span class="stat-icon">⚕</span><span id="stat-hermes-val">—</span>
+          </div>
+        </div>
+ 
         <!-- Buttons -->
         <div class="btn-row">
           <a class="btn btn-gold" href="/onboarding" target="_blank"
@@ -1244,6 +1277,19 @@
           </div>
         </div>
 
+        <div class="card" id="tailscale-card" style="margin-bottom:1rem">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+            <h2 style="margin:0">🌐 Tailscale Network</h2>
+            <div style="display:flex;gap:0.5rem;align-items:center">
+              <span id="tailscale-last-updated" class="live-badge"></span>
+              <button onclick="loadTailscaleStatus()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">↻</button>
+            </div>
+          </div>
+          <div id="tailscale-devices-list" style="margin-top:0.75rem;display:flex;flex-direction:column;gap:0.3rem">
+            <div style="color:var(--muted);font-size:0.82rem;font-style:italic">Loading…</div>
+          </div>
+        </div>
+
         <div class="card" id="system-health-card" style="margin-bottom:1rem">
           <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap">
             <span>🖥️ Mac Mini Health</span>
@@ -1273,6 +1319,11 @@
               <div class="stat-label">Uptime</div>
               <div class="stat-value" id="system-health-uptime">…</div>
               <div style="font-size:0.75rem;color:var(--muted)" id="system-health-timestamp"></div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">Time Machine</div>
+              <div class="stat-value" id="system-health-tm">…</div>
+              <div style="font-size:0.75rem;color:var(--muted)" id="system-health-tm-detail"></div>
             </div>
           </div>
         </div>
@@ -1430,6 +1481,11 @@
           </div>
           <div id="config-status-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0.5rem">
             <span style="color:var(--muted);font-style:italic">Loading...</span>
+          </div>
+          <div style="margin-top:0.85rem;padding:0.65rem 0.8rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:0.8rem;line-height:1.5">
+            <strong style="color:var(--text)">📡 Download webhooks</strong><br>
+            Sonarr: <code style="background:rgba(255,255,255,0.06);padding:0.1rem 0.35rem;border-radius:4px">https://openclaw.davevoyles.synology.me/api/webhooks/sonarr</code><br>
+            Radarr: <code style="background:rgba(255,255,255,0.06);padding:0.1rem 0.35rem;border-radius:4px">https://openclaw.davevoyles.synology.me/api/webhooks/radarr</code>
           </div>
           </details>
         </div>
@@ -2123,6 +2179,51 @@
           <div id="arr-queue-body" style="margin-top:0.75rem">
             <div id="arr-queue-list" style="display:flex;flex-direction:column;gap:0.5rem"></div>
             <div id="arr-history-fallback" style="margin-top:0.75rem"></div>
+          </div>
+        </div>
+
+        <!-- 🎟️ Overseerr Media Requests -->
+        <div class="card" id="overseerr-card" style="margin-bottom:1rem">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem">
+            <h2 style="margin:0">🎟️ Media Requests</h2>
+            <button onclick="loadOverseerrRequests()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">↻</button>
+          </div>
+          <div style="display:flex;gap:0.5rem;margin-top:0.75rem">
+            <input id="overseerr-search-input" type="text" placeholder="Search movies &amp; TV shows…"
+              style="flex:1;padding:0.4rem 0.7rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.82rem"
+              onkeydown="if(event.key==='Enter')searchOverseerr()">
+            <button onclick="searchOverseerr()" style="padding:0.4rem 0.8rem;background:rgba(124,58,237,0.2);border:1px solid rgba(124,58,237,0.4);border-radius:6px;color:#a78bfa;font-size:0.82rem;cursor:pointer">Search</button>
+          </div>
+          <div id="overseerr-search-results" style="margin-top:0.5rem"></div>
+          <div style="color:var(--muted);font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;margin:0.75rem 0 0.4rem">Recent Requests</div>
+          <div id="overseerr-requests-list" style="display:flex;flex-direction:column;gap:0.3rem">
+            <div style="color:var(--muted);font-size:0.82rem;font-style:italic">Loading…</div>
+          </div>
+        </div>
+
+        <div class="card" id="sonarr-calendar-card" style="margin-bottom:1rem">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+            <h2 style="margin:0">📅 Upcoming Episodes</h2>
+            <div style="display:flex;gap:0.5rem;align-items:center">
+              <span id="sonarr-cal-last-updated" class="live-badge"></span>
+              <button onclick="loadSonarrCalendar()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">↻</button>
+            </div>
+          </div>
+          <div id="sonarr-calendar-list" style="margin-top:0.75rem;display:flex;flex-direction:column;gap:0.3rem">
+            <div style="color:var(--muted);font-size:0.82rem;font-style:italic">Loading…</div>
+          </div>
+        </div>
+
+        <div class="card" id="radarr-watchlist-card" style="margin-bottom:1rem">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap">
+            <h2 style="margin:0">🎬 Radarr Watchlist</h2>
+            <div style="display:flex;gap:0.5rem;align-items:center">
+              <span id="radarr-watchlist-count" style="font-size:0.75rem;color:var(--muted)"></span>
+              <button onclick="loadRadarrWatchlist()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">↻</button>
+            </div>
+          </div>
+          <div class="card-body" id="radarr-watchlist-body" style="margin-top:0.75rem">
+            <div style="color:var(--muted);font-size:0.82rem;font-style:italic">Loading…</div>
           </div>
         </div>
 
@@ -2974,6 +3075,112 @@
         if (renderedOk) _stampUpdated('plex-last-updated');
       }
 
+      async function loadQuickStats() {
+        const headers = typeof _actionAuthHeaders === 'function' ? _actionAuthHeaders('dashboard-ui') : {};
+
+        try {
+          const r = await fetch('/api/tautulli/activity', { headers });
+          const d = await r.json();
+          const count = parseInt(d.stream_count || '0', 10) || (Array.isArray(d.sessions) ? d.sessions.length : 0);
+          const pill = document.getElementById('stat-plex');
+          const el = document.getElementById('stat-plex-val');
+          if (el) el.textContent = count ? `${count} streaming` : 'idle';
+          if (pill) pill.style.borderColor = count ? 'rgba(74,222,128,0.4)' : '';
+        } catch (_) {}
+
+        try {
+          const r = await fetch('/api/arr/queue', { headers });
+          const d = await r.json();
+          const sonarrTotal = Number(d.sonarr_total ?? (Array.isArray(d.sonarr) ? d.sonarr.length : 0));
+          const radarrTotal = Number(d.radarr_total ?? (Array.isArray(d.radarr) ? d.radarr.length : 0));
+          const total = sonarrTotal + radarrTotal;
+          const pill = document.getElementById('stat-arr');
+          const el = document.getElementById('stat-arr-val');
+          if (el) el.textContent = total ? `${total} downloading` : 'idle';
+          if (pill) pill.style.borderColor = total ? 'rgba(251,191,36,0.4)' : '';
+        } catch (_) {}
+
+        try {
+          const r = await fetch('/api/system/health', { headers });
+          const d = await r.json();
+          const disk = d.disk || d.storage || {};
+          const pct = disk.percent ?? disk.usage_pct ?? disk.pct ?? null;
+          const pill = document.getElementById('stat-disk');
+          const el = document.getElementById('stat-disk-val');
+          if (el && pct != null) el.textContent = `${Math.round(Number(pct))}%`;
+          if (pill) {
+            pill.style.borderColor = Number(pct) > 85
+              ? 'rgba(239,68,68,0.4)'
+              : Number(pct) > 70
+                ? 'rgba(251,191,36,0.4)'
+                : '';
+          }
+        } catch (_) {}
+
+        try {
+          const r = await fetch('/api/hermes/sessions', { headers });
+          const d = await r.json();
+          const sessions = Array.isArray(d.sessions) ? d.sessions : (Array.isArray(d.data) ? d.data : []);
+          const el = document.getElementById('stat-hermes-val');
+          if (el) el.textContent = sessions.length ? `${sessions.length} sessions` : 'ready';
+        } catch (_) {}
+      }
+
+      function renderRadarrWatchlist(data, errorMessage = '') {
+        const el = document.getElementById('radarr-watchlist-body');
+        const countEl = document.getElementById('radarr-watchlist-count');
+        if (!el) return;
+
+        if (!data) {
+          if (countEl) countEl.textContent = '';
+          el.innerHTML = `<div style="color:#ef4444;font-size:0.82rem">⚠ ${esc(errorMessage || 'Failed')} — <button onclick="loadRadarrWatchlist()" style="background:none;border:none;color:#ef4444;cursor:pointer;text-decoration:underline">retry</button></div>`;
+          return;
+        }
+
+        const missing = Number(data.radarr_missing || 0);
+        const radarrItems = Array.isArray(data.radarr) ? data.radarr : [];
+        if (countEl) countEl.textContent = `${missing} wanted`;
+
+        let html = '';
+        if (radarrItems.length) {
+          html += '<div style="color:var(--muted);font-size:0.72rem;text-transform:uppercase;margin-bottom:0.3rem">Downloading</div>';
+          html += radarrItems.map(item => {
+            const pct = Math.max(0, Math.min(100, Number(item.pct || 0)));
+            return `<div style="padding:0.3rem 0.5rem;background:rgba(255,255,255,0.03);border-radius:6px;margin-bottom:0.2rem">
+              <div style="display:flex;justify-content:space-between;gap:0.5rem">
+                <span style="font-size:0.82rem">${esc(item.title || '?')}</span>
+                <span style="font-size:0.75rem;color:#4ade80">${pct}%</span>
+              </div>
+              <div style="margin-top:0.25rem;height:3px;background:rgba(255,255,255,0.1);border-radius:2px">
+                <div style="height:3px;background:#4ade80;border-radius:2px;width:${pct}%"></div>
+              </div>
+            </div>`;
+          }).join('');
+        }
+
+        if (missing > 0) {
+          html += `<div style="margin-top:0.5rem;padding:0.4rem 0.5rem;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:6px">
+            <span style="font-size:0.82rem;color:#fbbf24">📋 ${missing} movies on watchlist awaiting availability</span>
+          </div>`;
+        } else if (!radarrItems.length) {
+          html = '<div style="color:var(--muted);font-size:0.82rem;font-style:italic">No active downloads · watchlist up to date</div>';
+        }
+
+        el.innerHTML = html;
+      }
+
+      async function loadRadarrWatchlist() {
+        const headers = typeof _actionAuthHeaders === 'function' ? _actionAuthHeaders('dashboard-ui') : {};
+        try {
+          const r = await fetch('/api/arr/queue', { headers });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const d = await r.json();
+          renderRadarrWatchlist(d);
+        } catch (e) {
+          renderRadarrWatchlist(null, e.message || 'Failed');
+        }
+      }
+
       async function loadArrQueue() {
         const headers = _actionAuthHeaders('dashboard-ui');
         const summaryEl = document.getElementById('arr-queue-summary');
@@ -2995,6 +3202,7 @@
             ? `${active.length} active download${active.length === 1 ? '' : 's'}`
             : 'Queue idle';
           if (missingEl) missingEl.textContent = `📺 ${Number(d.radarr_missing || 0)} missing movies`;
+          renderRadarrWatchlist(d);
 
           if (active.length) {
             historyEl.innerHTML = '';
@@ -3040,8 +3248,126 @@
           if (missingEl) missingEl.textContent = '';
           listEl.innerHTML = `<div style="color:var(--muted);font-size:0.82rem;font-style:italic">Failed to load queue: ${esc(e.message || 'unknown error')}</div>`;
           historyEl.innerHTML = '';
+          renderRadarrWatchlist(null, e.message || 'Failed to load queue');
         }
       }
+
+      async function loadOverseerrRequests() {
+        const el = document.getElementById('overseerr-requests-list');
+        const headers = typeof _actionAuthHeaders === 'function' ? _actionAuthHeaders('dashboard-ui') : {};
+        try {
+          const r = await fetch('/api/overseerr/recent', { headers });
+          const d = await r.json();
+          const statusLabel = {1:'⏳ Pending',2:'✅ Approved',3:'❌ Declined',4:'🟢 Available',5:'🔄 Processing'};
+          const typeIcon = {movie:'🎬',tv:'📺'};
+          if (!el) return;
+          const items = d.requests || [];
+          if (!items.length) {
+            el.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;font-style:italic">No requests yet</div>';
+            return;
+          }
+          el.innerHTML = items.map(req => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+              <span style="font-size:0.82rem">${typeIcon[req.type] || '?'} ${esc(req.title || '?')} ${req.year ? `(${esc(req.year)})` : ''}</span>
+              <span style="font-size:0.72rem;color:var(--muted)">${esc(statusLabel[req.status] || `#${req.status}`)}</span>
+            </div>`).join('');
+        } catch (e) {
+          if (el) el.innerHTML = '<div style="color:#ef4444;font-size:0.82rem">⚠ Failed to load</div>';
+        }
+      }
+
+      async function searchOverseerr() {
+        const q = document.getElementById('overseerr-search-input')?.value?.trim();
+        const el = document.getElementById('overseerr-search-results');
+        if (!q || !el) return;
+        const headers = typeof _actionAuthHeaders === 'function' ? _actionAuthHeaders('dashboard-ui') : {};
+        el.innerHTML = '<div style="color:var(--muted);font-size:0.8rem;font-style:italic">Searching…</div>';
+        try {
+          const r = await fetch(`/api/overseerr/search?q=${encodeURIComponent(q)}`, { headers });
+          const d = await r.json();
+          const results = d.results || [];
+          if (!results.length) {
+            el.innerHTML = '<div style="color:var(--muted);font-size:0.8rem">No results</div>';
+            return;
+          }
+          el.innerHTML = results.map(item => {
+            const alreadyRequested = item.mediaInfo && item.mediaInfo.status;
+            const icon = item.mediaType === 'movie' ? '🎬' : '📺';
+            const btnStyle = alreadyRequested
+              ? 'background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);color:#4ade80;cursor:default'
+              : 'background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.35);color:#a78bfa;cursor:pointer';
+            const btnText = alreadyRequested ? '✓ Requested' : '+ Request';
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.4rem 0.5rem;margin-bottom:0.2rem;background:rgba(255,255,255,0.03);border-radius:6px">
+              <div>
+                <div style="font-size:0.82rem;font-weight:500">${icon} ${esc(item.title || '?')} ${item.year ? `(${esc(item.year)})` : ''}</div>
+                ${item.overview ? `<div style="font-size:0.72rem;color:var(--muted)">${esc(item.overview)}</div>` : ''}
+              </div>
+              <button onclick="requestMedia(${Number(item.id)},'${item.mediaType}')" style="flex-shrink:0;margin-left:0.5rem;padding:0.25rem 0.6rem;border-radius:6px;font-size:0.75rem;${btnStyle}" ${alreadyRequested ? 'disabled' : ''}>${btnText}</button>
+            </div>`;
+          }).join('');
+        } catch (e) {
+          el.innerHTML = '<div style="color:#ef4444;font-size:0.8rem">⚠ Search failed</div>';
+        }
+      }
+
+      async function requestMedia(mediaId, mediaType) {
+        const headers = typeof _actionAuthHeaders === 'function' ? _actionAuthHeaders('dashboard-ui') : {};
+        headers['Content-Type'] = 'application/json';
+        try {
+          const r = await fetch('/api/overseerr/request', { method:'POST', headers, body: JSON.stringify({ mediaId, mediaType }) });
+          const d = await r.json();
+          if (d.success) {
+            if (typeof showToast === 'function') showToast('✅ Request submitted!');
+            loadOverseerrRequests();
+            document.getElementById('overseerr-search-results').innerHTML = '';
+            const inp = document.getElementById('overseerr-search-input');
+            if (inp) inp.value = '';
+          } else {
+            if (typeof showToast === 'function') showToast(`❌ ${d.error || 'Request failed'}`, 'error');
+          }
+        } catch (e) {
+          if (typeof showToast === 'function') showToast(`❌ ${e}`, 'error');
+        }
+      }
+
+      async function loadSonarrCalendar() {
+        const el = document.getElementById('sonarr-calendar-list');
+        const headers = typeof _actionAuthHeaders === 'function' ? _actionAuthHeaders('dashboard-ui') : {};
+        try {
+          const r = await fetch('/api/sonarr/calendar?days=14', { headers });
+          const d = await r.json();
+          const eps = d.episodes || [];
+          if (!el) return;
+          if (!eps.length) {
+            el.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;font-style:italic">No episodes in the next 14 days</div>';
+            return;
+          }
+          const byDate = {};
+          eps.forEach(ep => { (byDate[ep.airDate] = byDate[ep.airDate] || []).push(ep); });
+          const today = new Date().toISOString().slice(0,10);
+          const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0,10);
+          const dateLabel = d => d === today ? 'Today' : d === tomorrow ? 'Tomorrow' : d;
+          el.innerHTML = Object.entries(byDate).map(([date, items]) => `
+            <div>
+              <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin:0.4rem 0 0.2rem">${esc(dateLabel(date))}</div>
+              ${items.map(ep => `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0.5rem;background:rgba(255,255,255,0.03);border-radius:6px;margin-bottom:0.2rem">
+                  <div>
+                    <span style="font-size:0.82rem;font-weight:500">${esc(ep.seriesTitle)}</span>
+                    <span style="font-size:0.75rem;color:var(--muted)"> S${String(ep.season).padStart(2,'0')}E${String(ep.episode).padStart(2,'0')}</span>
+                    ${ep.title ? `<span style="font-size:0.72rem;color:var(--muted)"> — ${esc(ep.title)}</span>` : ''}
+                  </div>
+                  ${ep.hasFile ? '<span style="font-size:0.7rem;color:#4ade80">✓ Downloaded</span>' : '<span style="font-size:0.7rem;color:var(--muted)">Airing</span>'}
+                </div>`).join('')}
+            </div>`).join('');
+          if (typeof _stampUpdated === 'function') _stampUpdated('sonarr-cal-last-updated');
+        } catch (e) {
+          if (el) el.innerHTML = '<div style="color:#ef4444;font-size:0.82rem">⚠ Failed — <button onclick="loadSonarrCalendar()" style="background:none;border:none;color:#ef4444;cursor:pointer;text-decoration:underline">retry</button></div>';
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', () => { loadOverseerrRequests(); });
+      document.addEventListener('DOMContentLoaded', () => { loadSonarrCalendar(); setInterval(loadSonarrCalendar, 300000); });
 
       function renderSkills(skills) {
         const sb = document.getElementById("skills-body");
@@ -4132,6 +4458,7 @@
           refreshHermesStatus();
           loadHermesMemory();
           refreshNetworkPing();
+          loadTailscaleStatus();
           refreshSystemHealth();
           refreshCopilotSessions();
           loadApprovals();
@@ -4174,6 +4501,7 @@
       setInterval(() => { loadPlexActivity(); }, 30000);
       setInterval(() => { loadArrQueue(); }, 60000);
       setInterval(refreshNetworkPing, 60000);
+      setInterval(loadTailscaleStatus, 60000);
       setInterval(refreshSystemHealth, 30000);
       setInterval(refreshCopilotSessions, 15000);
 
@@ -5407,6 +5735,44 @@
         return `${num.toFixed(1)} GB`;
       }
 
+      async function loadTailscaleStatus() {
+        const el = document.getElementById('tailscale-devices-list');
+        const headers = typeof _actionAuthHeaders === 'function' ? _actionAuthHeaders('dashboard-ui') : {};
+        try {
+          const r = await fetch('/api/tailscale/status', { headers });
+          const d = await r.json();
+          if (d.error) {
+            if (el) el.innerHTML = `<div style="color:#ef4444;font-size:0.82rem">⚠ ${esc(d.error)}</div>`;
+            return;
+          }
+          const devices = d.devices || [];
+          const osIcon = os => ({ macOS: '🍎', iOS: '📱', linux: '🐧', windows: '🪟', android: '🤖' }[os] || '💻');
+          if (el) {
+            el.innerHTML = devices.map(dev => {
+              const badge = dev.online
+                ? '<span style="font-size:0.7rem;color:#4ade80;font-weight:600">● online</span>'
+                : '<span style="font-size:0.7rem;color:var(--muted)">○ offline</span>';
+              const selfBadge = dev.self
+                ? ' <span style="font-size:0.65rem;background:rgba(124,58,237,0.2);color:#a78bfa;padding:0.1rem 0.35rem;border-radius:10px">this device</span>'
+                : '';
+              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0.5rem;background:${dev.online ? 'rgba(74,222,128,0.04)' : 'rgba(255,255,255,0.02)'};border-radius:6px;margin-bottom:0.15rem;opacity:${dev.online ? '1' : '0.65'}">
+                <div style="display:flex;align-items:center;gap:0.5rem">
+                  <span>${osIcon(dev.os)}</span>
+                  <div>
+                    <span style="font-size:0.82rem;font-weight:500">${esc(dev.name || '?')}${selfBadge}</span>
+                    <div style="font-size:0.7rem;color:var(--muted)">${esc(dev.ip || '?')}</div>
+                  </div>
+                </div>
+                ${badge}
+              </div>`;
+            }).join('');
+          }
+          if (typeof _stampUpdated === 'function') _stampUpdated('tailscale-last-updated');
+        } catch (e) {
+          if (el) el.innerHTML = '<div style="color:#ef4444;font-size:0.82rem">⚠ Failed — <button onclick="loadTailscaleStatus()" style="background:none;border:none;color:#ef4444;cursor:pointer;text-decoration:underline">retry</button></div>';
+        }
+      }
+
       function _loadBadgeColor(value) {
         if (value < 2.0) return { bg: 'rgba(74,222,128,0.15)', fg: '#4ade80' };
         if (value < 4.0) return { bg: 'rgba(250,204,21,0.16)', fg: '#facc15' };
@@ -5423,10 +5789,17 @@
         const uptimeEl = document.getElementById('system-health-uptime');
         const updatedEl = document.getElementById('system-health-updated');
         const timestampEl = document.getElementById('system-health-timestamp');
+        const tmEl = document.getElementById('system-health-tm');
+        const tmDetailEl = document.getElementById('system-health-tm-detail');
+        const headers = _actionAuthHeaders('dashboard-ui');
         try {
-          const r = await fetch('/api/system/health', { headers: _actionAuthHeaders('dashboard-ui') });
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          const d = await r.json();
+          const [healthResp, tmResp] = await Promise.all([
+            fetch('/api/system/health', { headers }),
+            fetch('/api/system/timemachine', { headers }),
+          ]);
+          if (!healthResp.ok) throw new Error(`HTTP ${healthResp.status}`);
+          const d = await healthResp.json();
+          const tm = tmResp.ok ? await tmResp.json() : { error: `HTTP ${tmResp.status}` };
           const load = d.loadavg || {};
           const load1 = Number(load['1m'] || 0);
           const load5 = Number(load['5m'] || 0);
@@ -5445,6 +5818,18 @@
           if (uptimeEl) uptimeEl.textContent = d.uptime.human || '—';
           if (updatedEl) updatedEl.textContent = `Updated ${new Date((d.timestamp || Date.now() / 1000) * 1000).toLocaleTimeString()}`;
           if (timestampEl) timestampEl.textContent = d.hostname ? `Host ${d.hostname}` : '';
+          if (tmEl) {
+            if (tm.error) tmEl.textContent = 'Unavailable';
+            else if (tm.running) tmEl.textContent = 'Running';
+            else if (tm.last_backup) tmEl.textContent = 'Healthy';
+            else tmEl.textContent = 'Unknown';
+          }
+          if (tmDetailEl) {
+            if (tm.error) tmDetailEl.textContent = tm.error;
+            else if (tm.running) tmDetailEl.textContent = tm.percent >= 0 ? `${Math.round(Number(tm.percent) * 100)}% complete` : 'Backup in progress';
+            else if (tm.last_backup) tmDetailEl.textContent = `Last backup ${tm.last_backup}`;
+            else tmDetailEl.textContent = 'No recent backup found';
+          }
           _stampUpdated('health-last-updated');
         } catch (e) {
           if (loadEl) loadEl.textContent = 'Unavailable';
@@ -5452,10 +5837,12 @@
           if (memEl) memEl.textContent = 'Unavailable';
           if (diskEl) diskEl.textContent = 'Unavailable';
           if (uptimeEl) uptimeEl.textContent = 'Unavailable';
+          if (tmEl) tmEl.textContent = 'Unavailable';
           if (updatedEl) updatedEl.textContent = '⚠️ Health check unavailable';
           if (memDetailEl) memDetailEl.textContent = '';
           if (diskDetailEl) diskDetailEl.textContent = '';
           if (timestampEl) timestampEl.textContent = '';
+          if (tmDetailEl) tmDetailEl.textContent = '';
         }
       }
 
@@ -6046,7 +6433,19 @@
       }
 
       function getCardStorageKey(cardId) {
+        return `openclaw_card_${cardId}`;
+      }
+
+      function getLegacyCardStorageKey(cardId) {
         return `oc-card-${cardId.replace(/-card$/, '')}`;
+      }
+
+      function getStoredCardState(cardId) {
+        try {
+          return localStorage.getItem(`openclaw_card_${cardId}`) || localStorage.getItem(getLegacyCardStorageKey(cardId));
+        } catch (_) {
+          return null;
+        }
       }
 
       function getCardBody(cardId) {
@@ -6067,7 +6466,10 @@
           btn.title = expanded ? 'Collapse card' : 'Expand card';
         }
         if (persist) {
-          try { localStorage.setItem(getCardStorageKey(cardId), expanded ? 'expanded' : 'collapsed'); } catch (_) {}
+          try {
+            localStorage.setItem(`openclaw_card_${cardId}`, expanded ? 'expanded' : 'collapsed');
+            localStorage.setItem(getLegacyCardStorageKey(cardId), expanded ? 'expanded' : 'collapsed');
+          } catch (_) {}
         }
         if (expanded && triggerLoad) {
           const loader = CARD_COLLAPSE_LOADERS[cardId];
@@ -6141,9 +6543,7 @@
             });
           }
 
-          const stored = (() => {
-            try { return localStorage.getItem(getCardStorageKey(cardId)); } catch (_) { return null; }
-          })();
+          const stored = getStoredCardState(cardId);
           const defaultExpanded = body.style.display !== 'none';
           setCardExpanded(cardId, stored ? stored !== 'collapsed' : defaultExpanded, { persist: false, triggerLoad: false });
         });
@@ -7085,8 +7485,10 @@
         initCardCollapse();
         initGlobalSearch();
         refreshPromptLibrarySelect();
+        loadQuickStats();
         loadContainerLogs();
         loadSystemAlerts();
+        setInterval(loadQuickStats, 30000);
         setInterval(loadSystemAlerts, 60000);
       });
       document.addEventListener('keydown', e => {

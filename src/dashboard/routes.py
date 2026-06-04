@@ -45,6 +45,12 @@ from .api_handlers import (
     api_tautulli_history_handler,
     api_arr_queue_handler,
     api_arr_history_handler,
+    api_overseerr_recent_handler,
+    api_overseerr_search_handler,
+    api_overseerr_request_handler,
+    api_sonarr_calendar_handler,
+    api_webhook_sonarr_handler,
+    api_webhook_radarr_handler,
     api_knowledge_graph_handler,
     api_memories_handler,
     api_manifest_handler,
@@ -71,6 +77,8 @@ from .api_handlers import (
     api_status_handler,
     api_system_alerts_handler,
     api_system_health_handler,
+    api_system_timemachine_handler,
+    api_tailscale_status_handler,
     api_task_status_detail_handler,
     api_task_status_handler,
     api_threads_handler,
@@ -243,7 +251,15 @@ def setup_dashboard(
     app.router.add_get("/api/network/ping", api_network_ping_handler)
     app.router.add_get("/api/network/wol", api_network_wol_handler)
     app.router.add_post("/api/network/wol", action(api_network_wol_handler))
+    app.router.add_get("/api/tailscale/status", api_tailscale_status_handler)
     app.router.add_get("/api/system/alerts", api_system_alerts_handler)
     app.router.add_get("/api/system/health", api_system_health_handler)
+    app.router.add_get("/api/system/timemachine", api_system_timemachine_handler)
     app.router.add_post("/api/hermes/upgrade", action(api_hermes_upgrade_handler))
     app.router.add_get("/api/nas/browse", api_nas_browse_handler)
+    app.router.add_get("/api/overseerr/recent", api_overseerr_recent_handler)
+    app.router.add_get("/api/overseerr/search", api_overseerr_search_handler)
+    app.router.add_post("/api/overseerr/request", api_overseerr_request_handler)
+    app.router.add_get("/api/sonarr/calendar", api_sonarr_calendar_handler)
+    app.router.add_post("/api/webhooks/sonarr", api_webhook_sonarr_handler)
+    app.router.add_post("/api/webhooks/radarr", api_webhook_radarr_handler)

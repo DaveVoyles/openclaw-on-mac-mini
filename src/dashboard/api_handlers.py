@@ -44,6 +44,35 @@ def _cache_set(key: str, value, ttl_seconds: int = 60):
     _api_cache[key] = (value, __import__('time').time() + ttl_seconds)
 
 
+def _overseerr_headers():
+    import base64
+    import os
+
+    raw = os.environ.get("OVERSEERR_API_KEY", "")
+    try:
+        key = base64.b64decode(raw).decode()
+    except Exception:
+        key = raw
+    return {"X-Api-Key": key, "Content-Type": "application/json"}
+
+
+async def _ntfy_push(title: str, body_text: str) -> None:
+    import os
+
+    ntfy_url = os.environ.get("NTFY_URL", "https://ntfy.sh")
+    topic = os.environ.get("NTFY_TOPIC", "openclaw-alerts")
+    try:
+        async with aiohttp.ClientSession() as s:
+            await s.post(
+                f"{ntfy_url}/{topic}",
+                data=body_text.encode(),
+                headers={"Title": title, "Priority": "default"},
+                timeout=aiohttp.ClientTimeout(total=5),
+            )
+    except Exception as e:
+        log.warning("ntfy push failed: %s", e)
+
+
 _QUALITY_DOMAIN_LIMIT = 6
 _QUALITY_FAILURE_LIMIT = 6
 _QUALITY_SIGNAL_LIMIT = 6
@@ -5720,3 +5749,361 @@ async def api_hermes_session_messages_handler(request: web.Request) -> web.Respo
             text=json.dumps({"error": str(e)}),
             status=500,
         )
+
+
+async def api_tailscale_status_handler(request):
+    """GET /api/tailscale/status — Tailscale device list."""
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+
+    import asyncio
+    import json as _json
+    import os
+
+    async def _get_tailscale_json() -> str | None:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "tailscale",
+                "status",
+                "--json",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            out, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+            if proc.returncode == 0:
+                return out.decode()
+        except (FileNotFoundError, asyncio.TimeoutError):
+            pass
+        except Exception:
+            pass
+
+        if os.environ.get("OPENCLAW_HOST_BRIDGE_ENABLED", "false").lower() != "true":
+            return None
+
+        try:
+            from host_bridge import run_shell
+
+            result = await run_shell(command="tailscale status --json", slack_user_id="dashboard", timeout_s=10)
+            if isinstance(result, str):
+                return result
+            return getattr(result, "stdout", "") or ""
+        except Exception:
+            return None
+
+    raw = await _get_tailscale_json()
+    if not raw:
+        return web.Response(
+            content_type="application/json",
+            text=_json.dumps({"error": "tailscale not available", "devices": []}),
+        )
+
+    try:
+        data = _json.loads(raw)
+    except Exception as e:
+        return web.Response(
+            content_type="application/json",
+            text=_json.dumps({"error": f"parse error: {e}", "devices": []}),
+        )
+
+    self_node = data.get("Self", {}) or {}
+    devices: list[dict[str, object]] = []
+    if self_node:
+        devices.append(
+            {
+                "name": self_node.get("HostName", "Mac Mini"),
+                "ip": (self_node.get("TailscaleIPs") or ["?"])[0],
+                "online": True,
+                "os": self_node.get("OS", "macOS"),
+                "self": True,
+                "lastSeen": None,
+            }
+        )
+
+    for peer in (data.get("Peer", {}) or {}).values():
+        devices.append(
+            {
+                "name": peer.get("HostName", "?"),
+                "ip": (peer.get("TailscaleIPs") or ["?"])[0],
+                "online": peer.get("Online", False),
+                "os": peer.get("OS", "?"),
+                "self": False,
+                "lastSeen": peer.get("LastSeen", ""),
+                "relay": peer.get("Relay", ""),
+            }
+        )
+
+    devices.sort(key=lambda d: (not bool(d.get("online")), str(d.get("name", "")).lower()))
+    return web.Response(
+        content_type="application/json",
+        text=_json.dumps({"devices": devices, "count": len(devices)}),
+    )
+
+
+async def api_system_timemachine_handler(request):
+    """GET /api/system/timemachine — Time Machine status via host bridge."""
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+
+    import json as _json
+    import os
+    import plistlib
+    import re
+
+    tm_status: dict[str, object] = {
+        "last_backup": None,
+        "running": False,
+        "percent": -1,
+        "error": None,
+    }
+
+    if os.environ.get("OPENCLAW_HOST_BRIDGE_ENABLED", "false").lower() != "true":
+        tm_status["error"] = "host bridge disabled"
+        return web.Response(content_type="application/json", text=_json.dumps(tm_status))
+
+    try:
+        from host_bridge import run_shell
+    except ImportError as exc:
+        tm_status["error"] = f"host_bridge unavailable: {exc}"
+        return web.Response(content_type="application/json", text=_json.dumps(tm_status), status=500)
+
+    try:
+        latest_result = await run_shell(command="tmutil latestbackup 2>/dev/null || true", slack_user_id="dashboard", timeout_s=10)
+        latest_output = latest_result if isinstance(latest_result, str) else (getattr(latest_result, "stdout", "") or "")
+        match = re.search(r"(\d{4}-\d{2}-\d{2}-\d{6})", latest_output)
+        if match:
+            tm_status["last_backup"] = match.group(1)[:10]
+
+        status_result = await run_shell(command="tmutil status 2>/dev/null || true", slack_user_id="dashboard", timeout_s=10)
+        status_output = status_result if isinstance(status_result, str) else (getattr(status_result, "stdout", "") or "")
+        if status_output.strip():
+            parsed = plistlib.loads(status_output.encode("utf-8"))
+            tm_status["running"] = bool(parsed.get("Running", False))
+            tm_status["percent"] = parsed.get("Percent", -1)
+    except Exception as exc:
+        tm_status["error"] = str(exc)
+
+    return web.Response(content_type="application/json", text=_json.dumps(tm_status))
+
+
+async def api_overseerr_recent_handler(request):
+    """GET /api/overseerr/recent — recent media requests"""
+    import os
+
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+    url = os.environ.get("OVERSEERR_URL", "http://localhost:5055")
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(
+                f"{url}/api/v1/request",
+                params={"take": 10, "sort": "added", "filter": "all"},
+                headers=_overseerr_headers(),
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as r:
+                data = await r.json()
+        results = data.get("results", [])
+        items = []
+        for req in results:
+            media = req.get("media", {})
+            items.append(
+                {
+                    "id": req.get("id"),
+                    "type": media.get("mediaType", "?"),
+                    "status": req.get("status", 0),
+                    "title": media.get("originalTitle") or media.get("title", "?"),
+                    "year": media.get("firstAirDate", "")[:4] or str(media.get("releaseDate", ""))[:4],
+                    "requestedBy": req.get("requestedBy", {}).get("displayName", "?"),
+                    "createdAt": req.get("createdAt", ""),
+                }
+            )
+        return web.Response(content_type="application/json", text=json.dumps({"requests": items}))
+    except Exception as e:
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps({"error": str(e), "requests": []}),
+        )
+
+
+async def api_overseerr_search_handler(request):
+    """GET /api/overseerr/search?q=<query> — search for media"""
+    import os
+
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+    query = request.rel_url.query.get("q", "").strip()
+    if not query:
+        return web.Response(content_type="application/json", text=json.dumps({"results": []}))
+    url = os.environ.get("OVERSEERR_URL", "http://localhost:5055")
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(
+                f"{url}/api/v1/search",
+                params={"query": query, "page": 1, "language": "en"},
+                headers=_overseerr_headers(),
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as r:
+                data = await r.json()
+        results = data.get("results", [])[:8]
+        items = [
+            {
+                "id": item.get("id"),
+                "mediaType": item.get("mediaType", "?"),
+                "title": item.get("originalTitle") or item.get("originalName") or item.get("name", "?"),
+                "year": str(item.get("releaseDate", "") or item.get("firstAirDate", ""))[:4],
+                "overview": (item.get("overview", "") or "")[:150],
+                "mediaInfo": item.get("mediaInfo"),
+            }
+            for item in results
+        ]
+        return web.Response(content_type="application/json", text=json.dumps({"results": items}))
+    except Exception as e:
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps({"error": str(e), "results": []}),
+        )
+
+
+async def api_overseerr_request_handler(request):
+    """POST /api/overseerr/request — create a media request"""
+    import os
+
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+    try:
+        body = await request.json()
+    except Exception:
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps({"error": "Invalid JSON"}),
+            status=400,
+        )
+    media_id = body.get("mediaId")
+    media_type = body.get("mediaType", "movie")
+    if not media_id:
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps({"error": "mediaId required"}),
+            status=400,
+        )
+    url = os.environ.get("OVERSEERR_URL", "http://localhost:5055")
+    payload = {"mediaType": media_type, "mediaId": media_id}
+    if media_type == "tv":
+        payload["seasons"] = "all"
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.post(
+                f"{url}/api/v1/request",
+                json=payload,
+                headers=_overseerr_headers(),
+                timeout=aiohttp.ClientTimeout(total=8),
+            ) as r:
+                status = r.status
+                data = await r.json()
+        if status in (200, 201):
+            return web.Response(
+                content_type="application/json",
+                text=json.dumps({"success": True, "request": data}),
+            )
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps({"success": False, "error": data.get("message", "Request failed")}),
+            status=status,
+        )
+    except Exception as e:
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps({"success": False, "error": str(e)}),
+            status=500,
+        )
+
+
+async def api_sonarr_calendar_handler(request):
+    """GET /api/sonarr/calendar — upcoming episodes (next 14 days)"""
+    import os
+    from datetime import datetime, timedelta
+
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+    url = os.environ.get("SONARR_URL", "http://localhost:8989")
+    key = os.environ.get("SONARR_API_KEY", "")
+    days = int(request.rel_url.query.get("days", "14"))
+    start = datetime.utcnow().strftime("%Y-%m-%d")
+    end = (datetime.utcnow() + timedelta(days=days)).strftime("%Y-%m-%d")
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(
+                f"{url}/api/v3/calendar",
+                params={"apikey": key, "start": start, "end": end, "includeSeries": "true"},
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as r:
+                episodes = await r.json()
+        result = []
+        for ep in episodes:
+            result.append(
+                {
+                    "seriesTitle": ep.get("series", {}).get("title", ep.get("title", "?")),
+                    "season": ep.get("seasonNumber", 0),
+                    "episode": ep.get("episodeNumber", 0),
+                    "title": ep.get("title", ""),
+                    "airDate": ep.get("airDateUtc", "")[:10],
+                    "hasFile": ep.get("hasFile", False),
+                    "id": ep.get("id"),
+                }
+            )
+        result.sort(key=lambda x: x["airDate"])
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps({"episodes": result, "count": len(result)}),
+        )
+    except Exception as e:
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps({"error": str(e), "episodes": []}),
+        )
+
+
+async def api_webhook_sonarr_handler(request):
+    """POST /api/webhooks/sonarr — Sonarr download completion webhook"""
+    try:
+        body = await request.json()
+    except Exception:
+        return web.Response(status=400, text="Invalid JSON")
+
+    event_type = body.get("eventType", "")
+    if event_type == "Download":
+        series = body.get("series", {})
+        episodes = body.get("episodes", [])
+        series_title = series.get("title", "Unknown")
+        if episodes:
+            ep = episodes[0]
+            msg = (
+                f"📺 Downloaded: {series_title} "
+                f"S{ep.get('seasonNumber', 0):02d}E{ep.get('episodeNumber', 0):02d} — {ep.get('title', '')}"
+            )
+        else:
+            msg = f"📺 Downloaded: {series_title}"
+        asyncio.create_task(_ntfy_push("📺 Download Complete", msg))
+        log.info("Sonarr webhook: %s", msg)
+    elif event_type == "Test":
+        log.info("Sonarr webhook test received")
+
+    return web.Response(status=200, text="OK")
+
+
+async def api_webhook_radarr_handler(request):
+    """POST /api/webhooks/radarr — Radarr download completion webhook"""
+    try:
+        body = await request.json()
+    except Exception:
+        return web.Response(status=400, text="Invalid JSON")
+
+    event_type = body.get("eventType", "")
+    if event_type == "Download":
+        movie = body.get("movie", {})
+        msg = f"🎬 Downloaded: {movie.get('title', '?')} ({movie.get('year', '')})"
+        asyncio.create_task(_ntfy_push("🎬 Download Complete", msg))
+        log.info("Radarr webhook: %s", msg)
+    elif event_type == "Test":
+        log.info("Radarr webhook test received")
+
+    return web.Response(status=200, text="OK")
