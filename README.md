@@ -31,7 +31,7 @@ OpenClaw is a Slack-first personal AI assistant for homelab ops, media visibilit
 
 ## Key Slack commands
 
-OpenClaw currently registers **52 Slack slash commands**. These are the most useful day-to-day ones; use `/help` for the full list.
+OpenClaw currently registers **53 Slack slash commands**. These are the most useful day-to-day ones; use `/help` for the full list.
 
 ### AI & Chat
 - `/hermes <prompt>` — start a threaded Hermes session

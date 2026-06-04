@@ -3228,7 +3228,7 @@ def _build_home_view(user_id: str, name: str) -> dict:
             "elements": [
                 {
                     "type": "mrkdwn",
-                    "text": "Dashboard: https://openclaw.davevoyles.synology.me/dashboard · 48 commands available · Type `/help` for the full list",
+                    "text": "Dashboard: https://openclaw.davevoyles.synology.me/dashboard · 53 commands available · Type `/help` for the full list",
                 }
             ],
         }
