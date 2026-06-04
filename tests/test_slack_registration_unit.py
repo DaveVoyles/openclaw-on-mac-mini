@@ -6,16 +6,17 @@ these tests will catch it before CI smoke tests do.
 
 Counts at time of last update (src/slack_bot.py):
   @app.event:   5  (app_home_opened, app_mention, message, reaction_added, file_shared)
-  @app.command: 51 (/arr, /batch, /brief, /calendar, /chat, /clawbox, /clawchan, /clear,
+  @app.command: 52 (/arr, /batch, /brief, /calendar, /chat, /clawbox, /clawchan, /clear,
                      /contacts, /copilot ×5, /digest, /downloads, /drive, /email, /files,
                      /filesearch, /h, /health, /help, /hermes, /host, /inbox, /incident,
-                     /metrics, /morning, /mypins, /mystats, /nas, /nickname, /plex, /q,
-                     /request, /research, /resume, /schedule, /sessions, /simple, /status,
-                     /tailscale, /template, /today, /upcoming, /uptime, /wake, /watching)
+                     /metrics, /morning, /mypins, /mystats, /nas, /news, /nickname, /plex,
+                     /q, /request, /research, /resume, /schedule, /sessions, /simple,
+                     /status, /tailscale, /template, /today, /upcoming, /uptime, /wake,
+                     /watching)
   @app.action:  9  (file_compare_start, file_translate, translate_lang_selected,
                      retry_last_prompt, clarify_file, clarify_question, clarify_write,
                      gmail_summarize, incident_action_run)
-  Total:        65
+  Total:        66
 """
 
 import ast
@@ -27,9 +28,9 @@ SLACK_BOT_SRC = Path(__file__).parent.parent / "src" / "slack_bot.py"
 
 # Exact counts at authoring time — update intentionally when adding new handlers.
 EXPECTED_EVENT_COUNT = 5
-EXPECTED_COMMAND_COUNT = 51  # includes /arr, /copilot ×5 subcommand handlers, /downloads, /h, /hermes, /host, /incident, /morning, /nas, /plex, /q, /request, /resume, /sessions, /status, /tailscale, /upcoming, /uptime, /wake, /watching, etc.
+EXPECTED_COMMAND_COUNT = 52  # includes /arr, /copilot ×5 subcommand handlers, /downloads, /h, /hermes, /host, /incident, /morning, /nas, /news, /plex, /q, /request, /resume, /sessions, /status, /tailscale, /upcoming, /uptime, /wake, /watching, etc.
 EXPECTED_ACTION_COUNT = 9    # includes incident_action_run
-EXPECTED_TOTAL_COUNT = EXPECTED_EVENT_COUNT + EXPECTED_COMMAND_COUNT + EXPECTED_ACTION_COUNT  # 65
+EXPECTED_TOTAL_COUNT = EXPECTED_EVENT_COUNT + EXPECTED_COMMAND_COUNT + EXPECTED_ACTION_COUNT  # 66
 
 
 # ---------------------------------------------------------------------------

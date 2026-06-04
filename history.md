@@ -67,3 +67,4 @@
 - 2026-06-04: Renamed the dashboard Gemini status dot to Hermes, switched status checks to SSH bridge reachability, and added copy buttons for install commands, webhook URLs, and the Patreon docker cp command.
 - 2026-06-04: Fixed Overseerr/Seerr API key (was decoding base64 — key must be sent raw); updated Seerr v3.2.0 → v3.3.0
 - 2026-06-04: Wave 10A added hardened Time Machine plist parsing plus SABnzbd dashboard/Slack downloads visibility; syntax checks and Slack registration tests passed.
+- 2026-06-04: Wave 11B added a `/news` Slack command plus morning-briefing headlines, updated Slack command docs, and kept Slack registration validation green.

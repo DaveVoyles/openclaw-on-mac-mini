@@ -31,7 +31,7 @@ OpenClaw is a Slack-first personal AI assistant for homelab ops, media visibilit
 
 ## Key Slack commands
 
-OpenClaw currently registers **51 Slack slash commands**. These are the most useful day-to-day ones; use `/help` for the full list.
+OpenClaw currently registers **52 Slack slash commands**. These are the most useful day-to-day ones; use `/help` for the full list.
 
 ### AI & Chat
 - `/hermes <prompt>` — start a threaded Hermes session
@@ -55,6 +55,7 @@ OpenClaw currently registers **51 Slack slash commands**. These are the most use
 - `/status` — quick system snapshot with Uptime Kuma service summary
 - `/uptime` — show all Uptime Kuma services grouped by status-page section
 - `/morning` — trigger the owner morning briefing DM on demand
+- `/news [topic]` — show top headlines or search a topic
 - `/tailscale` — show current Tailscale device status
 - `/wake mbp|mbp2` — send a Wake-on-LAN packet
 - `/nas df|ls <path>|free` — browse NAS status and folders

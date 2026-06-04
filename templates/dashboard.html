@@ -803,7 +803,7 @@
         transition: background 0.15s, border-color 0.15s;
       }
       .qa-btn:hover { background: var(--accent, #7c3aed); border-color: var(--accent, #7c3aed); }
-      .jump-pill {
+      #mobile-jump-nav button, .prompt-pill {
         display: inline-block;
         padding: 0.35rem 0.75rem;
         margin-right: 0.4rem;
@@ -816,7 +816,7 @@
         white-space: nowrap;
         min-height: 36px;
       }
-      .jump-pill:active { background: rgba(124,58,237,0.35); }
+      #mobile-jump-nav button:active, .prompt-pill:active { background: rgba(124,58,237,0.35); }
 
       /* ── Mobile responsiveness ─────────────────────────────────────── */
       @media (max-width: 768px) {
@@ -944,6 +944,12 @@
           <button onclick="jumpTo('tailscale-card')" class="jump-pill">🌐 Tailscale</button>
           <button onclick="jumpTo('system-health-card')" class="jump-pill">🖥 Health</button>
           <button onclick="jumpTo('hermes-sessions-card')" class="jump-pill">📋 Sessions</button>
+          <button onclick="jumpTo('sonarr-calendar-card')" class="jump-pill">📅 TV</button>
+          <button onclick="jumpTo('radarr-watchlist-card')" class="jump-pill">🎬 Movies</button>
+          <button onclick="jumpTo('sabnzbd-card')" class="jump-pill">📥 Downloads</button>
+          <button onclick="jumpTo('overseerr-card')" class="jump-pill">🎭 Requests</button>
+          <button onclick="jumpTo('uptime-kuma-card')" class="jump-pill">📊 Uptime</button>
+          <button onclick="jumpTo('tools-links-card')" class="jump-pill">🛠️ Tools</button>
         </nav>
 
         <div id="pwa-install-banner" style="display:none;padding:0.5rem 1rem;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:8px;margin-bottom:0.75rem;align-items:center;justify-content:space-between;gap:0.5rem">
@@ -967,6 +973,12 @@
           </div>
           <div class="stat-pill" id="stat-hermes" onclick="document.getElementById('hermes-sessions-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Hermes">
             <span class="stat-icon">⚕</span><span id="stat-hermes-val">—</span>
+          </div>
+          <div class="stat-pill" id="stat-sabnzbd" onclick="document.getElementById('sabnzbd-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Downloads">
+            <span class="stat-icon">📥</span><span id="stat-sabnzbd-val">—</span>
+          </div>
+          <div class="stat-pill" id="stat-uptime" onclick="document.getElementById('uptime-kuma-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Uptime Kuma">
+            <span class="stat-icon">📊</span><span id="stat-uptime-val">—</span>
           </div>
         </div>
  
@@ -1137,10 +1149,10 @@
           </div>
           <!-- Hermes hint (shown when Hermes is selected) -->
           <div id="mobile-quick-prompts" style="display:none;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.5rem">
-            <button onclick="setQuickPrompt('Give me a quick system status summary')" class="jump-pill" style="font-size:0.72rem">📊 Status</button>
-            <button onclick="setQuickPrompt('What\'s new on Plex this week?')" class="jump-pill" style="font-size:0.72rem">🎬 Plex</button>
-            <button onclick="setQuickPrompt('Any alerts or issues I should know about?')" class="jump-pill" style="font-size:0.72rem">🔔 Alerts</button>
-            <button onclick="setQuickPrompt('What Hermes sessions did I run today?')" class="jump-pill" style="font-size:0.72rem">📋 Today</button>
+            <button onclick="setQuickPrompt('Give me a quick system status summary')" class="prompt-pill" style="font-size:0.72rem">📊 Status</button>
+            <button onclick="setQuickPrompt('What\'s new on Plex this week?')" class="prompt-pill" style="font-size:0.72rem">🎬 Plex</button>
+            <button onclick="setQuickPrompt('Any alerts or issues I should know about?')" class="prompt-pill" style="font-size:0.72rem">🔔 Alerts</button>
+            <button onclick="setQuickPrompt('What Hermes sessions did I run today?')" class="prompt-pill" style="font-size:0.72rem">📋 Today</button>
           </div>
           <div id="hermes-hint" style="display:none;margin-top:0.6rem;padding:0.75rem 1rem;background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.3);border-radius:8px;font-size:0.82rem;line-height:1.6;color:var(--text)">
             <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem;flex-wrap:wrap">
@@ -1687,35 +1699,41 @@
           <div class="card" id="tools-links-card" style="margin-bottom:1rem">
             <h2 style="margin:0 0 0.75rem">🛠️ Tools &amp; Services</h2>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:0.5rem">
-              <a href="http://localhost:9696" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.4rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:0.78rem;text-align:center;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+              <a href="https://prowlarr.davevoyles.synology.me" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.4rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:0.78rem;text-align:center;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
                 <span style="font-size:1.4rem">🔍</span><span>Prowlarr</span>
               </a>
-              <a href="http://localhost:6767" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.4rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:0.78rem;text-align:center;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+              <a href="https://bazarr.davevoyles.synology.me" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.4rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:0.78rem;text-align:center;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
                 <span style="font-size:1.4rem">🔤</span><span>Bazarr</span>
               </a>
-              <a href="http://localhost:8686" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.4rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:0.78rem;text-align:center;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+              <a href="https://lidarr.davevoyles.synology.me" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.4rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:0.78rem;text-align:center;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
                 <span style="font-size:1.4rem">🎵</span><span>Lidarr</span>
               </a>
-              <a href="http://192.168.1.8:3000" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.4rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:0.78rem;text-align:center;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+              <a href="https://grafana.davevoyles.synology.me" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.4rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:0.78rem;text-align:center;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
                 <span style="font-size:1.4rem">📊</span><span>Grafana</span>
               </a>
-              <a href="http://192.168.1.8:13378" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.4rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:0.78rem;text-align:center;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+              <a href="https://audiobookshelf.davevoyles.synology.me" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.4rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:0.78rem;text-align:center;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
                 <span style="font-size:1.4rem">🎧</span><span>Audiobookshelf</span>
               </a>
-              <a href="http://192.168.1.8:5000" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.4rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:0.78rem;text-align:center;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+              <a href="https://kavita.davevoyles.synology.me" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.4rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:0.78rem;text-align:center;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
                 <span style="font-size:1.4rem">📚</span><span>Kavita</span>
               </a>
-              <a href="http://192.168.1.8:8080" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.4rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:0.78rem;text-align:center;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+              <a href="https://qbittorrent.davevoyles.synology.me" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.4rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:0.78rem;text-align:center;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
                 <span style="font-size:1.4rem">🌊</span><span>qBittorrent</span>
               </a>
-              <a href="http://192.168.1.8:8775" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.4rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:0.78rem;text-align:center;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+              <a href="https://sabnzbd.davevoyles.synology.me" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.4rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:0.78rem;text-align:center;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
                 <span style="font-size:1.4rem">📰</span><span>SABnzbd</span>
               </a>
-              <a href="http://192.168.1.8:3001" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.4rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:0.78rem;text-align:center;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+              <a href="https://uptime.davevoyles.synology.me" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.4rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:0.78rem;text-align:center;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
                 <span style="font-size:1.4rem">💚</span><span>Uptime Kuma</span>
               </a>
+              <a href="https://adguard.davevoyles.synology.me" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.4rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:0.78rem;text-align:center;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+                <span style="font-size:1.4rem">🛡️</span><span>AdGuard</span>
+              </a>
+              <a href="https://homepage.davevoyles.synology.me" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.4rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:0.78rem;text-align:center;transition:background 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+                <span style="font-size:1.4rem">🏠</span><span>Homepage</span>
+              </a>
             </div>
-            <div style="font-size:0.7rem;color:var(--muted);margin-top:0.6rem">NAS services require LAN access (192.168.1.8) or Tailscale</div>
+            <div style="font-size:0.7rem;color:var(--muted);margin-top:0.6rem">All links use public HTTPS URLs — accessible from anywhere</div>
           </div>
           <!-- Spending -->
           <div class="card">
@@ -3204,6 +3222,30 @@
           const el = document.getElementById('stat-hermes-val');
           if (el) el.textContent = sessions.length ? `${sessions.length} sessions` : 'ready';
         } catch (_) {}
+
+        // SABnzbd pill
+        try {
+          const sab = await apiFetch('/api/sabnzbd/queue');
+          const sabEl = document.getElementById('stat-sabnzbd-val');
+          if (sabEl) {
+            const count = sab.queue_size || 0;
+            sabEl.textContent = count > 0 ? `${count} dl` : 'idle';
+          }
+        } catch(e) {}
+
+        // Uptime Kuma pill
+        try {
+          const uptime = await apiFetch('/api/uptime/status');
+          const uptimeEl = document.getElementById('stat-uptime-val');
+          if (uptimeEl) {
+            const down = uptime.down || 0;
+            const total = uptime.total || 0;
+            uptimeEl.textContent = down > 0 ? `⚠️ ${down}↓` : `${total}/✓`;
+            if (down > 0) {
+              document.getElementById('stat-uptime')?.style && (document.getElementById('stat-uptime').style.borderColor = 'var(--error, #f87171)');
+            }
+          }
+        } catch(e) {}
       }
 
       function renderRadarrWatchlist(data, errorMessage = '') {

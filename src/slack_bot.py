@@ -733,6 +733,7 @@ _HELP_TEXT = """
 
 *⚙️ Utilities*
 • `/morning` — Trigger your morning briefing DM
+• `/news [topic]` — Show top headlines or search a topic
 • `/help` — Show this command list
 
 _Tip: Most slash command replies are ephemeral, so only you can see them._
@@ -3179,6 +3180,7 @@ def _build_home_view(user_id: str, name: str) -> dict:
             "⚙️ Preferences & Help",
             [
                 "`/morning` — Trigger your morning briefing DM",
+                "`/news [topic]` — Show top headlines or search a topic",
                 "`/help` — Full command reference",
                 "`/simple on|off` — Toggle plain-language mode",
                 "`/clear` — Reset your current session state",
@@ -3989,6 +3991,71 @@ def _register_core_handlers(app: Any) -> None:
             )
         except Exception as exc:
             log.warning("handle_slash_status: failed to post ephemeral: %s", exc)
+
+    @app.command("/news")
+    async def handle_slash_news(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        import aiohttp
+
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", "")
+
+        api_key = os.environ.get("NEWSAPI_KEY", "")
+        if not api_key:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="⚠️ NEWSAPI_KEY not configured.",
+            )
+            return
+
+        topic = (body.get("text", "") or "").strip()
+
+        try:
+            params: dict[str, str] = {"country": "us", "pageSize": "8", "apiKey": api_key}
+            if topic:
+                params["q"] = topic
+                params.pop("country", None)
+                url = "https://newsapi.org/v2/everything"
+                params["sortBy"] = "publishedAt"
+                params["language"] = "en"
+            else:
+                url = "https://newsapi.org/v2/top-headlines"
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=6)) as resp:
+                    data = await resp.json()
+
+            articles = data.get("articles", [])
+            if not articles:
+                await client.chat_postEphemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="📰 No headlines found.",
+                )
+                return
+
+            header = f"📰 *Top Headlines{' — ' + topic if topic else ''}*\n"
+            lines = [header]
+            for article in articles[:8]:
+                title = article.get("title", "?")
+                source = article.get("source", {}).get("name", "")
+                if source:
+                    lines.append(f"• {title} _{source}_")
+                else:
+                    lines.append(f"• {title}")
+
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="\n".join(lines),
+            )
+        except Exception as exc:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=f"❌ News fetch failed: {exc}",
+            )
 
     # ------------------------------------------------------------------
     # Handler: /digest — per-user periodic file digest opt-in
@@ -5020,6 +5087,28 @@ async def _send_morning_briefing(client: Any) -> str:
             sections.append(f"✅ *Uptime Kuma:* all {total_services} services up")
     except Exception:
         pass
+
+    news_key = os.environ.get("NEWSAPI_KEY", "")
+    if news_key:
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.get(
+                    "https://newsapi.org/v2/top-headlines",
+                    params={"country": "us", "pageSize": "3", "apiKey": news_key},
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as r:
+                    news_data = await r.json()
+            articles = news_data.get("articles", [])
+            if articles:
+                news_lines = ["📰 *Top headlines:*"]
+                for article in articles[:3]:
+                    title = article.get("title", "?")
+                    if " - " in title:
+                        title = title.rsplit(" - ", 1)[0]
+                    news_lines.append(f"  • {title}")
+                sections.extend(news_lines)
+        except Exception:
+            pass
 
     message = "\n".join(sections)
     try:
