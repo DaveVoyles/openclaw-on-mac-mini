@@ -45,14 +45,11 @@ def _cache_set(key: str, value, ttl_seconds: int = 60):
 
 
 def _overseerr_headers():
-    import base64
     import os
 
-    raw = os.environ.get("OVERSEERR_API_KEY", "")
-    try:
-        key = base64.b64decode(raw).decode()
-    except Exception:
-        key = raw
+    # Seerr/Overseerr expects the raw API key value from settings.json
+    # (which is itself a base64 string) — do NOT decode it further
+    key = os.environ.get("OVERSEERR_API_KEY", "")
     return {"X-Api-Key": key, "Content-Type": "application/json"}
 
 
