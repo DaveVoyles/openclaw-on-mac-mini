@@ -3095,39 +3095,105 @@ def _is_vague_question(text: str, has_files: bool = False) -> bool:
 def _build_home_view(user_id: str, name: str) -> dict:
     """Build a Slack Block Kit Home tab view for the given user."""
     greeting_name = name if name and name != "there" else "there"
-    greeting = f"👋 Hi {greeting_name}! Welcome to your OpenClaw hub."
-
-    commands_text = (
-        "*Your commands:*\n"
-        "• `/chat <question>` — ask me anything\n"
-        "• `/hermes <question>` — always start a Hermes thread\n"
-        "• `/h <question>` — shorthand alias for Hermes\n"
-        "• `/wake mbp|mbp2` — wake a MacBook Pro on the LAN\n"
-        "• `/tailscale` — view Tailscale device status\n"
-        "• `/nas df|ls <path>|free` — inspect NAS storage and files\n"
-        "• `/help` — full command list\n"
-        "• `/files` — browse your uploaded files\n"
-        "• `/brief` — last 5 uploads at a glance\n"
-        "• `/search <keyword>` — search your file history\n"
-        "• `/research <topic>` — web research\n"
-        "• `/batch summarize|proofread|explain` — process all your files\n"
-        "• `/template list` — starter document templates\n"
-        "• `/simple on|off` — plain-language mode\n"
-        "• `/digest on|off|status` — daily file digest\n"
-        "• `/schedule <time>` — set digest delivery time\n"
-        "• `/saved` — view your bookmarked responses\n"
-        "• `/nickname <name>` — set your display name\n"
-        "• `/clear` — reset active file context\n"
-        "• `/metrics` — usage stats (admin)\n"
-        "• `/health` — bot status"
+    intro_text = (
+        f"*Hi {greeting_name}.* OpenClaw is your personal AI on Mac Mini M4 · Hermes · "
+        "claude-sonnet-4.6"
     )
 
+    command_sections = [
+        (
+            "🤖 AI & Sessions",
+            [
+                "`/chat <prompt>` — Ask OpenClaw in Slack",
+                "`/hermes <prompt>` — Start a Hermes thread",
+                "`/h <prompt>` — Quick Hermes alias",
+                "`/q <prompt>` — Quick ephemeral Hermes answer",
+                "`/resume [prompt]` — Resume your last Hermes session",
+                "`/sessions [n|resume n]` — Browse or resume Hermes sessions",
+                "`/copilot <prompt>` — Start a threaded Copilot CLI session",
+                "`/copilot-sessions` — List Copilot sessions",
+                "`/copilot-attach <id>` — Attach to a Copilot session",
+                "`/copilot-recap <id>` — Recap a Copilot session",
+                "`/copilot-cancel <id>` — Cancel an active Copilot run",
+                "`/copilot-end <id>` — End a Copilot session",
+                "`/research <topic>` — Run the research pipeline",
+            ],
+        ),
+        (
+            "📁 Files & Workspace",
+            [
+                "`/files [query]` — Browse synced documents",
+                "`/filesearch <query>` — Search your recent files",
+                "`/batch <action>` — Process uploaded files",
+                "`/brief` — Show your recent files",
+                "`/template [name]` — List or download templates",
+                "`/mypins` — Show your saved notes",
+                "`/metrics` — View 7-day workspace usage metrics",
+                "`/mystats` — View your personal usage stats",
+                "`/digest on|off` — Toggle digest delivery",
+                "`/schedule <time|off>` — Set your digest time",
+            ],
+        ),
+        (
+            "📬 Google & Integrations",
+            [
+                "`/inbox` — List unread Gmail messages",
+                "`/email <n|setup|forget|query>` — Read or search email",
+                "`/today` — Show today's calendar",
+                "`/calendar [today|week]` — View calendar events",
+                "`/clawbox <connect|sync|list|status>` — Manage Dropbox access",
+                "`/clawchan ...` — List or archive Slack channels",
+                "`/drive ...` — Search or read Google Drive files",
+                "`/contacts ...` — Search Google Contacts",
+            ],
+        ),
+        (
+            "🖥️ Host & Ops",
+            [
+                "`/status` — Quick system health snapshot",
+                "`/health` — Detailed OpenClaw bot health card",
+                "`/host <shortcut>` — Run a saved host-bridge shortcut",
+                "`/incident ...` — Start, inspect, or resolve incidents",
+                "`/wake mbp|mbp2` — Wake a MacBook Pro on the LAN",
+                "`/tailscale` — Show Tailscale device status",
+                "`/nas df|ls <path>|free` — Browse NAS status and folders",
+                "`/nas-share <path>` — Generate a NAS share link",
+            ],
+        ),
+        (
+            "🎬 Media",
+            [
+                "`/watching` — What's playing on Plex now",
+                "`/plex <status|recent|search|request>` — Check Plex / Overseerr",
+                "`/request <title>` — Search Overseerr and request media",
+                "`/arr` — View Sonarr/Radarr queues",
+                "`/upcoming` — Show upcoming Sonarr episodes",
+            ],
+        ),
+        (
+            "⚙️ Preferences & Help",
+            [
+                "`/help` — Full command reference",
+                "`/simple on|off` — Toggle plain-language mode",
+                "`/clear` — Reset your current session state",
+                "`/nickname <name>` — Set the name OpenClaw uses for you",
+            ],
+        ),
+    ]
+
     blocks: list[dict] = [
-        {"type": "header", "text": {"type": "plain_text", "text": greeting, "emoji": True}},
-        {"type": "divider"},
-        {"type": "section", "text": {"type": "mrkdwn", "text": commands_text}},
+        {"type": "header", "text": {"type": "plain_text", "text": "⚕ OpenClaw", "emoji": True}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": intro_text}},
         {"type": "divider"},
     ]
+
+    for title, commands in command_sections:
+        blocks.append(
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*{title}*\n" + "\n".join(commands)},
+            }
+        )
 
     recent = list(reversed(_file_history.get(user_id, [])))[:3]
     if recent:
@@ -3136,18 +3202,25 @@ def _build_home_view(user_id: str, name: str) -> dict:
             fname = f.get("name", "unknown")
             uploaded = f.get("uploaded_at", "")[:10] if f.get("uploaded_at") else ""
             file_lines.append(f"• *{fname}*" + (f" ({uploaded})" if uploaded else ""))
-        blocks.append(
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": "*📁 Your recent files:*\n" + "\n".join(file_lines)},
-            }
+        blocks.extend(
+            [
+                {"type": "divider"},
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": "*📁 Your recent files*\n" + "\n".join(file_lines)},
+                },
+            ]
         )
-        blocks.append({"type": "divider"})
 
     blocks.append(
         {
             "type": "context",
-            "elements": [{"type": "mrkdwn", "text": "📖 Full guide: `/help` · Questions? Just send me a DM!"}],
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": "Dashboard: https://openclaw.davevoyles.synology.me/dashboard · 48 commands available · Type `/help` for the full list",
+                }
+            ],
         }
     )
 

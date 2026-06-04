@@ -79,6 +79,7 @@ from .api_handlers import (
     api_system_health_handler,
     api_system_timemachine_handler,
     api_tailscale_status_handler,
+    api_uptime_kuma_handler,
     api_task_status_detail_handler,
     api_task_status_handler,
     api_threads_handler,
@@ -252,6 +253,7 @@ def setup_dashboard(
     app.router.add_get("/api/network/wol", api_network_wol_handler)
     app.router.add_post("/api/network/wol", action(api_network_wol_handler))
     app.router.add_get("/api/tailscale/status", api_tailscale_status_handler)
+    app.router.add_get("/api/uptime/status", api_uptime_kuma_handler)
     app.router.add_get("/api/system/alerts", api_system_alerts_handler)
     app.router.add_get("/api/system/health", api_system_health_handler)
     app.router.add_get("/api/system/timemachine", api_system_timemachine_handler)

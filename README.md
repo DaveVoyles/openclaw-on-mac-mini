@@ -1,155 +1,115 @@
 # OpenClaw 🤖
 
-Personal AI assistant running on a home Mac Mini server. Ask it anything via Slack — it can draft emails, do research, summarize documents, search your files, and more.
+OpenClaw is a Slack-first personal AI assistant for homelab ops, media visibility, file workflows, and quick research — running on a **Mac Mini M4 Pro** at `192.168.1.93`.
 
-Runs on a **Mac Mini M4 Pro** alongside a Synology NAS and a 20+ container Docker stack.
-
-|                   |                                                              |
-| ----------------- | ------------------------------------------------------------ |
-| **Host**          | Mac Mini M4 Pro (`192.168.1.93`)                             |
-| **Dashboard**     | [openclaw.davevoyles.synology.me/dashboard](https://openclaw.davevoyles.synology.me/dashboard) |
-| **Web Chat**      | [chat.davevoyles.synology.me](https://chat.davevoyles.synology.me) |
-| **Health**        | `https://openclaw.davevoyles.synology.me/health`             |
-| **LLM**           | Gemini 2.5 Flash (primary) + Ollama `gemma4:e4b` (local)    |
-| **Interfaces**    | Slack bot · Web UI · CLI                                     |
-
-> **Note (May 2026):** Discord support was removed. Slack is now the sole chat interface. See [docs/AGENT-GUIDE.md](docs/AGENT-GUIDE.md) for architecture details.
-
----
-
-## What it can do
-
-- **Ask anything** — draft emails, proofread, explain documents, research topics
-- **File search** — upload a document and ask questions about it
-- **Web research** — pull summaries from the web on any topic
-- **Scheduled tasks** — set recurring reminders or digests
-- **System monitoring** — container health, logs, metrics
-- **Integrations** — Gmail, Dropbox, Google Calendar
-
----
+| | |
+|---|---|
+| **Host** | Mac Mini M4 Pro (`192.168.1.93`) |
+| **Dashboard** | [openclaw.davevoyles.synology.me/dashboard](https://openclaw.davevoyles.synology.me/dashboard) |
+| **Web Chat** | [chat.davevoyles.synology.me](https://chat.davevoyles.synology.me) |
+| **Health** | `https://openclaw.davevoyles.synology.me/health` |
+| **LLM** | Hermes · claude-sonnet-4.6 (GitHub Copilot) |
 
 ## Interfaces
 
-| Interface | How to access | Best for |
-|-----------|--------------|----------|
-| **Slack** | DM `@OpenClaw` or use slash commands | Day-to-day queries, file sharing, remote Mac Mini control |
-| **Web Chat** | [chat.davevoyles.synology.me](https://chat.davevoyles.synology.me) | Long conversations, rich formatting |
-| **CLI** | `openclaw` (after install) | Power users, scripting |
+| Role | Interface | Access | Best for |
+|---|---|---|---|
+| **Primary** | Slack | DM `@OpenClaw` or use slash commands | Day-to-day chat, media checks, ops shortcuts |
+| **Secondary** | Dashboard | [openclaw.davevoyles.synology.me/dashboard](https://openclaw.davevoyles.synology.me/dashboard) | Visual status, controls, transcripts |
+| **Also available** | Web Chat | [chat.davevoyles.synology.me](https://chat.davevoyles.synology.me) | Browser-based conversations |
 
-### Key Slack commands
+> Discord has been removed. Slack is the main messaging interface.
 
-```
-/copilot <prompt>   Run Copilot CLI on the Mac Mini in a threaded session
-/host <subcommand>  Quick-action shortcuts (status, logs, restart, plex-fix, …)
-/incident           Declare and track an incident
-/chat <question>    Ask anything
-/research <topic>   Web search + summary
-/filesearch <term>  Search uploaded files
-/digest             Summary of today's activity
-/help               Full command list
-```
+## What it can do
 
----
+- **Ask anything** via Hermes — quick answers, threaded sessions, research, and summaries.
+- **Watch your media stack** — Plex now playing, recent activity, and Sonarr/Radarr download queues.
+- **Handle media requests** — search Overseerr and request movies or TV from Slack.
+- **Show network visibility** — Tailscale device status, NAS reachability, and host health.
+- **Send notifications** — ntfy push alerts, Slack DMs, digests, briefings, and download-complete notices.
+- **Work with files** — browse synced files, search recent uploads, and pull quick briefs.
+
+## Key Slack commands
+
+OpenClaw currently registers **48 Slack slash commands**. These are the most useful day-to-day ones; use `/help` for the full list.
+
+### AI & Chat
+- `/hermes <prompt>` — start a threaded Hermes session
+- `/q <prompt>` — get a quick ephemeral Hermes answer
+- `/resume [prompt]` — continue your last Hermes session
+- `/sessions [n|resume n]` — list or reopen Hermes sessions
+- `/research <topic>` — run the research pipeline
+
+### Files & Knowledge
+- `/files [query]` — browse synced documents
+- `/filesearch <query>` — search your recent files
+
+### Media
+- `/watching` — see what Plex is playing right now
+- `/arr` — view Sonarr/Radarr download queues
+- `/request <title>` — request media through Overseerr
+- `/upcoming` — show episodes airing soon from Sonarr
+
+### Ops & Network
+- `/status` — quick system snapshot
+- `/tailscale` — show current Tailscale device status
+- `/wake mbp|mbp2` — send a Wake-on-LAN packet
+- `/nas df|ls <path>|free` — browse NAS status and folders
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    U[User] --> SL[Slack]
-    U --> WEB[Web UI]
-    SL & WEB --> BOT[OpenClaw Server\nsrc/slack_bot.py]
-    BOT --> ORCH[Orchestrator]
-    ORCH --> LLM[Gemini 2.5 Flash]
-    ORCH --> LOCAL[Ollama gemma4:e4b]
-    ORCH --> SKILLS[Skills / Tools]
-    SKILLS --> EXT[Gmail · Dropbox · Calendar\nSonarr · Radarr · Plex]
-    BOT --> MEM[Vector Store\n+ Conversation Memory]
+    SL[Slack] --> OC[OpenClaw Server]
+    WC[Web Chat] --> OC
+    OC --> HA[Hermes Agent
+SSH bridge]
+    HA --> LLM[claude-sonnet-4.6
+GitHub Copilot]
+    OC --> DB[Dashboard]
+    OC --> MEDIA[Plex · Tautulli
+Sonarr · Radarr · Overseerr]
+    OC --> NET[Tailscale]
+    OC --> NOTIFY[ntfy · Slack DM]
 ```
 
----
-
-## Deploy
+## Install
 
 ```bash
-# First time
-cp .env.example .env   # fill in API keys
+# Install the Hermes client on your Mac
+bash <(curl -fsSL https://openclaw.davevoyles.synology.me/ih)
+
+# Configure and run OpenClaw
+cp .env.example .env
+# fill in your tokens, API keys, and service URLs
+
 docker compose up -d --build
-
-# Day-to-day (after code changes)
-make ship-server
-
-# Verify
-curl -s https://openclaw.davevoyles.synology.me/health | python3 -m json.tool
 ```
 
-### Environment variables (`.env`)
-
-| Key | Required | Description |
-|-----|----------|-------------|
-| `SLACK_BOT_TOKEN` | Yes | Slack app OAuth token (`xoxb-…`) |
-| `SLACK_APP_TOKEN` | Yes | Slack app-level token for Socket Mode (`xapp-…`) |
-| `SLACK_SIGNING_SECRET` | Yes | Slack app signing secret |
-| `OPENCLAW_HOST_BRIDGE_ALLOWED_USERS` | Yes | Comma-separated Slack user IDs allowed to run `/copilot` and `/host` |
-| `GEMINI_API_KEY` | Yes | Google AI Studio |
-| `GMAIL_CREDENTIALS_FILE` | No | Gmail OAuth JSON |
-| `DROPBOX_APP_KEY` | No | Dropbox API app key |
-
-See `.env.example` for the full list.
-
----
+### Important environment groups
+- **Slack & dashboard:** bot tokens, notify user, API auth
+- **Hermes / host bridge:** `COPILOT_BACKEND=hermes`, bridge paths, Copilot proxy
+- **Media services:** Tautulli, Sonarr, Radarr, Overseerr
+- **Notifications & monitoring:** ntfy, Slack DM, Uptime Kuma, Wake-on-LAN
+- **NAS & search providers:** NAS credentials, GitHub repos, search API keys
 
 ## Operations
 
 ```bash
-# Restart
-cd ~/openclaw && docker compose restart
+# Validate env docs
+make validate-env
 
-# View logs
-docker logs openclaw -f --tail 50
+# Rebuild locally
 
-# Rebuild after code changes
 docker compose up -d --build
 
-# Stop
-docker compose down
+# Check health
+curl -s https://openclaw.davevoyles.synology.me/health | python3 -m json.tool
 ```
-
----
-
-## Security
-
-- Container: `read_only`, `cap_drop: ALL`, `no-new-privileges`
-- Whitelisted Slack user IDs only (`OPENCLAW_HOST_BRIDGE_ALLOWED_USERS`)
-- All actions logged to `data/audit/YYYY-MM-DD.jsonl`
-- Resource limits: 2 GB RAM, 2 CPU cores
-- Destructive commands require button-click approval
-- `/estop` halts all write actions immediately
-
----
 
 ## Docs
 
-| Document | Description |
-|----------|-------------|
-| [docs/PRODUCT-ROADMAP.md](docs/PRODUCT-ROADMAP.md) | Active roadmap and planned features |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Detailed deployment guide |
-| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Development workflow |
-| [docs/TESTING.md](docs/TESTING.md) | Running tests |
-| [CHANGELOG.md](CHANGELOG.md) | Release history |
-
-User-facing guides live at `/parents-guide`, `/webui-guide`, and `/onboarding` on the server.
-
----
-
-## Developer Tools
-
-| Command | Purpose |
-|---------|---------|
-| `make help` | Show all available make targets |
-| `make smoke` | Fast smoke test gate (~18s) |
-| `make lint-fix` | Auto-fix lint violations |
-| `make validate-env` | Validate .env against .env.example |
-| `pre-commit install` | Install git hooks (ruff, mypy, schema check) |
-
-See [docs/API.md](docs/API.md) for HTTP endpoint reference.
-See [docs/TESTING.md](docs/TESTING.md) for test suite structure.
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — deployment flow
+- [docs/TESTING.md](docs/TESTING.md) — test commands and conventions
+- [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) — development workflow
+- [CHANGELOG.md](CHANGELOG.md) — release history

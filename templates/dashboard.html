@@ -946,6 +946,14 @@
           <button onclick="jumpTo('hermes-sessions-card')" class="jump-pill">📋 Sessions</button>
         </nav>
 
+        <div id="pwa-install-banner" style="display:none;padding:0.5rem 1rem;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:8px;margin-bottom:0.75rem;align-items:center;justify-content:space-between;gap:0.5rem">
+          <span style="font-size:0.82rem">📱 Install OpenClaw as an app for quick access</span>
+          <div style="display:flex;gap:0.5rem">
+            <button id="pwa-install-btn" style="padding:0.3rem 0.7rem;background:rgba(124,58,237,0.3);border:1px solid rgba(124,58,237,0.5);border-radius:6px;color:#a78bfa;font-size:0.8rem;cursor:pointer">Install</button>
+            <button onclick="document.getElementById('pwa-install-banner').style.display='none';localStorage.setItem('pwa_dismissed','1')" style="padding:0.3rem 0.5rem;background:none;border:none;color:var(--muted);font-size:0.9rem;cursor:pointer">✕</button>
+          </div>
+        </div>
+
         <!-- Quick Stats Strip -->
         <div id="quick-stats-strip" style="display:flex;flex-wrap:wrap;gap:0.5rem;padding:0.5rem 0;margin-bottom:0.5rem">
           <div class="stat-pill" id="stat-plex" onclick="document.getElementById('plex-activity-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Plex">
@@ -1662,6 +1670,19 @@
           <div id="system-ok-banner" style="display:none;margin-bottom:1rem;padding:0.5rem 1rem;background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.2);border-radius:8px;font-size:0.82rem;color:#4ade80;grid-column:1 / -1">
             ✅ All systems nominal
           </div>
+          <div class="card" id="uptime-kuma-card" style="margin-bottom:1rem">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+              <h2 style="margin:0">📊 Service Status</h2>
+              <div style="display:flex;gap:0.5rem;align-items:center">
+                <span id="uptime-overall-badge" style="font-size:0.75rem;padding:0.2rem 0.5rem;border-radius:10px"></span>
+                <span id="uptime-last-updated" class="live-badge"></span>
+                <button onclick="loadUptimeStatus()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">↻</button>
+              </div>
+            </div>
+            <div id="uptime-services-list" style="margin-top:0.75rem;display:flex;flex-direction:column;gap:0.25rem">
+              <div style="color:var(--muted);font-size:0.82rem;font-style:italic">Loading…</div>
+            </div>
+          </div>
           <!-- Spending -->
           <div class="card">
             <h2>&#128176; Gemini Spending</h2>
@@ -2187,6 +2208,9 @@
           <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem">
             <h2 style="margin:0">🎟️ Media Requests</h2>
             <button onclick="loadOverseerrRequests()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">↻</button>
+          </div>
+          <div id="overseerr-setup-note" style="display:none;margin-top:0.75rem;padding:0.5rem;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:6px;font-size:0.82rem">
+            🔑 <strong>Setup needed:</strong> Go to <code>Overseerr → Settings → General</code> and copy the API Key, then update <code>OVERSEERR_API_KEY</code> in <code>.env</code> and restart the container.
           </div>
           <div style="display:flex;gap:0.5rem;margin-top:0.75rem">
             <input id="overseerr-search-input" type="text" placeholder="Search movies &amp; TV shows…"
@@ -3254,6 +3278,7 @@
 
       async function loadOverseerrRequests() {
         const el = document.getElementById('overseerr-requests-list');
+        const setupNote = document.getElementById('overseerr-setup-note');
         const headers = typeof _actionAuthHeaders === 'function' ? _actionAuthHeaders('dashboard-ui') : {};
         try {
           const r = await fetch('/api/overseerr/recent', { headers });
@@ -3261,6 +3286,14 @@
           const statusLabel = {1:'⏳ Pending',2:'✅ Approved',3:'❌ Declined',4:'🟢 Available',5:'🔄 Processing'};
           const typeIcon = {movie:'🎬',tv:'📺'};
           if (!el) return;
+          if (setupNote) setupNote.style.display = 'none';
+          if (d.error && d.error.includes('403')) {
+            if (setupNote) setupNote.style.display = 'block';
+            el.innerHTML = `<div style="padding:0.5rem;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:6px;font-size:0.82rem">
+              🔑 <strong>Setup needed:</strong> Go to <code>Overseerr → Settings → General</code> and copy the API Key, then update <code>OVERSEERR_API_KEY</code> in <code>.env</code> and restart the container.
+            </div>`;
+            return;
+          }
           const items = d.requests || [];
           if (!items.length) {
             el.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;font-style:italic">No requests yet</div>';
@@ -3272,6 +3305,7 @@
               <span style="font-size:0.72rem;color:var(--muted)">${esc(statusLabel[req.status] || `#${req.status}`)}</span>
             </div>`).join('');
         } catch (e) {
+          if (setupNote) setupNote.style.display = 'none';
           if (el) el.innerHTML = '<div style="color:#ef4444;font-size:0.82rem">⚠ Failed to load</div>';
         }
       }
@@ -3367,6 +3401,7 @@
       }
 
       document.addEventListener('DOMContentLoaded', () => { loadOverseerrRequests(); });
+      document.addEventListener('DOMContentLoaded', () => { loadUptimeStatus(); setInterval(loadUptimeStatus, 60000); });
       document.addEventListener('DOMContentLoaded', () => { loadSonarrCalendar(); setInterval(loadSonarrCalendar, 300000); });
 
       function renderSkills(skills) {
@@ -5773,6 +5808,55 @@
         }
       }
 
+      async function loadUptimeStatus() {
+        const el = document.getElementById('uptime-services-list');
+        const badge = document.getElementById('uptime-overall-badge');
+        const headers = typeof _actionAuthHeaders === 'function' ? _actionAuthHeaders('dashboard-ui') : {};
+        try {
+          const r = await fetch('/api/uptime/status', { headers });
+          const d = await r.json();
+          if (d.error) {
+            if (el) el.innerHTML = `<div style="color:#ef4444;font-size:0.82rem">⚠ ${esc(d.error)}</div>`;
+            return;
+          }
+          if (badge) {
+            if (d.all_up) {
+              badge.textContent = '✅ All systems operational';
+              badge.style.background = 'rgba(74,222,128,0.1)';
+              badge.style.color = '#4ade80';
+              badge.style.border = '1px solid rgba(74,222,128,0.3)';
+            } else {
+              badge.textContent = `⚠ ${d.down} down`;
+              badge.style.background = 'rgba(239,68,68,0.1)';
+              badge.style.color = '#ef4444';
+              badge.style.border = '1px solid rgba(239,68,68,0.3)';
+            }
+          }
+          const groups = {};
+          (d.services || []).forEach(service => { (groups[service.group] = groups[service.group] || []).push(service); });
+          if (el) {
+            const rendered = Object.entries(groups).map(([group, services]) => `
+              ${group ? `<div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin:0.4rem 0 0.2rem">${esc(group)}</div>` : ''}
+              ${services.map(service => `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0.5rem;background:${service.up ? 'rgba(74,222,128,0.04)' : 'rgba(239,68,68,0.06)'};border-radius:6px;border:1px solid ${service.up ? 'rgba(74,222,128,0.15)' : 'rgba(239,68,68,0.2)'}">
+                  <div style="display:flex;align-items:center;gap:0.5rem">
+                    <span style="font-size:0.75rem;color:${service.up ? '#4ade80' : '#ef4444'}">●</span>
+                    <span style="font-size:0.82rem;color:${service.up ? 'var(--text)' : '#ef4444'}">${esc(service.name || '?')}</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:0.5rem">
+                    ${service.uptime ? `<span style="font-size:0.7rem;color:var(--muted)">${Math.round(service.uptime * 100) / 100}%</span>` : ''}
+                    <span style="font-size:0.75rem;font-weight:600;color:${service.up ? '#4ade80' : '#ef4444'}">${service.up ? 'UP' : 'DOWN'}</span>
+                  </div>
+                </div>`).join('')}
+            `).join('');
+            el.innerHTML = rendered || '<div style="color:var(--muted);font-size:0.82rem;font-style:italic">No services published on the status page.</div>';
+          }
+          if (typeof _stampUpdated === 'function') _stampUpdated('uptime-last-updated');
+        } catch (e) {
+          if (el) el.innerHTML = '<div style="color:#ef4444;font-size:0.82rem">⚠ Failed — <button onclick="loadUptimeStatus()" style="background:none;border:none;color:#ef4444;cursor:pointer;text-decoration:underline">retry</button></div>';
+        }
+      }
+
       function _loadBadgeColor(value) {
         if (value < 2.0) return { bg: 'rgba(74,222,128,0.15)', fg: '#4ade80' };
         if (value < 4.0) return { bg: 'rgba(250,204,21,0.16)', fg: '#facc15' };
@@ -7479,6 +7563,47 @@
         savePromptLibrary(lib);
         refreshPromptLibrarySelect();
       }
+
+      // PWA install prompt
+      let _pwaPrompt = null;
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        _pwaPrompt = e;
+        if (!localStorage.getItem('pwa_dismissed')) {
+          const banner = document.getElementById('pwa-install-banner');
+          if (banner) banner.style.display = 'flex';
+        }
+      });
+
+      document.getElementById('pwa-install-btn')?.addEventListener('click', async () => {
+        if (!_pwaPrompt) return;
+        _pwaPrompt.prompt();
+        const { outcome } = await _pwaPrompt.userChoice;
+        if (outcome === 'accepted') {
+          document.getElementById('pwa-install-banner').style.display = 'none';
+          localStorage.setItem('pwa_dismissed', '1');
+        }
+        _pwaPrompt = null;
+      });
+
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      }
+
+      window.addEventListener('DOMContentLoaded', () => {
+        const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+        const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches;
+        if (isIOS && !isInStandaloneMode && !localStorage.getItem('pwa_dismissed')) {
+          const banner = document.getElementById('pwa-install-banner');
+          if (banner) {
+            const bannerText = banner.querySelector('span');
+            if (bannerText) bannerText.textContent = '📱 Add to Home Screen: tap Share → "Add to Home Screen"';
+            banner.style.display = 'flex';
+            const installBtn = document.getElementById('pwa-install-btn');
+            if (installBtn) installBtn.style.display = 'none';
+          }
+        }
+      });
 
       document.addEventListener('DOMContentLoaded', () => {
         initThemeToggle();

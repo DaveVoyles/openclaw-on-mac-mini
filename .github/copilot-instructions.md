@@ -702,10 +702,22 @@ Code and docs must stay in sync. Doc drift is a form of tech debt.
 - Config file comments
 - This file and `.github/agents/autonomous-fleet-agent.md` (when agent behavior changes)
 
+**Project-specific doc rules (OpenClaw):**
+
+Every wave of changes **must** include these checks before committing:
+
+1. **`README.md`** — update whenever: a new integration is added, a Slack command is added/removed, the primary AI/model changes, the architecture changes, or the interfaces table changes. The README must always reflect the actual running system, not the system as it was months ago.
+
+2. **`.env.example`** — update whenever a new environment variable is added to `.env` or referenced in code. Every variable used in the codebase must have a documented entry in `.env.example` with a comment explaining what it is and where to get the value. Never let `.env` and `.env.example` drift.
+
+3. **Slack `/help` text and home tab** — update whenever Slack commands are added or removed. The `_HELP_TEXT` constant and `handle_app_home_opened` view must always list the full current command set.
+
 **Doc sync checklist (run at wave completion):**
 
 - [ ] Did any public-facing behavior change? → update README/docs
-- [ ] Did any config format change? → update config comments and docs
+- [ ] Did any config format change? → update `.env.example` with new vars + comments
+- [ ] Were any Slack commands added/removed? → update `_HELP_TEXT` and home tab view
+- [ ] Did any new integration get added? → update README integrations/architecture sections
 - [ ] Did any agent instruction change? → verify Instruction Consistency Policy
 
 **Rule:** If you cannot update a doc in the same wave, log it as `⚠️ Doc debt` in the wave summary with a clear description of what is out of sync.
@@ -998,7 +1010,7 @@ Write operations that are safe to run more than once. A second run should produc
 ---
 
 **Version:** 5.23
-**Last Updated:** May 19, 2026
+**Last Updated:** June 4, 2026
 **Best For:** Base session behavior — load this always. For fleet/orchestration, also load `.github/agents/autonomous-fleet-agent.md`.
 
 Consumer repos should refresh their copied shared files when the version changes.

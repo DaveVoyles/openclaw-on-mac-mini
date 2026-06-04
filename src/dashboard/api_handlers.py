@@ -6107,3 +6107,53 @@ async def api_webhook_radarr_handler(request):
         log.info("Radarr webhook test received")
 
     return web.Response(status=200, text="OK")
+
+
+async def api_uptime_kuma_handler(request):
+    """GET /api/uptime/status — Uptime Kuma status page."""
+    import os
+
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+
+    base = os.environ.get("UPTIME_KUMA_URL", "http://host.docker.internal:3001")
+    slug = os.environ.get("UPTIME_KUMA_STATUS_SLUG", "main")
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{base}/api/status-page/{slug}",
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as response:
+                data = await response.json()
+
+        groups = data.get("publicGroupList", [])
+        services: list[dict[str, object]] = []
+        for group in groups:
+            for monitor in group.get("monitorList", []):
+                services.append(
+                    {
+                        "name": monitor.get("name", "?"),
+                        "group": group.get("name", ""),
+                        "up": not monitor.get("currentDown", True),
+                        "uptime": monitor.get("uptime", 0),
+                        "url": monitor.get("url", ""),
+                    }
+                )
+
+        all_up = all(service["up"] for service in services) if services else True
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps(
+                {
+                    "services": services,
+                    "all_up": all_up,
+                    "total": len(services),
+                    "down": sum(1 for service in services if not service["up"]),
+                }
+            ),
+        )
+    except Exception as exc:
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps({"error": str(exc), "services": []}),
+        )
