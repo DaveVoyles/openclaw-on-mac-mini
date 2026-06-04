@@ -725,6 +725,7 @@ _HELP_TEXT = """
 
 *🎬 Media*
 • `/watching` — See what Plex is playing right now
+• `/media` — Active Plex streams, recent plays, recently added
 • `/plex <status|recent|search|request>` — Check Plex / Overseerr
 • `/request <title>` — Search Overseerr and request media
 • `/arr` — View Sonarr/Radarr/Lidarr queues
@@ -735,6 +736,7 @@ _HELP_TEXT = """
 • `/morning` — Trigger your morning briefing DM
 • `/news [topic]` — Show top headlines or search a topic
 • `/adguard` — DNS stats: queries, block rate, top blocked domains
+• `/grafana` — Grafana health status and dashboard links
 • `/help` — Show this command list
 
 _Tip: Most slash command replies are ephemeral, so only you can see them._
@@ -3170,6 +3172,7 @@ def _build_home_view(user_id: str, name: str) -> dict:
             "🎬 Media",
             [
                 "`/watching` — What's playing on Plex now",
+                "`/media` — Active Plex streams, recent plays, recently added",
                 "`/plex <status|recent|search|request>` — Check Plex / Overseerr",
                 "`/request <title>` — Search Overseerr and request media",
                 "`/arr` — View Sonarr/Radarr/Lidarr queues",
@@ -3183,6 +3186,7 @@ def _build_home_view(user_id: str, name: str) -> dict:
                 "`/morning` — Trigger your morning briefing DM",
                 "`/news [topic]` — Show top headlines or search a topic",
                 "`/adguard` — DNS stats: queries, block rate, top blocked domains",
+                "`/grafana` — Grafana health status and dashboard links",
                 "`/help` — Full command reference",
                 "`/simple on|off` — Toggle plain-language mode",
                 "`/clear` — Reset your current session state",
@@ -4981,6 +4985,33 @@ async def _send_morning_briefing(client: Any) -> str:
             pass
 
     try:
+        nas_path = os.environ.get("NAS_BACKUP_PATH", "/Volumes/Misc")
+        if os.path.exists(nas_path):
+            usage = shutil.disk_usage(nas_path)
+            pct = usage.used / usage.total * 100
+            sections.append(
+                f"💾 *NAS disk:* {pct:.1f}% used ({usage.free // 1_073_741_824:.0f} GB free)"
+            )
+    except Exception:
+        pass
+
+    # Tailscale peers
+    try:
+        from host_bridge import _enabled as _host_bridge_enabled, run_shell as _run_shell_ts
+
+        if _host_bridge_enabled():
+            ts_output = await _run_shell_ts(command="tailscale status --json", slack_user_id="slack", timeout_s=8)
+            ts_text = ts_output if isinstance(ts_output, str) else (getattr(ts_output, "stdout", "") or "")
+            import json as _json
+            ts_data = _json.loads(ts_text)
+            peers = ts_data.get("Peer", {})
+            online = sum(1 for p in peers.values() if p.get("Online", False))
+            total_peers = len(peers)
+            sections.append(f"🌐 *Tailscale:* {online}/{total_peers} peers online")
+    except Exception:
+        pass
+
+    try:
         db_path = os.path.expanduser("~/.hermes/state.db")
         yesterday = _time.time() - 86400
         conn = sqlite3.connect(f"file:{db_path}?immutable=1", uri=True)
@@ -4992,17 +5023,6 @@ async def _send_morning_briefing(client: Any) -> str:
         finally:
             conn.close()
         sections.append(f"🤖 *Hermes sessions yesterday:* {count}")
-    except Exception:
-        pass
-
-    try:
-        nas_path = os.environ.get("NAS_BACKUP_PATH", "/Volumes/Misc")
-        if os.path.exists(nas_path):
-            usage = shutil.disk_usage(nas_path)
-            pct = usage.used / usage.total * 100
-            sections.append(
-                f"💾 *NAS disk:* {pct:.1f}% used ({usage.free // 1_073_741_824:.0f} GB free)"
-            )
     except Exception:
         pass
 
@@ -8467,6 +8487,145 @@ def _register_integration_handlers(app: Any) -> None:
             await client.chat_postMessage(channel=channel_id, text=text, mrkdwn=True)
         except Exception as e:
             log.warning("Slack send failed in /adguard: %s", e)
+
+
+    @app.command("/grafana")
+    async def handle_grafana(ack: Any, command: dict, client: Any) -> None:
+        """Show Grafana status and quick links to key dashboards."""
+        await ack()
+        import os
+        import aiohttp as _aiohttp
+
+        channel_id = command.get("channel_id", "")
+        user_id = command.get("user_id", "")
+        grafana_url = os.environ.get("GRAFANA_URL", "https://grafana.davevoyles.synology.me")
+
+        try:
+            async with _aiohttp.ClientSession() as s:
+                async with s.get(f"{grafana_url}/api/health", timeout=_aiohttp.ClientTimeout(total=5)) as r:
+                    health = await r.json()
+            version = health.get("version", "?")
+            db = health.get("database", "?")
+            status_line = f"✅ Grafana v{version} — DB: {db}"
+        except Exception as exc:
+            status_line = f"❌ Grafana unreachable: {exc}"
+
+        text = (
+            f"📊 *Grafana* — {status_line}\n\n"
+            f"*Quick Links*\n"
+            f"• <{grafana_url}|🏠 Home>\n"
+            f"• <{grafana_url}/d/node-exporter|🖥️ Node Exporter (System)>\n"
+            f"• <{grafana_url}/d/docker|🐳 Docker Containers>\n"
+            f"• <{grafana_url}/alerting/list|🔔 Alert Rules>\n"
+            f"• <{grafana_url}/dashboards|📋 All Dashboards>"
+        )
+        try:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text, mrkdwn=True)
+        except Exception as e:
+            log.warning("Slack send failed in /grafana: %s", e)
+
+
+    @app.command("/media")
+    async def handle_media(ack: Any, command: dict, client: Any) -> None:
+        """Show combined Plex/Tautulli: active streams, recent plays, recently added."""
+        await ack()
+        import os
+        import aiohttp as _aiohttp
+        from datetime import datetime, timezone
+
+        channel_id = command.get("channel_id", "")
+        user_id = command.get("user_id", "")
+        tautulli_key = os.environ.get("TAUTULLI_API_KEY", "")
+        tautulli_url = os.environ.get("TAUTULLI_URL", "")
+        # Use public URL if the configured URL is internal
+        if not tautulli_url or tautulli_url.startswith("http://host.") or tautulli_url.startswith("http://localhost"):
+            tautulli_url = "https://tautulli.davevoyles.synology.me"
+
+        if not tautulli_key:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="⚠️ TAUTULLI_API_KEY not configured.")
+            return
+
+        sections = []
+
+        try:
+            async with _aiohttp.ClientSession() as s:
+                # Active streams
+                async with s.get(
+                    f"{tautulli_url}/api/v2",
+                    params={"apikey": tautulli_key, "cmd": "get_activity"},
+                    timeout=_aiohttp.ClientTimeout(total=5),
+                ) as r:
+                    act = (await r.json()).get("response", {}).get("data", {})
+
+                stream_count = act.get("stream_count", 0)
+                sessions = act.get("sessions", [])
+                if sessions:
+                    stream_lines = [f"🎬 *Now Streaming* ({stream_count} active)"]
+                    for sess in sessions[:3]:
+                        media_type = sess.get("media_type", "")
+                        emoji = "📺" if media_type == "episode" else "🎬" if media_type == "movie" else "🎵"
+                        title = sess.get("full_title") or sess.get("grandchild_title") or sess.get("title") or "?"
+                        user = sess.get("friendly_name") or sess.get("user", "?")
+                        pct = sess.get("progress_percent", 0)
+                        stream_lines.append(f"  {emoji} {title} — {user} ({pct}%)")
+                    sections.append("\n".join(stream_lines))
+                else:
+                    sections.append("🎬 *Now Streaming:* nothing playing")
+
+                # Recent history
+                async with s.get(
+                    f"{tautulli_url}/api/v2",
+                    params={"apikey": tautulli_key, "cmd": "get_history", "length": "5"},
+                    timeout=_aiohttp.ClientTimeout(total=5),
+                ) as r:
+                    hist_data = (await r.json()).get("response", {}).get("data", {}).get("data", [])
+
+                if hist_data:
+                    hist_lines = ["*📖 Recently Played*"]
+                    for item in hist_data[:5]:
+                        title = item.get("full_title") or item.get("title") or "?"
+                        user = item.get("friendly_name") or item.get("user", "?")
+                        stopped = item.get("stopped", 0)
+                        if stopped:
+                            dt = datetime.fromtimestamp(stopped, tz=timezone.utc)
+                            when = dt.strftime("%-m/%-d %-I:%M%p").lower()
+                        else:
+                            when = "recently"
+                        hist_lines.append(f"  • {title} — {user} @ {when}")
+                    sections.append("\n".join(hist_lines))
+
+                # Recently added
+                async with s.get(
+                    f"{tautulli_url}/api/v2",
+                    params={"apikey": tautulli_key, "cmd": "get_recently_added", "count": "5"},
+                    timeout=_aiohttp.ClientTimeout(total=5),
+                ) as r:
+                    added_data = (await r.json()).get("response", {}).get("data", {}).get("recently_added", [])
+
+                if added_data:
+                    added_lines = ["*✨ Recently Added to Plex*"]
+                    for item in added_data[:5]:
+                        media_type = item.get("media_type", "")
+                        if media_type == "episode":
+                            ep_title = item.get("grandchild_title") or item.get("title") or "?"
+                            show = item.get("title") or item.get("parent_title") or ""
+                            label = f"📺 {show} — {ep_title}" if show and show != ep_title else f"📺 {ep_title}"
+                        elif media_type == "movie":
+                            label = f"🎬 {item.get('title', '?')}"
+                        else:
+                            label = f"🎵 {item.get('title', '?')}"
+                        added_lines.append(f"  • {label}")
+                    sections.append("\n".join(added_lines))
+
+        except Exception as exc:
+            log.warning("/media failed: %s", exc)
+            sections.append(f"❌ Media data unavailable: {exc}")
+
+        try:
+            await client.chat_postMessage(channel=channel_id, text="\n\n".join(sections), mrkdwn=True)
+        except Exception as e:
+            log.warning("Slack send failed in /media: %s", e)
+
 
 
 def _register_action_handlers(app: Any) -> None:

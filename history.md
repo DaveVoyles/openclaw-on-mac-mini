@@ -70,3 +70,6 @@
 - 2026-06-04: Wave 11B added a `/news` Slack command plus morning-briefing headlines, updated Slack command docs, and kept Slack registration validation green.
 - 2026-06-04: Added /adguard Slack command (DNS stats, block rate, top blocked domains) and Seerr to tools panel; all tools panel URLs now public HTTPS — deployed f41efd5
 - 2026-06-04: Wave 13 — enriched /status and morning briefing with SABnzbd queue, AdGuard DNS stats, and Lidarr queue
+- 2026-06-04: Added Tautulli and OpenClaw links to the dashboard tools panel and surfaced Tailscale peer counts in the morning briefing; HTML and Python syntax validation passed.
+- 2026-06-04: Added `/grafana` and `/media` Slack commands, synced help/home/docs, documented GRAFANA_URL, and kept Slack registration validation green.
+- 2026-06-04: Wave 14 — /grafana command, /media command (Plex+Tautulli), Tautulli+OpenClaw in tools panel, Tailscale peer count in morning briefing. 53→55 commands

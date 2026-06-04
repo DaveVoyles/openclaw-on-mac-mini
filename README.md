@@ -31,7 +31,7 @@ OpenClaw is a Slack-first personal AI assistant for homelab ops, media visibilit
 
 ## Key Slack commands
 
-OpenClaw currently registers **53 Slack slash commands**. These are the most useful day-to-day ones; use `/help` for the full list.
+OpenClaw currently registers **55 Slack slash commands**. These are the most useful day-to-day ones; use `/help` for the full list.
 
 ### AI & Chat
 - `/hermes <prompt>` — start a threaded Hermes session
@@ -46,6 +46,7 @@ OpenClaw currently registers **53 Slack slash commands**. These are the most use
 
 ### Media
 - `/watching` — see what Plex is playing right now
+- `/media` — show active Plex streams, recent plays, and recently added titles
 - `/arr` — view Sonarr/Radarr/Lidarr download queues
 - `/downloads` — view active SABnzbd downloads
 - `/request <title>` — request media through Overseerr
@@ -54,6 +55,7 @@ OpenClaw currently registers **53 Slack slash commands**. These are the most use
 ### Ops & Network
 - `/status` — quick system snapshot with Uptime Kuma service summary
 - `/uptime` — show all Uptime Kuma services grouped by status-page section
+- `/grafana` — check Grafana health and jump to key dashboards
 - `/morning` — trigger the owner morning briefing DM on demand
 - `/news [topic]` — show top headlines or search a topic
 - `/tailscale` — show current Tailscale device status
