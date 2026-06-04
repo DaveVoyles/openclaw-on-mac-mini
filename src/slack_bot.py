@@ -734,6 +734,7 @@ _HELP_TEXT = """
 *⚙️ Utilities*
 • `/morning` — Trigger your morning briefing DM
 • `/news [topic]` — Show top headlines or search a topic
+• `/adguard` — DNS stats: queries, block rate, top blocked domains
 • `/help` — Show this command list
 
 _Tip: Most slash command replies are ephemeral, so only you can see them._
@@ -3181,6 +3182,7 @@ def _build_home_view(user_id: str, name: str) -> dict:
             [
                 "`/morning` — Trigger your morning briefing DM",
                 "`/news [topic]` — Show top headlines or search a topic",
+                "`/adguard` — DNS stats: queries, block rate, top blocked domains",
                 "`/help` — Full command reference",
                 "`/simple on|off` — Toggle plain-language mode",
                 "`/clear` — Reset your current session state",
@@ -8300,6 +8302,64 @@ def _register_integration_handlers(app: Any) -> None:
             await client.chat_postMessage(channel=channel_id, text=result, mrkdwn=True)
         except Exception as e:
             log.warning("Slack send failed in /nas-share: %s", e)
+
+
+    @app.command("/adguard")
+    async def handle_adguard(ack: Any, command: dict, client: Any) -> None:
+        """Show AdGuard Home DNS stats: queries, block rate, top blocked domains."""
+        await ack()
+        channel_id = command.get("channel_id", "")
+        import os
+        import aiohttp
+        import base64 as _b64
+
+        adguard_url = os.environ.get("ADGUARD_URL", "https://adguard.davevoyles.synology.me")
+        user = os.environ.get("ADGUARD_USER", "")
+        password = os.environ.get("ADGUARD_PASSWORD", "")
+        creds = _b64.b64encode(f"{user}:{password}".encode()).decode()
+        headers = {"Authorization": f"Basic {creds}"}
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{adguard_url}/control/stats", headers=headers, timeout=aiohttp.ClientTimeout(total=8)) as r:
+                    stats = await r.json()
+                async with session.get(f"{adguard_url}/control/status", headers=headers, timeout=aiohttp.ClientTimeout(total=8)) as r:
+                    status = await r.json()
+
+            total = stats.get("num_dns_queries", 0)
+            blocked = stats.get("num_blocked_filtering", 0)
+            safebrowsing = stats.get("num_replaced_safebrowsing", 0)
+            safesearch = stats.get("num_replaced_safesearch", 0)
+            pct = round(blocked / max(total, 1) * 100, 1)
+            avg_ms = round(stats.get("avg_processing_time", 0) * 1000, 2)
+            protection = "🟢 On" if status.get("protection_enabled") else "🔴 Off"
+            version = status.get("version", "?")
+
+            top_blocked = stats.get("top_blocked_domains", [])[:5]
+            top_lines = "\n".join(
+                f"  {i+1}. `{list(d.keys())[0]}` — {list(d.values())[0]:,}"
+                for i, d in enumerate(top_blocked)
+            ) or "  _(none)_"
+
+            text = (
+                f"🛡️ *AdGuard Home* ({version}) — Protection: {protection}\n\n"
+                f"*Last 24 Hours*\n"
+                f"• DNS queries: *{total:,}*\n"
+                f"• Blocked ads/trackers: *{blocked:,}* ({pct}%)\n"
+                f"• Safe browsing blocks: *{safebrowsing:,}*\n"
+                f"• Safe search enforced: *{safesearch:,}*\n"
+                f"• Avg response time: *{avg_ms} ms*\n\n"
+                f"*Top Blocked Domains*\n{top_lines}"
+            )
+
+        except Exception as exc:
+            log.warning("/adguard failed: %s", exc)
+            text = f"❌ Could not reach AdGuard Home: {exc}"
+
+        try:
+            await client.chat_postMessage(channel=channel_id, text=text, mrkdwn=True)
+        except Exception as e:
+            log.warning("Slack send failed in /adguard: %s", e)
 
 
 def _register_action_handlers(app: Any) -> None:
