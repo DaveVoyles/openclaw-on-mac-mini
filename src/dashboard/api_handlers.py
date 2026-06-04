@@ -3406,13 +3406,31 @@ async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
     # Copilot CLI path — route directly to SSH bridge (skips LLM dispatch)
     # ------------------------------------------------------------------
     if model_pref == "copilot":
+        _copilot_backend = _os.environ.get("COPILOT_BACKEND", "ssh").lower()
+        _copilot_model_name = "hermes" if _copilot_backend == "hermes" else "copilot-cli"
         try:
-            from host_bridge import run_copilot, run_copilot_stream
+            if _copilot_backend == "hermes":
+                from host_bridge import run_hermes_stream
+            else:
+                from host_bridge import run_copilot, run_copilot_stream
         except ImportError as exc:
             return web.json_response(
                 {"error": {"message": f"host_bridge unavailable: {exc}", "type": "server_error"}},
                 status=500,
             )
+
+        async def _copilot_event_stream():
+            if _copilot_backend == "hermes":
+                async for event in run_hermes_stream(
+                    prompt=prompt,
+                    slack_user_id="open-webui",
+                    timeout_s=120,
+                ):
+                    yield event
+                return
+
+            async for event in run_copilot_stream(prompt=prompt, slack_user_id="open-webui"):
+                yield event
 
         # Inject Mac Mini system context so Copilot CLI knows the local environment.
         _bridge_workdir = _os.environ.get("OPENCLAW_HOST_BRIDGE_WORKDIR", "/Users/davevoyles/docker-stack")
@@ -3482,33 +3500,34 @@ async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
 
             role_chunk = {
                 "id": completion_id, "object": "chat.completion.chunk",
-                "created": created_ts, "model": "copilot-cli",
+                "created": created_ts, "model": _copilot_model_name,
                 "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}],
             }
             await stream_resp.write(f"data: {json.dumps(role_chunk)}\n\n".encode())
 
             _accumulated_copilot: list[str] = []
             try:
-                async for event in run_copilot_stream(prompt=prompt, slack_user_id="open-webui"):
+                async for event in _copilot_event_stream():
                     if event.get("type") in ("chunk", "stderr"):
                         text = event.get("text", "")
-                        if _is_copilot_noise_line(text):
-                            continue
-                        tool_label = _copilot_tool_label(text)
-                        if tool_label:
-                            # Emit as a special tool-progress chunk so the dashboard can style it.
-                            progress_chunk = {
-                                "id": completion_id, "object": "chat.completion.chunk",
-                                "created": created_ts, "model": "copilot-cli",
-                                "choices": [{"index": 0, "delta": {"content": tool_label + "\n"}, "finish_reason": None}],
-                                "x_tool_progress": True,
-                            }
-                            await stream_resp.write(f"data: {json.dumps(progress_chunk)}\n\n".encode())
-                            continue
+                        if _copilot_backend != "hermes":
+                            if _is_copilot_noise_line(text):
+                                continue
+                            tool_label = _copilot_tool_label(text)
+                            if tool_label:
+                                # Emit as a special tool-progress chunk so the dashboard can style it.
+                                progress_chunk = {
+                                    "id": completion_id, "object": "chat.completion.chunk",
+                                    "created": created_ts, "model": _copilot_model_name,
+                                    "choices": [{"index": 0, "delta": {"content": tool_label + "\n"}, "finish_reason": None}],
+                                    "x_tool_progress": True,
+                                }
+                                await stream_resp.write(f"data: {json.dumps(progress_chunk)}\n\n".encode())
+                                continue
                         _accumulated_copilot.append(text)
                         chunk = {
                             "id": completion_id, "object": "chat.completion.chunk",
-                            "created": created_ts, "model": "copilot-cli",
+                            "created": created_ts, "model": _copilot_model_name,
                             "choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}],
                         }
                         await stream_resp.write(f"data: {json.dumps(chunk)}\n\n".encode())
@@ -3516,7 +3535,7 @@ async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
                         err_text = f"\n⚠️ Copilot error: {event.get('error', 'Unknown error')}"
                         err_chunk = {
                             "id": completion_id, "object": "chat.completion.chunk",
-                            "created": created_ts, "model": "copilot-cli",
+                            "created": created_ts, "model": _copilot_model_name,
                             "choices": [{"index": 0, "delta": {"content": err_text}, "finish_reason": "stop"}],
                         }
                         await stream_resp.write(f"data: {json.dumps(err_chunk)}\n\n".encode())
@@ -3524,7 +3543,7 @@ async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
                 log.error("api_v1_chat_completions_handler copilot stream error: %s", exc)
                 err_chunk = {
                     "id": completion_id, "object": "chat.completion.chunk",
-                    "created": created_ts, "model": "copilot-cli",
+                    "created": created_ts, "model": _copilot_model_name,
                     "choices": [{"index": 0, "delta": {"content": f"\n[error: {exc}]"}, "finish_reason": "stop"}],
                 }
                 await stream_resp.write(f"data: {json.dumps(err_chunk)}\n\n".encode())
@@ -3533,14 +3552,14 @@ async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
             if share_suffix:
                 share_chunk = {
                     "id": completion_id, "object": "chat.completion.chunk",
-                    "created": created_ts, "model": "copilot-cli",
+                    "created": created_ts, "model": _copilot_model_name,
                     "choices": [{"index": 0, "delta": {"content": share_suffix}, "finish_reason": None}],
                 }
                 await stream_resp.write(f"data: {json.dumps(share_chunk)}\n\n".encode())
 
             stop_chunk = {
                 "id": completion_id, "object": "chat.completion.chunk",
-                "created": created_ts, "model": "copilot-cli",
+                "created": created_ts, "model": _copilot_model_name,
                 "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
             }
             await stream_resp.write(f"data: {json.dumps(stop_chunk)}\n\n".encode())
@@ -3550,25 +3569,39 @@ async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
 
         # Non-streaming copilot path
         try:
-            bridge_result = await run_copilot(prompt=prompt, slack_user_id="open-webui")
+            if _copilot_backend == "hermes":
+                _copilot_parts: list[str] = []
+                _copilot_error = ""
+                async for event in _copilot_event_stream():
+                    event_type = event.get("type")
+                    if event_type in ("chunk", "stderr"):
+                        _copilot_parts.append(event.get("text", ""))
+                    elif event_type == "error":
+                        _copilot_error = str(event.get("error") or "Unknown error")
+                    elif event_type == "done" and not event.get("success", True):
+                        _copilot_error = str(event.get("error") or _copilot_error or "Unknown error")
+
+                copilot_text = f"⚠️ Copilot error: {_copilot_error}" if _copilot_error else "".join(_copilot_parts).strip()
+            else:
+                bridge_result = await run_copilot(prompt=prompt, slack_user_id="open-webui")
+                if bridge_result.error:
+                    # Return error as an assistant message so Open WebUI displays it inline.
+                    copilot_text = f"⚠️ Copilot error: {bridge_result.error}"
+                else:
+                    copilot_text = "\n".join(
+                        line for line in (bridge_result.stdout or "").splitlines()
+                        if not _is_copilot_noise_line(line)
+                    ).strip()
         except Exception as exc:
             log.error("api_v1_chat_completions_handler copilot run error: %s", exc)
             return web.json_response(
                 {"error": {"message": str(exc), "type": "server_error"}}, status=500
             )
-        if bridge_result.error:
-            # Return error as an assistant message so Open WebUI displays it inline.
-            copilot_text = f"⚠️ Copilot error: {bridge_result.error}"
-        else:
-            copilot_text = "\n".join(
-                line for line in (bridge_result.stdout or "").splitlines()
-                if not _is_copilot_noise_line(line)
-            ).strip()
         copilot_text += await _try_share_links(copilot_text)
         completion_tokens_est = len(copilot_text.encode()) // 4
         return web.json_response({
             "id": completion_id, "object": "chat.completion", "created": created_ts,
-            "model": "copilot-cli",
+            "model": _copilot_model_name,
             "choices": [{"index": 0, "message": {"role": "assistant", "content": copilot_text}, "finish_reason": "stop"}],
             "usage": {"prompt_tokens": prompt_tokens_est, "completion_tokens": completion_tokens_est, "total_tokens": prompt_tokens_est + completion_tokens_est},
         })
@@ -4097,6 +4130,24 @@ async def api_hermes_status_handler(request: web.Request) -> web.Response:
         result["error"] = str(exc)
 
     return web.json_response(result)
+
+
+async def api_hermes_memory_handler(request: web.Request) -> web.Response:
+    """GET/POST /api/hermes/memory — read or update Hermes MEMORY.md."""
+    memory_file = Path("/Users/davevoyles/.hermes/memories/MEMORY.md")
+
+    if request.method == "GET":
+        content = memory_file.read_text(encoding="utf-8") if memory_file.exists() else ""
+        return web.json_response({"content": content, "path": str(memory_file)})
+
+    body = await request.json()
+    new_content = body.get("content", "")
+    try:
+        memory_file.parent.mkdir(parents=True, exist_ok=True)
+        memory_file.write_text(new_content, encoding="utf-8")
+    except OSError as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    return web.json_response({"ok": True, "bytes": len(new_content.encode("utf-8"))})
 
 
 async def api_hermes_memory_seed_handler(request: web.Request) -> web.Response:

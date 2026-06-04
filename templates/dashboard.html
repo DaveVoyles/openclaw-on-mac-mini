@@ -853,9 +853,11 @@
           </div>
           <!-- Hermes hint (shown when Hermes is selected) -->
           <div id="hermes-hint" style="display:none;margin-top:0.6rem;padding:0.75rem 1rem;background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.3);border-radius:8px;font-size:0.82rem;line-height:1.6;color:var(--text)">
-            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem;flex-wrap:wrap">
               <strong style="color:#4ade80;font-size:0.9rem">⚕ Hermes Agent</strong>
               <span style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:10px;background:rgba(74,222,128,0.15);color:#4ade80">claude-sonnet-4.6 · Copilot</span>
+              <span id="hermes-session-badge" style="font-size:0.72rem;color:#86efac"></span>
+              <button onclick="newHermesSession()" style="margin-left:auto;font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:12px;color:#4ade80;cursor:pointer">🆕 New session</button>
             </div>
             Hermes has persistent memory and custom skills for this home lab. Try these:
             <div style="display:flex;flex-wrap:wrap;gap:0.35rem;margin-top:0.5rem">
@@ -865,7 +867,7 @@
               <button onclick="dashAsk('What skills do you have available?')" style="font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:12px;color:#4ade80;cursor:pointer">🛠️ List skills</button>
               <button onclick="dashAsk('Check NAS connectivity and show available shares')" style="font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:12px;color:#4ade80;cursor:pointer">💾 NAS status</button>
             </div>
-            <div style="margin-top:0.5rem;color:var(--muted);font-size:0.75rem">Single-turn queries only. For multi-turn sessions with full memory use <strong>/copilot</strong> in Slack.</div>
+            <div style="margin-top:0.5rem;color:var(--muted);font-size:0.75rem">Browser chat now supports multi-turn Hermes sessions. Use <strong>🆕 New session</strong> to reset the active thread.</div>
           </div>
           <!-- Conversation Thread (prior exchanges) -->
           <div id="chat-thread" style="display:none;margin-top:0.75rem;display:flex;flex-direction:column;gap:0.5rem"></div>
@@ -1477,6 +1479,20 @@
           </div>
           <div class="card-body" id="hermes-status-body">
             <div class="loading">Loading…</div>
+          </div>
+        </div>
+
+        <div class="card" id="hermes-memory-card" style="margin-bottom:1rem">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+            <span>🧠 Hermes Memory</span>
+            <div style="display:flex;gap:0.5rem;align-items:center">
+              <span id="hermes-memory-status" style="font-size:0.75rem;color:var(--muted)"></span>
+              <button onclick="saveHermesMemory()" style="font-size:0.75rem;padding:0.2rem 0.6rem;background:rgba(74,222,128,0.15);border:1px solid rgba(74,222,128,0.4);border-radius:6px;color:#4ade80;cursor:pointer">💾 Save</button>
+              <button onclick="toggleCard('hermes-memory-body')" style="font-size:0.75rem;padding:0.2rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--muted);cursor:pointer">▼</button>
+            </div>
+          </div>
+          <div class="card-body" id="hermes-memory-body" style="display:none;padding:0.75rem">
+            <textarea id="hermes-memory-textarea" style="width:100%;min-height:320px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-family:monospace;font-size:0.78rem;padding:0.5rem;resize:vertical;line-height:1.5" placeholder="Loading..."></textarea>
           </div>
         </div>
 
@@ -4864,6 +4880,16 @@
         ta.focus();
       }
 
+      function _setHermesSessionBadge() {
+        const badge = document.getElementById('hermes-session-badge');
+        if (badge) badge.textContent = window._hermesSessionId ? `🔁 Session: ${window._hermesSessionId}` : '';
+      }
+
+      function newHermesSession() {
+        window._hermesSessionId = null;
+        _setHermesSessionBadge();
+      }
+
       // ── Ping cache (30 s TTL) ────────────────────────────────────────────
       let _bridgePingCache = { ts: 0, result: null };
       const BRIDGE_PING_TTL = 30_000;
@@ -4974,6 +5000,7 @@
           responseEl.style.fontSize = '0.82rem';
           responseEl.style.background = '#0d1117';
           responseEl.style.color = '#86efac';
+          _setHermesSessionBadge();
         } else {
           hint.style.display = 'none';
           hermesHint.style.display = 'none';
@@ -5128,7 +5155,7 @@
             const res = await fetch('/api/hermes/ask', {
               method: 'POST',
               headers: _actionAuthHeaders('dashboard-ui'),
-              body: JSON.stringify({ prompt }),
+              body: JSON.stringify({ prompt, hermes_session_id: window._hermesSessionId || null }),
               signal: _currentAbort.signal,
             });
 
@@ -5161,8 +5188,14 @@
                     _renderCurrent();
                     _setMeta('⚕ Hermes — streaming…');
                   } else if (type === 'done') {
+                    if (data.session_id) {
+                      window._hermesSessionId = data.session_id;
+                      _setHermesSessionBadge();
+                    }
                     const elapsed = ((Date.now() - startMs) / 1000).toFixed(1);
+                    const sessionId = data.session_id || window._hermesSessionId || '';
                     _setMeta('⚕ Hermes (claude-sonnet-4.6 · Copilot)  •  ' + elapsed + 's' +
+                      (sessionId ? '  •  session ' + sessionId : '') +
                       (data.success ? '' : '  ⚠️ non-zero exit'));
                     break outer;
                   } else if (type === 'error') {
@@ -5311,6 +5344,44 @@
           if (recapBtn) { recapBtn.disabled = false; recapBtn.textContent = '📋 Weekly Recap'; }
           loadingEl.style.display = 'none';
         }
+      }
+
+      async function loadHermesMemory() {
+        try {
+          const r = await fetch('/api/hermes/memory', { headers: _actionAuthHeaders('dashboard-ui') });
+          if (!r.ok) return;
+          const d = await r.json();
+          const ta = document.getElementById('hermes-memory-textarea');
+          if (ta) ta.value = d.content || '';
+        } catch (e) {}
+      }
+
+      async function saveHermesMemory() {
+        const ta = document.getElementById('hermes-memory-textarea');
+        const st = document.getElementById('hermes-memory-status');
+        if (!ta) return;
+        try {
+          const r = await fetch('/api/hermes/memory', {
+            method: 'POST',
+            headers: _actionAuthHeaders('dashboard-ui'),
+            body: JSON.stringify({ content: ta.value })
+          });
+          const d = await r.json();
+          if (st) {
+            st.textContent = d.ok ? '✅ Saved' : '❌ Error';
+            setTimeout(() => { if (st) st.textContent = ''; }, 3000);
+          }
+        } catch (e) {
+          if (st) st.textContent = '❌ Error';
+        }
+      }
+
+      function toggleCard(id) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const showing = el.style.display !== 'none';
+        el.style.display = showing ? 'none' : 'block';
+        if (!showing && id === 'hermes-memory-body') loadHermesMemory();
       }
 
       function copyAgentResponse() {

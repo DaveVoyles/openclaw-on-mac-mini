@@ -459,6 +459,7 @@ _HELP_TEXT = (
     "*Tips:*\n"
     "• `/simple on` — always get plain, easy-to-read answers (no need to type `--simple` every time)\n"
     "• Add `--simple` to any one message for a one-off plain answer\n"
+    "• `/hermes <question>` — always open a Hermes thread for host-side help\n"
     "• Reply in a thread to keep context from earlier messages\n\n"
     '_Example: Upload Budget2025.xlsx and type: "summarize the totals for me"_'
 )
@@ -2806,6 +2807,7 @@ def _build_home_view(user_id: str, name: str) -> dict:
     commands_text = (
         "*Your commands:*\n"
         "• `/chat <question>` — ask me anything\n"
+        "• `/hermes <question>` — always start a Hermes thread\n"
         "• `/help` — full command list\n"
         "• `/files` — browse your uploaded files\n"
         "• `/brief` — last 5 uploads at a glance\n"
@@ -5208,6 +5210,7 @@ def _register_integration_handlers(app: Any) -> None:
     # agent session. By default it opens a long-lived `copilot --allow-all-tools`
     # process on the Mac Mini host via SSH; when `COPILOT_BACKEND=hermes`, it
     # runs the local Hermes CLI instead and reuses the session ID for thread turns.
+    # `/hermes` below always forces the Hermes path regardless of env config.
     # ------------------------------------------------------------------
 
     def _is_code_chunk(text: str) -> bool:
@@ -5284,13 +5287,13 @@ def _register_integration_handlers(app: Any) -> None:
             await mgr.start(_copilot_chunk_poster)
         return mgr
 
-    def _copilot_owner_check(user_id: str) -> tuple[bool, str | None]:
+    def _copilot_owner_check(user_id: str, *, command_name: str = "/copilot") -> tuple[bool, str | None]:
         raw_allow = os.getenv("OPENCLAW_HOST_BRIDGE_ALLOWED_USERS", "") or SLACK_NOTIFY_USER_ID
         allowed = {p.strip() for p in raw_allow.split(",") if p.strip()}
         if not allowed:
-            return False, "🛑 `/copilot` is not configured. Set `OPENCLAW_HOST_BRIDGE_ALLOWED_USERS`."
+            return False, f"🛑 `{command_name}` is not configured. Set `OPENCLAW_HOST_BRIDGE_ALLOWED_USERS`."
         if user_id not in allowed:
-            return False, "🛑 You are not allowed to run `/copilot` on this workspace."
+            return False, f"🛑 You are not allowed to run `{command_name}` on this workspace."
         return True, None
 
     # Directory shortcuts for --dir flag
@@ -5421,7 +5424,7 @@ def _register_integration_handlers(app: Any) -> None:
             await mgr.registry.update(record.session_id, status="crashed", last_activity=time.time())
             record.status = "crashed"
             record.last_activity = time.time()
-            return "Hermes session ID is missing for this thread; start a new /copilot session."
+            return "Hermes session ID is missing for this thread; start a new /copilot or /hermes session."
 
         now = time.time()
         await mgr.registry.update(record.session_id, last_activity=now, turns=turn_num, status="active")
@@ -5569,6 +5572,7 @@ def _register_integration_handlers(app: Any) -> None:
                     "• `/copilot-sessions` — list your sessions\n"
                     "• `/copilot-attach <id>` — show details and last activity\n"
                     "• `/copilot-recap <id>` — summarize a session\n"
+                    "• `/hermes <prompt>` — always open a Hermes session\n"
                     f"• Backend: `{_copilot_backend()}` • Per-user cap: 3 active sessions. Idle timeout: {os.getenv('OPENCLAW_HOST_BRIDGE_IDLE_TIMEOUT_S','600')}s.\n"
                 ),
             )
@@ -5591,7 +5595,6 @@ def _register_integration_handlers(app: Any) -> None:
                 )
                 return
 
-        # Parse --dir flag from prompt text.
         prompt_text, cwd_override = _parse_copilot_flags(text)
         if not prompt_text:
             await client.chat_postEphemeral(
@@ -5601,7 +5604,6 @@ def _register_integration_handlers(app: Any) -> None:
 
         dir_label = cwd_override or os.getenv("OPENCLAW_HOST_BRIDGE_WORKDIR", "/Users/davevoyles/docker-stack")
 
-        # Post the parent thread message and use its ts as the thread anchor.
         try:
             parent = await client.chat_postMessage(
                 channel=channel_id,
@@ -5680,6 +5682,103 @@ def _register_integration_handlers(app: Any) -> None:
                         )
                     except Exception:  # noqa: BLE001
                         pass
+
+        asyncio.create_task(_bg())
+
+    @app.command("/hermes")
+    async def handle_slash_hermes(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id: str = body.get("user_id", "")
+        channel_id: str = body.get("channel_id", user_id)
+        text: str = (body.get("text") or "").strip()
+
+        ok, msg = _copilot_owner_check(user_id, command_name="/hermes")
+        if not ok:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg or "🛑 forbidden")
+            return
+
+        if not text:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="Usage: `/hermes <your question>`")
+            return
+
+        prompt_text, cwd_override = _parse_copilot_flags(text)
+        if not prompt_text:
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id, text="❌ prompt is empty after parsing flags."
+            )
+            return
+
+        dir_label = cwd_override or os.getenv("OPENCLAW_HOST_BRIDGE_WORKDIR", "/Users/davevoyles/docker-stack")
+
+        try:
+            parent = await client.chat_postMessage(
+                channel=channel_id,
+                text=(
+                    f"🧠 <@{user_id}> opened a Hermes session\n"
+                    f"_prompt:_ `{prompt_text[:300]}`\n"
+                    f"_cwd:_ `{dir_label}`\n"
+                    "_backend:_ `hermes`\n"
+                    "_reply in this thread to continue_"
+                ),
+            )
+            thread_ts = parent.get("ts") or parent.get("message", {}).get("ts") or ""
+        except Exception as exc:  # noqa: BLE001
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id, text=f"❌ failed to open thread: `{exc}`",
+            )
+            return
+
+        async def _bg() -> None:
+            try:
+                record, err = await _start_hermes_session(
+                    slack_user=user_id,
+                    slack_channel=channel_id,
+                    slack_thread_ts=thread_ts,
+                    cwd=cwd_override,
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.warning("/hermes start_session crashed: %s", exc)
+                try:
+                    await client.chat_postMessage(
+                        channel=channel_id, thread_ts=thread_ts,
+                        text=f"❌ session failed to start: `{exc}`",
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+                return
+
+            if err or record is None:
+                try:
+                    await client.chat_postMessage(
+                        channel=channel_id, thread_ts=thread_ts,
+                        text=f"❌ {err or 'unknown error'}",
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+                return
+
+            try:
+                await client.chat_postMessage(
+                    channel=channel_id,
+                    thread_ts=thread_ts,
+                    text=(
+                        f"✅ Hermes session `{record.session_id}` open — "
+                        f"`/copilot-end {record.session_id}` to close, "
+                        f"`/copilot-cancel {record.session_id}` to stop the current turn"
+                    ),
+                )
+            except Exception:  # noqa: BLE001
+                pass
+
+            err = await _run_hermes_turn(record, prompt_text)
+            if err:
+                try:
+                    await client.chat_postMessage(
+                        channel=channel_id, thread_ts=thread_ts,
+                        text=f"❌ {err}",
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
 
         asyncio.create_task(_bg())
 

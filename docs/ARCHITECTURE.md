@@ -1,55 +1,57 @@
 # OpenClaw — Architecture
 
-<!-- Updated: 2026-05-21 -->
+<!-- Updated: 2026-06-04 -->
 
-OpenClaw is a Slack-first personal AI assistant running in Docker on a Mac Mini M4. This doc gives the 30-second mental model. For extending the system, see [`AGENT-EXTENSION-GUIDE.md`](AGENT-EXTENSION-GUIDE.md). For the day-to-day "what is what", see [`AGENT-GUIDE.md`](AGENT-GUIDE.md).
-
-> **Heads up (May 2026):** Discord and the browser dashboard were removed. The historical Discord-era `ARCHITECTURE.md` and `MODULES.md` were replaced by this shorter, accurate version. Older revisions still exist in git history if you need them.
+OpenClaw is a Slack-first home lab AI assistant running on a Mac Mini M4, with a live browser dashboard and Hermes as the primary host-side agent. This doc gives the 30-second mental model. For extending the system, see [`AGENT-EXTENSION-GUIDE.md`](AGENT-EXTENSION-GUIDE.md). For the day-to-day "what is what", see [`AGENT-GUIDE.md`](AGENT-GUIDE.md).
 
 ---
 
 ## Topology
 
 ```
-                ┌──────────────────────────────────────────┐
-                │            Mac Mini M4 (host)            │
-                │  192.168.1.93                            │
-                │                                          │
-                │  ┌────────────────────────────────────┐  │
-                │  │ openclaw container (Docker)        │  │
-                │  │   src/slack_bot.py  (entrypoint)   │  │
-                │  │   skills/* + src/*  (registry)     │  │
-                │  │   /health on :8765                 │  │
-                │  └─────────────┬──────────────────────┘  │
-                │                │ stdio + named pipes     │
-                │  ┌─────────────▼──────────────────────┐  │
-                │  │ host_bridge.py  (host-side proc)   │  │
-                │  │   spawns `gh copilot` CLI sessions │  │
-                │  └────────────────────────────────────┘  │
-                │                                          │
-                │  Plex (native)   OrbStack   ChromaDB     │
-                └──────────────────┬───────────────────────┘
-                                   │
-                          NFS / SMB │ mounts
-                                   │
-                ┌──────────────────▼───────────────────────┐
-                │      Synology DS920+   192.168.1.8       │
-                │      Storage · Traefik · Backups         │
-                └──────────────────────────────────────────┘
+                ┌──────────────────────────────────────────────┐
+                │              Mac Mini M4 (host)              │
+                │  192.168.1.93                                │
+                │                                               │
+                │  ┌──────────────────────────────────────────┐ │
+                │  │ openclaw container (Docker)             │ │
+                │  │   src/slack_bot.py  (entrypoint)        │ │
+                │  │   dashboard + API on :8765              │ │
+                │  │   skills/* + src/*  (registry)          │ │
+                │  └──────────────┬──────────────────────────┘ │
+                │                 │ SSH host bridge             │
+                │  ┌──────────────▼──────────────────────────┐ │
+                │  │ Hermes CLI (host)                      │ │
+                │  │   primary AI agent for Slack + UI      │ │
+                │  └─────────────────────────────────────────┘ │
+                │                                               │
+                │  Plex (native)   OrbStack   ChromaDB          │
+                └───────────────────┬───────────────────────────┘
+                                    │
+                           NFS / SMB │ mounts + reverse proxy
+                                    │
+                ┌───────────────────▼───────────────────────────┐
+                │       Synology DS920+   192.168.1.8           │
+                │       Storage · Traefik · Backups             │
+                └───────────────────────────────────────────────┘
 
-                       ▲                       ▲
-                       │ Socket Mode           │ HTTPS health probe
-                       │                       │
-                  Slack workspace          Uptime Kuma
+                       ▲                         ▲
+                       │ Slack Socket Mode       │ HTTPS reverse proxy
+                       │                         │
+                  Slack workspace      https://openclaw.davevoyles.synology.me/dashboard
 ```
+
+Dashboard is served locally on port `8765` and exposed externally via the Synology reverse proxy at `https://openclaw.davevoyles.synology.me/dashboard`.
 
 ## Process layout
 
 | Process | Where | What |
 | --- | --- | --- |
-| `openclaw` container | Mac Mini Docker | Slack Bolt bot, skill registry, LLM router, scheduler, health server |
-| `host_bridge.py` | Mac Mini host (outside Docker) | Spawns `gh copilot` CLI sessions on the host on demand from Slack |
-| Slack workspace | Slack cloud | UI; talks to bot via Socket Mode (no inbound webhook needed) |
+| `openclaw` container | Mac Mini Docker | Slack Bolt bot, dashboard server (`/dashboard` on :8765), skill registry, scheduler, health server |
+| `host_bridge.py` | Mac Mini host (outside Docker) | Bridges Docker-initiated host sessions for Copilot/Hermes workflows |
+| `hermes` CLI | Mac Mini host (outside Docker) | Primary AI agent; invoked by slack_bot.py + dashboard via SSH bridge |
+| Slack workspace | Slack cloud | Primary user interface for notifications, slash commands, and threaded sessions |
+| Browser dashboard | Synology-routed HTTPS → Mac Mini :8765 | Live UI for status, chat, and host-integrated controls |
 | Synology NAS | 192.168.1.8 | NFS-mounted media, Traefik reverse proxy, off-host backups |
 
 ## Source layout

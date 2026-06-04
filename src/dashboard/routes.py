@@ -12,6 +12,7 @@ from .api_handlers import (
     api_copilot_sessions_handler,
     api_copilot_stream_handler,
     api_hermes_status_handler,
+    api_hermes_memory_handler,
     api_hermes_memory_seed_handler,
     api_hermes_skills_seed_handler,
     api_hermes_ask_handler,
@@ -186,6 +187,8 @@ def setup_dashboard(
     app.router.add_post("/api/copilot/ping", action(api_copilot_ping_handler))
     app.router.add_get("/api/copilot/sessions", api_copilot_sessions_handler)
     app.router.add_get("/api/hermes/status", api_hermes_status_handler)
+    app.router.add_get("/api/hermes/memory", api_hermes_memory_handler)
+    app.router.add_post("/api/hermes/memory", action(api_hermes_memory_handler))
     app.router.add_get("/api/hermes/memory-seed", api_hermes_memory_seed_handler)
     app.router.add_get("/api/hermes/skills-seed", api_hermes_skills_seed_handler)
     app.router.add_post("/api/hermes/ask", action(api_hermes_ask_handler))
