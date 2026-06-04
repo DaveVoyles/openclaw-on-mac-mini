@@ -1239,7 +1239,7 @@
                   <tr style="border-bottom:1px solid var(--border);background:rgba(74,21,75,0.06)">
                     <td style="padding:0.6rem 0.75rem;white-space:nowrap">💬 <strong>Slack</strong></td>
                     <td style="padding:0.6rem 0.75rem">Daily use, phone, quick questions</td>
-                    <td style="padding:0.6rem 0.75rem;color:var(--muted)">Slash commands · <code>/wake</code> <code>/nas</code> <code>/plex</code> <code>/status</code> · Push alerts</td>
+                    <td style="padding:0.6rem 0.75rem;color:var(--muted)">Slash commands · <code>/wake</code> <code>/nas</code> <code>/status</code> <code>/uptime</code> <code>/morning</code> · Push alerts</td>
                     <td style="padding:0.6rem 0.75rem"><a href="https://dvopenclaw.slack.com" target="_blank" rel="noopener" style="color:#a97cc7">dvopenclaw.slack.com</a></td>
                   </tr>
                   <tr style="border-bottom:1px solid var(--border)">
@@ -5832,24 +5832,37 @@
               badge.style.border = '1px solid rgba(239,68,68,0.3)';
             }
           }
+          const services = d.services || [];
           const groups = {};
-          (d.services || []).forEach(service => { (groups[service.group] = groups[service.group] || []).push(service); });
+          services.forEach(s => {
+            const g = s.group || 'Other';
+            if (!groups[g]) groups[g] = [];
+            groups[g].push(s);
+          });
           if (el) {
-            const rendered = Object.entries(groups).map(([group, services]) => `
-              ${group ? `<div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin:0.4rem 0 0.2rem">${esc(group)}</div>` : ''}
-              ${services.map(service => `
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0.5rem;background:${service.up ? 'rgba(74,222,128,0.04)' : 'rgba(239,68,68,0.06)'};border-radius:6px;border:1px solid ${service.up ? 'rgba(74,222,128,0.15)' : 'rgba(239,68,68,0.2)'}">
-                  <div style="display:flex;align-items:center;gap:0.5rem">
-                    <span style="font-size:0.75rem;color:${service.up ? '#4ade80' : '#ef4444'}">●</span>
-                    <span style="font-size:0.82rem;color:${service.up ? 'var(--text)' : '#ef4444'}">${esc(service.name || '?')}</span>
+            if (!services.length) {
+              el.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;font-style:italic">No services published on the status page.</div>';
+            } else {
+              let html = '';
+              for (const [groupName, services] of Object.entries(groups)) {
+                const upCount = services.filter(s => s.up).length;
+                const allUp = upCount === services.length;
+                const groupColor = allUp ? 'var(--mint-green)' : 'var(--error, #f87171)';
+                html += `<div style="margin-bottom:0.75rem">
+                  <div style="font-size:0.8rem;font-weight:600;color:${groupColor};margin-bottom:0.35rem;text-transform:uppercase;letter-spacing:0.05em">
+                    ${esc(groupName)} <span style="font-weight:400;color:var(--muted)">(${upCount}/${services.length})</span>
                   </div>
-                  <div style="display:flex;align-items:center;gap:0.5rem">
-                    ${service.uptime ? `<span style="font-size:0.7rem;color:var(--muted)">${Math.round(service.uptime * 100) / 100}%</span>` : ''}
-                    <span style="font-size:0.75rem;font-weight:600;color:${service.up ? '#4ade80' : '#ef4444'}">${service.up ? 'UP' : 'DOWN'}</span>
-                  </div>
-                </div>`).join('')}
-            `).join('');
-            el.innerHTML = rendered || '<div style="color:var(--muted);font-size:0.82rem;font-style:italic">No services published on the status page.</div>';
+                  <div style="display:flex;flex-wrap:wrap;gap:0.3rem">`;
+                services.forEach(s => {
+                  const color = s.up ? 'var(--mint-green)' : 'var(--error, #f87171)';
+                  const icon = s.up ? '✅' : '❌';
+                  const ping = s.ping ? ` ${s.ping}ms` : '';
+                  html += `<span style="font-size:0.72rem;padding:0.15rem 0.45rem;border-radius:10px;border:1px solid ${color};color:${color};opacity:0.9" title="${esc(s.name || '?')}${esc(ping)}">${icon} ${esc(s.name || '?')}</span>`;
+                });
+                html += `</div></div>`;
+              }
+              el.innerHTML = html;
+            }
           }
           if (typeof _stampUpdated === 'function') _stampUpdated('uptime-last-updated');
         } catch (e) {

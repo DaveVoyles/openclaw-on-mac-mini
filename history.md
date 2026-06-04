@@ -60,3 +60,5 @@
 - 2026-06-04: Updated README to reflect Hermes-first Slack architecture and synced .env.example with current media, NAS, notification, monitoring, and host-bridge variables.
 - 2026-06-04: Added Wave 7B dashboard and Slack upgrades — Uptime Kuma status API/card, PWA install banner + service-worker registration, categorized Slack App Home with all 48 commands, and Overseerr API-key setup guidance; syntax checks and Slack registration tests passed.
 - 2026-06-04: Wave 7 deployed: README/env.example refreshed, Uptime Kuma card live (31 services, real heartbeat data), PWA install banner, Slack home tab rebuilt with all 48 commands, Copilot instructions strengthened with explicit doc-sync rules
+- 2026-06-04: Wave 8B grouped Uptime Kuma dashboard services by group and disabled ChromaDB anonymized telemetry in docker-compose to suppress startup telemetry errors.
+- 2026-06-04: Added `/uptime` and `/morning` Slack commands, expanded morning briefing + `/status` with Sonarr/Radarr/Uptime Kuma visibility, and kept Slack registration tests green.

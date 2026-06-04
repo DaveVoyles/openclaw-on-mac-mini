@@ -714,6 +714,7 @@ _HELP_TEXT = """
 
 *🖥️ Host & Ops*
 • `/status` — Quick system health snapshot
+• `/uptime` — Show grouped Uptime Kuma service status
 • `/health` — Detailed OpenClaw bot health card
 • `/host <shortcut>` — Run a saved host-bridge shortcut
 • `/incident ...` — Start, inspect, or resolve incidents
@@ -730,6 +731,7 @@ _HELP_TEXT = """
 • `/upcoming` — Show Sonarr episodes airing soon
 
 *⚙️ Utilities*
+• `/morning` — Trigger your morning briefing DM
 • `/help` — Show this command list
 
 _Tip: Most slash command replies are ephemeral, so only you can see them._
@@ -3151,6 +3153,7 @@ def _build_home_view(user_id: str, name: str) -> dict:
             "🖥️ Host & Ops",
             [
                 "`/status` — Quick system health snapshot",
+                "`/uptime` — Show grouped Uptime Kuma service status",
                 "`/health` — Detailed OpenClaw bot health card",
                 "`/host <shortcut>` — Run a saved host-bridge shortcut",
                 "`/incident ...` — Start, inspect, or resolve incidents",
@@ -3173,6 +3176,7 @@ def _build_home_view(user_id: str, name: str) -> dict:
         (
             "⚙️ Preferences & Help",
             [
+                "`/morning` — Trigger your morning briefing DM",
                 "`/help` — Full command reference",
                 "`/simple on|off` — Toggle plain-language mode",
                 "`/clear` — Reset your current session state",
@@ -4879,6 +4883,152 @@ def _register_slash_commands(app: Any) -> None:
         )
 
 
+async def _send_morning_briefing(client: Any) -> str:
+    """Send morning briefing DM to owner."""
+    import os
+    import shutil
+    import sqlite3
+    import time as _time
+
+    notify_user = os.environ.get("SLACK_NOTIFY_USER_ID", "")
+    if not notify_user:
+        return "Morning briefing skipped: SLACK_NOTIFY_USER_ID not set"
+
+    sections = ["*☀️ Good morning! Here's your daily briefing:*\n"]
+
+    weather_loc = os.environ.get("WEATHER_DEFAULT_LOCATION", "")
+    if weather_loc:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"https://wttr.in/{weather_loc}?format=3",
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as resp:
+                    weather = await resp.text()
+            sections.append(f"🌤 *Weather:* {weather.strip()}")
+        except Exception:
+            pass
+
+    try:
+        db_path = os.path.expanduser("~/.hermes/state.db")
+        yesterday = _time.time() - 86400
+        conn = sqlite3.connect(f"file:{db_path}?immutable=1", uri=True)
+        try:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM sessions WHERE started_at > ?",
+                (yesterday,),
+            ).fetchone()[0]
+        finally:
+            conn.close()
+        sections.append(f"🤖 *Hermes sessions yesterday:* {count}")
+    except Exception:
+        pass
+
+    try:
+        nas_path = os.environ.get("NAS_BACKUP_PATH", "/Volumes/Misc")
+        if os.path.exists(nas_path):
+            usage = shutil.disk_usage(nas_path)
+            pct = usage.used / usage.total * 100
+            sections.append(
+                f"💾 *NAS disk:* {pct:.1f}% used ({usage.free // 1_073_741_824:.0f} GB free)"
+            )
+    except Exception:
+        pass
+
+    tautulli_key = os.environ.get("TAUTULLI_API_KEY", "")
+    media_lines: list[str] = []
+    if tautulli_key:
+        try:
+            tautulli_url = os.environ.get("TAUTULLI_URL", "http://localhost:8181")
+            async with aiohttp.ClientSession() as s:
+                async with s.get(
+                    f"{tautulli_url}/api/v2",
+                    params={"apikey": tautulli_key, "cmd": "get_history", "length": "3"},
+                    timeout=aiohttp.ClientTimeout(total=4),
+                ) as r:
+                    hist = (await r.json()).get("response", {}).get("data", {}).get("data", [])
+            if hist:
+                media_lines.append("🎬 *Recently watched:*")
+                for item in hist[:3]:
+                    icon = "🎬" if item.get("media_type") == "movie" else "📺"
+                    media_lines.append(f"  {icon} {item.get('full_title', item.get('title', '?'))}")
+        except Exception:
+            pass
+    if media_lines:
+        sections.extend(media_lines)
+
+    sonarr_key = os.environ.get("SONARR_API_KEY", "")
+    if sonarr_key:
+        try:
+            import datetime as _dt
+
+            today = _dt.date.today().isoformat()
+            tomorrow = (_dt.date.today() + _dt.timedelta(days=1)).isoformat()
+            sonarr_url = os.environ.get("SONARR_URL", "http://host.docker.internal:8989")
+            async with aiohttp.ClientSession() as s:
+                async with s.get(
+                    f"{sonarr_url}/api/v3/calendar",
+                    params={"apikey": sonarr_key, "start": today, "end": tomorrow},
+                    timeout=aiohttp.ClientTimeout(total=4),
+                ) as r:
+                    episodes = await r.json()
+            if episodes:
+                ep_lines = [f"📺 *Today on Sonarr ({len(episodes)} eps):*"]
+                for ep in episodes[:3]:
+                    show = ep.get("series", {}).get("title", ep.get("seriesTitle", "?"))
+                    ep_lines.append(
+                        f"  • {show} S{ep.get('seasonNumber', 0):02d}E{ep.get('episodeNumber', 0):02d}"
+                    )
+                sections.extend(ep_lines)
+        except Exception:
+            pass
+
+    radarr_key = os.environ.get("RADARR_API_KEY", "")
+    if radarr_key:
+        try:
+            radarr_url = os.environ.get("RADARR_URL", "http://host.docker.internal:7878")
+            async with aiohttp.ClientSession() as s:
+                async with s.get(
+                    f"{radarr_url}/api/v3/wanted/missing",
+                    params={"apikey": radarr_key, "pageSize": 1},
+                    timeout=aiohttp.ClientTimeout(total=4),
+                ) as r:
+                    wanted = await r.json()
+            total = wanted.get("totalRecords", 0)
+            if total:
+                sections.append(f"🎬 *Radarr:* {total} movies still wanted")
+        except Exception:
+            pass
+
+    try:
+        uptime_url = os.environ.get("UPTIME_KUMA_URL", "http://host.docker.internal:3001")
+        uptime_slug = os.environ.get("UPTIME_KUMA_STATUS_SLUG", "main")
+        async with aiohttp.ClientSession() as s:
+            async with s.get(
+                f"{uptime_url}/api/status-page/heartbeat/{uptime_slug}",
+                timeout=aiohttp.ClientTimeout(total=4),
+            ) as r:
+                hb_data = await r.json()
+        heartbeats = hb_data.get("heartbeatList", {})
+        down_ids = [mid for mid, beats in heartbeats.items() if beats and beats[-1].get("status", 0) == 0]
+        total_services = len(heartbeats)
+        if down_ids:
+            sections.append(f"⚠️ *Uptime Kuma:* {len(down_ids)}/{total_services} services DOWN")
+        else:
+            sections.append(f"✅ *Uptime Kuma:* all {total_services} services up")
+    except Exception:
+        pass
+
+    message = "\n".join(sections)
+    try:
+        await client.chat_postMessage(channel=notify_user, text=message)
+        asyncio.create_task(_send_ntfy("☀️ Morning Briefing", "Daily briefing posted to Slack"))
+        return "Morning briefing sent"
+    except Exception as exc:
+        log.error("Morning briefing failed: %s", exc)
+        return f"Morning briefing failed: {exc}"
+
+
 def _register_integration_handlers(app: Any) -> None:
     """Register integration handlers: Gmail (/inbox, /email, /today, /calendar), Dropbox (/clawbox), channels (/clawchan)."""
     # ------------------------------------------------------------------
@@ -6215,6 +6365,69 @@ def _register_integration_handlers(app: Any) -> None:
         for start in range(0, len(body), 3500):
             await client.chat_postMessage(channel=channel_id, thread_ts=thread_ts, text=body[start : start + 3500])
 
+    def _uptime_status_label(status: int) -> str:
+        return {0: "down", 1: "up", 2: "pending", 3: "maintenance"}.get(status, "unknown")
+
+    async def _fetch_uptime_kuma_snapshot() -> dict[str, Any]:
+        uptime_url = os.environ.get("UPTIME_KUMA_URL", "http://host.docker.internal:3001")
+        uptime_slug = os.environ.get("UPTIME_KUMA_STATUS_SLUG", "main")
+        timeout = aiohttp.ClientTimeout(total=4)
+
+        async with aiohttp.ClientSession() as session:
+            async def _get_json(url: str) -> dict[str, Any]:
+                async with session.get(url, timeout=timeout) as resp:
+                    if resp.status != 200:
+                        raise RuntimeError(f"Uptime Kuma returned HTTP {resp.status}")
+                    return await resp.json()
+
+            page_data, hb_data = await asyncio.gather(
+                _get_json(f"{uptime_url}/api/status-page/{uptime_slug}"),
+                _get_json(f"{uptime_url}/api/status-page/heartbeat/{uptime_slug}"),
+            )
+
+        heartbeats = hb_data.get("heartbeatList", {})
+        groups: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+
+        for group in page_data.get("publicGroupList", []):
+            services: list[dict[str, Any]] = []
+            for monitor in group.get("monitorList", []):
+                monitor_id = str(monitor.get("id"))
+                seen_ids.add(monitor_id)
+                beats = heartbeats.get(monitor_id, [])
+                latest = beats[-1] if beats else {}
+                services.append(
+                    {
+                        "id": monitor_id,
+                        "name": monitor.get("name") or latest.get("name") or f"Monitor {monitor_id}",
+                        "status": latest.get("status", 0),
+                        "msg": latest.get("msg", ""),
+                    }
+                )
+            if services:
+                groups.append({"name": group.get("name") or "Other", "services": services})
+
+        extras: list[dict[str, Any]] = []
+        for monitor_id, beats in heartbeats.items():
+            monitor_key = str(monitor_id)
+            if monitor_key in seen_ids:
+                continue
+            latest = beats[-1] if beats else {}
+            extras.append(
+                {
+                    "id": monitor_key,
+                    "name": latest.get("name") or f"Monitor {monitor_key}",
+                    "status": latest.get("status", 0),
+                    "msg": latest.get("msg", ""),
+                }
+            )
+        if extras:
+            groups.append({"name": "Other", "services": extras})
+
+        services = [service for group in groups for service in group["services"]]
+        down_services = [service for service in services if service.get("status") != 1]
+        return {"groups": groups, "services": services, "down_services": down_services}
+
     @app.command("/status")
     async def handle_slash_status_quick(ack: Any, body: dict[str, Any], client: Any) -> None:
         await ack()
@@ -6332,9 +6545,80 @@ def _register_integration_handlers(app: Any) -> None:
             lines.append(f"• {plex_line}")
 
         try:
+            uptime_snapshot = await _fetch_uptime_kuma_snapshot()
+            total_services = len(uptime_snapshot["services"])
+            down_names = [service["name"] for service in uptime_snapshot["down_services"]]
+            if total_services:
+                if down_names:
+                    lines.append(
+                        f"• ⚠️ *Services:* {len(down_names)} down: {', '.join(down_names[:3])}"
+                        + (f" +{len(down_names) - 3} more" if len(down_names) > 3 else "")
+                    )
+                else:
+                    lines.append(f"• *Services:* {total_services}/{total_services} up ✅")
+        except Exception:
+            pass
+
+        try:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines))
         except Exception as e:
             log.warning("Slack send failed in /status: %s", e)
+
+    @app.command("/uptime")
+    async def handle_slash_uptime(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", "")
+
+        try:
+            uptime_snapshot = await _fetch_uptime_kuma_snapshot()
+            lines = ["*📊 Service Status*", ""]
+            for group in uptime_snapshot["groups"]:
+                services = group.get("services", [])
+                if not services:
+                    continue
+                up_count = sum(1 for service in services if service.get("status") == 1)
+                lines.append(f"*{group['name']}* ({up_count}/{len(services)} up)")
+                for service in services:
+                    status = service.get("status", 0)
+                    name = service.get("name", "?")
+                    if status == 1:
+                        lines.append(f"  ✅ {name}")
+                    elif status == 0:
+                        lines.append(f"  ❌ {name} — down")
+                    elif status == 3:
+                        lines.append(f"  ⚠️ {name} — maintenance")
+                    else:
+                        lines.append(f"  ⚠️ {name} — {_uptime_status_label(status)}")
+                lines.append("")
+
+            if len(lines) == 2:
+                lines.append("_No services found on the Uptime Kuma status page._")
+
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines).strip())
+        except Exception as exc:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=f"⚠️ Could not load Uptime Kuma status: {exc}",
+            )
+
+    @app.command("/morning")
+    async def handle_slash_morning(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", "")
+        result = await _send_morning_briefing(client)
+        if result != "Morning briefing sent":
+            log.warning("/morning result: %s", result)
+        try:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="☀️ Morning briefing triggered!",
+            )
+        except Exception as e:
+            log.warning("Slack send failed in /morning: %s", e)
 
     @app.command("/resume")
     async def handle_slash_resume(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
@@ -8264,87 +8548,7 @@ async def create_slack_handler() -> Any | None:  # type: ignore[return]
     log.info("Digest loop started")
 
     async def _morning_briefing() -> str:
-        """Send morning briefing DM to owner."""
-        import os
-        import shutil
-        import sqlite3
-        import time as _time
-
-        notify_user = os.environ.get("SLACK_NOTIFY_USER_ID", "")
-        if not notify_user:
-            return "Morning briefing skipped: SLACK_NOTIFY_USER_ID not set"
-
-        sections = ["*☀️ Good morning! Here's your daily briefing:*\n"]
-
-        weather_loc = os.environ.get("WEATHER_DEFAULT_LOCATION", "")
-        if weather_loc:
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                        f"https://wttr.in/{weather_loc}?format=3",
-                        timeout=aiohttp.ClientTimeout(total=5),
-                    ) as resp:
-                        weather = await resp.text()
-                sections.append(f"🌤 *Weather:* {weather.strip()}")
-            except Exception:
-                pass
-
-        try:
-            db_path = os.path.expanduser("~/.hermes/state.db")
-            yesterday = _time.time() - 86400
-            conn = sqlite3.connect(f"file:{db_path}?immutable=1", uri=True)
-            try:
-                count = conn.execute(
-                    "SELECT COUNT(*) FROM sessions WHERE started_at > ?",
-                    (yesterday,),
-                ).fetchone()[0]
-            finally:
-                conn.close()
-            sections.append(f"🤖 *Hermes sessions yesterday:* {count}")
-        except Exception:
-            pass
-
-        try:
-            nas_path = os.environ.get("NAS_BACKUP_PATH", "/Volumes/Misc")
-            if os.path.exists(nas_path):
-                usage = shutil.disk_usage(nas_path)
-                pct = usage.used / usage.total * 100
-                sections.append(
-                    f"💾 *NAS disk:* {pct:.1f}% used ({usage.free // 1_073_741_824:.0f} GB free)"
-                )
-        except Exception:
-            pass
-
-        tautulli_key = os.environ.get("TAUTULLI_API_KEY", "")
-        media_lines: list[str] = []
-        if tautulli_key:
-            try:
-                tautulli_url = os.environ.get("TAUTULLI_URL", "http://localhost:8181")
-                async with aiohttp.ClientSession() as s:
-                    async with s.get(
-                        f"{tautulli_url}/api/v2",
-                        params={"apikey": tautulli_key, "cmd": "get_history", "length": "3"},
-                        timeout=aiohttp.ClientTimeout(total=4),
-                    ) as r:
-                        hist = (await r.json()).get("response", {}).get("data", {}).get("data", [])
-                if hist:
-                    media_lines.append("🎬 *Recently watched:*")
-                    for item in hist[:3]:
-                        icon = "🎬" if item.get("media_type") == "movie" else "📺"
-                        media_lines.append(f"  {icon} {item.get('full_title', item.get('title', '?'))}")
-            except Exception:
-                pass
-        if media_lines:
-            sections.extend(media_lines)
-
-        message = "\n".join(sections)
-        try:
-            await app.client.chat_postMessage(channel=notify_user, text=message)
-            asyncio.create_task(_send_ntfy("☀️ Morning Briefing", "Daily briefing posted to Slack"))
-            return "Morning briefing sent"
-        except Exception as exc:
-            log.error("Morning briefing failed: %s", exc)
-            return f"Morning briefing failed: {exc}"
+        return await _send_morning_briefing(app.client)
 
     async def _weekly_digest() -> str:
         """Sunday 9am: summarize the week via Hermes and send to Slack+ntfy."""

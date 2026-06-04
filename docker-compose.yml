@@ -39,26 +39,27 @@ services:
       - .env
 
     environment:
-      - PYTHONPATH=/app/src:/app/skills:/app
-      - HEALTH_PORT=8765
-      - LOG_DIR=/logs
-      - AUDIT_DIR=/audit
-      - MC_TASKS_FILE=/app/data/tasks.json
-      - VAULT_DIR=/vault
+      PYTHONPATH: "/app/src:/app/skills:/app"
+      HEALTH_PORT: "8765"
+      LOG_DIR: "/logs"
+      AUDIT_DIR: "/audit"
+      MC_TASKS_FILE: "/app/data/tasks.json"
+      VAULT_DIR: "/vault"
       # Channel role IDs — set in .env with real Discord channel IDs
-      - DISCORD_CHANNEL_RESEARCH_ID=${DISCORD_CHANNEL_RESEARCH_ID:-0}
-      - DISCORD_CHANNEL_ANALYTICS_ID=${DISCORD_CHANNEL_ANALYTICS_ID:-0}
-      - DISCORD_CHANNEL_BOOKMARKS_ID=${DISCORD_CHANNEL_BOOKMARKS_ID:-0}
-      - DISCORD_CHANNEL_REAL_ESTATE_ID=${DISCORD_CHANNEL_REAL_ESTATE_ID:-0}
-      - ALERT_CHANNEL_ID=${ALERT_CHANNEL_ID:-0}
+      DISCORD_CHANNEL_RESEARCH_ID: "${DISCORD_CHANNEL_RESEARCH_ID:-0}"
+      DISCORD_CHANNEL_ANALYTICS_ID: "${DISCORD_CHANNEL_ANALYTICS_ID:-0}"
+      DISCORD_CHANNEL_BOOKMARKS_ID: "${DISCORD_CHANNEL_BOOKMARKS_ID:-0}"
+      DISCORD_CHANNEL_REAL_ESTATE_ID: "${DISCORD_CHANNEL_REAL_ESTATE_ID:-0}"
+      ALERT_CHANNEL_ID: "${ALERT_CHANNEL_ID:-0}"
       # NAS maintenance backup settings
-      - NAS_HOST=${NAS_HOST:-192.168.1.8}
-      - NAS_SSH_PORT=${NAS_SSH_PORT:-24}
-      - NAS_SSH_USER=${NAS_SSH_USER:-dave}
-      - NAS_BACKUP_PATH=${NAS_BACKUP_PATH:-/volume1/docker/openclaw/backups}
-      - QBIT_URL=${QBIT_URL:-http://192.168.1.8:8080}
-      - PLANS_DIR=/plans
-      - SLACK_METRICS_PATH=/logs/slack_metrics.jsonl
+      NAS_HOST: "${NAS_HOST:-192.168.1.8}"
+      NAS_SSH_PORT: "${NAS_SSH_PORT:-24}"
+      NAS_SSH_USER: "${NAS_SSH_USER:-dave}"
+      NAS_BACKUP_PATH: "${NAS_BACKUP_PATH:-/volume1/docker/openclaw/backups}"
+      QBIT_URL: "${QBIT_URL:-http://192.168.1.8:8080}"
+      PLANS_DIR: "/plans"
+      SLACK_METRICS_PATH: "/logs/slack_metrics.jsonl"
+      ANONYMIZED_TELEMETRY: "False"
 
     # Volume mounts
     volumes:
