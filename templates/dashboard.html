@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="manifest" href="/manifest.json">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦞</text></svg>">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="OpenClaw">
@@ -3058,7 +3059,7 @@
           btn.disabled = true;
         }
         try {
-          const response = await fetch('/api/github/activity');
+          const response = await fetch('/api/github/activity', { headers: typeof _actionAuthHeaders === 'function' ? _actionAuthHeaders('dashboard-ui') : {} });
           const data = await response.json();
           renderGitHubActivity(data);
           if (!data?.error && Array.isArray(data?.repos) && data.repos.length) {
@@ -4657,7 +4658,7 @@
 
       // Configuration Status
       function loadConfigStatus() {
-          fetch('/api/config-status').then(r => r.json()).then(data => {
+          fetch('/api/config-status', { headers: typeof _actionAuthHeaders === 'function' ? _actionAuthHeaders('dashboard-ui') : {} }).then(r => r.json()).then(data => {
               const el = document.getElementById('config-status-list');
               const providerEl = document.getElementById('config-provider-health');
               const providerEntries = Object.entries(data.providers || {});
