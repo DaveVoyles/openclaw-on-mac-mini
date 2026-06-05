@@ -31,6 +31,49 @@ You have 117 tools available. You can search the web, browse NAS folders, check 
 
 ---
 
+## Credentials & Service Access
+
+You have access to all credentials needed to operate autonomously. **Never ask the user for credentials that are listed here.**
+
+### NAS SSH
+- **Host**: `192.168.1.8`, **Port**: `24`, **User**: `dave`
+- **Password**: `Ilovepizza3!` (also works as SSH key auth from Mac Mini)
+- **Docker binary on NAS**: `/usr/local/bin/docker`
+
+### Common Passwords
+- **Primary password** (most services): `Ilovepizza3!`
+- **Alternate password**: `Weezer31!`
+
+### Service Credentials
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| Grafana | https://grafana.davevoyles.synology.me | admin / Ilovepizza3! |
+| qBittorrent | https://qbittorrent.davevoyles.synology.me | admin / Ilovepizza3! |
+| SABnzbd | http://192.168.1.8:8775 | API key: `609a6bd3fd804f22a22747667159eddd` |
+| AdGuard Home | https://adguard.davevoyles.synology.me | admin / Ilovepizza3! |
+| Sonarr | http://host.docker.internal:8989 | API key: `f22970fcd8734393a5f25e888282e1f6` |
+| Radarr | http://host.docker.internal:7878 | API key: `1858e9a659a44a23a07f21f8e67ca8d4` |
+| Lidarr | http://host.docker.internal:8686 | API key: `30ebd5a983ad4d1191469b0f15d89f73` |
+| Prowlarr | http://host.docker.internal:9696 | API key: `e7ff06b6ad3f4cc79dcca23c5dc22686` |
+| Tautulli | https://tautulli.davevoyles.synology.me | API key: `aabecf9a709f4f70aeca4f66191db737` |
+| Kavita | — | API key: `c2bb1098e777f6bdc2bb56ec8ccb90ec` |
+| Plex | http://host.docker.internal:32400 | Token: `se9CzQCdLdaAHu5UFd4o` |
+
+### MacBook Pro Wake-on-LAN
+- **MBP1**: IP `192.168.1.131`, MAC `a0:78:17:ae:61:01`, SSH key auth works
+- **MBP2**: IP `192.168.1.136`, MAC `70:8c:f2:ae:06:71`
+
+### Push Notifications (ntfy)
+- **URL**: `https://ntfy.sh`, **Topic**: `openclaw-alerts`
+
+### Credential Files (on Mac Mini host, not in container)
+- `/Users/davevoyles/docker-stack/secrets/nas-credentials.env` — NAS user/pass
+- `/Users/davevoyles/docker-stack/secrets/monitoring.env` — all *arr API keys + SAB key
+- `/Users/davevoyles/docker-stack/secrets/kavita.env` — Kavita key + Plex token
+- `/Users/davevoyles/openclaw/.env` — full OpenClaw environment (all keys above)
+
+---
+
 ## Autonomy Rules — How You Operate
 
 ### 1. Keep Going Until Done

@@ -110,8 +110,9 @@ services:
       # Auto-Dream memory files (persistent cognitive memory)
       - ./data/dream:/app/data/dream:rw
 
-      # ChromaDB vector store — semantic memory (Phase 13A)
-      - ./data/chromadb:/memory/chromadb:rw
+      # docker-stack secrets — read-only credential store for Hermes autonomous access
+      - /Users/davevoyles/docker-stack/secrets:/docker-stack/secrets:ro
+
 
       # SQLite thread store (Phase 13B) — lives in /memory alongside other data
       # (openclaw.db is created automatically by thread_store.py)

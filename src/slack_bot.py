@@ -8713,6 +8713,98 @@ def _register_integration_handlers(app: Any) -> None:
             log.warning("Slack send failed in /grafana: %s", e)
 
 
+    @app.command("/nas")
+    async def handle_nas(ack: Any, command: dict, client: Any) -> None:
+        """Show NAS health: disk usage, running containers, load average."""
+        await ack()
+        import os
+        import asyncio
+
+        channel_id = command.get("channel_id", "")
+        user_id = command.get("user_id", "")
+
+        nas_host = os.environ.get("NAS_HOST", "192.168.1.8")
+        nas_port = os.environ.get("NAS_SSH_PORT", "24")
+        nas_user = os.environ.get("NAS_SSH_USER", "dave")
+
+        nas_cmd = (
+            "echo '=DISK='; df -h / /volume1 2>/dev/null; "
+            "echo '=UPTIME='; uptime; "
+            "echo '=CONTAINERS='; /usr/local/bin/docker ps --format '{{.Names}}|{{.Status}}'"
+        )
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=8",
+                "-o", "BatchMode=yes",
+                "-p", nas_port, f"{nas_user}@{nas_host}", nas_cmd,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=15)
+            raw = stdout.decode()
+        except Exception as exc:
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id,
+                text=f"❌ Cannot reach NAS via SSH: {exc}"
+            )
+            return
+
+        sections = []
+
+        # Parse disk
+        disk_block = raw.split("=DISK=\n", 1)[1].split("=UPTIME=")[0].strip() if "=DISK=" in raw else ""
+        if disk_block:
+            lines = disk_block.splitlines()
+            disk_lines = ["💾 *Disk Usage*"]
+            for line in lines[1:]:  # skip header
+                parts = line.split()
+                if len(parts) >= 6:
+                    fs, size, used, avail, pct, mount = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
+                    pct_num = int(pct.replace("%", ""))
+                    icon = "🔴" if pct_num >= 90 else "🟡" if pct_num >= 75 else "🟢"
+                    label = "System" if mount == "/" else f"Volume1 ({size} total)"
+                    disk_lines.append(f"  {icon} *{label}*: {used} / {size} ({pct})")
+            sections.append("\n".join(disk_lines))
+
+        # Parse uptime/load
+        uptime_block = raw.split("=UPTIME=\n", 1)[1].split("=CONTAINERS=")[0].strip() if "=UPTIME=" in raw else ""
+        if uptime_block:
+            # Extract load averages
+            import re
+            load_match = re.search(r"load average[s]?:?\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)", uptime_block)
+            up_match = re.search(r"up\s+(.+?),\s+\d+ user", uptime_block)
+            if load_match:
+                l1, l5, l15 = load_match.groups()
+                l1f = float(l1)
+                icon = "🔴" if l1f > 4 else "🟡" if l1f > 2 else "🟢"
+                uptime_str = f" (up {up_match.group(1)})" if up_match else ""
+                sections.append(f"{icon} *Load*: {l1} / {l5} / {l15} (1m/5m/15m){uptime_str}")
+
+        # Parse containers
+        container_block = raw.split("=CONTAINERS=\n", 1)[1].strip() if "=CONTAINERS=" in raw else ""
+        if container_block:
+            lines = [l for l in container_block.splitlines() if l.strip()]
+            healthy = [l.split("|")[0] for l in lines if "healthy" in l.lower()]
+            unhealthy = [l.split("|")[0] for l in lines if "unhealthy" in l.lower() or "exited" in l.lower()]
+            running = [l.split("|")[0] for l in lines if "Up" in l.split("|")[1] if len(l.split("|")) > 1]
+            total = len(lines)
+            if unhealthy:
+                cont_lines = [f"🐳 *Containers* ({total} running)"]
+                for c in unhealthy:
+                    cont_lines.append(f"  🔴 {c}")
+                sections.append("\n".join(cont_lines))
+            else:
+                sections.append(f"🐳 *Containers*: {total} running, all healthy ✅")
+
+        text = f"🖥️ *NAS Status* — `{nas_host}`\n\n" + "\n\n".join(sections)
+        text += f"\n\n<https://homepage.davevoyles.synology.me|🔗 NAS Dashboard>"
+
+        try:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text, mrkdwn=True)
+        except Exception as e:
+            log.warning("Slack send failed in /nas: %s", e)
+
+
     @app.command("/media")
     async def handle_media(ack: Any, command: dict, client: Any) -> None:
         """Show combined Plex/Tautulli: active streams, recent plays, recently added."""
