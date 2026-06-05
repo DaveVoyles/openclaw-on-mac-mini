@@ -84,3 +84,4 @@
 - 2026-06-05: Extended /nas with status overview and containers subcommand; wired Grafana CPU/memory/disk alerts to push via ntfy
 - 2026-06-05: Added /nas logs <container> subcommand and NAS disk/container section to morning briefing
 - 2026-06-05: Added /nas restart <container> with Slack confirmation, created 8-panel NAS Overview Grafana dashboard
+- 2026-06-05: Added NAS Overview link to /grafana, wired audit_log() to /nas restart confirm/fail/error
