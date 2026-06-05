@@ -5191,6 +5191,44 @@ async def _send_morning_briefing(client: Any) -> str:
         except Exception:
             pass
 
+    # NAS health (disk + containers)
+    try:
+        import asyncio as _asyncio_nas
+        nas_host = os.environ.get("NAS_HOST", "192.168.1.8")
+        nas_port = os.environ.get("NAS_SSH_PORT", "24")
+        nas_user = os.environ.get("NAS_SSH_USER", "dave")
+        nas_cmd = (
+            "df -h /volume1 2>/dev/null | tail -1; "
+            "echo '---'; "
+            "/usr/local/bin/docker ps --format '{{.Status}}' | grep -c 'Up' 2>/dev/null || echo 0; "
+            "/usr/local/bin/docker ps --format '{{.Names}}|{{.Status}}' | grep -i unhealthy | head -3"
+        )
+        _proc = await _asyncio_nas.create_subprocess_exec(
+            "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=6",
+            "-o", "BatchMode=yes", "-p", nas_port, f"{nas_user}@{nas_host}", nas_cmd,
+            stdout=_asyncio_nas.subprocess.PIPE, stderr=_asyncio_nas.subprocess.PIPE,
+        )
+        _stdout, _ = await _asyncio_nas.wait_for(_proc.communicate(), timeout=12)
+        _nas_raw = _stdout.decode().strip().split("---")
+        _disk_line = _nas_raw[0].strip() if _nas_raw else ""
+        _cont_part = _nas_raw[1].strip().splitlines() if len(_nas_raw) > 1 else []
+        _running = int(_cont_part[0]) if _cont_part and _cont_part[0].isdigit() else 0
+        _unhealthy = [l.split("|")[0] for l in _cont_part[1:] if l.strip()]
+        # Parse disk %
+        _disk_pct = ""
+        if _disk_line:
+            _dcols = _disk_line.split()
+            if len(_dcols) >= 5:
+                _disk_pct = _dcols[4]
+                _dp_num = int(_disk_pct.replace("%", "")) if _disk_pct.replace("%","").isdigit() else 0
+                _disk_icon = "🔴" if _dp_num >= 90 else "🟡" if _dp_num >= 75 else "🟢"
+                _nas_line = f"🖥️ *NAS:* {_running} containers running, volume1 {_disk_icon} {_disk_pct} used"
+                if _unhealthy:
+                    _nas_line += f" ⚠️ unhealthy: {', '.join(_unhealthy)}"
+                sections.append(_nas_line)
+    except Exception:
+        pass
+
     news_key = os.environ.get("NEWSAPI_KEY", "")
     if news_key:
         try:
@@ -8339,6 +8377,47 @@ def _register_integration_handlers(app: Any) -> None:
                 header += f", {unhealthy_count} 🔴 unhealthy"
             header += ")"
             text_out = header + "\n" + "\n".join(lines)
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, mrkdwn=True)
+            return
+
+        if subcommand == "logs":
+            import os as _os, asyncio as _asyncio
+            nas_host = _os.environ.get("NAS_HOST", "192.168.1.8")
+            nas_port = _os.environ.get("NAS_SSH_PORT", "24")
+            nas_user = _os.environ.get("NAS_SSH_USER", "dave")
+            # Syntax: /nas logs <container> [lines]
+            log_parts = remainder.split() if remainder else []
+            container_name = log_parts[0] if log_parts else ""
+            try:
+                lines_n = int(log_parts[1]) if len(log_parts) > 1 else 50
+                lines_n = min(max(lines_n, 5), 200)  # clamp 5-200
+            except (ValueError, IndexError):
+                lines_n = 50
+            if not container_name:
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id,
+                    text="❌ Usage: `/nas logs <container> [lines]`\nExample: `/nas logs grafana 100`"
+                )
+                return
+            nas_cmd = f"/usr/local/bin/docker logs --tail {lines_n} {container_name} 2>&1"
+            try:
+                proc = await _asyncio.create_subprocess_exec(
+                    "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=8",
+                    "-o", "BatchMode=yes", "-p", nas_port, f"{nas_user}@{nas_host}", nas_cmd,
+                    stdout=_asyncio.subprocess.PIPE, stderr=_asyncio.subprocess.PIPE,
+                )
+                stdout, _ = await _asyncio.wait_for(proc.communicate(), timeout=20)
+                log_output = stdout.decode().strip()
+            except Exception as exc:
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ SSH error: {exc}")
+                return
+            if not log_output:
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"ℹ️ No log output for `{container_name}`.")
+                return
+            # Truncate to Slack's 3000 char block limit
+            if len(log_output) > 2800:
+                log_output = "…(truncated)\n" + log_output[-2800:]
+            text_out = f"📋 *Logs: `{container_name}`* (last {lines_n} lines)\n```{log_output}```"
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, mrkdwn=True)
             return
 
