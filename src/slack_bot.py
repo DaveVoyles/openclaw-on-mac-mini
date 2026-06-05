@@ -6781,6 +6781,41 @@ def _register_integration_handlers(app: Any) -> None:
             except Exception:
                 pass
 
+        # qBittorrent
+        _qbt_url = os.environ.get("QBIT_URL", "")
+        _qbt_user = os.environ.get("QBIT_USER", "admin")
+        _qbt_pass = os.environ.get("QBIT_PASSWORD", "")
+        if _qbt_url and _qbt_pass:
+            try:
+                import aiohttp as _aiohttp_qbt
+                _jar = _aiohttp_qbt.CookieJar()
+                async with _aiohttp_qbt.ClientSession(cookie_jar=_jar) as _s:
+                    await _s.post(
+                        f"{_qbt_url}/api/v2/auth/login",
+                        data={"username": _qbt_user, "password": _qbt_pass},
+                        timeout=_aiohttp_qbt.ClientTimeout(total=5),
+                    )
+                    async with _s.get(
+                        f"{_qbt_url}/api/v2/transfer/info",
+                        timeout=_aiohttp_qbt.ClientTimeout(total=4),
+                    ) as _r:
+                        _xfer = await _r.json()
+                    async with _s.get(
+                        f"{_qbt_url}/api/v2/torrents/info",
+                        params={"filter": "active"},
+                        timeout=_aiohttp_qbt.ClientTimeout(total=4),
+                    ) as _r:
+                        _active_torrents = await _r.json()
+                _dl = _xfer.get("dl_info_speed", 0) / 1024 / 1024
+                _up = _xfer.get("up_info_speed", 0) / 1024 / 1024
+                _active_count = len(_active_torrents)
+                if _active_count or _dl > 0.01:
+                    lines.append(f"• 🌊 qBittorrent: {_active_count} active ⬇️{_dl:.1f} MB/s ⬆️{_up:.1f} MB/s")
+                else:
+                    lines.append("• 🌊 qBittorrent: idle")
+            except Exception:
+                pass
+
         try:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines))
         except Exception as e:
@@ -7591,47 +7626,114 @@ def _register_integration_handlers(app: Any) -> None:
         user_id = body.get("user_id", "")
         channel_id = body.get("channel_id", "")
 
+        sections = []
+
+        # --- SABnzbd ---
         sab_url = os.environ.get("SABNZBD_URL", "http://host.docker.internal:8775")
         sab_key = os.environ.get("SABNZBD_API_KEY", "")
+        if sab_key:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        f"{sab_url}/api",
+                        params={"mode": "queue", "apikey": sab_key, "output": "json"},
+                        timeout=aiohttp.ClientTimeout(total=5),
+                    ) as resp:
+                        data = await resp.json()
 
-        if not sab_key:
-            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="⚠️ SABNZBD_API_KEY not configured.")
-            return
+                q = data.get("queue", {})
+                status = q.get("status", "Unknown")
+                speed_kb = float(q.get("kbpersec", 0))
+                speed_str = f"{speed_kb / 1024:.1f} MB/s" if speed_kb > 0 else "0 MB/s"
+                slots = q.get("slots", [])
+                total = int(q.get("noofslots_total", 0) or 0)
+                size_left = q.get("sizeleft", "0 B")
+
+                if not slots:
+                    sections.append(f"📰 *SABnzbd:* {status} — queue empty")
+                else:
+                    sab_lines = [f"📰 *SABnzbd* — {status} at {speed_str} · *{total} item(s)* · {size_left} left"]
+                    for s in slots[:4]:
+                        pct = s.get("percentage", 0)
+                        name = s.get("filename", s.get("name", "?"))[:48]
+                        timeleft = s.get("timeleft", "")
+                        eta = f" · ETA {timeleft}" if timeleft and timeleft != "0:00:00" else ""
+                        sab_lines.append(f"  • {name} — {pct}%{eta}")
+                    if total > 4:
+                        sab_lines.append(f"  _...and {total - 4} more_")
+                    sections.append("\n".join(sab_lines))
+            except Exception as exc:
+                sections.append(f"📰 *SABnzbd:* ❌ error — {exc}")
+
+        # --- qBittorrent ---
+        qbt_url = os.environ.get("QBIT_URL", "")
+        qbt_user = os.environ.get("QBIT_USER", "admin")
+        qbt_pass = os.environ.get("QBIT_PASSWORD", "")
+        if qbt_url and qbt_pass:
+            try:
+                jar = aiohttp.CookieJar()
+                async with aiohttp.ClientSession(cookie_jar=jar) as s:
+                    async with s.post(
+                        f"{qbt_url}/api/v2/auth/login",
+                        data={"username": qbt_user, "password": qbt_pass},
+                        timeout=aiohttp.ClientTimeout(total=6),
+                    ) as r:
+                        auth = await r.text()
+                    if auth.strip() not in ("Ok.", "Ok"):
+                        raise ValueError(f"auth failed: {auth}")
+
+                    async with s.get(
+                        f"{qbt_url}/api/v2/transfer/info",
+                        timeout=aiohttp.ClientTimeout(total=4),
+                    ) as r:
+                        xfer = await r.json()
+
+                    async with s.get(
+                        f"{qbt_url}/api/v2/torrents/info",
+                        params={"sort": "added_on", "reverse": "true", "limit": "8"},
+                        timeout=aiohttp.ClientTimeout(total=5),
+                    ) as r:
+                        torrents = await r.json()
+
+                dl = xfer.get("dl_info_speed", 0) / 1024 / 1024
+                up = xfer.get("up_info_speed", 0) / 1024 / 1024
+                free_gb = xfer.get("free_space_on_disk", 0) / 1e9
+                active = [t for t in torrents if t.get("state") not in ("pausedDL", "pausedUP", "stalledUP", "uploading")]
+                total_t = len(torrents)
+
+                state_emoji = {
+                    "downloading": "⬇️", "uploading": "⬆️", "stalledDL": "⏸",
+                    "pausedDL": "⏹", "queuedDL": "🕐", "error": "❌",
+                }
+                if not active and dl < 0.01:
+                    qbt_lines = [f"🌊 *qBittorrent:* idle · {total_t} torrent(s) · {free_gb:,.0f} GB free"]
+                else:
+                    qbt_lines = [f"🌊 *qBittorrent* — ⬇️ {dl:.1f} MB/s  ⬆️ {up:.1f} MB/s · {free_gb:,.0f} GB free"]
+                for t in torrents[:5]:
+                    state = t.get("state", "?")
+                    emoji = state_emoji.get(state, "•")
+                    name = t.get("name", "?")[:48]
+                    pct = t.get("progress", 0) * 100
+                    size_gb = t.get("size", 0) / 1e9
+                    if pct < 100:
+                        qbt_lines.append(f"  {emoji} {name} — {pct:.0f}% ({size_gb:.1f} GB)")
+                    else:
+                        qbt_lines.append(f"  ⬆️ {name} — seeding")
+                if total_t > 5:
+                    qbt_lines.append(f"  _...and {total_t - 5} more_")
+                sections.append("\n".join(qbt_lines))
+            except Exception as exc:
+                sections.append(f"🌊 *qBittorrent:* ❌ error — {exc}")
+
+        if not sections:
+            text = "⚠️ No download managers configured (SABNZBD_API_KEY / QBIT_PASSWORD missing)."
+        else:
+            text = "\n\n".join(sections)
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{sab_url}/api",
-                    params={"mode": "queue", "apikey": sab_key, "output": "json"},
-                    timeout=aiohttp.ClientTimeout(total=5),
-                ) as resp:
-                    data = await resp.json()
-
-            q = data.get("queue", {})
-            status = q.get("status", "Unknown")
-            speed_kb = float(q.get("kbpersec", 0))
-            speed_str = f"{speed_kb / 1024:.1f} MB/s" if speed_kb > 0 else "0 MB/s"
-            slots = q.get("slots", [])
-            total = int(q.get("noofslots_total", 0) or 0)
-            size_left = q.get("sizeleft", "0 B")
-
-            if not slots:
-                text = f"📥 *SABnzbd:* {status} — queue empty"
-            else:
-                lines = [f"📥 *SABnzbd Downloads* — {status} at {speed_str}\n*{total} item(s)* · {size_left} remaining\n"]
-                for s in slots[:5]:
-                    pct = s.get("percentage", 0)
-                    name = s.get("filename", s.get("name", "?"))[:50]
-                    timeleft = s.get("timeleft", "")
-                    eta = f" · ETA {timeleft}" if timeleft and timeleft != "0:00:00" else ""
-                    lines.append(f"• {name} — {pct}%{eta}")
-                if total > 5:
-                    lines.append(f"_...and {total - 5} more_")
-                text = "\n".join(lines)
-
-            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text)
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text, mrkdwn=True)
         except Exception as exc:
-            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ SABnzbd error: {exc}")
+            log.warning("Slack send failed in /downloads: %s", exc)
 
     @app.command("/upcoming")
     async def handle_slash_upcoming(ack: Any, body: dict[str, Any], client: Any) -> None:

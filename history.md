@@ -74,3 +74,4 @@
 - 2026-06-04: Added `/grafana` and `/media` Slack commands, synced help/home/docs, documented GRAFANA_URL, and kept Slack registration validation green.
 - 2026-06-04: Wave 14 — /grafana command, /media command (Plex+Tautulli), Tautulli+OpenClaw in tools panel, Tailscale peer count in morning briefing. 53→55 commands
 - 2026-06-05: Added /qbt command (qBittorrent torrents, speeds, free space); updated QBIT_URL to public HTTPS; 55→56 commands
+- 2026-06-05: Added qBittorrent to /downloads (SABnzbd+qBit merged) and to /status; MacBook Pro SSH troubleshooting
