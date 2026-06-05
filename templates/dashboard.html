@@ -1552,92 +1552,6 @@
           <pre id="container-logs-output" style="margin-top:0.75rem;background:#0d1117;color:#7ee787;font-size:0.72rem;line-height:1.4;padding:0.75rem;border-radius:6px;max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all">Loading…</pre>
         </div>
 
-        <!-- Mac Mini Resource Usage -->
-        <div class="card" id="mac-mini-usage" style="display: none">
-          <h2>&#128187; Mac Mini Resource Usage</h2>
-          <div
-            class="grid"
-            style="
-              grid-template-columns: repeat(3, 1fr);
-              margin-top: 0.5rem;
-              gap: 1rem;
-            "
-          >
-            <div
-              class="stat-item"
-              style="
-                text-align: center;
-                background: rgba(104, 172, 229, 0.05);
-                padding: 1rem;
-                border-radius: 0.5rem;
-                border: 1px solid var(--border);
-              "
-            >
-              <div
-                style="
-                  font-size: 0.7rem;
-                  color: var(--gold);
-                  text-transform: uppercase;
-                  margin-bottom: 0.25rem;
-                "
-              >
-                CPU Usage
-              </div>
-              <div id="server-cpu" style="font-size: 1.1rem; font-weight: 700">
-                --
-              </div>
-            </div>
-            <div
-              class="stat-item"
-              style="
-                text-align: center;
-                background: rgba(104, 172, 229, 0.05);
-                padding: 1rem;
-                border-radius: 0.5rem;
-                border: 1px solid var(--border);
-              "
-            >
-              <div
-                style="
-                  font-size: 0.7rem;
-                  color: var(--spirit-blue);
-                  text-transform: uppercase;
-                  margin-bottom: 0.25rem;
-                "
-              >
-                Memory
-              </div>
-              <div id="server-mem" style="font-size: 1.1rem; font-weight: 700">
-                --
-              </div>
-            </div>
-            <div
-              class="stat-item"
-              style="
-                text-align: center;
-                background: rgba(104, 172, 229, 0.05);
-                padding: 1rem;
-                border-radius: 0.5rem;
-                border: 1px solid var(--border);
-              "
-            >
-              <div
-                style="
-                  font-size: 0.7rem;
-                  color: var(--mint-green);
-                  text-transform: uppercase;
-                  margin-bottom: 0.25rem;
-                "
-              >
-                Storage (Root)
-              </div>
-              <div id="server-disk" style="font-size: 1.1rem; font-weight: 700">
-                --
-              </div>
-            </div>
-          </div>
-        </div>
-
         <!-- NAS Storage -->
         <div class="card" id="nas-disk-card" style="display:none">
           <h2>💾 NAS Storage</h2>
@@ -2839,15 +2753,8 @@
         // Resource usage stats
         if (d.stats) renderStats(d.stats);
 
-        // Server Resource stats
+        // Server Resource stats — card removed (duplicate of Hermes status panel)
         if (d.sys_stats) {
-          document.getElementById("mac-mini-usage").style.display = "block";
-          document.getElementById("server-cpu").textContent =
-            d.sys_stats.cpu || "--";
-          document.getElementById("server-mem").textContent =
-            d.sys_stats.mem || "--";
-          document.getElementById("server-disk").textContent =
-            d.sys_stats.disk || "--";
 
           // NAS disk bars
           const nasDisks = d.sys_stats.nas_disks || [];
