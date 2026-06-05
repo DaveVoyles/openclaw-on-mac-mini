@@ -80,3 +80,4 @@
 - 2026-06-05: Added `/notify` Slack push command, refreshed Slack help/home counts, and included qBittorrent in the morning briefing; requested AST + registration tests passed
 - 2026-06-05: Wave 15 — /notify command, qBittorrent morning briefing + live dashboard pill, 3 new jump nav pills (NAS/History/Logs), /api/qbt/status endpoint. 56→57 commands
 - 2026-06-05: Reset Grafana admin password via NAS SSH, created API service account token, upgraded /grafana command with live dashboard list and alert state
+- 2026-06-05: Added /nas command (NAS disk/containers/load via SSH), created 3 Grafana alert rules, wired Hermes system prompt with all credentials so it never prompts for passwords
