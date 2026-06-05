@@ -950,6 +950,9 @@
           <button onclick="jumpTo('overseerr-card')" class="jump-pill">🎭 Requests</button>
           <button onclick="jumpTo('uptime-kuma-card')" class="jump-pill">📊 Uptime</button>
           <button onclick="jumpTo('tools-links-card')" class="jump-pill">🛠️ Tools</button>
+          <button onclick="jumpTo('nas-browse-card')" class="jump-pill">📁 NAS</button>
+          <button onclick="jumpTo('conversations-card')" class="jump-pill">💬 History</button>
+          <button onclick="jumpTo('container-logs-card')" class="jump-pill">🐳 Logs</button>
         </nav>
 
         <div id="pwa-install-banner" style="display:none;padding:0.5rem 1rem;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:8px;margin-bottom:0.75rem;align-items:center;justify-content:space-between;gap:0.5rem">
@@ -976,6 +979,9 @@
           </div>
           <div class="stat-pill" id="stat-sabnzbd" onclick="document.getElementById('sabnzbd-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Downloads">
             <span class="stat-icon">📥</span><span id="stat-sabnzbd-val">—</span>
+          </div>
+          <div class="stat-pill" id="stat-qbt" onclick="document.getElementById('sabnzbd-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Downloads">
+            <span class="stat-icon">🌊</span><span id="stat-qbt-val">—</span>
           </div>
           <div class="stat-pill" id="stat-uptime" onclick="document.getElementById('uptime-kuma-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Uptime Kuma">
             <span class="stat-icon">📊</span><span id="stat-uptime-val">—</span>
@@ -3147,7 +3153,17 @@
             const count = sab.queue_size || 0;
             sabEl.textContent = count > 0 ? `${count} dl` : 'idle';
           }
-        } catch(e) {}
+
+          // qBittorrent pill — live data from /api/qbt/status
+          try {
+            const qbtData = await apiFetch('/api/qbt/status');
+            const qbtEl = document.getElementById('stat-qbt-val');
+            if (qbtEl && qbtData && !qbtData.error) {
+              const cnt = qbtData.active_count || 0;
+              const dl = qbtData.dl_speed_mbps || 0;
+              qbtEl.textContent = cnt > 0 ? `${cnt} ⬇️${dl.toFixed(1)}` : 'idle';
+            }
+          } catch(e) {}
 
         // Uptime Kuma pill
         try {

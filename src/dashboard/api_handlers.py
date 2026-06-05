@@ -6290,3 +6290,53 @@ async def api_sabnzbd_queue_handler(request):
         return web.Response(content_type="application/json", text=json.dumps(result))
     except Exception as exc:
         return web.Response(content_type="application/json", text=json.dumps({"error": str(exc)}))
+
+
+async def api_qbt_status_handler(request):
+    """GET /api/qbt/status — qBittorrent active count and speeds."""
+    import os
+
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+
+    cached = _cache_get("qbt_status")
+    if cached:
+        return web.Response(content_type="application/json", text=json.dumps(cached))
+
+    qbt_url = os.environ.get("QBIT_URL", "")
+    qbt_user = os.environ.get("QBIT_USER", "admin")
+    qbt_pass = os.environ.get("QBIT_PASSWORD", "")
+    if not qbt_url or not qbt_pass:
+        return web.Response(content_type="application/json", text=json.dumps({"error": "QBIT_PASSWORD not set"}))
+
+    try:
+        jar = aiohttp.CookieJar()
+        async with aiohttp.ClientSession(cookie_jar=jar) as s:
+            async with s.post(
+                f"{qbt_url}/api/v2/auth/login",
+                data={"username": qbt_user, "password": qbt_pass},
+                timeout=aiohttp.ClientTimeout(total=6),
+            ) as r:
+                auth = await r.text()
+            if auth.strip() not in ("Ok.", "Ok"):
+                raise ValueError(f"auth failed: {auth}")
+
+            async with s.get(f"{qbt_url}/api/v2/transfer/info", timeout=aiohttp.ClientTimeout(total=4)) as r:
+                xfer = await r.json()
+            async with s.get(
+                f"{qbt_url}/api/v2/torrents/info",
+                params={"filter": "active"},
+                timeout=aiohttp.ClientTimeout(total=4),
+            ) as r:
+                active = await r.json()
+
+        result = {
+            "active_count": len(active),
+            "dl_speed_mbps": round(xfer.get("dl_info_speed", 0) / 1024 / 1024, 2),
+            "up_speed_mbps": round(xfer.get("up_info_speed", 0) / 1024 / 1024, 2),
+            "free_space_gb": round(xfer.get("free_space_on_disk", 0) / 1e9, 1),
+        }
+        _cache_set("qbt_status", result, ttl_seconds=30)
+        return web.Response(content_type="application/json", text=json.dumps(result))
+    except Exception as exc:
+        return web.Response(content_type="application/json", text=json.dumps({"error": str(exc)}))

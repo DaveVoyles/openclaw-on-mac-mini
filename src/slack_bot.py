@@ -736,6 +736,7 @@ _HELP_TEXT = """
 *⚙️ Utilities*
 • `/morning` — Trigger your morning briefing DM
 • `/news [topic]` — Show top headlines or search a topic
+• `/notify <message>` — Send a push notification to your phone (prefix `high:` for urgent)
 • `/adguard` — DNS stats: queries, block rate, top blocked domains
 • `/grafana` — Grafana health status and dashboard links
 • `/help` — Show this command list
@@ -3187,6 +3188,7 @@ def _build_home_view(user_id: str, name: str) -> dict:
             [
                 "`/morning` — Trigger your morning briefing DM",
                 "`/news [topic]` — Show top headlines or search a topic",
+                "`/notify <message>` — Send a push notification via ntfy",
                 "`/adguard` — DNS stats: queries, block rate, top blocked domains",
                 "`/grafana` — Grafana health status and dashboard links",
                 "`/help` — Full command reference",
@@ -3234,7 +3236,7 @@ def _build_home_view(user_id: str, name: str) -> dict:
             "elements": [
                 {
                     "type": "mrkdwn",
-                    "text": "Dashboard: https://openclaw.davevoyles.synology.me/dashboard · 53 commands available · Type `/help` for the full list",
+                    "text": "Dashboard: https://openclaw.davevoyles.synology.me/dashboard · 56 commands available · Type `/help` for the full list",
                 }
             ],
         }
@@ -5130,6 +5132,40 @@ async def _send_morning_briefing(client: Any) -> str:
                 sections.append(f"📰 *SABnzbd:* {_slots} item(s) queued, {_mb_left/1024:.1f} GB left")
             else:
                 sections.append("📰 *SABnzbd:* queue empty")
+        except Exception:
+            pass
+
+    # qBittorrent active downloads
+    _qbt_url = os.environ.get("QBIT_URL", "")
+    _qbt_user = os.environ.get("QBIT_USER", "admin")
+    _qbt_pass = os.environ.get("QBIT_PASSWORD", "")
+    if _qbt_url and _qbt_pass:
+        try:
+            import aiohttp as _aiohttp_qbt2
+            _jar2 = _aiohttp_qbt2.CookieJar()
+            async with _aiohttp_qbt2.ClientSession(cookie_jar=_jar2) as _s:
+                await _s.post(
+                    f"{_qbt_url}/api/v2/auth/login",
+                    data={"username": _qbt_user, "password": _qbt_pass},
+                    timeout=_aiohttp_qbt2.ClientTimeout(total=5),
+                )
+                async with _s.get(
+                    f"{_qbt_url}/api/v2/transfer/info",
+                    timeout=_aiohttp_qbt2.ClientTimeout(total=4),
+                ) as _r:
+                    _xfer2 = await _r.json()
+                async with _s.get(
+                    f"{_qbt_url}/api/v2/torrents/info",
+                    params={"filter": "active"},
+                    timeout=_aiohttp_qbt2.ClientTimeout(total=4),
+                ) as _r:
+                    _active2 = await _r.json()
+            _dl2 = _xfer2.get("dl_info_speed", 0) / 1024 / 1024
+            _count2 = len(_active2)
+            if _count2:
+                sections.append(f"🌊 *qBittorrent:* {_count2} active · ⬇️ {_dl2:.1f} MB/s")
+            else:
+                sections.append("🌊 *qBittorrent:* idle")
         except Exception:
             pass
 
@@ -8815,6 +8851,57 @@ def _register_integration_handlers(app: Any) -> None:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text, mrkdwn=True)
         except Exception as e:
             log.warning("Slack send failed in /qbt: %s", e)
+
+    @app.command("/notify")
+    async def handle_notify(ack: Any, command: dict, client: Any) -> None:
+        """Send a push notification via ntfy.sh. Usage: /notify <message> or /notify high: <message>"""
+        await ack()
+        channel_id = command.get("channel_id", "")
+        user_id = command.get("user_id", "")
+        text = (command.get("text") or "").strip()
+
+        if not text:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="Usage: `/notify <message>`\nOptional priority prefix: `high:`, `low:`, `urgent:`\nExample: `/notify high: Server is down`",
+            )
+            return
+
+        priority = "default"
+        for p in ("urgent", "high", "low"):
+            if text.lower().startswith(f"{p}:"):
+                priority = p
+                text = text[len(p) + 1 :].strip()
+                break
+
+        import os
+
+        ntfy_url = os.environ.get("NTFY_URL", "")
+        ntfy_topic = os.environ.get("NTFY_TOPIC", "")
+        if not ntfy_url or not ntfy_topic:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="⚠️ NTFY_URL / NTFY_TOPIC not configured.",
+            )
+            return
+
+        try:
+            await _send_ntfy("📣 OpenClaw", text, priority=priority)
+            emoji = {"urgent": "🚨", "high": "🔴", "low": "🔵"}.get(priority, "🔔")
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=f"{emoji} Notification sent: _{text}_",
+            )
+        except Exception as exc:
+            log.warning("/notify failed: %s", exc)
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=f"❌ Failed to send notification: {exc}",
+            )
 
 
 def _register_action_handlers(app: Any) -> None:

@@ -31,7 +31,7 @@ OpenClaw is a Slack-first personal AI assistant for homelab ops, media visibilit
 
 ## Key Slack commands
 
-OpenClaw currently registers **55 Slack slash commands**. These are the most useful day-to-day ones; use `/help` for the full list.
+OpenClaw currently registers **57 Slack slash commands**. These are the most useful day-to-day ones; use `/help` for the full list.
 
 ### AI & Chat
 - `/hermes <prompt>` — start a threaded Hermes session
@@ -58,6 +58,7 @@ OpenClaw currently registers **55 Slack slash commands**. These are the most use
 - `/grafana` — check Grafana health and jump to key dashboards
 - `/morning` — trigger the owner morning briefing DM on demand
 - `/news [topic]` — show top headlines or search a topic
+- `/notify <message>` — send an ntfy push notification to your phone
 - `/tailscale` — show current Tailscale device status
 - `/wake mbp|mbp2` — send a Wake-on-LAN packet
 - `/nas df|ls <path>|free` — browse NAS status and folders

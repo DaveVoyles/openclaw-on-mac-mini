@@ -77,3 +77,5 @@
 - 2026-06-05: Added qBittorrent to /downloads (SABnzbd+qBit merged) and to /status; MacBook Pro SSH troubleshooting
 - 2026-06-05: MBP1 SSH authorized; MAC a0:78:17:ae:61:01 added to .env; /wake mbp now fully functional
 - 2026-06-05: Fixed all dashboard copy buttons — replaced bare navigator.clipboard with robust copyText() helper (HTTPS + execCommand fallback)
+- 2026-06-05: Added `/notify` Slack push command, refreshed Slack help/home counts, and included qBittorrent in the morning briefing; requested AST + registration tests passed
+- 2026-06-05: Wave 15 — /notify command, qBittorrent morning briefing + live dashboard pill, 3 new jump nav pills (NAS/History/Logs), /api/qbt/status endpoint. 56→57 commands
