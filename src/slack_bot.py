@@ -8631,7 +8631,7 @@ def _register_integration_handlers(app: Any) -> None:
 
     @app.command("/grafana")
     async def handle_grafana(ack: Any, command: dict, client: Any) -> None:
-        """Show Grafana status and quick links to key dashboards."""
+        """Show Grafana status, live dashboards, and alert state."""
         await ack()
         import os
         import aiohttp as _aiohttp
@@ -8639,26 +8639,74 @@ def _register_integration_handlers(app: Any) -> None:
         channel_id = command.get("channel_id", "")
         user_id = command.get("user_id", "")
         grafana_url = os.environ.get("GRAFANA_URL", "https://grafana.davevoyles.synology.me")
+        api_key = os.environ.get("GRAFANA_API_KEY", "")
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
 
+        sections = []
+
+        # Health check
         try:
             async with _aiohttp.ClientSession() as s:
                 async with s.get(f"{grafana_url}/api/health", timeout=_aiohttp.ClientTimeout(total=5)) as r:
                     health = await r.json()
             version = health.get("version", "?")
             db = health.get("database", "?")
-            status_line = f"✅ Grafana v{version} — DB: {db}"
+            sections.append(f"✅ *Grafana v{version}* — DB: {db}")
         except Exception as exc:
-            status_line = f"❌ Grafana unreachable: {exc}"
+            sections.append(f"❌ Grafana unreachable: {exc}")
 
-        text = (
-            f"📊 *Grafana* — {status_line}\n\n"
+        # Live dashboards
+        if api_key:
+            try:
+                async with _aiohttp.ClientSession(headers=headers) as s:
+                    # Dashboards
+                    async with s.get(
+                        f"{grafana_url}/api/search",
+                        params={"type": "dash-db", "limit": 10},
+                        timeout=_aiohttp.ClientTimeout(total=5),
+                    ) as r:
+                        dashboards = await r.json()
+
+                    # Active alerts
+                    async with s.get(
+                        f"{grafana_url}/api/prometheus/grafana/api/v1/alerts",
+                        timeout=_aiohttp.ClientTimeout(total=5),
+                    ) as r:
+                        alert_data = await r.json()
+
+                # Dashboards section
+                if dashboards:
+                    dash_lines = ["📋 *Dashboards*"]
+                    for d in dashboards[:6]:
+                        title = d.get("title", "?")
+                        url = d.get("url", "")
+                        dash_lines.append(f"  • <{grafana_url}{url}|{title}>")
+                    sections.append("\n".join(dash_lines))
+
+                # Alerts section
+                alerts = alert_data.get("data", {}).get("alerts", [])
+                firing = [a for a in alerts if a.get("state") == "firing"]
+                if firing:
+                    alert_lines = [f"🔴 *Firing Alerts* ({len(firing)})"]
+                    for a in firing[:5]:
+                        name = a.get("labels", {}).get("alertname", "?")
+                        alert_lines.append(f"  • 🚨 {name}")
+                    sections.append("\n".join(alert_lines))
+                else:
+                    sections.append("🟢 *Alerts* — All clear, no firing alerts")
+
+            except Exception as exc:
+                log.warning("Grafana API error in /grafana: %s", exc)
+
+        # Quick links footer
+        sections.append(
             f"*Quick Links*\n"
-            f"• <{grafana_url}|🏠 Home>\n"
-            f"• <{grafana_url}/d/node-exporter|🖥️ Node Exporter (System)>\n"
-            f"• <{grafana_url}/d/docker|🐳 Docker Containers>\n"
-            f"• <{grafana_url}/alerting/list|🔔 Alert Rules>\n"
+            f"• <{grafana_url}|🏠 Home>  "
+            f"• <{grafana_url}/alerting/list|🔔 Alerts>  "
             f"• <{grafana_url}/dashboards|📋 All Dashboards>"
         )
+
+        text = f"📊 *Grafana*\n\n" + "\n\n".join(sections)
         try:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text, mrkdwn=True)
         except Exception as e:
