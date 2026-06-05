@@ -6340,3 +6340,74 @@ async def api_qbt_status_handler(request):
         return web.Response(content_type="application/json", text=json.dumps(result))
     except Exception as exc:
         return web.Response(content_type="application/json", text=json.dumps({"error": str(exc)}))
+
+
+async def api_nas_status_handler(request):
+    """GET /api/nas/status — SSH to NAS, return disk % and container count."""
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+
+    cached = _cache_get("nas_status")
+    if cached:
+        return web.Response(content_type="application/json", text=json.dumps(cached))
+
+    import asyncio as _asyncio, re as _re
+    nas_host = _os.environ.get("NAS_HOST", "192.168.1.8")
+    nas_port = _os.environ.get("NAS_SSH_PORT", "24")
+    nas_user = _os.environ.get("NAS_SSH_USER", "dave")
+    nas_cmd = (
+        "df -h /volume1 2>/dev/null | tail -1; echo '---'; "
+        "/usr/local/bin/docker ps --format '{{.Status}}' | wc -l; echo '---'; "
+        "/usr/local/bin/docker ps --format '{{.Names}}|{{.Status}}' | grep -i unhealthy; "
+        "uptime"
+    )
+    try:
+        proc = await _asyncio.create_subprocess_exec(
+            "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=6",
+            "-o", "BatchMode=yes", "-p", nas_port, f"{nas_user}@{nas_host}", nas_cmd,
+            stdout=_asyncio.subprocess.PIPE, stderr=_asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await _asyncio.wait_for(proc.communicate(), timeout=12)
+        raw = stdout.decode().strip()
+    except Exception as exc:
+        return web.Response(content_type="application/json",
+                            text=json.dumps({"error": str(exc)}))
+
+    parts = raw.split("---")
+    disk_line = parts[0].strip() if parts else ""
+    cont_section = parts[1].strip() if len(parts) > 1 else ""
+    tail_section = parts[2].strip() if len(parts) > 2 else ""
+
+    # Parse disk %
+    disk_pct = None
+    disk_used = None
+    disk_total = None
+    if disk_line:
+        cols = disk_line.split()
+        if len(cols) >= 5:
+            disk_total = cols[1]
+            disk_used = cols[2]
+            disk_pct = int(cols[4].replace("%", "")) if cols[4].replace("%", "").isdigit() else None
+
+    # Container count
+    container_count = int(cont_section.splitlines()[0].strip()) if cont_section.splitlines() else 0
+    unhealthy = [l.split("|")[0] for l in cont_section.splitlines()[1:] if "|" in l]
+
+    # Load average
+    load_1m = None
+    if tail_section:
+        lm = _re.search(r"load average[s]?:?\s*([\d.]+)", tail_section)
+        if lm:
+            load_1m = float(lm.group(1))
+
+    result = {
+        "disk_pct": disk_pct,
+        "disk_used": disk_used,
+        "disk_total": disk_total,
+        "container_count": container_count,
+        "unhealthy": unhealthy,
+        "load_1m": load_1m,
+        "host": nas_host,
+    }
+    _cache_set("nas_status", result, ttl_seconds=60)
+    return web.Response(content_type="application/json", text=json.dumps(result))

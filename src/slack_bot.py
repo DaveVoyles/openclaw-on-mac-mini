@@ -8380,6 +8380,49 @@ def _register_integration_handlers(app: Any) -> None:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, mrkdwn=True)
             return
 
+        if subcommand == "exec":
+            import os as _os, asyncio as _asyncio
+            from audit import audit_log as _audit_log
+            # Admin-only
+            ok, msg = _copilot_owner_check(user_id, command_name="/nas exec")
+            if not ok:
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg or "🛑 Admin only.")
+                return
+            # /nas exec <container> <cmd...>
+            exec_parts = remainder.strip().split(None, 1) if remainder.strip() else []
+            exec_container = exec_parts[0] if exec_parts else ""
+            exec_cmd = exec_parts[1] if len(exec_parts) > 1 else ""
+            if not exec_container or not exec_cmd:
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id,
+                    text="❌ Usage: `/nas exec <container> <command>`\nExample: `/nas exec grafana grafana-cli version`"
+                )
+                return
+            nas_host = _os.environ.get("NAS_HOST", "192.168.1.8")
+            nas_port = _os.environ.get("NAS_SSH_PORT", "24")
+            nas_user_env = _os.environ.get("NAS_SSH_USER", "dave")
+            nas_cmd = f"/usr/local/bin/docker exec {exec_container} {exec_cmd}"
+            _audit_log(user_id, "nas_container_exec",
+                       detail=f"container={exec_container} cmd={exec_cmd}", severity="INFO")
+            try:
+                proc = await _asyncio.create_subprocess_exec(
+                    "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=8",
+                    "-o", "BatchMode=yes", "-p", nas_port, f"{nas_user_env}@{nas_host}", nas_cmd,
+                    stdout=_asyncio.subprocess.PIPE, stderr=_asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await _asyncio.wait_for(proc.communicate(), timeout=30)
+                output = (stdout.decode() + stderr.decode()).strip()
+            except Exception as exc:
+                _audit_log(user_id, "nas_container_exec",
+                           detail=f"container={exec_container} cmd={exec_cmd}", result=f"error:{exc}", severity="WARNING")
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ SSH error: {exc}")
+                return
+            if len(output) > 2800:
+                output = "…(truncated)\n" + output[-2800:]
+            result_text = f"🖥️ *`{exec_container}` — `{exec_cmd}`*\n```{output or '(no output)'}```"
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=result_text, mrkdwn=True)
+            return
+
         if subcommand == "restart":
             container_name = remainder.strip().split()[0] if remainder.strip() else ""
             if not container_name:

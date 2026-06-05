@@ -1563,6 +1563,38 @@
           <h2>💾 NAS Storage</h2>
           <div id="nas-disk-bars"></div>
         </div>
+
+        <!-- NAS Status Card -->
+        <div class="card" id="nas-status-card" style="margin-bottom:1rem">
+          <h2>🖥️ NAS Status</h2>
+          <div id="nas-status-body">
+            <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.75rem">
+              <div class="stat-pill" style="flex:1;min-width:120px">
+                <span class="stat-icon">💾</span>
+                <span id="nas-disk-pct">—</span>
+                <span style="font-size:0.7rem;color:#8b949e">volume1</span>
+              </div>
+              <div class="stat-pill" style="flex:1;min-width:120px">
+                <span class="stat-icon">🐳</span>
+                <span id="nas-containers">—</span>
+                <span style="font-size:0.7rem;color:#8b949e">containers</span>
+              </div>
+              <div class="stat-pill" style="flex:1;min-width:120px">
+                <span class="stat-icon">⚡</span>
+                <span id="nas-load">—</span>
+                <span style="font-size:0.7rem;color:#8b949e">load</span>
+              </div>
+            </div>
+            <div id="nas-unhealthy" style="display:none;color:#f85149;font-size:0.8rem;margin-top:0.25rem"></div>
+            <div style="margin-top:0.5rem;display:flex;gap:0.5rem;flex-wrap:wrap">
+              <a href="https://homepage.davevoyles.synology.me" target="_blank"
+                 style="font-size:0.75rem;padding:0.2rem 0.6rem;background:rgba(56,139,253,0.1);border:1px solid rgba(56,139,253,0.3);border-radius:12px;color:#58a6ff;text-decoration:none">🏠 Homepage</a>
+              <a href="https://grafana.davevoyles.synology.me/d/nas-overview" target="_blank"
+                 style="font-size:0.75rem;padding:0.2rem 0.6rem;background:rgba(56,139,253,0.1);border:1px solid rgba(56,139,253,0.3);border-radius:12px;color:#58a6ff;text-decoration:none">📊 Grafana</a>
+            </div>
+          </div>
+        </div>
+
         <div class="card" id="nas-browse-card" style="margin-bottom:1rem">
           <div class="card-header d-flex justify-content-between align-items-center" style="cursor:pointer" onclick="toggleNasBrowse()">
             <span>📁 NAS File Browser</span>
@@ -3176,6 +3208,38 @@
             if (down > 0) {
               document.getElementById('stat-uptime')?.style && (document.getElementById('stat-uptime').style.borderColor = 'var(--error, #f87171)');
             }
+          }
+        } catch(e) {}
+      }
+
+      async function loadNasStatus() {
+        try {
+          const d = await apiFetch('/api/nas/status');
+          if (!d || d.error) return;
+          const diskEl = document.getElementById('nas-disk-pct');
+          const contEl = document.getElementById('nas-containers');
+          const loadEl = document.getElementById('nas-load');
+          const unhealthyEl = document.getElementById('nas-unhealthy');
+          if (diskEl) {
+            const pct = d.disk_pct;
+            const color = pct >= 90 ? '#f85149' : pct >= 75 ? '#d29922' : '#3fb950';
+            diskEl.innerHTML = `<span style="color:${color}">${pct ?? '—'}%</span>`;
+            if (d.disk_used && d.disk_total) diskEl.title = `${d.disk_used} used of ${d.disk_total}`;
+          }
+          if (contEl) {
+            const unhealthy = (d.unhealthy || []).length;
+            contEl.innerHTML = unhealthy > 0
+              ? `${d.container_count} <span style="color:#f85149">(${unhealthy} ⚠️)</span>`
+              : `${d.container_count} ✅`;
+          }
+          if (loadEl) {
+            const l = d.load_1m;
+            const lcolor = l > 4 ? '#f85149' : l > 2 ? '#d29922' : '#3fb950';
+            loadEl.innerHTML = l != null ? `<span style="color:${lcolor}">${l.toFixed(2)}</span>` : '—';
+          }
+          if (unhealthyEl && d.unhealthy && d.unhealthy.length > 0) {
+            unhealthyEl.textContent = `⚠️ Unhealthy: ${d.unhealthy.join(', ')}`;
+            unhealthyEl.style.display = 'block';
           }
         } catch(e) {}
       }
@@ -7759,8 +7823,10 @@
         loadQuickStats();
         loadContainerLogs();
         loadSystemAlerts();
+        loadNasStatus();
         setInterval(loadQuickStats, 30000);
         setInterval(loadSystemAlerts, 60000);
+        setInterval(loadNasStatus, 60000);
       });
       document.addEventListener('keydown', e => {
         if (e.key === 'Escape') {
