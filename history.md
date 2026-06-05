@@ -87,3 +87,4 @@
 - 2026-06-05: Added NAS Overview link to /grafana, wired audit_log() to /nas restart confirm/fail/error
 - 2026-06-05: Added /nas exec (admin, audited), /api/nas/status endpoint, and NAS Status card to dashboard showing live disk/container/load
 - 2026-06-05: Added /nas exec command blocklist (14 dangerous commands blocked+audited), added NAS disk % pill to dashboard quick-stats strip
+- 2026-06-05: Wave 23 complete — /nas update subcommand, /api/audit/recent endpoint registered, audit log dashboard card with 60s auto-refresh
