@@ -8380,6 +8380,52 @@ def _register_integration_handlers(app: Any) -> None:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, mrkdwn=True)
             return
 
+        if subcommand == "restart":
+            container_name = remainder.strip().split()[0] if remainder.strip() else ""
+            if not container_name:
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id,
+                    text="❌ Usage: `/nas restart <container>`\nExample: `/nas restart grafana`"
+                )
+                return
+            # Send confirmation prompt with danger button
+            blocks = [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"⚠️ Restart NAS container *`{container_name}`*?\nThis will briefly interrupt the service.",
+                    },
+                },
+                {
+                    "type": "actions",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "🔄 Restart"},
+                            "style": "danger",
+                            "action_id": "nas_restart_confirm",
+                            "value": container_name,
+                            "confirm": {
+                                "title": {"type": "plain_text", "text": "Confirm restart"},
+                                "text": {"type": "mrkdwn", "text": f"Restart `{container_name}` on the NAS?"},
+                                "confirm": {"type": "plain_text", "text": "Yes, restart"},
+                                "deny": {"type": "plain_text", "text": "Cancel"},
+                            },
+                        },
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "Cancel"},
+                            "action_id": "nas_restart_cancel",
+                            "value": container_name,
+                        },
+                    ],
+                },
+            ]
+            await client.chat_postEphemeral(channel=channel_id, user=user_id,
+                                            text=f"Restart `{container_name}`?", blocks=blocks)
+            return
+
         if subcommand == "logs":
             import os as _os, asyncio as _asyncio
             nas_host = _os.environ.get("NAS_HOST", "192.168.1.8")
@@ -9143,6 +9189,57 @@ def _register_integration_handlers(app: Any) -> None:
 
 def _register_action_handlers(app: Any) -> None:
     """Register all @app.action handlers: file actions, retry/clarify, and Gmail summarize."""
+
+    # ------------------------------------------------------------------
+    # Handler: 🔄 NAS container restart (confirm / cancel)
+    # ------------------------------------------------------------------
+
+    @app.action("nas_restart_confirm")
+    async def handle_nas_restart_confirm(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        import os, asyncio
+        user_id = (body.get("user") or {}).get("id", "")
+        channel_id = (body.get("channel") or {}).get("id", user_id)
+        actions = body.get("actions", [{}])
+        container_name = (actions[0] if actions else {}).get("value", "")
+        if not container_name:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="⚠️ No container name found.")
+            return
+        nas_host = os.environ.get("NAS_HOST", "192.168.1.8")
+        nas_port = os.environ.get("NAS_SSH_PORT", "24")
+        nas_user = os.environ.get("NAS_SSH_USER", "dave")
+        nas_cmd = f"/usr/local/bin/docker restart {container_name}"
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=8",
+                "-o", "BatchMode=yes", "-p", nas_port, f"{nas_user}@{nas_host}", nas_cmd,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+            output = (stdout.decode() + stderr.decode()).strip()
+            if proc.returncode == 0:
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id,
+                    text=f"✅ `{container_name}` restarted successfully on NAS."
+                )
+            else:
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id,
+                    text=f"❌ Restart failed for `{container_name}`:\n```{output[:500]}```"
+                )
+        except Exception as exc:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id,
+                                            text=f"❌ SSH error during restart: {exc}")
+
+    @app.action("nas_restart_cancel")
+    async def handle_nas_restart_cancel(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = (body.get("user") or {}).get("id", "")
+        channel_id = (body.get("channel") or {}).get("id", user_id)
+        actions = body.get("actions", [{}])
+        container_name = (actions[0] if actions else {}).get("value", "")
+        await client.chat_postEphemeral(channel=channel_id, user=user_id,
+                                        text=f"↩️ Restart of `{container_name}` cancelled.")
 
     # ------------------------------------------------------------------
     # Handler: 🔀 Compare — first step, store Document A and prompt for B
