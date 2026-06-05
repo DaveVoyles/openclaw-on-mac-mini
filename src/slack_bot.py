@@ -8086,8 +8086,69 @@ def _register_integration_handlers(app: Any) -> None:
             )
 
         if not subcommand:
-            usage_text, usage_blocks = _usage_blocks()
-            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=usage_text, blocks=usage_blocks)
+            # No subcommand → SSH status overview (disk + load + container summary)
+            import os as _os
+            nas_host = _os.environ.get("NAS_HOST", "192.168.1.8")
+            nas_port = _os.environ.get("NAS_SSH_PORT", "24")
+            nas_user = _os.environ.get("NAS_SSH_USER", "dave")
+            nas_cmd = (
+                "echo '=DISK='; df -h / /volume1 2>/dev/null; "
+                "echo '=UPTIME='; uptime; "
+                "echo '=CONTAINERS='; /usr/local/bin/docker ps --format '{{.Names}}|{{.Status}}'"
+            )
+            import asyncio as _asyncio, re as _re
+            try:
+                proc = await _asyncio.create_subprocess_exec(
+                    "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=8",
+                    "-o", "BatchMode=yes", "-p", nas_port, f"{nas_user}@{nas_host}", nas_cmd,
+                    stdout=_asyncio.subprocess.PIPE, stderr=_asyncio.subprocess.PIPE,
+                )
+                stdout, _ = await _asyncio.wait_for(proc.communicate(), timeout=15)
+                raw = stdout.decode()
+            except Exception as exc:
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ Cannot reach NAS via SSH: {exc}")
+                return
+
+            parts_out = []
+            # Disk
+            if "=DISK=" in raw:
+                disk_block = raw.split("=DISK=\n", 1)[1].split("=UPTIME=")[0].strip()
+                disk_lines = ["💾 *Disk*"]
+                for ln in disk_block.splitlines()[1:]:
+                    cols = ln.split()
+                    if len(cols) >= 6:
+                        pct_num = int(cols[4].replace("%", "")) if cols[4].replace("%","").isdigit() else 0
+                        icon = "🔴" if pct_num >= 90 else "🟡" if pct_num >= 75 else "🟢"
+                        label = "System" if cols[5] == "/" else f"Volume1 ({cols[1]})"
+                        disk_lines.append(f"  {icon} *{label}*: {cols[2]} / {cols[1]} ({cols[4]})")
+                parts_out.append("\n".join(disk_lines))
+            # Load
+            if "=UPTIME=" in raw:
+                uptime_block = raw.split("=UPTIME=\n", 1)[1].split("=CONTAINERS=")[0].strip()
+                lm = _re.search(r"load average[s]?:?\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)", uptime_block)
+                um = _re.search(r"up\s+(.+?),\s+\d+ user", uptime_block)
+                if lm:
+                    l1, l5, l15 = lm.groups()
+                    load_icon = "🔴" if float(l1) > 4 else "🟡" if float(l1) > 2 else "🟢"
+                    up_str = f" (up {um.group(1)})" if um else ""
+                    parts_out.append(f"{load_icon} *Load*: {l1} / {l5} / {l15}{up_str}")
+            # Containers summary
+            if "=CONTAINERS=" in raw:
+                cont_raw = raw.split("=CONTAINERS=\n", 1)[1].strip()
+                cont_lines = [l for l in cont_raw.splitlines() if l.strip()]
+                total = len(cont_lines)
+                unhealthy = [l.split("|")[0] for l in cont_lines if "unhealthy" in l.lower() or "exited" in l.lower()]
+                if unhealthy:
+                    c_block = [f"🐳 *Containers* ({total} running, {len(unhealthy)} ⚠️)"]
+                    for c in unhealthy:
+                        c_block.append(f"  🔴 {c}")
+                    parts_out.append("\n".join(c_block))
+                else:
+                    parts_out.append(f"🐳 *Containers*: {total} running ✅  — `/nas containers` for full list")
+
+            text_out = f"🖥️ *NAS* — `{nas_host}`\n\n" + "\n\n".join(parts_out)
+            text_out += f"\n\n<https://homepage.davevoyles.synology.me|🔗 Dashboard>"
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, mrkdwn=True)
             return
 
         if subcommand == "df":
@@ -8230,6 +8291,55 @@ def _register_integration_handlers(app: Any) -> None:
 
             text_out, blocks = _disk_blocks(payload, heading="*🧠 NAS resources*\n⚠️ DSM resource data unavailable — showing disk usage instead.")
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, blocks=blocks)
+            return
+
+        if subcommand == "containers":
+            import os as _os, asyncio as _asyncio
+            nas_host = _os.environ.get("NAS_HOST", "192.168.1.8")
+            nas_port = _os.environ.get("NAS_SSH_PORT", "24")
+            nas_user = _os.environ.get("NAS_SSH_USER", "dave")
+            nas_cmd = "/usr/local/bin/docker ps --format '{{.Names}}|{{.Status}}|{{.Image}}' --no-trunc=false"
+            try:
+                proc = await _asyncio.create_subprocess_exec(
+                    "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=8",
+                    "-o", "BatchMode=yes", "-p", nas_port, f"{nas_user}@{nas_host}", nas_cmd,
+                    stdout=_asyncio.subprocess.PIPE, stderr=_asyncio.subprocess.PIPE,
+                )
+                stdout, _ = await _asyncio.wait_for(proc.communicate(), timeout=15)
+                raw = stdout.decode().strip()
+            except Exception as exc:
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ SSH error: {exc}")
+                return
+
+            if not raw:
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text="⚠️ No containers running on NAS.")
+                return
+
+            lines = []
+            healthy_count = unhealthy_count = 0
+            for ln in raw.splitlines():
+                parts = ln.split("|", 2)
+                name = parts[0] if parts else "?"
+                status = parts[1] if len(parts) > 1 else "?"
+                if "unhealthy" in status.lower() or "exited" in status.lower():
+                    icon = "🔴"
+                    unhealthy_count += 1
+                elif "healthy" in status.lower():
+                    icon = "🟢"
+                    healthy_count += 1
+                else:
+                    icon = "🟡"
+                    healthy_count += 1
+                # Shorten status
+                short_status = status.split("(")[0].strip()
+                lines.append(f"  {icon} `{name}` — {short_status}")
+
+            header = f"🐳 *NAS Containers* ({len(lines)} total — {healthy_count} healthy"
+            if unhealthy_count:
+                header += f", {unhealthy_count} 🔴 unhealthy"
+            header += ")"
+            text_out = header + "\n" + "\n".join(lines)
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, mrkdwn=True)
             return
 
         usage_text, usage_blocks = _usage_blocks()
@@ -8711,98 +8821,6 @@ def _register_integration_handlers(app: Any) -> None:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text, mrkdwn=True)
         except Exception as e:
             log.warning("Slack send failed in /grafana: %s", e)
-
-
-    @app.command("/nas")
-    async def handle_nas(ack: Any, command: dict, client: Any) -> None:
-        """Show NAS health: disk usage, running containers, load average."""
-        await ack()
-        import os
-        import asyncio
-
-        channel_id = command.get("channel_id", "")
-        user_id = command.get("user_id", "")
-
-        nas_host = os.environ.get("NAS_HOST", "192.168.1.8")
-        nas_port = os.environ.get("NAS_SSH_PORT", "24")
-        nas_user = os.environ.get("NAS_SSH_USER", "dave")
-
-        nas_cmd = (
-            "echo '=DISK='; df -h / /volume1 2>/dev/null; "
-            "echo '=UPTIME='; uptime; "
-            "echo '=CONTAINERS='; /usr/local/bin/docker ps --format '{{.Names}}|{{.Status}}'"
-        )
-
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=8",
-                "-o", "BatchMode=yes",
-                "-p", nas_port, f"{nas_user}@{nas_host}", nas_cmd,
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=15)
-            raw = stdout.decode()
-        except Exception as exc:
-            await client.chat_postEphemeral(
-                channel=channel_id, user=user_id,
-                text=f"❌ Cannot reach NAS via SSH: {exc}"
-            )
-            return
-
-        sections = []
-
-        # Parse disk
-        disk_block = raw.split("=DISK=\n", 1)[1].split("=UPTIME=")[0].strip() if "=DISK=" in raw else ""
-        if disk_block:
-            lines = disk_block.splitlines()
-            disk_lines = ["💾 *Disk Usage*"]
-            for line in lines[1:]:  # skip header
-                parts = line.split()
-                if len(parts) >= 6:
-                    fs, size, used, avail, pct, mount = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
-                    pct_num = int(pct.replace("%", ""))
-                    icon = "🔴" if pct_num >= 90 else "🟡" if pct_num >= 75 else "🟢"
-                    label = "System" if mount == "/" else f"Volume1 ({size} total)"
-                    disk_lines.append(f"  {icon} *{label}*: {used} / {size} ({pct})")
-            sections.append("\n".join(disk_lines))
-
-        # Parse uptime/load
-        uptime_block = raw.split("=UPTIME=\n", 1)[1].split("=CONTAINERS=")[0].strip() if "=UPTIME=" in raw else ""
-        if uptime_block:
-            # Extract load averages
-            import re
-            load_match = re.search(r"load average[s]?:?\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)", uptime_block)
-            up_match = re.search(r"up\s+(.+?),\s+\d+ user", uptime_block)
-            if load_match:
-                l1, l5, l15 = load_match.groups()
-                l1f = float(l1)
-                icon = "🔴" if l1f > 4 else "🟡" if l1f > 2 else "🟢"
-                uptime_str = f" (up {up_match.group(1)})" if up_match else ""
-                sections.append(f"{icon} *Load*: {l1} / {l5} / {l15} (1m/5m/15m){uptime_str}")
-
-        # Parse containers
-        container_block = raw.split("=CONTAINERS=\n", 1)[1].strip() if "=CONTAINERS=" in raw else ""
-        if container_block:
-            lines = [l for l in container_block.splitlines() if l.strip()]
-            healthy = [l.split("|")[0] for l in lines if "healthy" in l.lower()]
-            unhealthy = [l.split("|")[0] for l in lines if "unhealthy" in l.lower() or "exited" in l.lower()]
-            running = [l.split("|")[0] for l in lines if "Up" in l.split("|")[1] if len(l.split("|")) > 1]
-            total = len(lines)
-            if unhealthy:
-                cont_lines = [f"🐳 *Containers* ({total} running)"]
-                for c in unhealthy:
-                    cont_lines.append(f"  🔴 {c}")
-                sections.append("\n".join(cont_lines))
-            else:
-                sections.append(f"🐳 *Containers*: {total} running, all healthy ✅")
-
-        text = f"🖥️ *NAS Status* — `{nas_host}`\n\n" + "\n\n".join(sections)
-        text += f"\n\n<https://homepage.davevoyles.synology.me|🔗 NAS Dashboard>"
-
-        try:
-            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text, mrkdwn=True)
-        except Exception as e:
-            log.warning("Slack send failed in /nas: %s", e)
 
 
     @app.command("/media")
