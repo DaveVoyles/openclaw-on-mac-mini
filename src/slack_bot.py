@@ -8380,6 +8380,74 @@ def _register_integration_handlers(app: Any) -> None:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, mrkdwn=True)
             return
 
+        if subcommand == "update":
+            import os as _os, asyncio as _asyncio
+            from audit import audit_log as _audit_log
+            ok, msg = _copilot_owner_check(user_id, command_name="/nas update")
+            if not ok:
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg or "🛑 Admin only.")
+                return
+            container_name = remainder.strip().split()[0] if remainder.strip() else ""
+            if not container_name:
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id,
+                    text="❌ Usage: `/nas update <container>`\nExample: `/nas update grafana`"
+                )
+                return
+            nas_host = _os.environ.get("NAS_HOST", "192.168.1.8")
+            nas_port = _os.environ.get("NAS_SSH_PORT", "24")
+            nas_user_env = _os.environ.get("NAS_SSH_USER", "dave")
+            # Get current image so we can pull and show before/after
+            inspect_cmd = (
+                f"/usr/local/bin/docker inspect --format '{{{{.Config.Image}}}}' {container_name} 2>/dev/null"
+            )
+            try:
+                proc = await _asyncio.create_subprocess_exec(
+                    "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=8",
+                    "-o", "BatchMode=yes", "-p", nas_port, f"{nas_user_env}@{nas_host}", inspect_cmd,
+                    stdout=_asyncio.subprocess.PIPE, stderr=_asyncio.subprocess.PIPE,
+                )
+                stdout, _ = await _asyncio.wait_for(proc.communicate(), timeout=10)
+                image_name = stdout.decode().strip()
+            except Exception as exc:
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ Could not inspect container: {exc}")
+                return
+            if not image_name:
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ Container `{container_name}` not found on NAS.")
+                return
+            await client.chat_postEphemeral(channel=channel_id, user=user_id,
+                                            text=f"⏳ Pulling `{image_name}` for `{container_name}`…")
+            # Pull + restart
+            update_cmd = (
+                f"/usr/local/bin/docker pull {image_name} 2>&1 | tail -3; "
+                f"echo '---RESTART---'; "
+                f"/usr/local/bin/docker restart {container_name} 2>&1"
+            )
+            try:
+                proc2 = await _asyncio.create_subprocess_exec(
+                    "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=8",
+                    "-o", "BatchMode=yes", "-p", nas_port, f"{nas_user_env}@{nas_host}", update_cmd,
+                    stdout=_asyncio.subprocess.PIPE, stderr=_asyncio.subprocess.PIPE,
+                )
+                stdout2, _ = await _asyncio.wait_for(proc2.communicate(), timeout=120)
+                output = stdout2.decode().strip()
+                pull_out = output.split("---RESTART---")[0].strip() if "---RESTART---" in output else output
+                restart_out = output.split("---RESTART---")[1].strip() if "---RESTART---" in output else ""
+                updated = "Status: Image is up to date" not in pull_out
+                status_line = "🆕 New image pulled" if updated else "✅ Already up to date"
+                _audit_log(user_id, "nas_container_update",
+                           detail=f"container={container_name} image={image_name} updated={updated}",
+                           result="success", severity="INFO")
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id,
+                    text=f"✅ *`{container_name}` updated*\n{status_line} — `{image_name}`\n```{pull_out}```"
+                )
+            except Exception as exc:
+                _audit_log(user_id, "nas_container_update",
+                           detail=f"container={container_name} image={image_name}", result=f"error:{exc}", severity="WARNING")
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ Update failed: {exc}")
+            return
+
         if subcommand == "exec":
             import os as _os, asyncio as _asyncio
             from audit import audit_log as _audit_log

@@ -6411,3 +6411,36 @@ async def api_nas_status_handler(request):
     }
     _cache_set("nas_status", result, ttl_seconds=60)
     return web.Response(content_type="application/json", text=json.dumps(result))
+
+
+async def api_audit_recent_handler(request):
+    """GET /api/audit/recent?limit=N — return last N audit log entries across all daily files."""
+    if not _check_auth(request):
+        return web.Response(status=401, text="Unauthorized")
+
+    limit = min(int(request.rel_url.query.get("limit", "50")), 200)
+    audit_dir = Path(_os.environ.get("AUDIT_DIR", "/audit"))
+    entries = []
+    try:
+        log_files = sorted(audit_dir.glob("*.jsonl"), reverse=True)
+        for fpath in log_files:
+            if len(entries) >= limit:
+                break
+            try:
+                lines = fpath.read_text().splitlines()
+                for line in reversed(lines):
+                    if not line.strip():
+                        continue
+                    try:
+                        entries.append(json.loads(line))
+                    except Exception:
+                        pass
+                    if len(entries) >= limit:
+                        break
+            except Exception:
+                pass
+    except Exception as exc:
+        return web.Response(content_type="application/json",
+                            text=json.dumps({"error": str(exc), "entries": []}))
+    return web.Response(content_type="application/json",
+                        text=json.dumps({"entries": entries[:limit], "total": len(entries)}))

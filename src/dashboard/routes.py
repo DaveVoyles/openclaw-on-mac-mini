@@ -24,6 +24,7 @@ from .api_handlers import (
     api_nas_browse_handler,
     api_nas_disk_handler,
     api_nas_status_handler,
+    api_audit_recent_handler,
     api_agent_session_detail_handler,
     api_agent_session_intervention_handler,
     api_agent_sessions_handler,
@@ -268,6 +269,7 @@ def setup_dashboard(
     app.router.add_get("/api/overseerr/search", api_overseerr_search_handler)
     app.router.add_post("/api/overseerr/request", api_overseerr_request_handler)
     app.router.add_get("/api/sonarr/calendar", api_sonarr_calendar_handler)
+    app.router.add_get("/api/audit/recent", api_audit_recent_handler)
     app.router.add_get("/api/nas/status", api_nas_status_handler)
     app.router.add_post("/api/webhooks/sonarr", api_webhook_sonarr_handler)
     app.router.add_post("/api/webhooks/radarr", api_webhook_radarr_handler)
