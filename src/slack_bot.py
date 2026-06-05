@@ -10033,7 +10033,7 @@ async def _start_health_server() -> None:
 
     app = web.Application()
     app.router.add_get("/health", health)
-    app.router.add_get("/", health)
+    app.router.add_get("/", lambda _req: web.HTTPFound("/dashboard"))
 
     try:
         from dashboard.routes import setup_dashboard
