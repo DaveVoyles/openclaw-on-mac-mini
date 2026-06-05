@@ -89,3 +89,4 @@
 - 2026-06-05: Added /nas exec command blocklist (14 dangerous commands blocked+audited), added NAS disk % pill to dashboard quick-stats strip
 - 2026-06-05: Wave 23 complete — /nas update subcommand, /api/audit/recent endpoint registered, audit log dashboard card with 60s auto-refresh
 - 2026-06-05: Diagnosed root URL serving health JSON instead of dashboard; fixed / to redirect to /dashboard (kept /health for probes)
+- 2026-06-05: Fixed dashboard JS SyntaxError (missing catch on SABnzbd try block in loadQuickStats) that prevented all dashboard data cards from loading
