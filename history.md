@@ -82,3 +82,4 @@
 - 2026-06-05: Reset Grafana admin password via NAS SSH, created API service account token, upgraded /grafana command with live dashboard list and alert state
 - 2026-06-05: Added /nas command (NAS disk/containers/load via SSH), created 3 Grafana alert rules, wired Hermes system prompt with all credentials so it never prompts for passwords
 - 2026-06-05: Extended /nas with status overview and containers subcommand; wired Grafana CPU/memory/disk alerts to push via ntfy
+- 2026-06-05: Added /nas logs <container> subcommand and NAS disk/container section to morning briefing
