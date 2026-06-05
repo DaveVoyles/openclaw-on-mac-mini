@@ -73,3 +73,4 @@
 - 2026-06-04: Added Tautulli and OpenClaw links to the dashboard tools panel and surfaced Tailscale peer counts in the morning briefing; HTML and Python syntax validation passed.
 - 2026-06-04: Added `/grafana` and `/media` Slack commands, synced help/home/docs, documented GRAFANA_URL, and kept Slack registration validation green.
 - 2026-06-04: Wave 14 — /grafana command, /media command (Plex+Tautulli), Tautulli+OpenClaw in tools panel, Tailscale peer count in morning briefing. 53→55 commands
+- 2026-06-05: Added /qbt command (qBittorrent torrents, speeds, free space); updated QBIT_URL to public HTTPS; 55→56 commands

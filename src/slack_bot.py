@@ -730,6 +730,7 @@ _HELP_TEXT = """
 • `/request <title>` — Search Overseerr and request media
 • `/arr` — View Sonarr/Radarr/Lidarr queues
 • `/downloads` — View SABnzbd downloads
+• `/qbt` — qBittorrent active torrents, speeds, free space
 • `/upcoming` — Show Sonarr episodes airing soon
 
 *⚙️ Utilities*
@@ -3177,6 +3178,7 @@ def _build_home_view(user_id: str, name: str) -> dict:
                 "`/request <title>` — Search Overseerr and request media",
                 "`/arr` — View Sonarr/Radarr/Lidarr queues",
                 "`/downloads` — View SABnzbd downloads",
+                "`/qbt` — qBittorrent active torrents and speeds",
                 "`/upcoming` — Show upcoming Sonarr episodes",
             ],
         ),
@@ -8626,6 +8628,91 @@ def _register_integration_handlers(app: Any) -> None:
         except Exception as e:
             log.warning("Slack send failed in /media: %s", e)
 
+    @app.command("/qbt")
+    async def handle_qbt(ack: Any, command: dict, client: Any) -> None:
+        """Show qBittorrent active torrents, speeds, and free space."""
+        await ack()
+        import os
+        import aiohttp as _aiohttp
+
+        channel_id = command.get("channel_id", "")
+        user_id = command.get("user_id", "")
+        qbt_url = os.environ.get("QBIT_URL", "https://qbittorrent.davevoyles.synology.me")
+        qbt_user = os.environ.get("QBIT_USER", "admin")
+        qbt_pass = os.environ.get("QBIT_PASSWORD", "")
+
+        if not qbt_pass:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="⚠️ QBIT_PASSWORD not configured.")
+            return
+
+        try:
+            jar = _aiohttp.CookieJar()
+            async with _aiohttp.ClientSession(cookie_jar=jar) as s:
+                # Authenticate
+                async with s.post(
+                    f"{qbt_url}/api/v2/auth/login",
+                    data={"username": qbt_user, "password": qbt_pass},
+                    timeout=_aiohttp.ClientTimeout(total=6),
+                ) as r:
+                    auth_result = await r.text()
+                if auth_result.strip() not in ("Ok.", "Ok"):
+                    raise ValueError(f"Auth failed: {auth_result}")
+
+                # Get torrent list
+                async with s.get(
+                    f"{qbt_url}/api/v2/torrents/info",
+                    params={"sort": "added_on", "reverse": "true", "limit": "10"},
+                    timeout=_aiohttp.ClientTimeout(total=6),
+                ) as r:
+                    torrents = await r.json()
+
+                # Get transfer stats
+                async with s.get(
+                    f"{qbt_url}/api/v2/transfer/info",
+                    timeout=_aiohttp.ClientTimeout(total=5),
+                ) as r:
+                    xfer = await r.json()
+
+            dl_speed = xfer.get("dl_info_speed", 0) / 1024 / 1024
+            up_speed = xfer.get("up_info_speed", 0) / 1024 / 1024
+            free_gb = xfer.get("free_space_on_disk", 0) / 1e9
+
+            state_emoji = {
+                "downloading": "⬇️", "uploading": "⬆️", "stalledDL": "⏸",
+                "stalledUP": "⏸", "pausedDL": "⏹", "pausedUP": "⏹",
+                "queuedDL": "🕐", "queuedUP": "🕐", "checkingDL": "🔍",
+                "error": "❌", "missingFiles": "⚠️",
+            }
+
+            active = [t for t in torrents if t.get("state") not in ("pausedDL", "pausedUP", "stalledUP")]
+            all_count = len(torrents)
+
+            lines = [
+                f"🌊 *qBittorrent* — ⬇️ {dl_speed:.1f} MB/s  ⬆️ {up_speed:.1f} MB/s  💾 {free_gb:,.0f} GB free\n"
+                f"*{all_count} torrent(s)*"
+            ]
+            for t in torrents[:8]:
+                state = t.get("state", "?")
+                emoji = state_emoji.get(state, "•")
+                name = t.get("name", "?")[:50]
+                pct = t.get("progress", 0) * 100
+                size_gb = t.get("size", 0) / 1e9
+                if pct < 100:
+                    lines.append(f"  {emoji} {name} — {pct:.0f}% ({size_gb:.1f} GB)")
+                else:
+                    lines.append(f"  {emoji} {name} — seeding")
+            if all_count > 8:
+                lines.append(f"  _...and {all_count - 8} more_")
+
+            text = "\n".join(lines)
+        except Exception as exc:
+            log.warning("/qbt failed: %s", exc)
+            text = f"❌ qBittorrent error: {exc}"
+
+        try:
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text, mrkdwn=True)
+        except Exception as e:
+            log.warning("Slack send failed in /qbt: %s", e)
 
 
 def _register_action_handlers(app: Any) -> None:
