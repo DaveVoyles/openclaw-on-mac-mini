@@ -8937,6 +8937,7 @@ def _register_integration_handlers(app: Any) -> None:
         sections.append(
             f"*Quick Links*\n"
             f"• <{grafana_url}|🏠 Home>  "
+            f"• <{grafana_url}/d/nas-overview|🖥️ NAS Overview>  "
             f"• <{grafana_url}/alerting/list|🔔 Alerts>  "
             f"• <{grafana_url}/dashboards|📋 All Dashboards>"
         )
@@ -9198,7 +9199,9 @@ def _register_action_handlers(app: Any) -> None:
     async def handle_nas_restart_confirm(ack: Any, body: dict[str, Any], client: Any) -> None:
         await ack()
         import os, asyncio
+        from audit import audit_log
         user_id = (body.get("user") or {}).get("id", "")
+        user_name = (body.get("user") or {}).get("username", user_id)
         channel_id = (body.get("channel") or {}).get("id", user_id)
         actions = body.get("actions", [{}])
         container_name = (actions[0] if actions else {}).get("value", "")
@@ -9218,16 +9221,22 @@ def _register_action_handlers(app: Any) -> None:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
             output = (stdout.decode() + stderr.decode()).strip()
             if proc.returncode == 0:
+                audit_log(user_name, "nas_container_restart",
+                          detail=f"container={container_name} host={nas_host}", result="success", severity="INFO")
                 await client.chat_postEphemeral(
                     channel=channel_id, user=user_id,
                     text=f"✅ `{container_name}` restarted successfully on NAS."
                 )
             else:
+                audit_log(user_name, "nas_container_restart",
+                          detail=f"container={container_name} host={nas_host}", result="failed", severity="WARNING")
                 await client.chat_postEphemeral(
                     channel=channel_id, user=user_id,
                     text=f"❌ Restart failed for `{container_name}`:\n```{output[:500]}```"
                 )
         except Exception as exc:
+            audit_log(user_name, "nas_container_restart",
+                      detail=f"container={container_name} host={nas_host}", result=f"error: {exc}", severity="WARNING")
             await client.chat_postEphemeral(channel=channel_id, user=user_id,
                                             text=f"❌ SSH error during restart: {exc}")
 
