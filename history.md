@@ -86,3 +86,4 @@
 - 2026-06-05: Added /nas restart <container> with Slack confirmation, created 8-panel NAS Overview Grafana dashboard
 - 2026-06-05: Added NAS Overview link to /grafana, wired audit_log() to /nas restart confirm/fail/error
 - 2026-06-05: Added /nas exec (admin, audited), /api/nas/status endpoint, and NAS Status card to dashboard showing live disk/container/load
+- 2026-06-05: Added /nas exec command blocklist (14 dangerous commands blocked+audited), added NAS disk % pill to dashboard quick-stats strip
