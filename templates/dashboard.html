@@ -1015,8 +1015,8 @@
               <div>
                 <div style="font-weight:600;color:var(--text);margin-bottom:0.35rem">🐙 OpenClaw CLI</div>
                 <div style="display:flex;flex-direction:column;gap:0.3rem">
-                  <div><span style="color:var(--muted)">On LAN:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">curl -fsSL http://192.168.1.93:8765/install | bash</code><button onclick="(function(btn){navigator.clipboard.writeText('curl -fsSL http://192.168.1.93:8765/install | bash').then(()=>{btn.textContent='✓';setTimeout(()=>{btn.textContent='📋'},1200);})})(this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button></div>
-                  <div><span style="color:var(--muted)">Remote:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">curl -fsSL https://openclaw.davevoyles.synology.me/install | bash</code><button onclick="(function(btn){navigator.clipboard.writeText('curl -fsSL https://openclaw.davevoyles.synology.me/install | bash').then(()=>{btn.textContent='✓';setTimeout(()=>{btn.textContent='📋'},1200);})})(this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button></div>
+                  <div><span style="color:var(--muted)">On LAN:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">curl -fsSL http://192.168.1.93:8765/install | bash</code><button onclick="copyText('curl -fsSL http://192.168.1.93:8765/install | bash',this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button></div>
+                  <div><span style="color:var(--muted)">Remote:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">curl -fsSL https://openclaw.davevoyles.synology.me/install | bash</code><button onclick="copyText('curl -fsSL https://openclaw.davevoyles.synology.me/install | bash',this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button></div>
                   <div><span style="color:var(--muted)">Then:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">source ~/.zshrc</code><span style="color:var(--muted)"> &rarr; </span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">OpenClaw</code></div>
                 </div>
               </div>
@@ -1053,7 +1053,7 @@
             </div>
             <div style="display:flex;flex-direction:column;gap:0.4rem;font-size:0.8rem;min-width:200px">
               <div style="color:var(--muted);font-weight:600;margin-bottom:0.1rem">Install on any Mac:</div>
-              <code style="display:block;background:rgba(0,0,0,0.4);border:1px solid rgba(16,185,129,0.2);border-radius:6px;padding:0.45rem 0.7rem;color:#9ecbff;font-size:0.78rem;word-break:break-all">bash &lt;(curl -fsSL https://openclaw.davevoyles.synology.me/ih)</code><button onclick="(function(btn){navigator.clipboard.writeText('bash <(curl -fsSL https://openclaw.davevoyles.synology.me/ih)').then(()=>{btn.textContent='✓';setTimeout(()=>{btn.textContent='📋'},1200);})})(this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button>
+              <code style="display:block;background:rgba(0,0,0,0.4);border:1px solid rgba(16,185,129,0.2);border-radius:6px;padding:0.45rem 0.7rem;color:#9ecbff;font-size:0.78rem;word-break:break-all">bash &lt;(curl -fsSL https://openclaw.davevoyles.synology.me/ih)</code><button onclick="copyText('bash <(curl -fsSL https://openclaw.davevoyles.synology.me/ih)',this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button>
               <div style="color:var(--muted);font-size:0.75rem">Then: <code style="color:#9ecbff">source ~/.zshrc &amp;&amp; hermes</code></div>
               <div style="margin-top:0.3rem;display:flex;gap:0.4rem;flex-wrap:wrap">
                 <a href="https://github.com/NousResearch/hermes-agent" target="_blank" style="font-size:0.75rem;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:4px;padding:0.2em 0.5em">📄 Docs</a>
@@ -1388,7 +1388,7 @@
               <li>Click the <strong>EditThisCookie</strong> icon → <strong>Export</strong></li>
               <li>Copy the exported JSON</li>
               <li>Save to <code style="background:var(--surface);padding:0.2rem 0.4rem;border-radius:4px">~/Downloads/cookies.txt</code></li>
-              <li>Run: <code style="background:var(--surface);padding:0.2rem 0.4rem;border-radius:4px;display:block;margin:0.5rem 0">docker cp ~/Downloads/cookies.txt monstervision:/app/cookies/cookies.txt</code><button onclick="(function(btn){navigator.clipboard.writeText('docker cp ~/Downloads/cookies.txt monstervision:/app/cookies/cookies.txt').then(()=>{btn.textContent='✓';setTimeout(()=>{btn.textContent='📋'},1200);})})(this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button></li>
+              <li>Run: <code style="background:var(--surface);padding:0.2rem 0.4rem;border-radius:4px;display:block;margin:0.5rem 0">docker cp ~/Downloads/cookies.txt monstervision:/app/cookies/cookies.txt</code><button onclick="copyText('docker cp ~/Downloads/cookies.txt monstervision:/app/cookies/cookies.txt',this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button></li>
               <li>Downloads will resume automatically within <strong>30 minutes</strong></li>
             </ol>
             <div style="margin-top:1.5rem;padding:1rem;background:rgba(241,196,0,0.1);border-left:3px solid var(--gold);border-radius:4px">
@@ -1504,8 +1504,8 @@
           </div>
           <div style="margin-top:0.85rem;padding:0.65rem 0.8rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:0.8rem;line-height:1.5">
             <strong style="color:var(--text)">📡 Download webhooks</strong><br>
-            Sonarr: <code style="background:rgba(255,255,255,0.06);padding:0.1rem 0.35rem;border-radius:4px">https://openclaw.davevoyles.synology.me/api/webhooks/sonarr</code><button onclick="(function(btn){navigator.clipboard.writeText('https://openclaw.davevoyles.synology.me/api/webhooks/sonarr').then(()=>{btn.textContent='✓';setTimeout(()=>{btn.textContent='📋'},1200);})})(this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button><br>
-            Radarr: <code style="background:rgba(255,255,255,0.06);padding:0.1rem 0.35rem;border-radius:4px">https://openclaw.davevoyles.synology.me/api/webhooks/radarr</code><button onclick="(function(btn){navigator.clipboard.writeText('https://openclaw.davevoyles.synology.me/api/webhooks/radarr').then(()=>{btn.textContent='✓';setTimeout(()=>{btn.textContent='📋'},1200);})})(this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button>
+            Sonarr: <code style="background:rgba(255,255,255,0.06);padding:0.1rem 0.35rem;border-radius:4px">https://openclaw.davevoyles.synology.me/api/webhooks/sonarr</code><button onclick="copyText('https://openclaw.davevoyles.synology.me/api/webhooks/sonarr',this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button><br>
+            Radarr: <code style="background:rgba(255,255,255,0.06);padding:0.1rem 0.35rem;border-radius:4px">https://openclaw.davevoyles.synology.me/api/webhooks/radarr</code><button onclick="copyText('https://openclaw.davevoyles.synology.me/api/webhooks/radarr',this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button>
           </div>
           </details>
         </div>
@@ -5307,7 +5307,7 @@
         const cmds = { cancel: `/copilot-cancel ${sessionId}`, end: `/copilot-end ${sessionId}` };
         const cmd = cmds[action];
         if (cmd) {
-          try { await navigator.clipboard.writeText(cmd); } catch {}
+          copyText(cmd, null);
           alert(`Run in Slack:\n${cmd}\n\n(copied to clipboard)`);
         }
       }
@@ -6630,6 +6630,31 @@
     <!-- Agent Chat JS -->
     <script>
       // ── Ask OpenClaw Agent ────────────────────────────────────────────────
+
+      // Robust clipboard helper — works on HTTPS and HTTP, all browsers
+      function copyText(text, btn) {
+        function showOk() {
+          if (!btn) return;
+          const orig = btn.textContent;
+          btn.textContent = '✓';
+          setTimeout(() => { btn.textContent = orig; }, 1400);
+        }
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(text).then(showOk).catch(() => fallback());
+        } else {
+          fallback();
+        }
+        function fallback() {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          try { document.execCommand('copy'); showOk(); } catch(e) {}
+          document.body.removeChild(ta);
+        }
+      }
       let _agentHistory = [];
       let _hermesSessionSearchEntries = [];
       let _changelogSearchEntries = [];
@@ -7047,10 +7072,8 @@
       function copyCodeBlock(id) {
         const el = document.getElementById(id);
         if (!el) return;
-        navigator.clipboard.writeText(el.textContent).then(() => {
-          const btn = el.nextElementSibling;
-          if (btn) { const o = btn.textContent; btn.textContent = '✅'; setTimeout(() => { btn.textContent = o; }, 1200); }
-        });
+        const btn = el.nextElementSibling;
+        copyText(el.textContent, btn);
       }
 
       // ── Abort controller for in-flight requests ──────────────────────────
@@ -7682,12 +7705,7 @@
 
       function copyAgentResponse() {
         const text = document.getElementById('agent-response').textContent;
-        navigator.clipboard.writeText(text).then(() => {
-          const btn = event.target;
-          const orig = btn.textContent;
-          btn.textContent = '\u2705 Copied!';
-          setTimeout(() => { btn.textContent = orig; }, 1500);
-        });
+        copyText(text, event.target);
       }
 
       function clearAgentChat() {
