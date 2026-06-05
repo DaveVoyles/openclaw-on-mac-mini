@@ -75,3 +75,4 @@
 - 2026-06-04: Wave 14 — /grafana command, /media command (Plex+Tautulli), Tautulli+OpenClaw in tools panel, Tailscale peer count in morning briefing. 53→55 commands
 - 2026-06-05: Added /qbt command (qBittorrent torrents, speeds, free space); updated QBIT_URL to public HTTPS; 55→56 commands
 - 2026-06-05: Added qBittorrent to /downloads (SABnzbd+qBit merged) and to /status; MacBook Pro SSH troubleshooting
+- 2026-06-05: MBP1 SSH authorized; MAC a0:78:17:ae:61:01 added to .env; /wake mbp now fully functional
