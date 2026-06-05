@@ -8398,6 +8398,19 @@ def _register_integration_handlers(app: Any) -> None:
                     text="❌ Usage: `/nas exec <container> <command>`\nExample: `/nas exec grafana grafana-cli version`"
                 )
                 return
+            # Blocklist — prevent destructive commands
+            _BLOCKED = {"rm", "kill", "dd", "mkfs", "shutdown", "reboot",
+                        "truncate", "shred", "wipefs", "fdisk", "parted",
+                        "chmod", "chown", "passwd", "userdel", "useradd"}
+            _first_token = exec_cmd.strip().split()[0].lstrip("/").lower()
+            if _first_token in _BLOCKED:
+                _audit_log(user_id, "nas_container_exec_blocked",
+                           detail=f"container={exec_container} cmd={exec_cmd}", result="blocked", severity="WARNING")
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id,
+                    text=f"🛑 Command `{_first_token}` is blocked. `/nas exec` only allows read/inspect commands."
+                )
+                return
             nas_host = _os.environ.get("NAS_HOST", "192.168.1.8")
             nas_port = _os.environ.get("NAS_SSH_PORT", "24")
             nas_user_env = _os.environ.get("NAS_SSH_USER", "dave")

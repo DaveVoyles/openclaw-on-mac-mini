@@ -983,6 +983,9 @@
           <div class="stat-pill" id="stat-qbt" onclick="document.getElementById('sabnzbd-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Downloads">
             <span class="stat-icon">🌊</span><span id="stat-qbt-val">—</span>
           </div>
+          <div class="stat-pill" id="stat-nas" onclick="document.getElementById('nas-status-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="NAS disk usage">
+            <span class="stat-icon">🖥️</span><span id="stat-nas-val">—</span>
+          </div>
           <div class="stat-pill" id="stat-uptime" onclick="document.getElementById('uptime-kuma-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Uptime Kuma">
             <span class="stat-icon">📊</span><span id="stat-uptime-val">—</span>
           </div>
@@ -3220,11 +3223,19 @@
           const contEl = document.getElementById('nas-containers');
           const loadEl = document.getElementById('nas-load');
           const unhealthyEl = document.getElementById('nas-unhealthy');
+          const pillEl = document.getElementById('stat-nas-val');
+          const pct = d.disk_pct;
+          const color = pct >= 90 ? '#f85149' : pct >= 75 ? '#d29922' : '#3fb950';
           if (diskEl) {
-            const pct = d.disk_pct;
-            const color = pct >= 90 ? '#f85149' : pct >= 75 ? '#d29922' : '#3fb950';
             diskEl.innerHTML = `<span style="color:${color}">${pct ?? '—'}%</span>`;
             if (d.disk_used && d.disk_total) diskEl.title = `${d.disk_used} used of ${d.disk_total}`;
+          }
+          if (pillEl) {
+            const unhealthy = (d.unhealthy || []).length;
+            pillEl.innerHTML = `<span style="color:${color}">${pct ?? '—'}%</span>` +
+              (unhealthy > 0 ? ` <span style="color:#f85149">⚠️</span>` : '');
+            document.getElementById('stat-nas').title =
+              `NAS: ${pct}% disk, ${d.container_count} containers${unhealthy > 0 ? `, ${unhealthy} unhealthy` : ''}`;
           }
           if (contEl) {
             const unhealthy = (d.unhealthy || []).length;
