@@ -196,17 +196,23 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64, openclaw]
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install pip-audit
-        run: pip install pip-audit
       - name: Run pip-audit
+        # Use the runner's host Python directly. actions/setup-python assumes the
+        # GitHub-hosted tool cache (/Users/runner/hostedtoolcache), which does not
+        # exist on this self-hosted runner and fails with "Permission denied".
+        # This audit is for visibility only, so never hard-fail the workflow.
+        continue-on-error: true
         run: |
+          PYTHON_BIN="$(command -v python3.13 || command -v python3)"
+          echo "Using $PYTHON_BIN ($($PYTHON_BIN --version))"
+          VENV_DIR="${RUNNER_TEMP:-/tmp}/venv-audit"
+          rm -rf "$VENV_DIR"
+          "$PYTHON_BIN" -m venv "$VENV_DIR"
+          source "$VENV_DIR/bin/activate"
+          python3 -m pip install --upgrade pip
+          pip install pip-audit
           pip-audit --requirement requirements.txt --desc on --format markdown 2>/dev/null || true
           pip-audit --requirement requirements-test.txt --desc on --format markdown 2>/dev/null || true
-        continue-on-error: true
 
   security-report:
     name: Generate Security Report
