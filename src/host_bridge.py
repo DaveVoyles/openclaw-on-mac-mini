@@ -984,6 +984,7 @@ async def run_hermes_stream(
     slack_user_id: str,
     hermes_session_id: str | None = None,
     timeout_s: int | None = None,
+    cwd: str | None = None,
 ):
     """Async generator that streams output from ``hermes chat -q <prompt>`` over SSH.
 
@@ -1023,7 +1024,8 @@ async def run_hermes_stream(
     q_prompt = shlex.quote(prompt)
     q_bin = shlex.quote(HERMES_BIN)
     resume_part = f"--resume {shlex.quote(hermes_session_id)} " if hermes_session_id else ""
-    inner = f"TERM=dumb NO_COLOR=1 {q_bin} chat {resume_part}-q {q_prompt}"
+    cd_part = f"cd {shlex.quote(cwd)} && " if cwd else ""
+    inner = f"{cd_part}TERM=dumb NO_COLOR=1 {q_bin} chat {resume_part}-q {q_prompt}"
     remote_cmd = f"bash -lc {shlex.quote(inner)}"
 
     log.info(

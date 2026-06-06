@@ -69,9 +69,42 @@ log = logging.getLogger(__name__)
 
 _MENTION_RE = re.compile(r"<@[A-Z0-9]+>")
 _HERMES_SESSION_RE = re.compile(r"^Session:\s*(\S+)", re.MULTILINE)
-_HERMES_BIN = Path.home() / ".local" / "bin" / "hermes"
 _HERMES_AUDIT_DIR = Path(__file__).parent.parent / "data" / "audit" / "host_bridge"
-_hermes_live_procs: dict[str, asyncio.subprocess.Process] = {}
+
+
+class _HermesStreamHandle:
+    """Proc-like handle for an in-flight Hermes SSH stream.
+
+    Hermes runs on the host over SSH (via ``host_bridge.run_hermes_stream``), so
+    there is no local subprocess to track. This lightweight handle lets the
+    existing concurrency guard, liveness checks, and /copilot-cancel / -end
+    handlers keep working: ``terminate()``/``kill()`` request cancellation, and
+    ``wait()`` resolves once the stream loop has finished.
+    """
+
+    def __init__(self) -> None:
+        self._cancelled = False
+        self._done = asyncio.Event()
+
+    @property
+    def cancelled(self) -> bool:
+        return self._cancelled
+
+    def terminate(self) -> None:
+        self._cancelled = True
+
+    def kill(self) -> None:
+        self._cancelled = True
+
+    async def wait(self) -> int:
+        await self._done.wait()
+        return 0
+
+    def finish(self) -> None:
+        self._done.set()
+
+
+_hermes_live_procs: dict[str, _HermesStreamHandle] = {}
 _slack_app_client: Any | None = None
 
 
@@ -193,8 +226,6 @@ def _append_copilot_transcript(path: str | None, text: str) -> None:
 async def _run_hermes_turn(record: Any, prompt: str) -> str | None:
     if record.session_id in _hermes_live_procs:
         return "a Hermes turn is already running for this session"
-    if not _HERMES_BIN.exists():
-        return f"Hermes binary not found at {_HERMES_BIN}"
 
     mgr = await _ensure_session_manager()
     if mgr is None:
@@ -218,48 +249,52 @@ async def _run_hermes_turn(record: Any, prompt: str) -> str | None:
         f"\n>>> USER TURN {turn_num} ({record.slack_user})\n{prompt}\n",
     )
 
-    cmd = [str(_HERMES_BIN), "chat"]
-    if prior_hermes_session_id:
-        cmd.extend(["--resume", prior_hermes_session_id])
-    cmd.extend(["-q", prompt])
+    # Hermes runs on the host over SSH (the binary is not present inside the
+    # container). Stream output back through the host bridge.
+    from host_bridge import run_hermes_stream
+
+    handle = _HermesStreamHandle()
+    _hermes_live_procs[record.session_id] = handle
+
+    stdout_parts: list[str] = []
+    stderr_text = ""
+    return_code = 0
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
+        async for event in run_hermes_stream(
+            prompt=prompt,
+            slack_user_id=record.slack_user,
+            hermes_session_id=prior_hermes_session_id,
             cwd=record.cwd or None,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        ):
+            if handle.cancelled:
+                stderr_text = "cancelled"
+                return_code = 1
+                break
+            etype = event.get("type")
+            if etype == "chunk":
+                text = event.get("text", "")
+                if text:
+                    stdout_parts.append(text)
+                    _append_copilot_transcript(record.transcript_path, text)
+                    await _copilot_chunk_poster(record, text)
+            elif etype == "error":
+                stderr_text = event.get("error") or "hermes error"
+                return_code = 1
+            elif etype == "done":
+                exit_code = event.get("exit_code")
+                if not event.get("success"):
+                    return_code = exit_code if isinstance(exit_code, int) and exit_code != 0 else 1
+                    if not stderr_text:
+                        stderr_text = event.get("error") or f"Hermes exited with status {return_code}"
     except Exception as exc:  # noqa: BLE001
         await mgr.registry.update(record.session_id, status="crashed", last_activity=time.time())
         record.status = "crashed"
         return f"Hermes failed to start: {type(exc).__name__}: {exc}"
-
-    _hermes_live_procs[record.session_id] = proc
-
-    async def _pump_stdout() -> str:
-        parts: list[str] = []
-        if proc.stdout is None:
-            return ""
-        while True:
-            chunk = await proc.stdout.read(2048)
-            if not chunk:
-                break
-            text = chunk.decode("utf-8", errors="replace")
-            parts.append(text)
-            _append_copilot_transcript(record.transcript_path, text)
-            await _copilot_chunk_poster(record, text)
-        return "".join(parts)
-
-    async def _read_stderr() -> str:
-        if proc.stderr is None:
-            return ""
-        return (await proc.stderr.read()).decode("utf-8", errors="replace")
-
-    try:
-        stdout_text, stderr_text = await asyncio.gather(_pump_stdout(), _read_stderr())
-        return_code = await proc.wait()
     finally:
+        handle.finish()
         _hermes_live_procs.pop(record.session_id, None)
+
+    stdout_text = "".join(stdout_parts)
 
     if stderr_text:
         _append_copilot_transcript(record.transcript_path, f"\n[stderr]\n{stderr_text}\n")
@@ -6623,31 +6658,36 @@ def _register_integration_handlers(app: Any) -> None:
         resume_session_id: str | None = None,
         cwd: str | None = None,
     ) -> tuple[str, str | None]:
-        if not _HERMES_BIN.exists():
-            return "", f"Hermes binary not found at {_HERMES_BIN}"
+        # Hermes runs on the host over SSH; stream and accumulate the full reply.
+        from host_bridge import run_hermes_stream
 
         workdir = cwd or os.getenv("OPENCLAW_HOST_BRIDGE_WORKDIR", "/Users/davevoyles/docker-stack")
-        cmd = [str(_HERMES_BIN), "chat"]
-        if resume_session_id:
-            cmd.extend(["--resume", resume_session_id])
-        cmd.extend(["-q", prompt])
-
+        parts: list[str] = []
+        error: str | None = None
         try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
+            async for event in run_hermes_stream(
+                prompt=prompt,
+                slack_user_id="slack-quick",
+                hermes_session_id=resume_session_id,
                 cwd=workdir,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
+            ):
+                etype = event.get("type")
+                if etype == "chunk":
+                    parts.append(event.get("text", ""))
+                elif etype == "error":
+                    error = event.get("error") or "hermes error"
+                elif etype == "done" and not event.get("success") and error is None:
+                    exit_code = event.get("exit_code")
+                    error = event.get("error") or (
+                        f"Hermes exited with status {exit_code}" if exit_code else "Hermes failed"
+                    )
         except Exception as exc:  # noqa: BLE001
             return "", f"Hermes failed to start: {type(exc).__name__}: {exc}"
 
-        stdout_bytes, stderr_bytes = await proc.communicate()
-        stdout_text = stdout_bytes.decode("utf-8", errors="replace")
-        stderr_text = stderr_bytes.decode("utf-8", errors="replace").strip()
-        if proc.returncode != 0:
-            return "", stderr_text or f"Hermes exited with status {proc.returncode}"
+        if error:
+            return "", error
 
+        stdout_text = "".join(parts)
         cleaned_lines = [line for line in stdout_text.splitlines() if not _HERMES_SESSION_RE.match(line)]
         return "\n".join(cleaned_lines).strip(), None
 
