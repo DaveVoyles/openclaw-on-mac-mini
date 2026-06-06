@@ -193,8 +193,8 @@ async def login_api_handler(request: web.Request) -> web.Response:
         return web.json_response({"message": "Too many failed login attempts"}, status=429)
 
     username_ok = hmac.compare_digest(
-        supplied_username.encode("utf-8"),
-        cfg.dashboard_username.encode("utf-8"),
+        supplied_username.strip().casefold().encode("utf-8"),
+        cfg.dashboard_username.strip().casefold().encode("utf-8"),
     )
     password_ok = verify_password(supplied_password, cfg.dashboard_password)
     if not (username_ok and password_ok):

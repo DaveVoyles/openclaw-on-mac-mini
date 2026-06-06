@@ -81,6 +81,28 @@ async def test_valid_login_sets_secure_session_cookie_and_protected_page_loads()
 
 
 @pytest.mark.asyncio
+async def test_username_is_case_insensitive_and_trimmed():
+    app = web.Application()
+    app.router.add_post("/api/login", auth.login_api_handler)
+    client = await _client(app)
+    try:
+        # Configured username is "admin"; varied casing and surrounding
+        # whitespace must all authenticate (password stays exact).
+        for supplied in ("ADMIN", "Admin", "  admin  "):
+            auth._FAILED_ATTEMPTS.clear()
+            response = await client.post("/api/login", json={"username": supplied, "password": "swordfish"})
+            assert response.status == 200, supplied
+            assert await response.json() == {"ok": True}
+
+        # Password remains case-sensitive and exact.
+        auth._FAILED_ATTEMPTS.clear()
+        bad = await client.post("/api/login", json={"username": "ADMIN", "password": "SWORDFISH"})
+        assert bad.status == 401
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
 async def test_wrong_password_returns_401_and_rate_limits():
     app = web.Application()
     app.router.add_post("/api/login", auth.login_api_handler)
