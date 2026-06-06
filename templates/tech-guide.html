@@ -5276,7 +5276,13 @@ git push --tags
             <tr><td style="padding:0.35rem 0.6rem"><code>/files recent</code></td><td style="padding:0.35rem 0.6rem">Show the last 10 uploaded files with names and timestamps</td></tr>
             <tr><td style="padding:0.35rem 0.6rem"><code>/research &lt;topic&gt;</code></td><td style="padding:0.35rem 0.6rem">Web research routed to Perplexity AI &mdash; returns a cited summary</td></tr>
             <tr><td style="padding:0.35rem 0.6rem"><code>/batch summarize|proofread|explain</code></td><td style="padding:0.35rem 0.6rem">Process all uploaded files at once with the chosen action</td></tr>
-            <tr><td style="padding:0.35rem 0.6rem"><code>/status</code></td><td style="padding:0.35rem 0.6rem">Check system health: Mac Mini reachable, file count in /ai-files, last sync time, alert status</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/status</code></td><td style="padding:0.35rem 0.6rem">Check system health: Mac Mini load, Hermes sessions, NAS free space, Plex activity, and a quick Uptime Kuma service summary</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/uptime</code></td><td style="padding:0.35rem 0.6rem">Show every Uptime Kuma monitor grouped by status-page section, with up/down state for each service</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/morning</code></td><td style="padding:0.35rem 0.6rem">Trigger the daily owner morning briefing DM on demand</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/grafana</code></td><td style="padding:0.35rem 0.6rem">Check Grafana health and jump to the main dashboard, alerts, and system views</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/plex status|recent|search|request</code></td><td style="padding:0.35rem 0.6rem">Check Plex status, see recent activity, or search/request media through Overseerr</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/watching</code></td><td style="padding:0.35rem 0.6rem">See who is streaming on Plex right now, with recently watched fallback when idle</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/media</code></td><td style="padding:0.35rem 0.6rem">Show active Plex streams, recent plays, and recently added titles from Tautulli</td></tr>
             <tr><td style="padding:0.35rem 0.6rem"><code>/metrics</code></td><td style="padding:0.35rem 0.6rem">Show usage statistics and bot performance metrics</td></tr>
             <tr><td style="padding:0.35rem 0.6rem"><code>/digest on|off|status</code></td><td style="padding:0.35rem 0.6rem">Opt in or out of daily DM summaries listing files synced in the last 24 hours</td></tr>
             <tr><td style="padding:0.35rem 0.6rem"><code>/template list</code></td><td style="padding:0.35rem 0.6rem">Show available starter document templates (budget, letter, meeting notes)</td></tr>
@@ -5350,11 +5356,23 @@ git push --tags
         <code>/status</code> returns a quick health snapshot:
       </p>
       <ul>
-        <li>Mac Mini reachable &mdash; ping / port check</li>
-        <li>File count currently in <code>/ai-files</code></li>
-        <li>Last sync timestamp from <code>watch_folder.sh</code></li>
-        <li>Any active alert flags</li>
+        <li>Mac Mini load, memory, and disk usage</li>
+        <li>MacBook reachability checks on the LAN</li>
+        <li>Hermes session activity, Docker container count, and NAS free space</li>
+        <li>Plex activity plus a quick Uptime Kuma service summary</li>
       </ul>
+
+      <h3>Service Uptime (<code>/uptime</code>)</h3>
+      <p>
+        <code>/uptime</code> fetches the public Uptime Kuma status page and groups every monitored service
+        by its status-page section, so you can see exactly what is up or down without leaving Slack.
+      </p>
+
+      <h3>Morning Briefing Trigger (<code>/morning</code>)</h3>
+      <p>
+        <code>/morning</code> sends the daily morning briefing immediately to the configured owner DM,
+        including weather, Hermes, NAS, Plex, Sonarr, Radarr, and Uptime Kuma highlights.
+      </p>
 
       <h3>Proactive File Alerts</h3>
       <p>

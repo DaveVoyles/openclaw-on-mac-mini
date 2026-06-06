@@ -80,17 +80,32 @@ def _raw_command_groups() -> list[dict]:
         {
             "category": "💬 Conversation & AI",
             "commands": [
-                {"name": "/chat <question> [--model <alias>] [--simple]", "desc": "Ask OpenClaw anything — routes through the agent pipeline with your preferred model."},
-                {"name": "/research <query>", "desc": "Deep multi-source research: Perplexity → Tavily → DDG, synthesized report with sources."},
-                {"name": "/simple [on|off]", "desc": "Toggle simple/plain response mode — shorter answers without rich formatting."},
+                {
+                    "name": "/chat <question> [--model <alias>] [--simple]",
+                    "desc": "Ask OpenClaw anything — routes through the agent pipeline with your preferred model.",
+                },
+                {
+                    "name": "/research <query>",
+                    "desc": "Deep multi-source research: Perplexity → Tavily → DDG, synthesized report with sources.",
+                },
+                {
+                    "name": "/simple [on|off]",
+                    "desc": "Toggle simple/plain response mode — shorter answers without rich formatting.",
+                },
                 {"name": "/clear", "desc": "Clear active comparison state and file context for your session."},
             ],
         },
         {
             "category": "📁 Files & Batch Processing",
             "commands": [
-                {"name": "/files [recent|history|list|delete <name>]", "desc": "Manage uploaded files — list recent, view history, or delete a file by name."},
-                {"name": "/batch [prompt]", "desc": "Run a prompt against all currently uploaded files at once (batch analysis)."},
+                {
+                    "name": "/files [recent|history|list|delete <name>]",
+                    "desc": "Manage uploaded files — list recent, view history, or delete a file by name.",
+                },
+                {
+                    "name": "/batch [prompt]",
+                    "desc": "Run a prompt against all currently uploaded files at once (batch analysis).",
+                },
                 {"name": "/filesearch <keyword>", "desc": "Search your uploaded file history by filename keyword."},
                 {"name": "/brief", "desc": "AI-generated brief of your most recently uploaded file."},
             ],
@@ -112,36 +127,68 @@ def _raw_command_groups() -> list[dict]:
                 {"name": "/calendar upcoming [days]", "desc": "Show next N days of calendar events."},
                 {"name": "/calendar add <title> <when>", "desc": "Create a new calendar event."},
                 {"name": "/today", "desc": "Morning briefing: today's calendar, weather, and tasks in one shot."},
-                {"name": "/schedule [list|add|delete <id>]", "desc": "Manage recurring scheduled tasks — list, create, or delete automations."},
+                {
+                    "name": "/schedule [list|add|delete <id>]",
+                    "desc": "Manage recurring scheduled tasks — list, create, or delete automations.",
+                },
             ],
         },
         {
             "category": "🚨 Incident Operations",
             "commands": [
-                {"name": "/incident start <title> <severity> [details]", "desc": "Create an incident and post Copilot triage summary + recommended actions."},
-                {"name": "/incident status <id> [state] [note]", "desc": "Check or update incident state (open/investigating/monitoring/resolved)."},
+                {
+                    "name": "/incident start <title> <severity> [details]",
+                    "desc": "Create an incident and post Copilot triage summary + recommended actions.",
+                },
+                {
+                    "name": "/incident status <id> [state] [note]",
+                    "desc": "Check or update incident state (open/investigating/monitoring/resolved).",
+                },
                 {"name": "/incident list [state]", "desc": "List recent incidents filtered by state."},
-                {"name": "/incident resolve <id> <summary>", "desc": "Resolve an incident and capture postmortem notes."},
+                {
+                    "name": "/incident resolve <id> <summary>",
+                    "desc": "Resolve an incident and capture postmortem notes.",
+                },
             ],
         },
         {
             "category": "🤖 Copilot CLI",
             "commands": [
-                {"name": "/copilot <prompt>", "desc": "Run the configured host bridge backend on the Mac Mini. Starts or resumes your threaded session."},
-                {"name": "/hermes <prompt>", "desc": "Always run Hermes on the Mac Mini host, regardless of `COPILOT_BACKEND`."},
+                {
+                    "name": "/copilot <prompt>",
+                    "desc": "Run the configured host bridge backend on the Mac Mini. Starts or resumes your threaded session.",
+                },
+                {
+                    "name": "/hermes <prompt>",
+                    "desc": "Always run Hermes on the Mac Mini host, regardless of `COPILOT_BACKEND`.",
+                },
                 {"name": "/h <prompt>", "desc": "Alias for `/hermes` — always run Hermes on the Mac Mini host."},
                 {"name": "/copilot-sessions", "desc": "List your active Copilot CLI sessions."},
                 {"name": "/copilot-cancel", "desc": "Cancel the current Copilot task."},
                 {"name": "/copilot-end", "desc": "End your Copilot session and release the host connection."},
                 {"name": "/copilot-attach", "desc": "Attach to an existing Copilot session by ID."},
-                {"name": "/host <command>", "desc": "Run an arbitrary command on the Mac Mini host via the host bridge."},
+                {
+                    "name": "/host <command>",
+                    "desc": "Run an arbitrary command on the Mac Mini host via the host bridge.",
+                },
             ],
         },
         {
             "category": "🏠 Home Lab",
             "commands": [
                 {"name": "/wake [mbp|mbp2]", "desc": "Send a Wake-on-LAN magic packet to a configured MacBook Pro."},
-                {"name": "/nas [df|ls <path>|free]", "desc": "Inspect NAS disk usage, browse allowed mount paths, or show NAS CPU/memory when available."},
+                {
+                    "name": "/nas [df|ls <path>|free]",
+                    "desc": "Inspect NAS disk usage, browse allowed mount paths, or show NAS CPU/memory when available.",
+                },
+                {
+                    "name": "/plex [status|recent|search|request]",
+                    "desc": "Check Plex server status, recent activity, or search/request media via Overseerr.",
+                },
+                {
+                    "name": "/watching",
+                    "desc": "Show who is streaming on Plex right now, with recent watches when idle.",
+                },
             ],
         },
         {
@@ -164,8 +211,14 @@ def _raw_command_groups() -> list[dict]:
         {
             "category": "📋 Templates & Output",
             "commands": [
-                {"name": "/template [list|use <name>|save <name>]", "desc": "Manage reusable prompt templates — list, apply, or save new ones."},
-                {"name": "/metrics", "desc": "Show Slack bot usage metrics: commands run, files processed, error rate."},
+                {
+                    "name": "/template [list|use <name>|save <name>]",
+                    "desc": "Manage reusable prompt templates — list, apply, or save new ones.",
+                },
+                {
+                    "name": "/metrics",
+                    "desc": "Show Slack bot usage metrics: commands run, files processed, error rate.",
+                },
             ],
         },
         {
