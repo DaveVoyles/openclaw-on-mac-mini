@@ -91,3 +91,4 @@
 - 2026-06-05: Diagnosed root URL serving health JSON instead of dashboard; fixed / to redirect to /dashboard (kept /health for probes)
 - 2026-06-05: Fixed dashboard JS SyntaxError (missing catch on SABnzbd try block in loadQuickStats) that prevented all dashboard data cards from loading
 - 2026-06-05: Fixed 401 errors on /api/github/activity and /api/config-status (missing auth headers in JS fetch calls); added inline SVG favicon to suppress 404s
+- 2026-06-06: Added stdlib dashboard authentication with signed session cookies, protected mutating routes, and passing focused tests.

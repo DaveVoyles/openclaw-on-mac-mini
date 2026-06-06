@@ -293,8 +293,9 @@ _LOGIN_HTML = """<!DOCTYPE html>
                 });
 
                 if (response.ok) {
-                    // Set session and redirect
-                    window.location.href = window.location.href.replace('/login', '').replace('?from=login', '') || '/';
+                    const params = new URLSearchParams(window.location.search);
+                    const target = params.get('from') || '/dashboard';
+                    window.location.href = target.startsWith('/') && !target.startsWith('//') ? target : '/dashboard';
                 } else {
                     const data = await response.json();
                     errorBox.textContent = data.message || 'Login failed';

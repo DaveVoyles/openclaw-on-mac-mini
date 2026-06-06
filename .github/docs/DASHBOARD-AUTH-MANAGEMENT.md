@@ -1,15 +1,13 @@
 # Dashboard Authentication Management
 
-## Your Admin Credentials
+## Credential Storage
 
-**Save these in a secure location:**
+Dashboard credentials are stored only in the gitignored `.env` file:
 
-```
-Username: davevoyles
-Password: ***REMOVED***
-```
+- `OPENCLAW_DASHBOARD_USERNAME`
+- `OPENCLAW_DASHBOARD_PASSWORD`
 
-Use these credentials to log in at: https://openclaw.davevoyles.synology.me/login
+Never commit, paste, or document plaintext credential values in tracked files. Use the values from `.env` to log in at `https://<dashboard-host>/login`.
 
 ---
 
@@ -46,7 +44,7 @@ Automatically generates and displays new secure credentials. Instructions:
 ```
 
 Removes all authentication requirements from the dashboard:
-- Anyone can access https://openclaw.davevoyles.synology.me without login
+- Anyone can access https://<dashboard-host> without login
 - Useful if you want to re-enable auth later with different credentials
 - Re-enable anytime by running `reset` action
 
@@ -79,32 +77,32 @@ When an agent needs to reset credentials:
 
 ```bash
 # Step 1: Check current status
-cd /Users/davevoyles/openclaw
+cd /Users/<mac-user>/openclaw
 .github/scripts/reset-dashboard-auth.sh status
 
 # Step 2: Generate new credentials
 .github/scripts/reset-dashboard-auth.sh reset
 
 # Step 3: Restart container
-cd /Users/davevoyles/docker-stack
+cd /Users/<mac-user>/docker-stack
 docker compose restart openclaw
 
 # Step 4: Verify (optional)
-curl -s https://openclaw.davevoyles.synology.me/api/status | jq .
+curl -s https://<dashboard-host>/api/status | jq .
 ```
 
 ### Scenario: "Disable auth if user completely locked out"
 
 ```bash
-cd /Users/davevoyles/openclaw
+cd /Users/<mac-user>/openclaw
 
 # Disable temporarily
 .github/scripts/reset-dashboard-auth.sh disable
 
 # Restart to apply
-cd /Users/davevoyles/docker-stack && docker compose restart openclaw
+cd /Users/<mac-user>/docker-stack && docker compose restart openclaw
 
-# User can now access: https://openclaw.davevoyles.synology.me (no login)
+# User can now access: https://<dashboard-host> (no login)
 # Reset new credentials when user is ready:
 .github/scripts/reset-dashboard-auth.sh reset
 ```
@@ -115,9 +113,9 @@ cd /Users/davevoyles/docker-stack && docker compose restart openclaw
 
 | File | Purpose |
 |------|---------|
-| `/Users/davevoyles/openclaw/.github/scripts/reset-dashboard-auth.sh` | Reset script (executable) |
-| `/Users/davevoyles/openclaw/.env` | Primary env config (loaded by container) |
-| `/Users/davevoyles/docker-stack/openclaw/.env` | Backup env config |
+| `/Users/<mac-user>/openclaw/.github/scripts/reset-dashboard-auth.sh` | Reset script (executable) |
+| `/Users/<mac-user>/openclaw/.env` | Primary env config (loaded by container) |
+| `/Users/<mac-user>/docker-stack/openclaw/.env` | Backup env config |
 | `src/config.py` | Config loader (reads env vars) |
 | `src/discord_web.py` | Session auth middleware |
 | `src/dashboard/routes.py` | Protected page routes |
@@ -132,7 +130,7 @@ cd /Users/davevoyles/docker-stack && docker compose restart openclaw
 
 **Q: Reset script says "No .env file found"**
 - A: Ensure you're running from correct directory; script looks for `.env` one level up
-- Fix: `cd /Users/davevoyles/openclaw && .github/scripts/reset-dashboard-auth.sh reset`
+- Fix: `cd /Users/<mac-user>/openclaw && .github/scripts/reset-dashboard-auth.sh reset`
 
 **Q: Reset script permissions error**
 - A: Make script executable: `chmod +x .github/scripts/reset-dashboard-auth.sh`
@@ -151,12 +149,12 @@ The REST API endpoints remain accessible for automation:
 
 ```bash
 # These work WITHOUT session auth:
-curl https://openclaw.davevoyles.synology.me/api/status
-curl https://openclaw.davevoyles.synology.me/api/runs
+curl https://<dashboard-host>/api/status
+curl https://<dashboard-host>/api/runs
 
 # These require BEARER token (unchanged):
 curl -H "Authorization: Bearer oc_api_..." \
-  https://openclaw.davevoyles.synology.me/api/action
+  https://<dashboard-host>/api/action
 ```
 
 ---

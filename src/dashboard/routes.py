@@ -4,6 +4,7 @@ from collections.abc import Awaitable, Callable
 
 from aiohttp import web
 
+from .auth import login_api_handler, logout_handler
 from .api_handlers import (
     api_agent_ask_handler,
     api_agent_ask_stream_handler,
@@ -150,6 +151,9 @@ def setup_dashboard(
     app.router.add_get("/dashboard", page(dashboard_handler))
     app.router.add_get("/manifest.json", api_manifest_handler)
     app.router.add_get("/login", login_handler)
+    app.router.add_post("/api/login", login_api_handler)
+    app.router.add_get("/api/logout", logout_handler)
+    app.router.add_post("/api/logout", logout_handler)
     app.router.add_get("/tech-guide", page(guide_handler))
     app.router.add_get("/guide", lambda r: web.HTTPMovedPermanently("/tech-guide"))
     app.router.add_get("/terminal", page(terminal_handler))
@@ -159,8 +163,8 @@ def setup_dashboard(
     app.router.add_get("/install", page(openclaw_cli_installer_handler))
     app.router.add_get("/install-remote", page(openclaw_cli_remote_installer_handler))
     app.router.add_get("/install.ps1", page(openclaw_cli_windows_installer_handler))
-    app.router.add_get("/install-hermes", hermes_installer_handler)
-    app.router.add_get("/ih", hermes_installer_handler)  # short alias for single-line terminal use
+    app.router.add_get("/install-hermes", page(hermes_installer_handler))
+    app.router.add_get("/ih", page(hermes_installer_handler))  # short alias for single-line terminal use
     app.router.add_get("/downloads/openclaw_cli.py", page(openclaw_cli_download_handler))
     app.router.add_get("/downloads/openclaw-cli-support/{name}", page(openclaw_cli_support_download_handler))
     app.router.add_get("/downloads/openclaw-cli-installer.sh", page(openclaw_cli_installer_handler))
@@ -202,7 +206,7 @@ def setup_dashboard(
     app.router.add_post("/api/schedules/{task_id}/toggle", action(api_schedule_toggle_handler))
     app.router.add_delete("/api/schedules/{task_id}", action(api_schedule_delete_handler))
     app.router.add_get("/api/status", api_status_handler)
-    app.router.add_post("/api/agent/ask/stream", api_agent_ask_stream_handler)
+    app.router.add_post("/api/agent/ask/stream", action(api_agent_ask_stream_handler))
     app.router.add_get("/api/errors", api_errors_handler)
     app.router.add_get("/api/response-stats", api_response_stats_handler)
     app.router.add_get("/api/dream-health", api_dream_health_handler)
@@ -246,10 +250,10 @@ def setup_dashboard(
     # Tool Server — OpenAPI-compatible endpoints for Open WebUI tool calling
     # Configure in Open WebUI: Admin → Tools → Tool Servers → http://openclaw:8765
     app.router.add_get("/tools/openapi.json", api_tools_openapi_handler)
-    app.router.add_post("/tools/search_files", api_tools_search_files_handler)
-    app.router.add_post("/tools/read_file", api_tools_read_file_handler)
-    app.router.add_post("/tools/run_shell", api_tools_run_shell_handler)
-    app.router.add_post("/tools/share_file", api_tools_share_file_handler)
+    app.router.add_post("/tools/search_files", action(api_tools_search_files_handler))
+    app.router.add_post("/tools/read_file", action(api_tools_read_file_handler))
+    app.router.add_post("/tools/run_shell", action(api_tools_run_shell_handler))
+    app.router.add_post("/tools/share_file", action(api_tools_share_file_handler))
     app.router.add_get("/api/changelog", api_changelog_handler)
     app.router.add_get("/api/hermes/skills", api_hermes_skills_handler)
     app.router.add_get("/api/docker/status", api_docker_status_handler)
@@ -267,7 +271,7 @@ def setup_dashboard(
     app.router.add_get("/api/nas/browse", api_nas_browse_handler)
     app.router.add_get("/api/overseerr/recent", api_overseerr_recent_handler)
     app.router.add_get("/api/overseerr/search", api_overseerr_search_handler)
-    app.router.add_post("/api/overseerr/request", api_overseerr_request_handler)
+    app.router.add_post("/api/overseerr/request", action(api_overseerr_request_handler))
     app.router.add_get("/api/sonarr/calendar", api_sonarr_calendar_handler)
     app.router.add_get("/api/audit/recent", api_audit_recent_handler)
     app.router.add_get("/api/nas/status", api_nas_status_handler)

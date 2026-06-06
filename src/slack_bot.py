@@ -10036,8 +10036,9 @@ async def _start_health_server() -> None:
     app.router.add_get("/", lambda _req: web.HTTPFound("/dashboard"))
 
     try:
+        from dashboard.auth import require_action_auth, require_session
         from dashboard.routes import setup_dashboard
-        setup_dashboard(app)
+        setup_dashboard(app, require_action_auth=require_action_auth, require_session=require_session)
         log.info("Dashboard routes registered at /dashboard")
     except Exception as _exc:
         log.warning("Dashboard unavailable: %s", _exc)
