@@ -9,6 +9,7 @@ on:
       - 'requirements*.txt'
       - 'Dockerfile'
       - 'docker-compose*.yml'
+      - '.github/workflows/security.yml'
   pull_request:
     branches: [main]
     paths:
@@ -16,6 +17,7 @@ on:
       - 'requirements*.txt'
       - 'Dockerfile'
       - 'docker-compose*.yml'
+      - '.github/workflows/security.yml'
   schedule:
     # Weekly security scan on Mondays at 3 AM UTC (always runs full scan)
     - cron: '0 3 * * 1'
@@ -42,6 +44,14 @@ jobs:
 
       - name: Build Docker image
         run: |
+          # The self-hosted macOS runner runs headless, so Docker's default
+          # osxkeychain credential helper cannot unlock the login keychain
+          # ("session does not allow user interaction"). Pulling the public
+          # python base image needs no credentials, so build with an isolated,
+          # empty Docker config that has no credential helper configured.
+          DOCKER_CONFIG="$(mktemp -d)"
+          export DOCKER_CONFIG
+          echo '{}' > "$DOCKER_CONFIG/config.json"
           docker build -t openclaw:security-scan .
 
       - name: Run Trivy vulnerability scanner
