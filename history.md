@@ -98,3 +98,4 @@
 - 2026-06-06: Fleet-greened remaining CI gates — fixed mypy_enforce stale path to deleted workflow_api (+pyproject override), fixed 2 stale home-view test assertions; confirmed smoke/eval/syntax gates already pass. Only format gate (helpers.py user WIP) remains.
 - 2026-06-06: Committed pending Plex work (/plex, /watching dashboard commands + tech-guide doc entries) with ruff formatting, clearing the final CI format gate.
 - 2026-06-06: Fixed CI deploy job's container-restart step (was a silent no-op: rm -f cannot remove a running container) to use docker-compose up -d --force-recreate, so green pushes actually reload code.
+- 2026-06-06: gitignored 2 local working docs (discord-to-slack-plan, NAS-ACCESS) to keep them out of the public repo.

@@ -88,3 +88,7 @@ data/chromadb/
 data/dream/index.json.bak
 data/slack_file_history.json
 data/user_dropbox_tokens.json
+
+# Local working docs (not part of the public repo)
+.github/docs/2026-06-01-dashboard-discord-to-slack-plan.md
+.github/docs/NAS-ACCESS.md
