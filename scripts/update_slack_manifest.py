@@ -48,6 +48,14 @@ MANIFEST: dict = {
             "display_name": "OpenClaw",
             "always_online": True,
         },
+        # NOTE: Slack enforces a hard cap of 50 slash commands per app (manifest
+        # API rejects more with `max_items`). The bot handles a few extra commands
+        # that are intentionally NOT registered here to stay under the cap:
+        # /simple (= `/chat --simple`), /brief (= /files), /template, /mypins,
+        # /media (= /watching + `/plex recent`), /downloads (= /qbt + /arr),
+        # /upcoming (= /arr). They still work if typed, but won't autocomplete.
+        # /status is omitted because Slack reserves it as a built-in (it sets your
+        # Slack status); the manifest API rejects it with `invalid_name`.
         "slash_commands": [
             {
                 "command": "/chat",
@@ -59,12 +67,6 @@ MANIFEST: dict = {
                 "command": "/help",
                 "description": "Show examples and tips for using OpenClaw.",
                 "usage_hint": "(no arguments needed)",
-                "should_escape": False,
-            },
-            {
-                "command": "/simple",
-                "description": "Toggle plain-language mode. OpenClaw will always give easy-to-read answers.",
-                "usage_hint": "on | off",
                 "should_escape": False,
             },
             {
@@ -98,12 +100,6 @@ MANIFEST: dict = {
                 "should_escape": False,
             },
             {
-                "command": "/template",
-                "description": "Download a starter document template. Use: /template list or /template budget|letter|meeting-notes",
-                "usage_hint": "[list|budget|letter|meeting-notes]",
-                "should_escape": False,
-            },
-            {
                 "command": "/metrics",
                 "description": "Show OpenClaw usage metrics for the last 7 days (admin).",
                 "usage_hint": "(no arguments needed)",
@@ -116,20 +112,8 @@ MANIFEST: dict = {
                 "should_escape": False,
             },
             {
-                "command": "/brief",
-                "description": "Show your recently uploaded files",
-                "usage_hint": "(no arguments needed)",
-                "should_escape": False,
-            },
-            {
                 "command": "/mystats",
                 "description": "Show your personal usage statistics",
-                "usage_hint": "(no arguments needed)",
-                "should_escape": False,
-            },
-            {
-                "command": "/mypins",
-                "description": "View your bookmarked bot responses",
                 "usage_hint": "(no arguments needed)",
                 "should_escape": False,
             },
@@ -245,6 +229,126 @@ MANIFEST: dict = {
                 "command": "/h",
                 "description": "Short alias for /hermes to start a Hermes session",
                 "usage_hint": "<prompt>",
+                "should_escape": False,
+            },
+            {
+                "command": "/hermes",
+                "description": "Start a Hermes coding session on the Mac Mini",
+                "usage_hint": "<prompt>",
+                "should_escape": False,
+            },
+            {
+                "command": "/q",
+                "description": "Quick ephemeral Hermes answer, shown only to you",
+                "usage_hint": "<prompt>",
+                "should_escape": False,
+            },
+            {
+                "command": "/resume",
+                "description": "Resume your last Hermes session",
+                "usage_hint": "[prompt]",
+                "should_escape": False,
+            },
+            {
+                "command": "/sessions",
+                "description": "List, inspect, or resume Hermes sessions",
+                "usage_hint": "[n | resume n]",
+                "should_escape": False,
+            },
+            {
+                "command": "/copilot-recap",
+                "description": "Recap a Copilot session",
+                "usage_hint": "<id>",
+                "should_escape": False,
+            },
+            {
+                "command": "/plex",
+                "description": "Check Plex / Overseerr: status, recent activity, search, or request",
+                "usage_hint": "status | recent | search <title> | request <title>",
+                "should_escape": False,
+            },
+            {
+                "command": "/watching",
+                "description": "See what's playing on Plex right now",
+                "usage_hint": "(no arguments needed)",
+                "should_escape": False,
+            },
+            {
+                "command": "/request",
+                "description": "Search Overseerr and request a movie or TV show",
+                "usage_hint": "<title>",
+                "should_escape": False,
+            },
+            {
+                "command": "/uptime",
+                "description": "Show grouped Uptime Kuma service status",
+                "usage_hint": "(no arguments needed)",
+                "should_escape": False,
+            },
+            {
+                "command": "/morning",
+                "description": "Trigger your morning briefing DM on demand",
+                "usage_hint": "(no arguments needed)",
+                "should_escape": False,
+            },
+            {
+                "command": "/grafana",
+                "description": "Grafana health status and dashboard links",
+                "usage_hint": "(no arguments needed)",
+                "should_escape": False,
+            },
+            {
+                "command": "/adguard",
+                "description": "DNS stats: queries, block rate, top blocked domains",
+                "usage_hint": "(no arguments needed)",
+                "should_escape": False,
+            },
+            {
+                "command": "/arr",
+                "description": "View Sonarr/Radarr/Lidarr queues",
+                "usage_hint": "(no arguments needed)",
+                "should_escape": False,
+            },
+            {
+                "command": "/qbt",
+                "description": "qBittorrent active torrents, speeds, and free space",
+                "usage_hint": "(no arguments needed)",
+                "should_escape": False,
+            },
+            {
+                "command": "/tailscale",
+                "description": "Show current Tailscale device status",
+                "usage_hint": "(no arguments needed)",
+                "should_escape": False,
+            },
+            {
+                "command": "/nas-share",
+                "description": "Generate a NAS share link for a path",
+                "usage_hint": "<path>",
+                "should_escape": False,
+            },
+            {
+                "command": "/news",
+                "description": "Show top headlines or search a topic",
+                "usage_hint": "[topic]",
+                "should_escape": False,
+            },
+            {
+                "command": "/notify",
+                "description": "Send a push notification to your phone (prefix high: for urgent)",
+                "usage_hint": "<message>",
+                "should_escape": False,
+            },
+            {
+                "command": "/contacts",
+                "description": "Search, add, or list Google Contacts",
+                "usage_hint": "[search <name> | add | list]",
+                "should_escape": False,
+            },
+            {
+                "command": "/drive",
+                "description": "Browse and search Google Drive files",
+                "usage_hint": "[list | search | open]",
                 "should_escape": False,
             },
         ],
