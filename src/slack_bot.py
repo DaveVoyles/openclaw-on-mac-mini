@@ -86,6 +86,9 @@ class _HermesStreamHandle:
         self._cancelled = False
         self._cancel_event = asyncio.Event()
         self._done = asyncio.Event()
+        # Owner of a one-shot (/q, /resume) turn registered under a synthetic
+        # cancel id, so /copilot-cancel can verify ownership before stopping it.
+        self.slack_user: str | None = None
 
     @property
     def cancelled(self) -> bool:
@@ -6666,19 +6669,33 @@ def _register_integration_handlers(app: Any) -> None:
         *,
         resume_session_id: str | None = None,
         cwd: str | None = None,
+        slack_user: str | None = None,
+        cancel_id: str | None = None,
     ) -> tuple[str, str | None]:
         # Hermes runs on the host over SSH; stream and accumulate the full reply.
+        # When slack_user + cancel_id are supplied, register a handle so the turn
+        # can be hard-interrupted via /copilot-cancel <cancel_id>.
         from host_bridge import run_hermes_stream
 
         workdir = cwd or os.getenv("OPENCLAW_HOST_BRIDGE_WORKDIR", "/Users/davevoyles/docker-stack")
         parts: list[str] = []
         error: str | None = None
+
+        handle: _HermesStreamHandle | None = None
+        cancel_event: asyncio.Event | None = None
+        if slack_user and cancel_id:
+            handle = _HermesStreamHandle()
+            handle.slack_user = slack_user
+            _hermes_live_procs[cancel_id] = handle
+            cancel_event = handle.cancel_event
+
         try:
             async for event in run_hermes_stream(
                 prompt=prompt,
-                slack_user_id="slack-quick",
+                slack_user_id=slack_user or "slack-quick",
                 hermes_session_id=resume_session_id,
                 cwd=workdir,
+                cancel_event=cancel_event,
             ):
                 etype = event.get("type")
                 if etype == "chunk":
@@ -6686,12 +6703,20 @@ def _register_integration_handlers(app: Any) -> None:
                 elif etype == "error":
                     error = event.get("error") or "hermes error"
                 elif etype == "done" and not event.get("success") and error is None:
-                    exit_code = event.get("exit_code")
-                    error = event.get("error") or (
-                        f"Hermes exited with status {exit_code}" if exit_code else "Hermes failed"
-                    )
+                    if event.get("cancelled"):
+                        error = "cancelled"
+                    else:
+                        exit_code = event.get("exit_code")
+                        error = event.get("error") or (
+                            f"Hermes exited with status {exit_code}" if exit_code else "Hermes failed"
+                        )
         except Exception as exc:  # noqa: BLE001
             return "", f"Hermes failed to start: {type(exc).__name__}: {exc}"
+        finally:
+            if handle is not None:
+                handle.finish()
+                if cancel_id is not None:
+                    _hermes_live_procs.pop(cancel_id, None)
 
         if error:
             return "", error
@@ -7115,16 +7140,20 @@ def _register_integration_handlers(app: Any) -> None:
             )
             return
 
+        cancel_id = "r" + secrets.token_hex(4)
         msg = await client.chat_postMessage(
             channel=channel_id,
-            text=f"⚕ Resuming session `{short_id}`… _{title_text}_",
+            text=f"⚕ Resuming session `{short_id}`… _{title_text}_ _(`/copilot-cancel {cancel_id}` to stop)_",
         )
         thread_ts = msg.get("ts") or msg.get("message", {}).get("ts")
 
         async def _bg_resume() -> None:
-            answer, err = await _run_hermes_quick_command(prompt, resume_session_id=session_id)
+            answer, err = await _run_hermes_quick_command(
+                prompt, resume_session_id=session_id, slack_user=user_id, cancel_id=cancel_id
+            )
             if err:
-                await client.chat_postMessage(channel=channel_id, thread_ts=thread_ts, text=f"❌ Error: {err}")
+                text = "⏹ Cancelled." if err == "cancelled" else f"❌ Error: {err}"
+                await client.chat_postMessage(channel=channel_id, thread_ts=thread_ts, text=text)
                 return
             await _post_slack_text_chunks(client, channel_id, answer, thread_ts=thread_ts)
 
@@ -7233,10 +7262,14 @@ def _register_integration_handlers(app: Any) -> None:
             )
             return
 
-        await client.chat_postEphemeral(channel=channel_id, user=user_id, text="⚕ Thinking…")
-        answer, err = await _run_hermes_quick_command(prompt)
+        cancel_id = "q" + secrets.token_hex(4)
+        await client.chat_postEphemeral(
+            channel=channel_id, user=user_id, text=f"⚕ Thinking… _(`/copilot-cancel {cancel_id}` to stop)_"
+        )
+        answer, err = await _run_hermes_quick_command(prompt, slack_user=user_id, cancel_id=cancel_id)
         if err:
-            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ Error: {err}")
+            text = "⏹ Cancelled." if err == "cancelled" else f"❌ Error: {err}"
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text)
             return
 
         answer = answer or "(no response)"
@@ -7301,6 +7334,17 @@ def _register_integration_handlers(app: Any) -> None:
             return
         rec = mgr.get_record(sid)
         if rec is None:
+            # One-shot /q and /resume turns have no persistent record; they
+            # register a handle in _hermes_live_procs under their cancel id.
+            qhandle = _hermes_live_procs.get(sid)
+            if qhandle is not None and getattr(qhandle, "slack_user", None) == user_id:
+                try:
+                    qhandle.terminate()
+                except Exception as exc:  # noqa: BLE001
+                    await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ cancel failed: {exc}")
+                    return
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"⏹ stop signal sent to `{sid}`")
+                return
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text="❌ session not found")
             return
         if _is_hermes_session(rec):

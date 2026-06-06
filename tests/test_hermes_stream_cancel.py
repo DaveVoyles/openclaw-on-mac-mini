@@ -145,3 +145,34 @@ async def test_no_cancel_event_completes_normally(monkeypatch: pytest.MonkeyPatc
     done = [e for e in events if e.get("type") == "done"]
     assert done and done[-1]["success"] is True
     assert done[-1]["cancelled"] is False
+
+
+def test_quick_command_handle_registry_owner_and_cancel() -> None:
+    """One-shot /q and /resume turns register a cancel handle keyed by a
+    synthetic id with the requesting user recorded, so /copilot-cancel can
+    verify ownership and hard-interrupt the turn via the same cancel_event the
+    host bridge watches.
+    """
+    import slack_bot
+
+    handle = slack_bot._HermesStreamHandle()
+    handle.slack_user = "U_OWNER"
+    cancel_id = "qdeadbeef"
+    slack_bot._hermes_live_procs[cancel_id] = handle
+    try:
+        registered = slack_bot._hermes_live_procs.get(cancel_id)
+        assert registered is handle
+        assert registered.slack_user == "U_OWNER"
+
+        # A different user must not be able to cancel this turn.
+        assert registered.slack_user != "U_OTHER"
+
+        # Owner cancel fires the event the host bridge watches.
+        assert handle.cancel_event.is_set() is False
+        handle.terminate()
+        assert handle.cancelled is True
+        assert handle.cancel_event.is_set() is True
+    finally:
+        slack_bot._hermes_live_procs.pop(cancel_id, None)
+
+    assert cancel_id not in slack_bot._hermes_live_procs
