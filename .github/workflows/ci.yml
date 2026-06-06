@@ -196,7 +196,10 @@ jobs:
         run: bash scripts/install_openclaw_cli_remote.sh macbook
 
       - name: Restart server container (picks up src/ bind mount)
-        run: cd /Users/davevoyles/openclaw && docker-compose rm -f openclaw 2>/dev/null || true && docker-compose up -d openclaw
+        # force-recreate is required: `rm -f` cannot remove a running container
+        # (the error is swallowed), so a plain `up -d` would see the unchanged
+        # healthy container and skip recreation, never reloading new code.
+        run: cd /Users/davevoyles/openclaw && docker-compose up -d --force-recreate --no-deps openclaw
 
       - name: Verify deployed version
         run: |

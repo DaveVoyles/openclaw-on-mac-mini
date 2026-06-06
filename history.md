@@ -97,3 +97,4 @@
 - 2026-06-06: Fleet-fixed all 64 pre-existing ruff errors + 3 real latent bugs (BUG-1 live Hermes NameError in Slack handler, BUG-2/3 dashboard API crashes); code-review verified all fixes; cleared the ruff gate that blocked CI for weeks.
 - 2026-06-06: Fleet-greened remaining CI gates — fixed mypy_enforce stale path to deleted workflow_api (+pyproject override), fixed 2 stale home-view test assertions; confirmed smoke/eval/syntax gates already pass. Only format gate (helpers.py user WIP) remains.
 - 2026-06-06: Committed pending Plex work (/plex, /watching dashboard commands + tech-guide doc entries) with ruff formatting, clearing the final CI format gate.
+- 2026-06-06: Fixed CI deploy job's container-restart step (was a silent no-op: rm -f cannot remove a running container) to use docker-compose up -d --force-recreate, so green pushes actually reload code.
