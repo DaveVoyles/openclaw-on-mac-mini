@@ -985,6 +985,7 @@ async def run_hermes_stream(
     hermes_session_id: str | None = None,
     timeout_s: int | None = None,
     cwd: str | None = None,
+    cancel_event: asyncio.Event | None = None,
 ):
     """Async generator that streams output from ``hermes chat -q <prompt>`` over SSH.
 
@@ -993,6 +994,11 @@ async def run_hermes_stream(
         {"type": "done",   "success": bool, "duration_s": float,
          "exit_code": int|None, "session_id": str}                   — terminal event
         {"type": "error",  "error": str, "session_id": str}         — fatal error
+
+    If ``cancel_event`` is provided, setting it hard-interrupts the in-flight
+    turn: the remote hermes process is terminated over SSH (escalating to kill
+    and connection abort), so a silent or long-running turn stops promptly
+    instead of only after the next chunk arrives.
     """
     session_id = uuid.uuid4().hex[:12]
     timeout = timeout_s if (timeout_s and timeout_s > 0) else TIMEOUT_S
@@ -1038,6 +1044,7 @@ async def run_hermes_stream(
 
     exit_code: int | None = None
     error: str | None = None
+    cancelled = False
 
     try:
         known_hosts = KNOWN_HOSTS if Path(KNOWN_HOSTS).exists() else None
@@ -1048,28 +1055,73 @@ async def run_hermes_stream(
             known_hosts=known_hosts,
         ) as conn:
             async with conn.create_process(remote_cmd) as proc:
+                # Watch for a cancel request and hard-interrupt the remote turn.
+                # proc.terminate() reliably kills the remote hermes process over
+                # SSH on this host; escalate to kill()/conn.abort() as a safety
+                # net so a stuck turn always tears down promptly.
+                watcher: asyncio.Task[None] | None = None
+                if cancel_event is not None:
 
-                async def _drain_stdout():
-                    async for raw_line in proc.stdout:
-                        line = raw_line if isinstance(raw_line, str) else raw_line.decode("utf-8", "replace")
-                        yield {"type": "chunk", "text": line}
+                    async def _watch_cancel() -> None:
+                        await cancel_event.wait()  # type: ignore[union-attr]
+                        log.info("host_bridge[%s]: cancel requested — terminating remote hermes", session_id)
+                        try:
+                            proc.terminate()
+                        except Exception:  # noqa: BLE001
+                            pass
+                        await asyncio.sleep(2)
+                        try:
+                            proc.kill()
+                        except Exception:  # noqa: BLE001
+                            pass
+                        await asyncio.sleep(1)
+                        try:
+                            conn.abort()
+                        except Exception:  # noqa: BLE001
+                            pass
 
-                async for event in _drain_stdout():
-                    yield event
+                    watcher = asyncio.ensure_future(_watch_cancel())
 
                 try:
-                    await asyncio.wait_for(
-                        proc.wait_closed(),
-                        timeout=max(5, timeout - (time.monotonic() - start_ts)),
-                    )
-                except asyncio.TimeoutError:
-                    error = f"hermes timed out after {timeout}s"
-                # asyncssh wait_closed() returns None; exit status is on the proc
-                try:
-                    es = proc.exit_status
-                    exit_code = es if isinstance(es, int) else (0 if error is None else 1)
-                except Exception:
-                    exit_code = 0 if error is None else 1
+
+                    async def _drain_stdout():
+                        async for raw_line in proc.stdout:
+                            line = raw_line if isinstance(raw_line, str) else raw_line.decode("utf-8", "replace")
+                            yield {"type": "chunk", "text": line}
+
+                    async for event in _drain_stdout():
+                        yield event
+
+                    try:
+                        await asyncio.wait_for(
+                            proc.wait_closed(),
+                            timeout=max(5, timeout - (time.monotonic() - start_ts)),
+                        )
+                    except asyncio.TimeoutError:
+                        error = f"hermes timed out after {timeout}s"
+                    # asyncssh wait_closed() returns None; exit status is on the proc
+                    try:
+                        es = proc.exit_status
+                        exit_code = es if isinstance(es, int) else (0 if error is None else 1)
+                    except Exception:
+                        exit_code = 0 if error is None else 1
+                except (asyncssh.Error, ConnectionError, BrokenPipeError) as exc:
+                    # A cancel that aborts the connection surfaces here — treat it
+                    # as a clean cancellation rather than a fatal error.
+                    if cancel_event is not None and cancel_event.is_set():
+                        cancelled = True
+                    else:
+                        raise RuntimeError(f"{type(exc).__name__}: {exc}") from exc
+                finally:
+                    if watcher is not None:
+                        watcher.cancel()
+                        try:
+                            await watcher
+                        except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                            pass
+
+                if cancel_event is not None and cancel_event.is_set():
+                    cancelled = True
 
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
@@ -1078,7 +1130,10 @@ async def run_hermes_stream(
         return
 
     duration = time.monotonic() - start_ts
-    success = (error is None) and (exit_code is None or exit_code == 0)
+    if cancelled:
+        error = error or "cancelled"
+        exit_code = exit_code if isinstance(exit_code, int) and exit_code != 0 else 1
+    success = (not cancelled) and (error is None) and (exit_code is None or exit_code == 0)
 
     yield {
         "type": "done",
@@ -1087,6 +1142,7 @@ async def run_hermes_stream(
         "exit_code": exit_code,
         "session_id": session_id,
         "error": error,
+        "cancelled": cancelled,
     }
 
 

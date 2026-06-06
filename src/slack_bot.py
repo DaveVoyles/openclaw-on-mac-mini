@@ -84,17 +84,25 @@ class _HermesStreamHandle:
 
     def __init__(self) -> None:
         self._cancelled = False
+        self._cancel_event = asyncio.Event()
         self._done = asyncio.Event()
 
     @property
     def cancelled(self) -> bool:
         return self._cancelled
 
+    @property
+    def cancel_event(self) -> asyncio.Event:
+        """Event the host bridge watches to hard-interrupt the remote turn."""
+        return self._cancel_event
+
     def terminate(self) -> None:
         self._cancelled = True
+        self._cancel_event.set()
 
     def kill(self) -> None:
         self._cancelled = True
+        self._cancel_event.set()
 
     async def wait(self) -> int:
         await self._done.wait()
@@ -265,6 +273,7 @@ async def _run_hermes_turn(record: Any, prompt: str) -> str | None:
             slack_user_id=record.slack_user,
             hermes_session_id=prior_hermes_session_id,
             cwd=record.cwd or None,
+            cancel_event=handle.cancel_event,
         ):
             if handle.cancelled:
                 stderr_text = "cancelled"
