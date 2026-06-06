@@ -100,3 +100,4 @@
 - 2026-06-06: Fixed CI deploy job's container-restart step (was a silent no-op: rm -f cannot remove a running container) to use docker-compose up -d --force-recreate, so green pushes actually reload code.
 - 2026-06-06: gitignored 2 local working docs (discord-to-slack-plan, NAS-ACCESS) to keep them out of the public repo.
 - 2026-06-06: Registered Hermes + home-ops Slack slash commands (/hermes, /plex, /uptime, etc.) in the app manifest and pushed live via apps.manifest.update; pruned to Slack's 50-command cap and dropped reserved /status.
+- 2026-06-06: Fixed /hermes 'binary not found' by routing hermes slash commands through the host SSH bridge (run_hermes_stream) instead of an in-container subprocess; verified live. Added a CI slash-command drift check so new commands can't silently go unregistered.
