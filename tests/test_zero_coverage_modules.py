@@ -7,7 +7,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -676,4 +676,3 @@ class TestParseTimeExpression:
     )
     def test_invalid_expressions(self, expr):
         assert parse_time_expression(expr) is None
-

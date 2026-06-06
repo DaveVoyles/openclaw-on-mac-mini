@@ -120,6 +120,7 @@ async def openclaw_cli_remote_installer_handler(request: web.Request) -> web.Res
 async def hermes_installer_handler(request: web.Request) -> web.Response:
     """Serve a shell installer that installs Hermes agent with Copilot provider pre-configured."""
     from .helpers import build_hermes_installer
+
     base_url = f"{request.scheme}://{request.host}"
     script = build_hermes_installer(base_url)
     return web.Response(

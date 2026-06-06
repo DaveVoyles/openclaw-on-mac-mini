@@ -8,7 +8,6 @@ smoke test after deploy. These tests guard the pure-Python contract.
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -21,6 +20,7 @@ def bridge(monkeypatch, tmp_path):
     # Force re-import so module-level config picks up the env tweaks.
     import importlib
     import sys
+
     sys.modules.pop("host_bridge", None)
     mod = importlib.import_module("host_bridge")
     # Redirect audit dir into tmp.

@@ -5,7 +5,6 @@ Originally Discord-specific; now Slack-first with table modes preserved
 for legacy callers.
 """
 
-import io
 import re
 from typing import Literal
 

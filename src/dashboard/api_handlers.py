@@ -35,13 +35,13 @@ _api_cache: dict = {}  # key -> (value, expires_at_float)
 
 def _cache_get(key: str):
     entry = _api_cache.get(key)
-    if entry and entry[1] > __import__('time').time():
+    if entry and entry[1] > __import__("time").time():
         return entry[0]
     return None
 
 
 def _cache_set(key: str, value, ttl_seconds: int = 60):
-    _api_cache[key] = (value, __import__('time').time() + ttl_seconds)
+    _api_cache[key] = (value, __import__("time").time() + ttl_seconds)
 
 
 def _overseerr_headers():
@@ -1349,9 +1349,7 @@ async def api_status_handler(request):
 
     # Hermes
     try:
-        _reader, _writer = await asyncio.wait_for(
-            asyncio.open_connection("192.168.1.93", 22), timeout=2.0
-        )
+        _reader, _writer = await asyncio.wait_for(asyncio.open_connection("192.168.1.93", 22), timeout=2.0)
         _writer.close()
         try:
             await _writer.wait_closed()
@@ -1499,8 +1497,12 @@ async def api_github_activity_handler(request: web.Request) -> web.Response:
                                 {
                                     "repo": repo,
                                     "sha": str(commit.get("sha", ""))[:7],
-                                    "message": str(((commit.get("commit") or {}).get("message") or "").split("\n")[0])[:80],
-                                    "author": str((((commit.get("commit") or {}).get("author") or {}).get("name") or "")),
+                                    "message": str(((commit.get("commit") or {}).get("message") or "").split("\n")[0])[
+                                        :80
+                                    ],
+                                    "author": str(
+                                        (((commit.get("commit") or {}).get("author") or {}).get("name") or "")
+                                    ),
                                     "date": str((((commit.get("commit") or {}).get("author") or {}).get("date") or "")),
                                     "url": str(commit.get("html_url") or ""),
                                 }
@@ -3389,14 +3391,11 @@ async def api_manifest_handler(request):
                 "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='24' fill='%237c3aed'/%3E%3Ctext x='96' y='130' font-size='100' text-anchor='middle' font-family='system-ui'%3E⚕%3C/text%3E%3C/svg%3E",
                 "sizes": "192x192",
                 "type": "image/svg+xml",
-                "purpose": "any maskable"
+                "purpose": "any maskable",
             }
-        ]
+        ],
     }
-    return web.Response(
-        content_type="application/manifest+json",
-        text=json.dumps(manifest)
-    )
+    return web.Response(content_type="application/manifest+json", text=json.dumps(manifest))
 
 
 # ---------------------------------------------------------------------------
@@ -3407,13 +3406,13 @@ async def api_manifest_handler(request):
 # Models exposed to Open WebUI — matches the model_pref values accepted by
 # api_agent_ask_handler.
 _OAI_MODELS = [
-    {"id": "auto",      "label": "OpenClaw Auto"},
-    {"id": "gemini",    "label": "Gemini"},
-    {"id": "openai",    "label": "OpenAI"},
+    {"id": "auto", "label": "OpenClaw Auto"},
+    {"id": "gemini", "label": "Gemini"},
+    {"id": "openai", "label": "OpenAI"},
     {"id": "anthropic", "label": "Anthropic / Claude"},
-    {"id": "local",     "label": "Local (Ollama)"},
-    {"id": "copilot",   "label": "Copilot CLI (SSH)"},
-    {"id": "shell",     "label": "Mac Mini Shell (bash)"},
+    {"id": "local", "label": "Local (Ollama)"},
+    {"id": "copilot", "label": "Copilot CLI (SSH)"},
+    {"id": "shell", "label": "Mac Mini Shell (bash)"},
 ]
 
 import os as _os
@@ -3421,6 +3420,11 @@ import os as _os
 # Regex to strip the "_via Model Name_" attribution footer OpenClaw appends to
 # LLM responses.  It's useful in Slack/dashboard but is noise in Open WebUI.
 _VIA_FOOTER_RE = re.compile(r"\n_via [^\n]+_[ \t]*$", re.MULTILINE)
+
+
+def _strip_via_footer(text: str) -> str:
+    return _VIA_FOOTER_RE.sub("", text)
+
 
 # Copilot CLI emits terminal status bar lines at the end of every run (even with
 # TERM=dumb).  These are noise in Open WebUI and should be filtered from /v1 output.
@@ -3458,7 +3462,6 @@ def _copilot_tool_label(line: str) -> str | None:
     if _COPILOT_TOOL_NAME_RE.match(stripped):
         return f"⚙️ tool: {stripped}"
     return None
-
 
 
 # ---------------------------------------------------------------------------
@@ -3671,7 +3674,7 @@ async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
             "1. Read/list files: use the SMB mount at /Users/davevoyles/mnt/ROMs/ directly.",
             "2. Run NAS-side commands (Docker, DSM): ssh -p 24 dave@192.168.1.8 '<cmd>'",
             "3. Create share links: POST https://openclaw.davevoyles.synology.me/tools/share_file",
-            "   with JSON body: {\"path\": \"/Users/davevoyles/mnt/ROMs/ROMs/<system>/<file>\"}",
+            '   with JSON body: {"path": "/Users/davevoyles/mnt/ROMs/ROMs/<system>/<file>"}',
             "",
         ]
         prompt = "\n".join(context_lines) + prompt
@@ -3698,8 +3701,10 @@ async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
             await stream_resp.prepare(request)
 
             role_chunk = {
-                "id": completion_id, "object": "chat.completion.chunk",
-                "created": created_ts, "model": _copilot_model_name,
+                "id": completion_id,
+                "object": "chat.completion.chunk",
+                "created": created_ts,
+                "model": _copilot_model_name,
                 "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}],
             }
             await stream_resp.write(f"data: {json.dumps(role_chunk)}\n\n".encode())
@@ -3716,33 +3721,43 @@ async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
                             if tool_label:
                                 # Emit as a special tool-progress chunk so the dashboard can style it.
                                 progress_chunk = {
-                                    "id": completion_id, "object": "chat.completion.chunk",
-                                    "created": created_ts, "model": _copilot_model_name,
-                                    "choices": [{"index": 0, "delta": {"content": tool_label + "\n"}, "finish_reason": None}],
+                                    "id": completion_id,
+                                    "object": "chat.completion.chunk",
+                                    "created": created_ts,
+                                    "model": _copilot_model_name,
+                                    "choices": [
+                                        {"index": 0, "delta": {"content": tool_label + "\n"}, "finish_reason": None}
+                                    ],
                                     "x_tool_progress": True,
                                 }
                                 await stream_resp.write(f"data: {json.dumps(progress_chunk)}\n\n".encode())
                                 continue
                         _accumulated_copilot.append(text)
                         chunk = {
-                            "id": completion_id, "object": "chat.completion.chunk",
-                            "created": created_ts, "model": _copilot_model_name,
+                            "id": completion_id,
+                            "object": "chat.completion.chunk",
+                            "created": created_ts,
+                            "model": _copilot_model_name,
                             "choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}],
                         }
                         await stream_resp.write(f"data: {json.dumps(chunk)}\n\n".encode())
                     elif event.get("type") == "error":
                         err_text = f"\n⚠️ Copilot error: {event.get('error', 'Unknown error')}"
                         err_chunk = {
-                            "id": completion_id, "object": "chat.completion.chunk",
-                            "created": created_ts, "model": _copilot_model_name,
+                            "id": completion_id,
+                            "object": "chat.completion.chunk",
+                            "created": created_ts,
+                            "model": _copilot_model_name,
                             "choices": [{"index": 0, "delta": {"content": err_text}, "finish_reason": "stop"}],
                         }
                         await stream_resp.write(f"data: {json.dumps(err_chunk)}\n\n".encode())
             except Exception as exc:
                 log.error("api_v1_chat_completions_handler copilot stream error: %s", exc)
                 err_chunk = {
-                    "id": completion_id, "object": "chat.completion.chunk",
-                    "created": created_ts, "model": _copilot_model_name,
+                    "id": completion_id,
+                    "object": "chat.completion.chunk",
+                    "created": created_ts,
+                    "model": _copilot_model_name,
                     "choices": [{"index": 0, "delta": {"content": f"\n[error: {exc}]"}, "finish_reason": "stop"}],
                 }
                 await stream_resp.write(f"data: {json.dumps(err_chunk)}\n\n".encode())
@@ -3750,15 +3765,19 @@ async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
             share_suffix = await _try_share_links("".join(_accumulated_copilot))
             if share_suffix:
                 share_chunk = {
-                    "id": completion_id, "object": "chat.completion.chunk",
-                    "created": created_ts, "model": _copilot_model_name,
+                    "id": completion_id,
+                    "object": "chat.completion.chunk",
+                    "created": created_ts,
+                    "model": _copilot_model_name,
                     "choices": [{"index": 0, "delta": {"content": share_suffix}, "finish_reason": None}],
                 }
                 await stream_resp.write(f"data: {json.dumps(share_chunk)}\n\n".encode())
 
             stop_chunk = {
-                "id": completion_id, "object": "chat.completion.chunk",
-                "created": created_ts, "model": _copilot_model_name,
+                "id": completion_id,
+                "object": "chat.completion.chunk",
+                "created": created_ts,
+                "model": _copilot_model_name,
                 "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
             }
             await stream_resp.write(f"data: {json.dumps(stop_chunk)}\n\n".encode())
@@ -3780,7 +3799,9 @@ async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
                     elif event_type == "done" and not event.get("success", True):
                         _copilot_error = str(event.get("error") or _copilot_error or "Unknown error")
 
-                copilot_text = f"⚠️ Copilot error: {_copilot_error}" if _copilot_error else "".join(_copilot_parts).strip()
+                copilot_text = (
+                    f"⚠️ Copilot error: {_copilot_error}" if _copilot_error else "".join(_copilot_parts).strip()
+                )
             else:
                 bridge_result = await run_copilot(prompt=prompt, slack_user_id="open-webui")
                 if bridge_result.error:
@@ -3788,22 +3809,29 @@ async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
                     copilot_text = f"⚠️ Copilot error: {bridge_result.error}"
                 else:
                     copilot_text = "\n".join(
-                        line for line in (bridge_result.stdout or "").splitlines()
-                        if not _is_copilot_noise_line(line)
+                        line for line in (bridge_result.stdout or "").splitlines() if not _is_copilot_noise_line(line)
                     ).strip()
         except Exception as exc:
             log.error("api_v1_chat_completions_handler copilot run error: %s", exc)
-            return web.json_response(
-                {"error": {"message": str(exc), "type": "server_error"}}, status=500
-            )
+            return web.json_response({"error": {"message": str(exc), "type": "server_error"}}, status=500)
         copilot_text += await _try_share_links(copilot_text)
         completion_tokens_est = len(copilot_text.encode()) // 4
-        return web.json_response({
-            "id": completion_id, "object": "chat.completion", "created": created_ts,
-            "model": _copilot_model_name,
-            "choices": [{"index": 0, "message": {"role": "assistant", "content": copilot_text}, "finish_reason": "stop"}],
-            "usage": {"prompt_tokens": prompt_tokens_est, "completion_tokens": completion_tokens_est, "total_tokens": prompt_tokens_est + completion_tokens_est},
-        })
+        return web.json_response(
+            {
+                "id": completion_id,
+                "object": "chat.completion",
+                "created": created_ts,
+                "model": _copilot_model_name,
+                "choices": [
+                    {"index": 0, "message": {"role": "assistant", "content": copilot_text}, "finish_reason": "stop"}
+                ],
+                "usage": {
+                    "prompt_tokens": prompt_tokens_est,
+                    "completion_tokens": completion_tokens_est,
+                    "total_tokens": prompt_tokens_est + completion_tokens_est,
+                },
+            }
+        )
 
     # ------------------------------------------------------------------
     # Shell model path — run raw bash command on Mac Mini via SSH bridge
@@ -3830,8 +3858,10 @@ async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
             await stream_resp.prepare(request)
 
             role_chunk = {
-                "id": completion_id, "object": "chat.completion.chunk",
-                "created": created_ts, "model": "shell",
+                "id": completion_id,
+                "object": "chat.completion.chunk",
+                "created": created_ts,
+                "model": "shell",
                 "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}],
             }
             await stream_resp.write(f"data: {json.dumps(role_chunk)}\n\n".encode())
@@ -3843,24 +3873,30 @@ async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
                         text = event.get("text", "")
                         _accumulated_shell.append(text)
                         chunk = {
-                            "id": completion_id, "object": "chat.completion.chunk",
-                            "created": created_ts, "model": "shell",
+                            "id": completion_id,
+                            "object": "chat.completion.chunk",
+                            "created": created_ts,
+                            "model": "shell",
                             "choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}],
                         }
                         await stream_resp.write(f"data: {json.dumps(chunk)}\n\n".encode())
                     elif event.get("type") == "error":
                         err_text = f"\n⚠️ Shell error: {event.get('error', 'Unknown error')}"
                         err_chunk = {
-                            "id": completion_id, "object": "chat.completion.chunk",
-                            "created": created_ts, "model": "shell",
+                            "id": completion_id,
+                            "object": "chat.completion.chunk",
+                            "created": created_ts,
+                            "model": "shell",
                             "choices": [{"index": 0, "delta": {"content": err_text}, "finish_reason": "stop"}],
                         }
                         await stream_resp.write(f"data: {json.dumps(err_chunk)}\n\n".encode())
             except Exception as exc:
                 log.error("api_v1_chat_completions_handler shell stream error: %s", exc)
                 err_chunk = {
-                    "id": completion_id, "object": "chat.completion.chunk",
-                    "created": created_ts, "model": "shell",
+                    "id": completion_id,
+                    "object": "chat.completion.chunk",
+                    "created": created_ts,
+                    "model": "shell",
                     "choices": [{"index": 0, "delta": {"content": f"\n[error: {exc}]"}, "finish_reason": "stop"}],
                 }
                 await stream_resp.write(f"data: {json.dumps(err_chunk)}\n\n".encode())
@@ -3868,15 +3904,19 @@ async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
             share_suffix = await _try_share_links("".join(_accumulated_shell))
             if share_suffix:
                 share_chunk = {
-                    "id": completion_id, "object": "chat.completion.chunk",
-                    "created": created_ts, "model": "shell",
+                    "id": completion_id,
+                    "object": "chat.completion.chunk",
+                    "created": created_ts,
+                    "model": "shell",
                     "choices": [{"index": 0, "delta": {"content": share_suffix}, "finish_reason": None}],
                 }
                 await stream_resp.write(f"data: {json.dumps(share_chunk)}\n\n".encode())
 
             stop_chunk = {
-                "id": completion_id, "object": "chat.completion.chunk",
-                "created": created_ts, "model": "shell",
+                "id": completion_id,
+                "object": "chat.completion.chunk",
+                "created": created_ts,
+                "model": "shell",
                 "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
             }
             await stream_resp.write(f"data: {json.dumps(stop_chunk)}\n\n".encode())
@@ -3889,9 +3929,7 @@ async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
             bridge_result = await run_shell(command=prompt, slack_user_id="open-webui")
         except Exception as exc:
             log.error("api_v1_chat_completions_handler shell run error: %s", exc)
-            return web.json_response(
-                {"error": {"message": str(exc), "type": "server_error"}}, status=500
-            )
+            return web.json_response({"error": {"message": str(exc), "type": "server_error"}}, status=500)
         if bridge_result.error:
             shell_text = f"⚠️ Shell error: {bridge_result.error}"
         else:
@@ -3900,12 +3938,22 @@ async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
                 shell_text += f"\n\n[stderr]\n{bridge_result.stderr.rstrip()}"
         shell_text += await _try_share_links(shell_text)
         completion_tokens_est = len(shell_text.encode()) // 4
-        return web.json_response({
-            "id": completion_id, "object": "chat.completion", "created": created_ts,
-            "model": "shell",
-            "choices": [{"index": 0, "message": {"role": "assistant", "content": shell_text}, "finish_reason": "stop"}],
-            "usage": {"prompt_tokens": prompt_tokens_est, "completion_tokens": completion_tokens_est, "total_tokens": prompt_tokens_est + completion_tokens_est},
-        })
+        return web.json_response(
+            {
+                "id": completion_id,
+                "object": "chat.completion",
+                "created": created_ts,
+                "model": "shell",
+                "choices": [
+                    {"index": 0, "message": {"role": "assistant", "content": shell_text}, "finish_reason": "stop"}
+                ],
+                "usage": {
+                    "prompt_tokens": prompt_tokens_est,
+                    "completion_tokens": completion_tokens_est,
+                    "total_tokens": prompt_tokens_est + completion_tokens_est,
+                },
+            }
+        )
 
     # ------------------------------------------------------------------
     # Streaming path — LLM dispatch via _execute_agent_ask
@@ -3930,8 +3978,10 @@ async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
             if _stream_pending:
                 prev = _stream_pending.pop()
                 ch = {
-                    "id": completion_id, "object": "chat.completion.chunk",
-                    "created": created_ts, "model": model_pref,
+                    "id": completion_id,
+                    "object": "chat.completion.chunk",
+                    "created": created_ts,
+                    "model": model_pref,
                     "choices": [{"index": 0, "delta": {"content": prev}, "finish_reason": None}],
                 }
                 await stream_resp.write(f"data: {json.dumps(ch)}\n\n".encode())
@@ -3971,8 +4021,10 @@ async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
             last = _strip_via_footer(_stream_pending.pop())
             if last:
                 final_ch = {
-                    "id": completion_id, "object": "chat.completion.chunk",
-                    "created": created_ts, "model": model_pref,
+                    "id": completion_id,
+                    "object": "chat.completion.chunk",
+                    "created": created_ts,
+                    "model": model_pref,
                     "choices": [{"index": 0, "delta": {"content": last}, "finish_reason": None}],
                 }
                 await stream_resp.write(f"data: {json.dumps(final_ch)}\n\n".encode())
@@ -4011,24 +4063,26 @@ async def api_v1_chat_completions_handler(request: web.Request) -> web.Response:
     model_used = str(result.get("model") or model_pref)
     completion_tokens = int(result.get("tokens") or 0)
 
-    return web.json_response({
-        "id": completion_id,
-        "object": "chat.completion",
-        "created": created_ts,
-        "model": model_used,
-        "choices": [
-            {
-                "index": 0,
-                "message": {"role": "assistant", "content": response_text},
-                "finish_reason": "stop",
-            }
-        ],
-        "usage": {
-            "prompt_tokens": prompt_tokens_est,
-            "completion_tokens": completion_tokens,
-            "total_tokens": prompt_tokens_est + completion_tokens,
-        },
-    })
+    return web.json_response(
+        {
+            "id": completion_id,
+            "object": "chat.completion",
+            "created": created_ts,
+            "model": model_used,
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": response_text},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {
+                "prompt_tokens": prompt_tokens_est,
+                "completion_tokens": completion_tokens,
+                "total_tokens": prompt_tokens_est + completion_tokens,
+            },
+        }
+    )
 
 
 async def api_recap_generate_handler(request: web.Request) -> web.Response:
@@ -4242,6 +4296,7 @@ async def api_copilot_run_handler(request: web.Request) -> web.Response:
 async def api_copilot_sessions_handler(request: web.Request) -> web.Response:
     """GET /api/copilot/sessions — List active Copilot CLI sessions."""
     import time as _time
+
     try:
         from host_bridge import get_session_manager
     except ImportError:
@@ -4250,18 +4305,20 @@ async def api_copilot_sessions_handler(request: web.Request) -> web.Response:
     mgr = get_session_manager()
     sessions = []
     for rec in mgr.list_sessions():
-        sessions.append({
-            "session_id": rec.session_id,
-            "slack_user": rec.slack_user,
-            "cwd": getattr(rec, "cwd", ""),
-            "status": rec.status,
-            "turns": getattr(rec, "turns", 0),
-            "started_at": getattr(rec, "started_at", 0),
-            "last_activity": getattr(rec, "last_activity", 0),
-            "age_s": int(_time.time() - getattr(rec, "started_at", _time.time())),
-            "idle_s": int(_time.time() - getattr(rec, "last_activity", _time.time())),
-            "live": mgr.is_live(rec.session_id),
-        })
+        sessions.append(
+            {
+                "session_id": rec.session_id,
+                "slack_user": rec.slack_user,
+                "cwd": getattr(rec, "cwd", ""),
+                "status": rec.status,
+                "turns": getattr(rec, "turns", 0),
+                "started_at": getattr(rec, "started_at", 0),
+                "last_activity": getattr(rec, "last_activity", 0),
+                "age_s": int(_time.time() - getattr(rec, "started_at", _time.time())),
+                "idle_s": int(_time.time() - getattr(rec, "last_activity", _time.time())),
+                "live": mgr.is_live(rec.session_id),
+            }
+        )
     return web.json_response({"sessions": sessions})
 
 
@@ -4277,10 +4334,12 @@ async def api_hermes_status_handler(request: web.Request) -> web.Response:
     result: dict[str, object] = {"installed": False}
 
     if not hermes_home.exists() and not binary.exists():
-        return web.json_response({
-            "installed": False,
-            "note": "Hermes runs on host, not in container",
-        })
+        return web.json_response(
+            {
+                "installed": False,
+                "note": "Hermes runs on host, not in container",
+            }
+        )
 
     try:
         result["installed"] = binary.exists()
@@ -4317,10 +4376,7 @@ async def api_hermes_status_handler(request: web.Request) -> web.Response:
                 if rows:
                     result["last_session_id"] = rows[0][0]
                     result["last_session_at"] = rows[0][1]
-                    result["recent_sessions"] = [
-                        {"id": r[0], "created_at": r[1], "messages": r[2] or 0}
-                        for r in rows
-                    ]
+                    result["recent_sessions"] = [{"id": r[0], "created_at": r[1], "messages": r[2] or 0} for r in rows]
             except Exception:
                 pass
 
@@ -4433,7 +4489,7 @@ async def api_hermes_memory_seed_handler(request: web.Request) -> web.Response:
     """GET /api/hermes/memory-seed — Serve MEMORY.md for new machine installs."""
     memory_file = Path("/Users/davevoyles/.hermes/memories/MEMORY.md")
     if not memory_file.exists():
-        return web.Response(text=f"# Hermes Memory — {os.uname().nodename}\n", content_type="text/plain")
+        return web.Response(text=f"# Hermes Memory — {_os.uname().nodename}\n", content_type="text/plain")
     return web.Response(
         text=memory_file.read_text(encoding="utf-8"),
         content_type="text/plain",
@@ -4602,7 +4658,9 @@ async def api_docker_logs_handler(request: web.Request) -> web.Response:
     service = (request.rel_url.query.get("service") or "").strip()
     if not service or not _DOCKER_CONTAINER_RE.match(service):
         return web.json_response(
-            {"error": "service must be a non-empty container name (alphanumeric, dash, underscore, dot; max 128 chars)"},
+            {
+                "error": "service must be a non-empty container name (alphanumeric, dash, underscore, dot; max 128 chars)"
+            },
             status=400,
         )
 
@@ -4664,8 +4722,15 @@ _TOOL_SERVER_SPEC = {
                                 "type": "object",
                                 "required": ["query"],
                                 "properties": {
-                                    "query": {"type": "string", "description": "File name glob pattern (e.g. '*.md', 'shmups*')"},
-                                    "path": {"type": "string", "description": "Directory to search (default: /)", "default": "/"},
+                                    "query": {
+                                        "type": "string",
+                                        "description": "File name glob pattern (e.g. '*.md', 'shmups*')",
+                                    },
+                                    "path": {
+                                        "type": "string",
+                                        "description": "Directory to search (default: /)",
+                                        "default": "/",
+                                    },
                                 },
                             }
                         }
@@ -4674,7 +4739,11 @@ _TOOL_SERVER_SPEC = {
                 "responses": {
                     "200": {
                         "description": "Matching file paths",
-                        "content": {"application/json": {"schema": {"type": "object", "properties": {"results": {"type": "string"}}}}},
+                        "content": {
+                            "application/json": {
+                                "schema": {"type": "object", "properties": {"results": {"type": "string"}}}
+                            }
+                        },
                     }
                 },
             }
@@ -4700,7 +4769,11 @@ _TOOL_SERVER_SPEC = {
                 "responses": {
                     "200": {
                         "description": "File contents",
-                        "content": {"application/json": {"schema": {"type": "object", "properties": {"content": {"type": "string"}}}}},
+                        "content": {
+                            "application/json": {
+                                "schema": {"type": "object", "properties": {"content": {"type": "string"}}}
+                            }
+                        },
                     }
                 },
             }
@@ -4718,8 +4791,15 @@ _TOOL_SERVER_SPEC = {
                                 "type": "object",
                                 "required": ["path"],
                                 "properties": {
-                                    "path": {"type": "string", "description": "File or folder path (Mac or NAS format)"},
-                                    "expire_days": {"type": "integer", "description": "Days until link expires (0 = never)", "default": 0},
+                                    "path": {
+                                        "type": "string",
+                                        "description": "File or folder path (Mac or NAS format)",
+                                    },
+                                    "expire_days": {
+                                        "type": "integer",
+                                        "description": "Days until link expires (0 = never)",
+                                        "default": 0,
+                                    },
                                 },
                             }
                         }
@@ -4728,7 +4808,14 @@ _TOOL_SERVER_SPEC = {
                 "responses": {
                     "200": {
                         "description": "Share link URL",
-                        "content": {"application/json": {"schema": {"type": "object", "properties": {"url": {"type": "string"}, "message": {"type": "string"}}}}},
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {"url": {"type": "string"}, "message": {"type": "string"}},
+                                }
+                            }
+                        },
                     }
                 },
             }
@@ -4754,7 +4841,11 @@ _TOOL_SERVER_SPEC = {
                 "responses": {
                     "200": {
                         "description": "Command output",
-                        "content": {"application/json": {"schema": {"type": "object", "properties": {"output": {"type": "string"}}}}},
+                        "content": {
+                            "application/json": {
+                                "schema": {"type": "object", "properties": {"output": {"type": "string"}}}
+                            }
+                        },
                     }
                 },
             }
@@ -4783,6 +4874,7 @@ async def api_tools_search_files_handler(request: web.Request) -> web.Response:
     path = (body.get("path") or "/").strip() or "/"
 
     import shlex as _shlex
+
     command = f"find {_shlex.quote(path)} -name {_shlex.quote(query)} 2>/dev/null | head -50"
 
     try:
@@ -4810,6 +4902,7 @@ async def api_tools_read_file_handler(request: web.Request) -> web.Response:
         return web.json_response({"error": "path is required"}, status=400)
 
     import shlex as _shlex
+
     command = f"cat {_shlex.quote(path)}"
 
     try:
@@ -4882,7 +4975,6 @@ async def api_tools_share_file_handler(request: web.Request) -> web.Response:
             url = part
             break
     return web.json_response({"url": url, "message": result_msg})
-
 
 
 async def api_changelog_handler(request: web.Request) -> web.Response:
@@ -5108,8 +5200,8 @@ async def api_network_wol_handler(request: web.Request) -> web.Response:
 
     POST body (JSON): {"machine": "mbp"} or {"machine": "mbp2"} or {} for first available.
     """
-    import socket
     import os
+    import socket
 
     broadcast_ip = os.environ.get("WOL_BROADCAST_IP", "192.168.1.255")
 
@@ -5125,7 +5217,10 @@ async def api_network_wol_handler(request: web.Request) -> web.Response:
 
     if not machines:
         return web.json_response(
-            {"error": "No WoL MAC configured. Set WOL_MACBOOK_PRO_MAC and/or WOL_MACBOOK_PRO2_MAC in .env", "sent": False},
+            {
+                "error": "No WoL MAC configured. Set WOL_MACBOOK_PRO_MAC and/or WOL_MACBOOK_PRO2_MAC in .env",
+                "sent": False,
+            },
             status=400,
         )
 
@@ -5140,7 +5235,9 @@ async def api_network_wol_handler(request: web.Request) -> web.Response:
         body = {}
     target_key = body.get("machine", "") or next(iter(machines))
     if target_key not in machines:
-        return web.json_response({"error": f"Unknown machine '{target_key}'. Valid: {list(machines)}", "sent": False}, status=400)
+        return web.json_response(
+            {"error": f"Unknown machine '{target_key}'. Valid: {list(machines)}", "sent": False}, status=400
+        )
 
     machine = machines[target_key]
     mac = machine["mac"]
@@ -5154,20 +5251,22 @@ async def api_network_wol_handler(request: web.Request) -> web.Response:
             # Send to subnet broadcast AND global broadcast for reliability
             sock.sendto(magic, (broadcast_ip, 9))
             sock.sendto(magic, ("255.255.255.255", 9))
-        return web.json_response({
-            "sent": True,
-            "mac": mac,
-            "machine": machine["label"],
-            "broadcast": broadcast_ip,
-            "message": f"Magic packet sent to {machine['label']} ({mac})",
-        })
+        return web.json_response(
+            {
+                "sent": True,
+                "mac": mac,
+                "machine": machine["label"],
+                "broadcast": broadcast_ip,
+                "message": f"Magic packet sent to {machine['label']} ({mac})",
+            }
+        )
     except Exception as exc:
         return web.json_response({"error": str(exc), "sent": False}, status=500)
 
 
-
 async def api_hermes_upgrade_handler(request: web.Request) -> web.Response:
-    from host_bridge import HERMES_BIN, _enabled as _host_bridge_enabled, run_shell
+    from host_bridge import HERMES_BIN, run_shell
+    from host_bridge import _enabled as _host_bridge_enabled
 
     if not _host_bridge_enabled():
         return web.json_response({"error": "Host bridge disabled", "updated": False})
@@ -5189,7 +5288,9 @@ async def api_hermes_upgrade_handler(request: web.Request) -> web.Response:
             timeout_s=120,
         )
         output = (upg_result if isinstance(upg_result, str) else getattr(upg_result, "stdout", "") or "").strip()
-        err_out = "" if isinstance(upg_result, str) else getattr(upg_result, "error", "") or getattr(upg_result, "stderr", "")
+        err_out = (
+            "" if isinstance(upg_result, str) else getattr(upg_result, "error", "") or getattr(upg_result, "stderr", "")
+        )
         if err_out:
             error = str(err_out)
     except Exception as exc:
@@ -5215,7 +5316,8 @@ async def api_nas_browse_handler(request: web.Request) -> web.Response:
     import re
     import shlex
 
-    from host_bridge import _enabled as _host_bridge_enabled, run_shell
+    from host_bridge import _enabled as _host_bridge_enabled
+    from host_bridge import run_shell
 
     if not _host_bridge_enabled():
         return web.json_response({"error": "Host bridge disabled", "entries": []})
@@ -5256,7 +5358,6 @@ async def api_nas_browse_handler(request: web.Request) -> web.Response:
     return web.json_response({"path": path, "entries": entries, "error": error})
 
 
-
 def _check_auth(request: web.Request) -> bool:
     dashboard_token = _os.environ.get("DASHBOARD_API_TOKEN", "").strip()
     dashboard_auth_required = _os.environ.get("DASHBOARD_API_AUTH_REQUIRED", "true").lower() == "true"
@@ -5272,7 +5373,6 @@ def _check_auth(request: web.Request) -> bool:
 
 async def api_network_ping_handler(request):
     import asyncio
-    import socket
 
     if not _check_auth(request):
         return web.Response(status=401, text="Unauthorized")
@@ -5285,9 +5385,7 @@ async def api_network_ping_handler(request):
     async def _tcp_reachable(ip: str, port: int = 22, timeout: float = 2.0) -> bool:
         """Check if a host is reachable by attempting a TCP connection (SSH port)."""
         try:
-            _, writer = await asyncio.wait_for(
-                asyncio.open_connection(ip, port), timeout=timeout
-            )
+            _, writer = await asyncio.wait_for(asyncio.open_connection(ip, port), timeout=timeout)
             writer.close()
             try:
                 await writer.wait_closed()
@@ -5323,12 +5421,14 @@ async def api_hermes_memory_get_handler(request):
             content = f.read()
         return web.Response(
             content_type="application/json",
-            text=json.dumps({
-                "content": content,
-                "path": path,
-                "file": file_param,
-                "saved_at": os.path.getmtime(path),
-            }),
+            text=json.dumps(
+                {
+                    "content": content,
+                    "path": path,
+                    "file": file_param,
+                    "saved_at": os.path.getmtime(path),
+                }
+            ),
         )
     except Exception as e:
         return web.Response(
@@ -5441,7 +5541,12 @@ async def api_system_health_handler(request):
             "used_gb": round(mem_used_kb / 1024 / 1024, 2),
         }
     except Exception as e:
-        result["memory"] = {"error": str(proc_data.get("meminfo_error", e)), "total_gb": 0.0, "available_gb": 0.0, "used_gb": 0.0}
+        result["memory"] = {
+            "error": str(proc_data.get("meminfo_error", e)),
+            "total_gb": 0.0,
+            "available_gb": 0.0,
+            "used_gb": 0.0,
+        }
 
     try:
         disk = shutil.disk_usage("/")
@@ -5484,7 +5589,9 @@ async def api_system_alerts_handler(request: web.Request) -> web.Response:
         disk = shutil.disk_usage("/")
         pct = disk.used / disk.total * 100
         if pct > 90:
-            alerts.append({"severity": "error", "msg": f"/ disk {pct:.0f}% full ({disk.free / 1e9:.0f}GB free)", "icon": "🔴"})
+            alerts.append(
+                {"severity": "error", "msg": f"/ disk {pct:.0f}% full ({disk.free / 1e9:.0f}GB free)", "icon": "🔴"}
+            )
         elif pct > 80:
             alerts.append({"severity": "warn", "msg": f"/ disk {pct:.0f}% used — watch this", "icon": "🟡"})
     except Exception as e:
@@ -5509,7 +5616,9 @@ async def api_system_alerts_handler(request: web.Request) -> web.Response:
         pass
 
     if not os.environ.get("WOL_MACBOOK_PRO_MAC"):
-        alerts.append({"severity": "info", "msg": "WoL: MacBook Pro 1 MAC not set — enable SSH on MBP to configure", "icon": "ℹ️"})
+        alerts.append(
+            {"severity": "info", "msg": "WoL: MacBook Pro 1 MAC not set — enable SSH on MBP to configure", "icon": "ℹ️"}
+        )
 
     try:
         nas_path = os.environ.get("NAS_BACKUP_PATH", "/Volumes/Misc")
@@ -5530,9 +5639,10 @@ async def api_system_alerts_handler(request: web.Request) -> web.Response:
     )
 
 
-
 async def api_tautulli_activity_handler(request):
-    import os, aiohttp
+    import os
+
+    import aiohttp
 
     if not _check_auth(request):
         return web.Response(status=401, text="Unauthorized")
@@ -5565,14 +5675,18 @@ async def api_tautulli_activity_handler(request):
 
 
 async def api_tautulli_history_handler(request):
-    import os, aiohttp
+    import os
+
+    import aiohttp
 
     if not _check_auth(request):
         return web.Response(status=401, text="Unauthorized")
     url = os.environ.get("TAUTULLI_URL", "http://localhost:8181")
     key = os.environ.get("TAUTULLI_API_KEY", "")
     if not key:
-        return web.Response(content_type="application/json", text=json.dumps({"error": "TAUTULLI_API_KEY not set", "data": []}))
+        return web.Response(
+            content_type="application/json", text=json.dumps({"error": "TAUTULLI_API_KEY not set", "data": []})
+        )
     length = request.rel_url.query.get("length", "10")
     try:
         async with aiohttp.ClientSession() as s:
@@ -5589,7 +5703,9 @@ async def api_tautulli_history_handler(request):
 
 
 async def api_arr_queue_handler(request):
-    import os, aiohttp
+    import os
+
+    import aiohttp
 
     if not _check_auth(request):
         return web.Response(status=401, text="Unauthorized")
@@ -5688,7 +5804,9 @@ async def api_arr_queue_handler(request):
 
 
 async def api_arr_history_handler(request):
-    import os, aiohttp
+    import os
+
+    import aiohttp
 
     if not _check_auth(request):
         return web.Response(status=401, text="Unauthorized")
@@ -5907,14 +6025,22 @@ async def api_system_timemachine_handler(request):
         return web.Response(content_type="application/json", text=_json.dumps(tm_status), status=500)
 
     try:
-        latest_result = await run_shell(command="tmutil latestbackup 2>/dev/null || true", slack_user_id="dashboard", timeout_s=10)
-        latest_output = latest_result if isinstance(latest_result, str) else (getattr(latest_result, "stdout", "") or "")
+        latest_result = await run_shell(
+            command="tmutil latestbackup 2>/dev/null || true", slack_user_id="dashboard", timeout_s=10
+        )
+        latest_output = (
+            latest_result if isinstance(latest_result, str) else (getattr(latest_result, "stdout", "") or "")
+        )
         match = re.search(r"(\d{4}-\d{2}-\d{2}-\d{6})", latest_output)
         if match:
             tm_status["last_backup"] = match.group(1)[:10]
 
-        status_result = await run_shell(command="tmutil status 2>/dev/null || true", slack_user_id="dashboard", timeout_s=10)
-        status_output = status_result if isinstance(status_result, str) else (getattr(status_result, "stdout", "") or "")
+        status_result = await run_shell(
+            command="tmutil status 2>/dev/null || true", slack_user_id="dashboard", timeout_s=10
+        )
+        status_output = (
+            status_result if isinstance(status_result, str) else (getattr(status_result, "stdout", "") or "")
+        )
         if status_output.strip():
             xml_start = status_output.find("<?xml")
             if xml_start == -1:
@@ -6351,7 +6477,9 @@ async def api_nas_status_handler(request):
     if cached:
         return web.Response(content_type="application/json", text=json.dumps(cached))
 
-    import asyncio as _asyncio, re as _re
+    import asyncio as _asyncio
+    import re as _re
+
     nas_host = _os.environ.get("NAS_HOST", "192.168.1.8")
     nas_port = _os.environ.get("NAS_SSH_PORT", "24")
     nas_user = _os.environ.get("NAS_SSH_USER", "dave")
@@ -6363,15 +6491,24 @@ async def api_nas_status_handler(request):
     )
     try:
         proc = await _asyncio.create_subprocess_exec(
-            "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=6",
-            "-o", "BatchMode=yes", "-p", nas_port, f"{nas_user}@{nas_host}", nas_cmd,
-            stdout=_asyncio.subprocess.PIPE, stderr=_asyncio.subprocess.PIPE,
+            "ssh",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "ConnectTimeout=6",
+            "-o",
+            "BatchMode=yes",
+            "-p",
+            nas_port,
+            f"{nas_user}@{nas_host}",
+            nas_cmd,
+            stdout=_asyncio.subprocess.PIPE,
+            stderr=_asyncio.subprocess.PIPE,
         )
         stdout, _ = await _asyncio.wait_for(proc.communicate(), timeout=12)
         raw = stdout.decode().strip()
     except Exception as exc:
-        return web.Response(content_type="application/json",
-                            text=json.dumps({"error": str(exc)}))
+        return web.Response(content_type="application/json", text=json.dumps({"error": str(exc)}))
 
     parts = raw.split("---")
     disk_line = parts[0].strip() if parts else ""
@@ -6391,7 +6528,7 @@ async def api_nas_status_handler(request):
 
     # Container count
     container_count = int(cont_section.splitlines()[0].strip()) if cont_section.splitlines() else 0
-    unhealthy = [l.split("|")[0] for l in cont_section.splitlines()[1:] if "|" in l]
+    unhealthy = [line.split("|")[0] for line in cont_section.splitlines()[1:] if "|" in line]
 
     # Load average
     load_1m = None
@@ -6440,7 +6577,7 @@ async def api_audit_recent_handler(request):
             except Exception:
                 pass
     except Exception as exc:
-        return web.Response(content_type="application/json",
-                            text=json.dumps({"error": str(exc), "entries": []}))
-    return web.Response(content_type="application/json",
-                        text=json.dumps({"entries": entries[:limit], "total": len(entries)}))
+        return web.Response(content_type="application/json", text=json.dumps({"error": str(exc), "entries": []}))
+    return web.Response(
+        content_type="application/json", text=json.dumps({"entries": entries[:limit], "total": len(entries)})
+    )

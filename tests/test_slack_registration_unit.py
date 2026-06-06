@@ -29,7 +29,7 @@ SLACK_BOT_SRC = Path(__file__).parent.parent / "src" / "slack_bot.py"
 # Exact counts at authoring time — update intentionally when adding new handlers.
 EXPECTED_EVENT_COUNT = 5
 EXPECTED_COMMAND_COUNT = 57  # includes /adguard, /arr, /copilot ×5 subcommand handlers, /downloads, /grafana, /h, /hermes, /host, /incident, /media, /morning, /nas (status+containers+df+ls+free), /news, /notify, /plex, /q, /qbt, /request, /resume, /sessions, /status, /tailscale, /upcoming, /uptime, /wake, /watching, etc.
-EXPECTED_ACTION_COUNT = 11   # includes incident_action_run, nas_restart_confirm, nas_restart_cancel
+EXPECTED_ACTION_COUNT = 11  # includes incident_action_run, nas_restart_confirm, nas_restart_cancel
 EXPECTED_TOTAL_COUNT = EXPECTED_EVENT_COUNT + EXPECTED_COMMAND_COUNT + EXPECTED_ACTION_COUNT  # 71
 
 

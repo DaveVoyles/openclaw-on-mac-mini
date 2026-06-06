@@ -10,14 +10,13 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import sys
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 # Ensure src/ on path
 ROOT = Path(__file__).resolve().parent.parent
@@ -36,6 +35,7 @@ def _setup_env(tmp_audit: Path) -> None:
 class RegistryPersistenceTests(unittest.IsolatedAsyncioTestCase):
     async def test_atomic_save_load_roundtrip(self) -> None:
         import tempfile
+
         with tempfile.TemporaryDirectory() as td:
             _setup_env(Path(td))
             from host_bridge_persistence import Registry, SessionRecord
@@ -63,6 +63,7 @@ class RegistryPersistenceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_load_marks_active_as_crashed(self) -> None:
         import tempfile
+
         with tempfile.TemporaryDirectory() as td:
             _setup_env(Path(td))
             from host_bridge_persistence import Registry, SessionRecord
@@ -70,9 +71,14 @@ class RegistryPersistenceTests(unittest.IsolatedAsyncioTestCase):
             path = Path(td) / "host_bridge" / "sessions.json"
             path.parent.mkdir(parents=True, exist_ok=True)
             rec = SessionRecord(
-                session_id="zzz", slack_user="U1", slack_channel="C1",
-                slack_thread_ts="1.0", started_at=time.time(),
-                last_activity=time.time(), cwd="/", status="active",
+                session_id="zzz",
+                slack_user="U1",
+                slack_channel="C1",
+                slack_thread_ts="1.0",
+                started_at=time.time(),
+                last_activity=time.time(),
+                cwd="/",
+                status="active",
             )
             path.write_text(json.dumps({"zzz": rec.to_dict()}))
 
@@ -82,14 +88,21 @@ class RegistryPersistenceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_find_by_thread(self) -> None:
         import tempfile
+
         with tempfile.TemporaryDirectory() as td:
             _setup_env(Path(td))
             from host_bridge_persistence import Registry, SessionRecord
+
             reg = Registry(path=Path(td) / "sessions.json")
             await reg.load()
             r1 = SessionRecord(
-                session_id="s1", slack_user="U1", slack_channel="C1",
-                slack_thread_ts="1.0", started_at=0, last_activity=0, cwd="/",
+                session_id="s1",
+                slack_user="U1",
+                slack_channel="C1",
+                slack_thread_ts="1.0",
+                started_at=0,
+                last_activity=0,
+                cwd="/",
             )
             await reg.add(r1)
             self.assertEqual(reg.find_by_thread("C1", "1.0").session_id, "s1")
@@ -99,6 +112,7 @@ class RegistryPersistenceTests(unittest.IsolatedAsyncioTestCase):
 class SessionManagerTests(unittest.IsolatedAsyncioTestCase):
     async def test_start_session_rejects_when_disabled(self) -> None:
         import tempfile
+
         with tempfile.TemporaryDirectory() as td:
             _setup_env(Path(td))
             os.environ["OPENCLAW_HOST_BRIDGE_ENABLED"] = "false"
@@ -106,17 +120,21 @@ class SessionManagerTests(unittest.IsolatedAsyncioTestCase):
             for mod in ("host_bridge", "host_bridge_persistence"):
                 sys.modules.pop(mod, None)
             from host_bridge import SessionManager
+
             mgr = SessionManager()
             await mgr.registry.load()
             rec, err = await mgr.start_session(
-                slack_user="U1", slack_channel="C1",
-                slack_thread_ts="1.0", initial_prompt="hi",
+                slack_user="U1",
+                slack_channel="C1",
+                slack_thread_ts="1.0",
+                initial_prompt="hi",
             )
             self.assertIsNone(rec)
             self.assertIn("disabled", err or "")
 
     async def test_per_user_cap_enforced(self) -> None:
         import tempfile
+
         with tempfile.TemporaryDirectory() as td:
             _setup_env(Path(td))
             os.environ["OPENCLAW_HOST_BRIDGE_MAX_SESSIONS_PER_USER"] = "1"
@@ -129,28 +147,37 @@ class SessionManagerTests(unittest.IsolatedAsyncioTestCase):
             await mgr.registry.load()
             # Inject a fake live session to occupy the cap
             rec = SessionRecord(
-                session_id="live1", slack_user="U1", slack_channel="C1",
-                slack_thread_ts="1.0", started_at=time.time(),
-                last_activity=time.time(), cwd="/", status="active",
+                session_id="live1",
+                slack_user="U1",
+                slack_channel="C1",
+                slack_thread_ts="1.0",
+                started_at=time.time(),
+                last_activity=time.time(),
+                cwd="/",
+                status="active",
             )
             await mgr.registry.add(rec)
             mgr._live["live1"] = MagicMock()
             mgr._live["live1"].record = rec
 
             rec2, err = await mgr.start_session(
-                slack_user="U1", slack_channel="C2",
-                slack_thread_ts="2.0", initial_prompt="hi",
+                slack_user="U1",
+                slack_channel="C2",
+                slack_thread_ts="2.0",
+                initial_prompt="hi",
             )
             self.assertIsNone(rec2)
             self.assertIn("cap reached", (err or "").lower())
 
     async def test_end_idempotent_on_unknown_session(self) -> None:
         import tempfile
+
         with tempfile.TemporaryDirectory() as td:
             _setup_env(Path(td))
             for mod in ("host_bridge", "host_bridge_persistence"):
                 sys.modules.pop(mod, None)
             from host_bridge import SessionManager
+
             mgr = SessionManager()
             await mgr.registry.load()
             # Should silently no-op
@@ -159,6 +186,7 @@ class SessionManagerTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_send_turn_rejects_wrong_owner(self) -> None:
         import tempfile
+
         with tempfile.TemporaryDirectory() as td:
             _setup_env(Path(td))
             for mod in ("host_bridge", "host_bridge_persistence"):
@@ -169,9 +197,13 @@ class SessionManagerTests(unittest.IsolatedAsyncioTestCase):
             mgr = SessionManager()
             await mgr.registry.load()
             rec = SessionRecord(
-                session_id="s1", slack_user="U1", slack_channel="C1",
-                slack_thread_ts="1.0", started_at=time.time(),
-                last_activity=time.time(), cwd="/",
+                session_id="s1",
+                slack_user="U1",
+                slack_channel="C1",
+                slack_thread_ts="1.0",
+                started_at=time.time(),
+                last_activity=time.time(),
+                cwd="/",
             )
             live = MagicMock()
             live.record = rec

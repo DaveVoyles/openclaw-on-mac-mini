@@ -840,8 +840,6 @@ async def _search_one_folder(query: str, folder_path: str) -> list[dict]:
     return results
 
 
-
-
 # ---------------------------------------------------------------------------
 # FileStation — share link generation
 # ---------------------------------------------------------------------------
@@ -859,7 +857,7 @@ def mac_path_to_nas_path(mac_path: str) -> str:
         ``/Volumes/ROMs/ROMs/Sega - Saturn/shmups.md``  →  ``/ROMs/ROMs/Sega - Saturn/shmups.md``
     """
     if mac_path.startswith(_MAC_MOUNT):
-        return _NAS_SHARE + mac_path[len(_MAC_MOUNT):]
+        return _NAS_SHARE + mac_path[len(_MAC_MOUNT) :]
     return mac_path  # already a NAS path or unknown — pass through
 
 

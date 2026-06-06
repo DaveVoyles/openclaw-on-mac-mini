@@ -69,6 +69,234 @@ log = logging.getLogger(__name__)
 
 _MENTION_RE = re.compile(r"<@[A-Z0-9]+>")
 _HERMES_SESSION_RE = re.compile(r"^Session:\s*(\S+)", re.MULTILINE)
+_HERMES_BIN = Path.home() / ".local" / "bin" / "hermes"
+_HERMES_AUDIT_DIR = Path(__file__).parent.parent / "data" / "audit" / "host_bridge"
+_hermes_live_procs: dict[str, asyncio.subprocess.Process] = {}
+_slack_app_client: Any | None = None
+
+
+def _is_code_chunk(text: str) -> bool:
+    """Return True if text looks like terminal/code output rather than prose."""
+    lines = [line for line in text.splitlines() if line.strip()]
+    if not lines:
+        return False
+    code_like = sum(
+        1
+        for line in lines
+        if line.startswith(("$", ">", "    ", "\t", "```"))
+        or line.startswith(("│", "┃", "╭", "╰", "├", "─"))
+        or line.lstrip().startswith(("//", "#!", "/*"))
+    )
+    return (code_like / len(lines)) >= 0.35
+
+
+async def _copilot_chunk_poster(record: Any, chunk: str) -> None:
+    if not chunk or not chunk.strip():
+        return
+
+    client = _slack_app_client
+    if client is None:
+        return
+
+    # Check if any line is a tool-progress indicator — post those as lightweight italic updates.
+    try:
+        from dashboard.api_handlers import _copilot_tool_label  # type: ignore[import]
+    except ImportError:
+        _copilot_tool_label = None  # type: ignore[assignment]
+
+    lines = chunk.splitlines()
+    tool_lines = []
+    content_lines = []
+    for line in lines:
+        if _copilot_tool_label and _copilot_tool_label(line):
+            tool_lines.append(_copilot_tool_label(line))
+        else:
+            content_lines.append(line)
+
+    if tool_lines:
+        try:
+            await client.chat_postMessage(
+                channel=record.slack_channel,
+                thread_ts=record.slack_thread_ts,
+                text="\n".join(f"_{tool}_" for tool in tool_lines),
+                mrkdwn=True,
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
+    body = "\n".join(content_lines).strip()
+    if not body:
+        return
+    if len(body) > 3800:
+        body = body[:3800] + "\n…[truncated]"
+    try:
+        if _is_code_chunk(body):
+            text = f"```\n{body}\n```"
+        else:
+            text = body
+        await client.chat_postMessage(
+            channel=record.slack_channel,
+            thread_ts=record.slack_thread_ts,
+            text=text,
+            mrkdwn=True,
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("/copilot chunk post failed: %s", exc)
+
+
+async def _ensure_session_manager() -> Any:
+    """Lazy-init the host SessionManager exactly once per process."""
+    try:
+        from host_bridge import get_session_manager
+    except ImportError:
+        return None
+    mgr = get_session_manager()
+    if not getattr(mgr, "_started", False):
+        await mgr.start(_copilot_chunk_poster)
+    return mgr
+
+
+def _is_hermes_session(record: Any) -> bool:
+    meta = getattr(record, "meta", {}) or {}
+    return meta.get("backend") == "hermes"
+
+
+def _hermes_session_id(record: Any) -> str | None:
+    meta = getattr(record, "meta", {}) or {}
+    session_id = meta.get("hermes_session_id")
+    return str(session_id).strip() if session_id else None
+
+
+def _extract_hermes_session_id(text: str) -> str | None:
+    if not text:
+        return None
+    match = _HERMES_SESSION_RE.search(text)
+    return match.group(1).strip() if match else None
+
+
+def _session_is_live(mgr: Any, session_id: str) -> bool:
+    return session_id in _hermes_live_procs or (mgr is not None and mgr.is_live(session_id))
+
+
+def _append_copilot_transcript(path: str | None, text: str) -> None:
+    if not path or not text:
+        return
+    try:
+        transcript_path = Path(path)
+        transcript_path.parent.mkdir(parents=True, exist_ok=True)
+        with transcript_path.open("a", encoding="utf-8") as fh:
+            fh.write(text)
+    except OSError as exc:
+        log.warning("/copilot transcript append failed: %s", exc)
+
+
+async def _run_hermes_turn(record: Any, prompt: str) -> str | None:
+    if record.session_id in _hermes_live_procs:
+        return "a Hermes turn is already running for this session"
+    if not _HERMES_BIN.exists():
+        return f"Hermes binary not found at {_HERMES_BIN}"
+
+    mgr = await _ensure_session_manager()
+    if mgr is None:
+        return "host_bridge module unavailable"
+
+    prior_hermes_session_id = _hermes_session_id(record)
+    turn_num = int(getattr(record, "turns", 0)) + 1
+    if turn_num > 1 and not prior_hermes_session_id:
+        await mgr.registry.update(record.session_id, status="crashed", last_activity=time.time())
+        record.status = "crashed"
+        record.last_activity = time.time()
+        return "Hermes session ID is missing for this thread; start a new /copilot or /hermes session."
+
+    now = time.time()
+    await mgr.registry.update(record.session_id, last_activity=now, turns=turn_num, status="active")
+    record.turns = turn_num
+    record.last_activity = now
+    record.status = "active"
+    _append_copilot_transcript(
+        record.transcript_path,
+        f"\n>>> USER TURN {turn_num} ({record.slack_user})\n{prompt}\n",
+    )
+
+    cmd = [str(_HERMES_BIN), "chat"]
+    if prior_hermes_session_id:
+        cmd.extend(["--resume", prior_hermes_session_id])
+    cmd.extend(["-q", prompt])
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            cwd=record.cwd or None,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except Exception as exc:  # noqa: BLE001
+        await mgr.registry.update(record.session_id, status="crashed", last_activity=time.time())
+        record.status = "crashed"
+        return f"Hermes failed to start: {type(exc).__name__}: {exc}"
+
+    _hermes_live_procs[record.session_id] = proc
+
+    async def _pump_stdout() -> str:
+        parts: list[str] = []
+        if proc.stdout is None:
+            return ""
+        while True:
+            chunk = await proc.stdout.read(2048)
+            if not chunk:
+                break
+            text = chunk.decode("utf-8", errors="replace")
+            parts.append(text)
+            _append_copilot_transcript(record.transcript_path, text)
+            await _copilot_chunk_poster(record, text)
+        return "".join(parts)
+
+    async def _read_stderr() -> str:
+        if proc.stderr is None:
+            return ""
+        return (await proc.stderr.read()).decode("utf-8", errors="replace")
+
+    try:
+        stdout_text, stderr_text = await asyncio.gather(_pump_stdout(), _read_stderr())
+        return_code = await proc.wait()
+    finally:
+        _hermes_live_procs.pop(record.session_id, None)
+
+    if stderr_text:
+        _append_copilot_transcript(record.transcript_path, f"\n[stderr]\n{stderr_text}\n")
+
+    finished_at = time.time()
+    hermes_session_id = prior_hermes_session_id or _extract_hermes_session_id(stdout_text)
+    final_status = "idle" if return_code == 0 else "crashed"
+    update_fields: dict[str, Any] = {"status": final_status, "last_activity": finished_at}
+    if hermes_session_id and hermes_session_id != prior_hermes_session_id:
+        meta = dict(getattr(record, "meta", {}) or {})
+        meta["backend"] = "hermes"
+        meta["hermes_session_id"] = hermes_session_id
+        update_fields["meta"] = meta
+        record.meta = meta
+    elif return_code == 0 and turn_num == 1 and not hermes_session_id:
+        final_status = "crashed"
+        update_fields["status"] = final_status
+    await mgr.registry.update(record.session_id, **update_fields)
+    record.status = final_status
+    record.last_activity = finished_at
+
+    if return_code != 0:
+        return stderr_text.strip() or f"Hermes exited with status {return_code}"
+    if not hermes_session_id:
+        return "Hermes completed, but did not emit a session ID; thread replies cannot resume."
+    if not stdout_text.strip():
+        client = _slack_app_client
+        if client is not None:
+            try:
+                await client.chat_postMessage(
+                    channel=record.slack_channel,
+                    thread_ts=record.slack_thread_ts,
+                    text="_Hermes returned no output._",
+                )
+            except Exception:  # noqa: BLE001
+                pass
+    return None
 
 
 async def _send_ntfy(title: str, message: str, priority: str = "default") -> None:
@@ -830,7 +1058,9 @@ def _on_model_fallback(provider: str, failures: int) -> None:
                 "Routing to next provider in chain."
             )
             asyncio.ensure_future(_slack_client_ref.chat_postMessage(channel=SLACK_NOTIFY_USER_ID, text=msg))
-            asyncio.ensure_future(_send_ntfy("⚠️ Model Fallback", f"Provider {provider} circuit opened", priority="high"))
+            asyncio.ensure_future(
+                _send_ntfy("⚠️ Model Fallback", f"Provider {provider} circuit opened", priority="high")
+            )
     except Exception:
         pass
 
@@ -940,7 +1170,10 @@ def _incident_action_blocks(
                 )
         if action_lines:
             blocks.append(
-                {"type": "section", "text": {"type": "mrkdwn", "text": "*Proposed actions:*\n\n" + "\n\n".join(action_lines)}}
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": "*Proposed actions:*\n\n" + "\n\n".join(action_lines)},
+                }
             )
         if buttons:
             blocks.append({"type": "actions", "elements": buttons})
@@ -981,9 +1214,7 @@ async def _run_incident_start(*, client: Any, channel_id: str, user_id: str, tit
         )
     except Exception as exc:  # broad: surface to user
         log.warning("/incident start: create_incident failed: %s", exc)
-        await client.chat_postEphemeral(
-            channel=channel_id, user=user_id, text=f"❌ Failed to create incident: `{exc}`"
-        )
+        await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ Failed to create incident: `{exc}`")
         return
 
     incident_id = int(incident.get("id", 0))
@@ -1434,7 +1665,7 @@ async def _catchup_missed_dms(client: Any) -> int:
                     text="🔁 I was briefly offline and noticed I missed your message — catching up now!",
                 )
                 thinking_resp = await client.chat_postMessage(channel=ch_id, text="⏳ Thinking…")
-                thinking_ts = (thinking_resp.get("ts") if thinking_resp else None)
+                thinking_ts = thinking_resp.get("ts") if thinking_resp else None
 
                 # Minimal say() shim so _send_answer can post replies to this channel.
                 _ch = ch_id  # capture for closure
@@ -1550,7 +1781,9 @@ async def _digest_loop(client: Any) -> None:
                 try:
                     await client.chat_postMessage(channel=user_id, text=text)
                     prefs[user_id]["last_sent"] = now
-                    asyncio.create_task(_send_ntfy("📋 Evening Digest Ready", "Your daily digest has been posted to Slack"))
+                    asyncio.create_task(
+                        _send_ntfy("📋 Evening Digest Ready", "Your daily digest has been posted to Slack")
+                    )
                     log.info("Sent digest to %s (%d files)", user_id, len(recent))
                 except Exception as exc:
                     log.warning("_digest_loop: failed to DM %s: %s", user_id, exc)
@@ -3104,10 +3337,7 @@ def _is_vague_question(text: str, has_files: bool = False) -> bool:
 def _build_home_view(user_id: str, name: str) -> dict:
     """Build a Slack Block Kit Home tab view for the given user."""
     greeting_name = name if name and name != "there" else "there"
-    intro_text = (
-        f"*Hi {greeting_name}.* OpenClaw is your personal AI on Mac Mini M4 · Hermes · "
-        "claude-sonnet-4.6"
-    )
+    intro_text = f"*Hi {greeting_name}.* OpenClaw is your personal AI on Mac Mini M4 · Hermes · claude-sonnet-4.6"
 
     command_sections = [
         (
@@ -3593,6 +3823,9 @@ async def _get_gmail_body(message_id: str) -> str:
 
 def _register_core_handlers(app: Any) -> None:
     """Register core event handlers: App Home, @mention, DM, /chat, reactions, and basic commands."""
+    global _slack_app_client
+    _slack_app_client = app.client
+
     # ------------------------------------------------------------------
     # Handler: App Home tab opened
     # ------------------------------------------------------------------
@@ -3699,6 +3932,7 @@ def _register_core_handlers(app: Any) -> None:
         if thread_ts_evt:
             try:
                 from host_bridge import get_session_manager
+
                 _mgr = get_session_manager()
                 _rec = _mgr.find_by_thread(event.get("channel", ""), thread_ts_evt)
             except Exception:  # noqa: BLE001
@@ -3712,7 +3946,8 @@ def _register_core_handlers(app: Any) -> None:
                 if _rec.slack_user != _uid:
                     try:
                         await client.chat_postEphemeral(
-                            channel=event.get("channel", ""), user=_uid,
+                            channel=event.get("channel", ""),
+                            user=_uid,
                             text="🙅 this Copilot session belongs to someone else",
                         )
                     except Exception:  # noqa: BLE001
@@ -3721,7 +3956,8 @@ def _register_core_handlers(app: Any) -> None:
                 if _is_hermes_session(_rec) and _rec.status == "ended":
                     try:
                         await client.chat_postEphemeral(
-                            channel=event.get("channel", ""), user=_uid,
+                            channel=event.get("channel", ""),
+                            user=_uid,
                             text="🙅 this Copilot session is already closed",
                         )
                     except Exception:  # noqa: BLE001
@@ -3743,7 +3979,8 @@ def _register_core_handlers(app: Any) -> None:
                 if _err:
                     try:
                         await client.chat_postMessage(
-                            channel=event.get("channel", ""), thread_ts=thread_ts_evt,
+                            channel=event.get("channel", ""),
+                            thread_ts=thread_ts_evt,
                             text=f"❌ {_err}",
                         )
                     except Exception:  # noqa: BLE001
@@ -4993,20 +5230,20 @@ async def _send_morning_briefing(client: Any) -> str:
         if os.path.exists(nas_path):
             usage = shutil.disk_usage(nas_path)
             pct = usage.used / usage.total * 100
-            sections.append(
-                f"💾 *NAS disk:* {pct:.1f}% used ({usage.free // 1_073_741_824:.0f} GB free)"
-            )
+            sections.append(f"💾 *NAS disk:* {pct:.1f}% used ({usage.free // 1_073_741_824:.0f} GB free)")
     except Exception:
         pass
 
     # Tailscale peers
     try:
-        from host_bridge import _enabled as _host_bridge_enabled, run_shell as _run_shell_ts
+        from host_bridge import _enabled as _host_bridge_enabled
+        from host_bridge import run_shell as _run_shell_ts
 
         if _host_bridge_enabled():
             ts_output = await _run_shell_ts(command="tailscale status --json", slack_user_id="slack", timeout_s=8)
             ts_text = ts_output if isinstance(ts_output, str) else (getattr(ts_output, "stdout", "") or "")
             import json as _json
+
             ts_data = _json.loads(ts_text)
             peers = ts_data.get("Peer", {})
             online = sum(1 for p in peers.values() if p.get("Online", False))
@@ -5071,9 +5308,7 @@ async def _send_morning_briefing(client: Any) -> str:
                 ep_lines = [f"📺 *Today on Sonarr ({len(episodes)} eps):*"]
                 for ep in episodes[:3]:
                     show = ep.get("series", {}).get("title", ep.get("seriesTitle", "?"))
-                    ep_lines.append(
-                        f"  • {show} S{ep.get('seasonNumber', 0):02d}E{ep.get('episodeNumber', 0):02d}"
-                    )
+                    ep_lines.append(f"  • {show} S{ep.get('seasonNumber', 0):02d}E{ep.get('episodeNumber', 0):02d}")
                 sections.extend(ep_lines)
         except Exception:
             pass
@@ -5129,7 +5364,7 @@ async def _send_morning_briefing(client: Any) -> str:
             _slots = _q.get("noofslots", 0)
             if _slots:
                 _mb_left = float(_q.get("mbleft", 0))
-                sections.append(f"📰 *SABnzbd:* {_slots} item(s) queued, {_mb_left/1024:.1f} GB left")
+                sections.append(f"📰 *SABnzbd:* {_slots} item(s) queued, {_mb_left / 1024:.1f} GB left")
             else:
                 sections.append("📰 *SABnzbd:* queue empty")
         except Exception:
@@ -5142,6 +5377,7 @@ async def _send_morning_briefing(client: Any) -> str:
     if _qbt_url and _qbt_pass:
         try:
             import aiohttp as _aiohttp_qbt2
+
             _jar2 = _aiohttp_qbt2.CookieJar()
             async with _aiohttp_qbt2.ClientSession(cookie_jar=_jar2) as _s:
                 await _s.post(
@@ -5176,6 +5412,7 @@ async def _send_morning_briefing(client: Any) -> str:
     if _ag_url and _ag_user:
         try:
             import base64 as _b64
+
             _creds = _b64.b64encode(f"{_ag_user}:{_ag_pass}".encode()).decode()
             async with aiohttp.ClientSession() as _s:
                 async with _s.get(
@@ -5194,6 +5431,7 @@ async def _send_morning_briefing(client: Any) -> str:
     # NAS health (disk + containers)
     try:
         import asyncio as _asyncio_nas
+
         nas_host = os.environ.get("NAS_HOST", "192.168.1.8")
         nas_port = os.environ.get("NAS_SSH_PORT", "24")
         nas_user = os.environ.get("NAS_SSH_USER", "dave")
@@ -5204,23 +5442,33 @@ async def _send_morning_briefing(client: Any) -> str:
             "/usr/local/bin/docker ps --format '{{.Names}}|{{.Status}}' | grep -i unhealthy | head -3"
         )
         _proc = await _asyncio_nas.create_subprocess_exec(
-            "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=6",
-            "-o", "BatchMode=yes", "-p", nas_port, f"{nas_user}@{nas_host}", nas_cmd,
-            stdout=_asyncio_nas.subprocess.PIPE, stderr=_asyncio_nas.subprocess.PIPE,
+            "ssh",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "ConnectTimeout=6",
+            "-o",
+            "BatchMode=yes",
+            "-p",
+            nas_port,
+            f"{nas_user}@{nas_host}",
+            nas_cmd,
+            stdout=_asyncio_nas.subprocess.PIPE,
+            stderr=_asyncio_nas.subprocess.PIPE,
         )
         _stdout, _ = await _asyncio_nas.wait_for(_proc.communicate(), timeout=12)
         _nas_raw = _stdout.decode().strip().split("---")
         _disk_line = _nas_raw[0].strip() if _nas_raw else ""
         _cont_part = _nas_raw[1].strip().splitlines() if len(_nas_raw) > 1 else []
         _running = int(_cont_part[0]) if _cont_part and _cont_part[0].isdigit() else 0
-        _unhealthy = [l.split("|")[0] for l in _cont_part[1:] if l.strip()]
+        _unhealthy = [line.split("|")[0] for line in _cont_part[1:] if line.strip()]
         # Parse disk %
         _disk_pct = ""
         if _disk_line:
             _dcols = _disk_line.split()
             if len(_dcols) >= 5:
                 _disk_pct = _dcols[4]
-                _dp_num = int(_disk_pct.replace("%", "")) if _disk_pct.replace("%","").isdigit() else 0
+                _dp_num = int(_disk_pct.replace("%", "")) if _disk_pct.replace("%", "").isdigit() else 0
                 _disk_icon = "🔴" if _dp_num >= 90 else "🟡" if _dp_num >= 75 else "🟢"
                 _nas_line = f"🖥️ *NAS:* {_running} containers running, volume1 {_disk_icon} {_disk_pct} used"
                 if _unhealthy:
@@ -5263,6 +5511,9 @@ async def _send_morning_briefing(client: Any) -> str:
 
 def _register_integration_handlers(app: Any) -> None:
     """Register integration handlers: Gmail (/inbox, /email, /today, /calendar), Dropbox (/clawbox), channels (/clawchan)."""
+    global _slack_app_client
+    _slack_app_client = app.client
+
     # ------------------------------------------------------------------
     # Wave 10 Leia: /inbox — show unread Gmail emails
     # ------------------------------------------------------------------
@@ -5979,80 +6230,6 @@ def _register_integration_handlers(app: Any) -> None:
     # `/hermes` below always forces the Hermes path regardless of env config.
     # ------------------------------------------------------------------
 
-    def _is_code_chunk(text: str) -> bool:
-        """Return True if text looks like terminal/code output rather than prose."""
-        lines = [l for l in text.splitlines() if l.strip()]
-        if not lines:
-            return False
-        code_like = sum(
-            1 for l in lines
-            if l.startswith(("$", ">", "    ", "\t", "```"))
-            or l.startswith(("│", "┃", "╭", "╰", "├", "─"))
-            or l.lstrip().startswith(("//", "#!", "/*"))
-        )
-        return (code_like / len(lines)) >= 0.35
-
-    # --- chunk poster: invoked by SessionManager to stream stdout back ---
-    async def _copilot_chunk_poster(record: Any, chunk: str) -> None:
-        if not chunk or not chunk.strip():
-            return
-
-        # Check if any line is a tool-progress indicator — post those as lightweight italic updates.
-        try:
-            from dashboard.api_handlers import _copilot_tool_label  # type: ignore[import]
-        except ImportError:
-            _copilot_tool_label = None  # type: ignore[assignment]
-
-        lines = chunk.splitlines()
-        tool_lines = []
-        content_lines = []
-        for line in lines:
-            if _copilot_tool_label and _copilot_tool_label(line):
-                tool_lines.append(_copilot_tool_label(line))
-            else:
-                content_lines.append(line)
-
-        if tool_lines:
-            try:
-                await app.client.chat_postMessage(
-                    channel=record.slack_channel,
-                    thread_ts=record.slack_thread_ts,
-                    text="\n".join(f"_{t}_" for t in tool_lines),
-                    mrkdwn=True,
-                )
-            except Exception:  # noqa: BLE001
-                pass
-
-        body = "\n".join(content_lines).strip()
-        if not body:
-            return
-        if len(body) > 3800:
-            body = body[:3800] + "\n…[truncated]"
-        try:
-            if _is_code_chunk(body):
-                text = f"```\n{body}\n```"
-            else:
-                text = body
-            await app.client.chat_postMessage(
-                channel=record.slack_channel,
-                thread_ts=record.slack_thread_ts,
-                text=text,
-                mrkdwn=True,
-            )
-        except Exception as exc:  # noqa: BLE001
-            log.warning("/copilot chunk post failed: %s", exc)
-
-    async def _ensure_session_manager() -> Any:
-        """Lazy-init the host SessionManager exactly once per process."""
-        try:
-            from host_bridge import get_session_manager
-        except ImportError:
-            return None
-        mgr = get_session_manager()
-        if not getattr(mgr, "_started", False):
-            await mgr.start(_copilot_chunk_poster)
-        return mgr
-
     def _copilot_owner_check(user_id: str, *, command_name: str = "/copilot") -> tuple[bool, str | None]:
         raw_allow = os.getenv("OPENCLAW_HOST_BRIDGE_ALLOWED_USERS", "") or SLACK_NOTIFY_USER_ID
         allowed = {p.strip() for p in raw_allow.split(",") if p.strip()}
@@ -6064,16 +6241,17 @@ def _register_integration_handlers(app: Any) -> None:
 
     # Directory shortcuts for --dir flag
     _COPILOT_DIR_SHORTCUTS: dict[str, str] = {
-        "openclaw":     "/Users/davevoyles/openclaw",
+        "openclaw": "/Users/davevoyles/openclaw",
         "docker-stack": "/Users/davevoyles/docker-stack",
         "docker_stack": "/Users/davevoyles/docker-stack",
-        "ai-files":     "/Users/davevoyles/ai-files",
-        "roms":         "/Users/davevoyles/mnt/ROMs",
+        "ai-files": "/Users/davevoyles/ai-files",
+        "roms": "/Users/davevoyles/mnt/ROMs",
     }
 
     def _parse_copilot_flags(text: str) -> tuple[str, str | None]:
         """Strip --dir <value> from text, return (cleaned_prompt, workdir_or_None)."""
         import re as _re
+
         m = _re.search(r"--dir\s+(\S+)", text)
         if not m:
             return text, None
@@ -6083,44 +6261,12 @@ def _register_integration_handlers(app: Any) -> None:
         return cleaned, workdir
 
     COPILOT_BACKEND = os.environ.get("COPILOT_BACKEND", "ssh").lower()
-    _HERMES_BIN = Path.home() / ".local" / "bin" / "hermes"
-    _HERMES_AUDIT_DIR = Path(__file__).parent.parent / "data" / "audit" / "host_bridge"
-    _hermes_live_procs: dict[str, asyncio.subprocess.Process] = {}
 
     def _copilot_backend() -> str:
         return "hermes" if COPILOT_BACKEND == "hermes" else "ssh"
 
     def _copilot_backend_label() -> str:
         return "Hermes CLI" if _copilot_backend() == "hermes" else "Copilot CLI (SSH)"
-
-    def _is_hermes_session(record: Any) -> bool:
-        meta = getattr(record, "meta", {}) or {}
-        return meta.get("backend") == "hermes"
-
-    def _hermes_session_id(record: Any) -> str | None:
-        meta = getattr(record, "meta", {}) or {}
-        session_id = meta.get("hermes_session_id")
-        return str(session_id).strip() if session_id else None
-
-    def _extract_hermes_session_id(text: str) -> str | None:
-        if not text:
-            return None
-        match = _HERMES_SESSION_RE.search(text)
-        return match.group(1).strip() if match else None
-
-    def _session_is_live(mgr: Any, session_id: str) -> bool:
-        return session_id in _hermes_live_procs or (mgr is not None and mgr.is_live(session_id))
-
-    def _append_copilot_transcript(path: str | None, text: str) -> None:
-        if not path or not text:
-            return
-        try:
-            transcript_path = Path(path)
-            transcript_path.parent.mkdir(parents=True, exist_ok=True)
-            with transcript_path.open("a", encoding="utf-8") as fh:
-                fh.write(text)
-        except OSError as exc:
-            log.warning("/copilot transcript append failed: %s", exc)
 
     async def _start_hermes_session(
         *,
@@ -6138,8 +6284,10 @@ def _register_integration_handlers(app: Any) -> None:
             return None, f"host_bridge_persistence unavailable: {exc}"
 
         active = [
-            r for r in mgr.list_sessions(slack_user)
-            if r.status in ("active", "idle") and (r.session_id in _hermes_live_procs or _is_hermes_session(r) or mgr.is_live(r.session_id))
+            r
+            for r in mgr.list_sessions(slack_user)
+            if r.status in ("active", "idle")
+            and (r.session_id in _hermes_live_procs or _is_hermes_session(r) or mgr.is_live(r.session_id))
         ]
         if len(active) >= 3:
             return None, "per-user session cap reached (3). End an existing session first."
@@ -6173,112 +6321,6 @@ def _register_integration_handlers(app: Any) -> None:
         )
         await mgr.registry.add(record)
         return record, None
-
-    async def _run_hermes_turn(record: Any, prompt: str) -> str | None:
-        if record.session_id in _hermes_live_procs:
-            return "a Hermes turn is already running for this session"
-        if not _HERMES_BIN.exists():
-            return f"Hermes binary not found at {_HERMES_BIN}"
-
-        mgr = await _ensure_session_manager()
-        if mgr is None:
-            return "host_bridge module unavailable"
-
-        prior_hermes_session_id = _hermes_session_id(record)
-        turn_num = int(getattr(record, "turns", 0)) + 1
-        if turn_num > 1 and not prior_hermes_session_id:
-            await mgr.registry.update(record.session_id, status="crashed", last_activity=time.time())
-            record.status = "crashed"
-            record.last_activity = time.time()
-            return "Hermes session ID is missing for this thread; start a new /copilot or /hermes session."
-
-        now = time.time()
-        await mgr.registry.update(record.session_id, last_activity=now, turns=turn_num, status="active")
-        record.turns = turn_num
-        record.last_activity = now
-        record.status = "active"
-        _append_copilot_transcript(
-            record.transcript_path,
-            f"\n>>> USER TURN {turn_num} ({record.slack_user})\n{prompt}\n",
-        )
-
-        cmd = [str(_HERMES_BIN), "chat"]
-        if prior_hermes_session_id:
-            cmd.extend(["--resume", prior_hermes_session_id])
-        cmd.extend(["-q", prompt])
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                cwd=record.cwd or None,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-        except Exception as exc:  # noqa: BLE001
-            await mgr.registry.update(record.session_id, status="crashed", last_activity=time.time())
-            record.status = "crashed"
-            return f"Hermes failed to start: {type(exc).__name__}: {exc}"
-
-        _hermes_live_procs[record.session_id] = proc
-
-        async def _pump_stdout() -> str:
-            parts: list[str] = []
-            if proc.stdout is None:
-                return ""
-            while True:
-                chunk = await proc.stdout.read(2048)
-                if not chunk:
-                    break
-                text = chunk.decode("utf-8", errors="replace")
-                parts.append(text)
-                _append_copilot_transcript(record.transcript_path, text)
-                await _copilot_chunk_poster(record, text)
-            return "".join(parts)
-
-        async def _read_stderr() -> str:
-            if proc.stderr is None:
-                return ""
-            return (await proc.stderr.read()).decode("utf-8", errors="replace")
-
-        try:
-            stdout_text, stderr_text = await asyncio.gather(_pump_stdout(), _read_stderr())
-            return_code = await proc.wait()
-        finally:
-            _hermes_live_procs.pop(record.session_id, None)
-
-        if stderr_text:
-            _append_copilot_transcript(record.transcript_path, f"\n[stderr]\n{stderr_text}\n")
-
-        finished_at = time.time()
-        hermes_session_id = prior_hermes_session_id or _extract_hermes_session_id(stdout_text)
-        final_status = "idle" if return_code == 0 else "crashed"
-        update_fields: dict[str, Any] = {"status": final_status, "last_activity": finished_at}
-        if hermes_session_id and hermes_session_id != prior_hermes_session_id:
-            meta = dict(getattr(record, "meta", {}) or {})
-            meta["backend"] = "hermes"
-            meta["hermes_session_id"] = hermes_session_id
-            update_fields["meta"] = meta
-            record.meta = meta
-        elif return_code == 0 and turn_num == 1 and not hermes_session_id:
-            final_status = "crashed"
-            update_fields["status"] = final_status
-        await mgr.registry.update(record.session_id, **update_fields)
-        record.status = final_status
-        record.last_activity = finished_at
-
-        if return_code != 0:
-            return stderr_text.strip() or f"Hermes exited with status {return_code}"
-        if not hermes_session_id:
-            return "Hermes completed, but did not emit a session ID; thread replies cannot resume."
-        if not stdout_text.strip():
-            try:
-                await app.client.chat_postMessage(
-                    channel=record.slack_channel,
-                    thread_ts=record.slack_thread_ts,
-                    text="_Hermes returned no output._",
-                )
-            except Exception:  # noqa: BLE001
-                pass
-        return None
 
     async def _cancel_hermes_session(record: Any, *, slack_user: str) -> str | None:
         if record.slack_user != slack_user:
@@ -6326,7 +6368,8 @@ def _register_integration_handlers(app: Any) -> None:
 
         if not text or text.lower() in {"help", "?"}:
             await client.chat_postEphemeral(
-                channel=channel_id, user=user_id,
+                channel=channel_id,
+                user=user_id,
                 text=(
                     f"🤖 *{_copilot_backend_label()} — interactive sessions*\n"
                     "• `/copilot <prompt>` — open a thread and run the selected backend\n"
@@ -6339,7 +6382,7 @@ def _register_integration_handlers(app: Any) -> None:
                     "• `/copilot-attach <id>` — show details and last activity\n"
                     "• `/copilot-recap <id>` — summarize a session\n"
                     "• `/hermes <prompt>` — always open a Hermes session\n"
-                    f"• Backend: `{_copilot_backend()}` • Per-user cap: 3 active sessions. Idle timeout: {os.getenv('OPENCLAW_HOST_BRIDGE_IDLE_TIMEOUT_S','600')}s.\n"
+                    f"• Backend: `{_copilot_backend()}` • Per-user cap: 3 active sessions. Idle timeout: {os.getenv('OPENCLAW_HOST_BRIDGE_IDLE_TIMEOUT_S', '600')}s.\n"
                 ),
             )
             return
@@ -6349,7 +6392,8 @@ def _register_integration_handlers(app: Any) -> None:
         if backend == "ssh":
             if os.getenv("OPENCLAW_HOST_BRIDGE_ENABLED", "false").lower() != "true":
                 await client.chat_postEphemeral(
-                    channel=channel_id, user=user_id,
+                    channel=channel_id,
+                    user=user_id,
                     text="🛑 Host bridge disabled. Set `OPENCLAW_HOST_BRIDGE_ENABLED=true` and redeploy.",
                 )
                 return
@@ -6357,7 +6401,9 @@ def _register_integration_handlers(app: Any) -> None:
             mgr = await _ensure_session_manager()
             if mgr is None:
                 await client.chat_postEphemeral(
-                    channel=channel_id, user=user_id, text="❌ host_bridge module unavailable",
+                    channel=channel_id,
+                    user=user_id,
+                    text="❌ host_bridge module unavailable",
                 )
                 return
 
@@ -6384,7 +6430,9 @@ def _register_integration_handlers(app: Any) -> None:
             thread_ts = parent.get("ts") or parent.get("message", {}).get("ts") or ""
         except Exception as exc:  # noqa: BLE001
             await client.chat_postEphemeral(
-                channel=channel_id, user=user_id, text=f"❌ failed to open thread: `{exc}`",
+                channel=channel_id,
+                user=user_id,
+                text=f"❌ failed to open thread: `{exc}`",
             )
             return
 
@@ -6409,7 +6457,8 @@ def _register_integration_handlers(app: Any) -> None:
                 log.warning("/copilot start_session crashed: %s", exc)
                 try:
                     await client.chat_postMessage(
-                        channel=channel_id, thread_ts=thread_ts,
+                        channel=channel_id,
+                        thread_ts=thread_ts,
                         text=f"❌ session failed to start: `{exc}`",
                     )
                 except Exception:  # noqa: BLE001
@@ -6419,7 +6468,8 @@ def _register_integration_handlers(app: Any) -> None:
             if err or record is None:
                 try:
                     await client.chat_postMessage(
-                        channel=channel_id, thread_ts=thread_ts,
+                        channel=channel_id,
+                        thread_ts=thread_ts,
                         text=f"❌ {err or 'unknown error'}",
                     )
                 except Exception:  # noqa: BLE001
@@ -6428,7 +6478,8 @@ def _register_integration_handlers(app: Any) -> None:
 
             try:
                 await client.chat_postMessage(
-                    channel=channel_id, thread_ts=thread_ts,
+                    channel=channel_id,
+                    thread_ts=thread_ts,
                     text=(
                         f"✅ session `{record.session_id}` open via `{backend}` — "
                         f"`/copilot-end {record.session_id}` to close, "
@@ -6443,7 +6494,8 @@ def _register_integration_handlers(app: Any) -> None:
                 if err:
                     try:
                         await client.chat_postMessage(
-                            channel=channel_id, thread_ts=thread_ts,
+                            channel=channel_id,
+                            thread_ts=thread_ts,
                             text=f"❌ {err}",
                         )
                     except Exception:  # noqa: BLE001
@@ -6462,7 +6514,9 @@ def _register_integration_handlers(app: Any) -> None:
             return
 
         if not text:
-            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"Usage: `{command_name} <your question>`")
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id, text=f"Usage: `{command_name} <your question>`"
+            )
             return
 
         prompt_text, cwd_override = _parse_copilot_flags(text)
@@ -6489,7 +6543,9 @@ def _register_integration_handlers(app: Any) -> None:
             thread_ts = parent.get("ts") or parent.get("message", {}).get("ts") or ""
         except Exception as exc:  # noqa: BLE001
             await client.chat_postEphemeral(
-                channel=channel_id, user=user_id, text=f"❌ failed to open thread: `{exc}`",
+                channel=channel_id,
+                user=user_id,
+                text=f"❌ failed to open thread: `{exc}`",
             )
             return
 
@@ -6505,7 +6561,8 @@ def _register_integration_handlers(app: Any) -> None:
                 log.warning("%s start_session crashed: %s", command_name, exc)
                 try:
                     await client.chat_postMessage(
-                        channel=channel_id, thread_ts=thread_ts,
+                        channel=channel_id,
+                        thread_ts=thread_ts,
                         text=f"❌ session failed to start: `{exc}`",
                     )
                 except Exception:  # noqa: BLE001
@@ -6515,7 +6572,8 @@ def _register_integration_handlers(app: Any) -> None:
             if err or record is None:
                 try:
                     await client.chat_postMessage(
-                        channel=channel_id, thread_ts=thread_ts,
+                        channel=channel_id,
+                        thread_ts=thread_ts,
                         text=f"❌ {err or 'unknown error'}",
                     )
                 except Exception:  # noqa: BLE001
@@ -6539,7 +6597,8 @@ def _register_integration_handlers(app: Any) -> None:
             if err:
                 try:
                     await client.chat_postMessage(
-                        channel=channel_id, thread_ts=thread_ts,
+                        channel=channel_id,
+                        thread_ts=thread_ts,
                         text=f"❌ {err}",
                     )
                 except Exception:  # noqa: BLE001
@@ -6606,6 +6665,7 @@ def _register_integration_handlers(app: Any) -> None:
         timeout = aiohttp.ClientTimeout(total=4)
 
         async with aiohttp.ClientSession() as session:
+
             async def _get_json(url: str) -> dict[str, Any]:
                 async with session.get(url, timeout=timeout) as resp:
                     if resp.status != 200:
@@ -6675,23 +6735,18 @@ def _register_integration_handlers(app: Any) -> None:
                 with open("/proc/loadavg", encoding="utf-8") as fh:
                     la = fh.read().split()
                 with open("/proc/meminfo", encoding="utf-8") as fh:
-                    mem = {
-                        k.strip(): v.strip()
-                        for k, _, v in (line.partition(":") for line in fh if ":" in line)
-                    }
+                    mem = {k.strip(): v.strip() for k, _, v in (line.partition(":") for line in fh if ":" in line)}
                 mem_total = int(mem.get("MemTotal", "0 kB").split()[0]) / 1024 / 1024
                 mem_avail = int(mem.get("MemAvailable", "0 kB").split()[0]) / 1024 / 1024
                 mem_used = mem_total - mem_avail
                 disk = shutil.disk_usage("/")
                 lines.append(
-                    f"• *Mac Mini:* load {la[0]} · RAM {mem_used:.1f}/{mem_total:.1f}GB · disk {disk.used/1e9:.0f}/{disk.total/1e9:.0f}GB"
+                    f"• *Mac Mini:* load {la[0]} · RAM {mem_used:.1f}/{mem_total:.1f}GB · disk {disk.used / 1e9:.0f}/{disk.total / 1e9:.0f}GB"
                 )
             else:
                 la = os.getloadavg()
                 disk = shutil.disk_usage("/")
-                lines.append(
-                    f"• *Mac Mini:* load {la[0]:.2f} · disk {disk.used/1e9:.0f}/{disk.total/1e9:.0f}GB"
-                )
+                lines.append(f"• *Mac Mini:* load {la[0]:.2f} · disk {disk.used / 1e9:.0f}/{disk.total / 1e9:.0f}GB")
         except Exception as exc:  # noqa: BLE001
             lines.append(f"• *Mac Mini:* error ({exc})")
 
@@ -6752,7 +6807,7 @@ def _register_integration_handlers(app: Any) -> None:
             for nas_path in nas_paths:
                 if nas_path and os.path.exists(nas_path):
                     usage = shutil.disk_usage(nas_path)
-                    lines.append(f"• *NAS:* {usage.free/1e12:.1f}TB free of {usage.total/1e12:.1f}TB")
+                    lines.append(f"• *NAS:* {usage.free / 1e12:.1f}TB free of {usage.total / 1e12:.1f}TB")
                     break
         except Exception:
             pass
@@ -6807,7 +6862,7 @@ def _register_integration_handlers(app: Any) -> None:
                 _slots = _q.get("noofslots", 0)
                 if _slots and _status.lower() != "idle":
                     _mb_left = float(_q.get("mbleft", 0))
-                    lines.append(f"• 📰 SABnzbd: {_slots} job(s), {_mb_left/1024:.1f} GB left")
+                    lines.append(f"• 📰 SABnzbd: {_slots} job(s), {_mb_left / 1024:.1f} GB left")
                 else:
                     lines.append("• 📰 SABnzbd: idle")
             except Exception:
@@ -6820,6 +6875,7 @@ def _register_integration_handlers(app: Any) -> None:
         if _adguard_url and _adguard_user:
             try:
                 import base64 as _b64
+
                 _creds = _b64.b64encode(f"{_adguard_user}:{_adguard_pass}".encode()).decode()
                 async with aiohttp.ClientSession() as _s:
                     async with _s.get(
@@ -6847,7 +6903,9 @@ def _register_integration_handlers(app: Any) -> None:
                         timeout=aiohttp.ClientTimeout(total=4),
                     ) as _r:
                         _lq = await _r.json()
-                _active = [i for i in (_lq if isinstance(_lq, list) else []) if i.get("status") in ("downloading", "queued")]
+                _active = [
+                    i for i in (_lq if isinstance(_lq, list) else []) if i.get("status") in ("downloading", "queued")
+                ]
                 if _active:
                     lines.append(f"• 🎵 Lidarr: {len(_active)} downloading")
                 else:
@@ -6862,6 +6920,7 @@ def _register_integration_handlers(app: Any) -> None:
         if _qbt_url and _qbt_pass:
             try:
                 import aiohttp as _aiohttp_qbt
+
                 _jar = _aiohttp_qbt.CookieJar()
                 async with _aiohttp_qbt.ClientSession(cookie_jar=_jar) as _s:
                     await _s.post(
@@ -7075,14 +7134,16 @@ def _register_integration_handlers(app: Any) -> None:
                         text=f"Session #{idx + 1} not found. List has {len(sessions)} sessions.",
                     )
             except (ValueError, IndexError):
-                await client.chat_postEphemeral(channel=channel_id, user=user_id, text="Usage: `/sessions resume <number>`")
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id, text="Usage: `/sessions resume <number>`"
+                )
             return
 
         if text.isdigit():
             idx = int(text) - 1
             if 0 <= idx < len(sessions):
                 sid, title, mc, started, model = sessions[idx]
-                started_str = _time.strftime('%Y-%m-%d %H:%M', _time.localtime(started)) if started else '?'
+                started_str = _time.strftime("%Y-%m-%d %H:%M", _time.localtime(started)) if started else "?"
                 msg = (
                     f"*Session #{idx + 1}*\n"
                     f"ID: `{sid}`\n"
@@ -7097,8 +7158,8 @@ def _register_integration_handlers(app: Any) -> None:
 
         lines = ["*⚕ Hermes Sessions*", ""]
         for i, (sid, title, mc, started, model) in enumerate(sessions, 1):
-            started_str = _time.strftime('%m/%d %H:%M', _time.localtime(started)) if started else '?'
-            short_title = (title or 'Untitled')[:50]
+            started_str = _time.strftime("%m/%d %H:%M", _time.localtime(started)) if started else "?"
+            short_title = (title or "Untitled")[:50]
             lines.append(f"{i}. _{short_title}_ ({mc or 0} msgs · {started_str})")
         lines.append("\n_Tip: `/sessions 3` for details · `/sessions resume 3` to continue_")
         await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines))
@@ -7181,7 +7242,9 @@ def _register_integration_handlers(app: Any) -> None:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg or "🛑 forbidden")
             return
         if not sid:
-            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="usage: `/copilot-cancel <session_id>`")
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id, text="usage: `/copilot-cancel <session_id>`"
+            )
             return
         mgr = await _ensure_session_manager()
         if mgr is None:
@@ -7241,7 +7304,9 @@ def _register_integration_handlers(app: Any) -> None:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg or "🛑 forbidden")
             return
         if not sid:
-            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="usage: `/copilot-attach <session_id>`")
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id, text="usage: `/copilot-attach <session_id>`"
+            )
             return
         mgr = await _ensure_session_manager()
         if mgr is None:
@@ -7256,7 +7321,8 @@ def _register_integration_handlers(app: Any) -> None:
         backend_label = "hermes" if _is_hermes_session(rec) else "ssh"
         live = "🟢 live" if _session_is_live(mgr, sid) else f"⚫ {rec.status}"
         await client.chat_postEphemeral(
-            channel=channel_id, user=user_id,
+            channel=channel_id,
+            user=user_id,
             text=(
                 f"📎 session `{sid}` — {live}\n"
                 f"• backend: `{backend_label}`\n"
@@ -7282,7 +7348,9 @@ def _register_integration_handlers(app: Any) -> None:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg or "🛑 forbidden")
             return
         if not sid:
-            await client.chat_postEphemeral(channel=channel_id, user=user_id, text="usage: `/copilot-recap <session_id>`")
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id, text="usage: `/copilot-recap <session_id>`"
+            )
             return
 
         # Locate transcript file — try manager first, fall back to audit dir glob.
@@ -7295,6 +7363,7 @@ def _register_integration_handlers(app: Any) -> None:
                 transcript_path = rec.transcript_path
         if transcript_path is None:
             import glob as _glob
+
             audit_dir = os.path.join(os.path.dirname(__file__), "..", "..", "data", "audit", "host_bridge")
             matches = _glob.glob(os.path.join(audit_dir, f"*{sid}*"))
             if matches:
@@ -7308,13 +7377,15 @@ def _register_integration_handlers(app: Any) -> None:
 
         if not transcript_text:
             await client.chat_postEphemeral(
-                channel=channel_id, user=user_id,
+                channel=channel_id,
+                user=user_id,
                 text=f"❌ No transcript found for session `{sid}`. Is the session ID correct?",
             )
             return
 
         await client.chat_postEphemeral(
-            channel=channel_id, user=user_id,
+            channel=channel_id,
+            user=user_id,
             text=f"⏳ Generating recap for session `{sid}`…",
         )
 
@@ -7330,10 +7401,13 @@ def _register_integration_handlers(app: Any) -> None:
         )
         try:
             from ask_orchestrator import ask_question  # type: ignore[import]
+
             recap = await ask_question(recap_prompt, model_pref="gemini")
         except Exception as exc:  # noqa: BLE001
             await client.chat_postEphemeral(
-                channel=channel_id, user=user_id, text=f"❌ recap generation failed: `{exc}`",
+                channel=channel_id,
+                user=user_id,
+                text=f"❌ recap generation failed: `{exc}`",
             )
             return
 
@@ -7346,12 +7420,14 @@ def _register_integration_handlers(app: Any) -> None:
         try:
             if thread_ts_for_recap:
                 await client.chat_postMessage(
-                    channel=channel_id, thread_ts=thread_ts_for_recap,
+                    channel=channel_id,
+                    thread_ts=thread_ts_for_recap,
                     text=f"📋 *Session recap — `{sid}`*\n\n{recap}",
                 )
             else:
                 await client.chat_postEphemeral(
-                    channel=channel_id, user=user_id,
+                    channel=channel_id,
+                    user=user_id,
                     text=f"📋 *Session recap — `{sid}`*\n\n{recap}",
                 )
         except Exception as exc:  # noqa: BLE001
@@ -7377,9 +7453,7 @@ def _register_integration_handlers(app: Any) -> None:
 
         if subcommand not in {"status", "recent", "search", "request"}:
             await respond(
-                text=(
-                    "Usage: `/plex status`, `/plex recent`, `/plex search <title>`, or `/plex request <title>`"
-                )
+                text=("Usage: `/plex status`, `/plex recent`, `/plex search <title>`, or `/plex request <title>`")
             )
             return
 
@@ -7566,7 +7640,9 @@ def _register_integration_handlers(app: Any) -> None:
                     lines.append(f"{i}. {icon} *{title}* ({year}) — not requested yet")
 
             auto_match = results[0] if len(results) == 1 else _pick_overseerr_result(results, query)
-            if auto_match and (len(results) == 1 or _overseerr_title(auto_match).strip().casefold() == query.casefold()):
+            if auto_match and (
+                len(results) == 1 or _overseerr_title(auto_match).strip().casefold() == query.casefold()
+            ):
                 media_id = auto_match.get("id")
                 media_type = auto_match.get("mediaType", "movie")
                 payload = {"mediaType": media_type, "mediaId": media_id}
@@ -7586,7 +7662,9 @@ def _register_integration_handlers(app: Any) -> None:
                 else:
                     lines.append(f"\n⚠ Could not auto-request: {req_data.get('message', 'unknown error')}")
             else:
-                lines.append("\n_Refine the title and rerun `/request`, or use the dashboard search card for one-tap requesting._")
+                lines.append(
+                    "\n_Refine the title and rerun `/request`, or use the dashboard search card for one-tap requesting._"
+                )
 
             try:
                 await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines))
@@ -7601,8 +7679,9 @@ def _register_integration_handlers(app: Any) -> None:
     @app.command("/arr")
     async def handle_slash_arr(ack: Any, body: dict[str, Any], client: Any) -> None:
         await ack()
-        import aiohttp
         import os
+
+        import aiohttp
 
         user_id = body.get("user_id", "")
         channel_id = body.get("channel_id", "")
@@ -7772,12 +7851,18 @@ def _register_integration_handlers(app: Any) -> None:
                 dl = xfer.get("dl_info_speed", 0) / 1024 / 1024
                 up = xfer.get("up_info_speed", 0) / 1024 / 1024
                 free_gb = xfer.get("free_space_on_disk", 0) / 1e9
-                active = [t for t in torrents if t.get("state") not in ("pausedDL", "pausedUP", "stalledUP", "uploading")]
+                active = [
+                    t for t in torrents if t.get("state") not in ("pausedDL", "pausedUP", "stalledUP", "uploading")
+                ]
                 total_t = len(torrents)
 
                 state_emoji = {
-                    "downloading": "⬇️", "uploading": "⬆️", "stalledDL": "⏸",
-                    "pausedDL": "⏹", "queuedDL": "🕐", "error": "❌",
+                    "downloading": "⬇️",
+                    "uploading": "⬆️",
+                    "stalledDL": "⏸",
+                    "pausedDL": "⏹",
+                    "queuedDL": "🕐",
+                    "error": "❌",
                 }
                 if not active and dl < 0.01:
                     qbt_lines = [f"🌊 *qBittorrent:* idle · {total_t} torrent(s) · {free_gb:,.0f} GB free"]
@@ -7812,9 +7897,10 @@ def _register_integration_handlers(app: Any) -> None:
     @app.command("/upcoming")
     async def handle_slash_upcoming(ack: Any, body: dict[str, Any], client: Any) -> None:
         await ack()
-        import aiohttp
         import os
         from datetime import datetime, timedelta, timezone
+
+        import aiohttp
 
         user_id = body.get("user_id", "")
         channel_id = body.get("channel_id", "")
@@ -7884,7 +7970,9 @@ def _register_integration_handlers(app: Any) -> None:
         user_id = body.get("user_id", "")
         channel_id = body.get("channel_id", "")
 
-        import aiohttp, os
+        import os
+
+        import aiohttp
 
         tautulli_url = os.environ.get("TAUTULLI_URL", "http://localhost:8181")
         tautulli_key = os.environ.get("TAUTULLI_API_KEY", "")
@@ -7909,10 +7997,14 @@ def _register_integration_handlers(app: Any) -> None:
                     act = (await r.json()).get("response", {}).get("data", {})
                 sessions = act.get("sessions", [])
                 if sessions:
-                    lines.append(f"*🎬 Now Playing on Plex* ({len(sessions)} stream{'s' if len(sessions) > 1 else ''})\n")
+                    lines.append(
+                        f"*🎬 Now Playing on Plex* ({len(sessions)} stream{'s' if len(sessions) > 1 else ''})\n"
+                    )
                     for s2 in sessions:
                         pct = s2.get("progress_percent", 0)
-                        lines.append(f"• _{s2.get('full_title', s2.get('title', '?'))}_ — {s2.get('user', '')} ({pct}%)")
+                        lines.append(
+                            f"• _{s2.get('full_title', s2.get('title', '?'))}_ — {s2.get('user', '')} ({pct}%)"
+                        )
                 else:
                     lines.append("*🎬 Plex* — Nothing streaming right now\n")
                     async with s.get(
@@ -7982,10 +8074,7 @@ def _register_integration_handlers(app: Any) -> None:
                     "elements": [
                         {
                             "type": "mrkdwn",
-                            "text": (
-                                f"Target IP: `{machine.get('ip') or 'unknown'}` · "
-                                f"Broadcast: `{broadcast_ip}`"
-                            ),
+                            "text": (f"Target IP: `{machine.get('ip') or 'unknown'}` · Broadcast: `{broadcast_ip}`"),
                         }
                     ],
                 },
@@ -8029,7 +8118,8 @@ def _register_integration_handlers(app: Any) -> None:
 
         if not output:
             try:
-                from host_bridge import _enabled as _host_bridge_enabled, run_shell as _run_shell_ts
+                from host_bridge import _enabled as _host_bridge_enabled
+                from host_bridge import run_shell as _run_shell_ts
 
                 if _host_bridge_enabled():
                     result = await _run_shell_ts(command="tailscale status", slack_user_id="slack", timeout_s=10)
@@ -8077,17 +8167,16 @@ def _register_integration_handlers(app: Any) -> None:
                         "text": {
                             "type": "mrkdwn",
                             "text": (
-                                "*Examples*\n"
-                                "• `/nas df`\n"
-                                "• `/nas ls /Users/davevoyles/mnt/ROMs/ROMs`\n"
-                                "• `/nas free`"
+                                "*Examples*\n• `/nas df`\n• `/nas ls /Users/davevoyles/mnt/ROMs/ROMs`\n• `/nas free`"
                             ),
                         },
                     },
                 ],
             )
 
-        def _disk_blocks(payload: dict[str, Any], *, heading: str = "*💾 NAS disk usage*") -> tuple[str, list[dict[str, Any]]]:
+        def _disk_blocks(
+            payload: dict[str, Any], *, heading: str = "*💾 NAS disk usage*"
+        ) -> tuple[str, list[dict[str, Any]]]:
             shares = payload.get("shares", []) if isinstance(payload, dict) else []
             if not shares:
                 text_out = "❌ No NAS disk data is available right now."
@@ -8126,6 +8215,7 @@ def _register_integration_handlers(app: Any) -> None:
         if not subcommand:
             # No subcommand → SSH status overview (disk + load + container summary)
             import os as _os
+
             nas_host = _os.environ.get("NAS_HOST", "192.168.1.8")
             nas_port = _os.environ.get("NAS_SSH_PORT", "24")
             nas_user = _os.environ.get("NAS_SSH_USER", "dave")
@@ -8134,17 +8224,31 @@ def _register_integration_handlers(app: Any) -> None:
                 "echo '=UPTIME='; uptime; "
                 "echo '=CONTAINERS='; /usr/local/bin/docker ps --format '{{.Names}}|{{.Status}}'"
             )
-            import asyncio as _asyncio, re as _re
+            import asyncio as _asyncio
+            import re as _re
+
             try:
                 proc = await _asyncio.create_subprocess_exec(
-                    "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=8",
-                    "-o", "BatchMode=yes", "-p", nas_port, f"{nas_user}@{nas_host}", nas_cmd,
-                    stdout=_asyncio.subprocess.PIPE, stderr=_asyncio.subprocess.PIPE,
+                    "ssh",
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    "-o",
+                    "ConnectTimeout=8",
+                    "-o",
+                    "BatchMode=yes",
+                    "-p",
+                    nas_port,
+                    f"{nas_user}@{nas_host}",
+                    nas_cmd,
+                    stdout=_asyncio.subprocess.PIPE,
+                    stderr=_asyncio.subprocess.PIPE,
                 )
                 stdout, _ = await _asyncio.wait_for(proc.communicate(), timeout=15)
                 raw = stdout.decode()
             except Exception as exc:
-                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ Cannot reach NAS via SSH: {exc}")
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id, text=f"❌ Cannot reach NAS via SSH: {exc}"
+                )
                 return
 
             parts_out = []
@@ -8155,7 +8259,7 @@ def _register_integration_handlers(app: Any) -> None:
                 for ln in disk_block.splitlines()[1:]:
                     cols = ln.split()
                     if len(cols) >= 6:
-                        pct_num = int(cols[4].replace("%", "")) if cols[4].replace("%","").isdigit() else 0
+                        pct_num = int(cols[4].replace("%", "")) if cols[4].replace("%", "").isdigit() else 0
                         icon = "🔴" if pct_num >= 90 else "🟡" if pct_num >= 75 else "🟢"
                         label = "System" if cols[5] == "/" else f"Volume1 ({cols[1]})"
                         disk_lines.append(f"  {icon} *{label}*: {cols[2]} / {cols[1]} ({cols[4]})")
@@ -8173,9 +8277,11 @@ def _register_integration_handlers(app: Any) -> None:
             # Containers summary
             if "=CONTAINERS=" in raw:
                 cont_raw = raw.split("=CONTAINERS=\n", 1)[1].strip()
-                cont_lines = [l for l in cont_raw.splitlines() if l.strip()]
+                cont_lines = [line for line in cont_raw.splitlines() if line.strip()]
                 total = len(cont_lines)
-                unhealthy = [l.split("|")[0] for l in cont_lines if "unhealthy" in l.lower() or "exited" in l.lower()]
+                unhealthy = [
+                    line.split("|")[0] for line in cont_lines if "unhealthy" in line.lower() or "exited" in line.lower()
+                ]
                 if unhealthy:
                     c_block = [f"🐳 *Containers* ({total} running, {len(unhealthy)} ⚠️)"]
                     for c in unhealthy:
@@ -8185,7 +8291,7 @@ def _register_integration_handlers(app: Any) -> None:
                     parts_out.append(f"🐳 *Containers*: {total} running ✅  — `/nas containers` for full list")
 
             text_out = f"🖥️ *NAS* — `{nas_host}`\n\n" + "\n\n".join(parts_out)
-            text_out += f"\n\n<https://homepage.davevoyles.synology.me|🔗 Dashboard>"
+            text_out += "\n\n<https://homepage.davevoyles.synology.me|🔗 Dashboard>"
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, mrkdwn=True)
             return
 
@@ -8327,21 +8433,35 @@ def _register_integration_handlers(app: Any) -> None:
                 await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, blocks=blocks)
                 return
 
-            text_out, blocks = _disk_blocks(payload, heading="*🧠 NAS resources*\n⚠️ DSM resource data unavailable — showing disk usage instead.")
+            text_out, blocks = _disk_blocks(
+                payload, heading="*🧠 NAS resources*\n⚠️ DSM resource data unavailable — showing disk usage instead."
+            )
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text_out, blocks=blocks)
             return
 
         if subcommand == "containers":
-            import os as _os, asyncio as _asyncio
+            import asyncio as _asyncio
+            import os as _os
+
             nas_host = _os.environ.get("NAS_HOST", "192.168.1.8")
             nas_port = _os.environ.get("NAS_SSH_PORT", "24")
             nas_user = _os.environ.get("NAS_SSH_USER", "dave")
             nas_cmd = "/usr/local/bin/docker ps --format '{{.Names}}|{{.Status}}|{{.Image}}' --no-trunc=false"
             try:
                 proc = await _asyncio.create_subprocess_exec(
-                    "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=8",
-                    "-o", "BatchMode=yes", "-p", nas_port, f"{nas_user}@{nas_host}", nas_cmd,
-                    stdout=_asyncio.subprocess.PIPE, stderr=_asyncio.subprocess.PIPE,
+                    "ssh",
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    "-o",
+                    "ConnectTimeout=8",
+                    "-o",
+                    "BatchMode=yes",
+                    "-p",
+                    nas_port,
+                    f"{nas_user}@{nas_host}",
+                    nas_cmd,
+                    stdout=_asyncio.subprocess.PIPE,
+                    stderr=_asyncio.subprocess.PIPE,
                 )
                 stdout, _ = await _asyncio.wait_for(proc.communicate(), timeout=15)
                 raw = stdout.decode().strip()
@@ -8350,7 +8470,9 @@ def _register_integration_handlers(app: Any) -> None:
                 return
 
             if not raw:
-                await client.chat_postEphemeral(channel=channel_id, user=user_id, text="⚠️ No containers running on NAS.")
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id, text="⚠️ No containers running on NAS."
+                )
                 return
 
             lines = []
@@ -8381,8 +8503,11 @@ def _register_integration_handlers(app: Any) -> None:
             return
 
         if subcommand == "update":
-            import os as _os, asyncio as _asyncio
+            import asyncio as _asyncio
+            import os as _os
+
             from audit import audit_log as _audit_log
+
             ok, msg = _copilot_owner_check(user_id, command_name="/nas update")
             if not ok:
                 await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg or "🛑 Admin only.")
@@ -8390,33 +8515,47 @@ def _register_integration_handlers(app: Any) -> None:
             container_name = remainder.strip().split()[0] if remainder.strip() else ""
             if not container_name:
                 await client.chat_postEphemeral(
-                    channel=channel_id, user=user_id,
-                    text="❌ Usage: `/nas update <container>`\nExample: `/nas update grafana`"
+                    channel=channel_id,
+                    user=user_id,
+                    text="❌ Usage: `/nas update <container>`\nExample: `/nas update grafana`",
                 )
                 return
             nas_host = _os.environ.get("NAS_HOST", "192.168.1.8")
             nas_port = _os.environ.get("NAS_SSH_PORT", "24")
             nas_user_env = _os.environ.get("NAS_SSH_USER", "dave")
             # Get current image so we can pull and show before/after
-            inspect_cmd = (
-                f"/usr/local/bin/docker inspect --format '{{{{.Config.Image}}}}' {container_name} 2>/dev/null"
-            )
+            inspect_cmd = f"/usr/local/bin/docker inspect --format '{{{{.Config.Image}}}}' {container_name} 2>/dev/null"
             try:
                 proc = await _asyncio.create_subprocess_exec(
-                    "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=8",
-                    "-o", "BatchMode=yes", "-p", nas_port, f"{nas_user_env}@{nas_host}", inspect_cmd,
-                    stdout=_asyncio.subprocess.PIPE, stderr=_asyncio.subprocess.PIPE,
+                    "ssh",
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    "-o",
+                    "ConnectTimeout=8",
+                    "-o",
+                    "BatchMode=yes",
+                    "-p",
+                    nas_port,
+                    f"{nas_user_env}@{nas_host}",
+                    inspect_cmd,
+                    stdout=_asyncio.subprocess.PIPE,
+                    stderr=_asyncio.subprocess.PIPE,
                 )
                 stdout, _ = await _asyncio.wait_for(proc.communicate(), timeout=10)
                 image_name = stdout.decode().strip()
             except Exception as exc:
-                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ Could not inspect container: {exc}")
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id, text=f"❌ Could not inspect container: {exc}"
+                )
                 return
             if not image_name:
-                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ Container `{container_name}` not found on NAS.")
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id, text=f"❌ Container `{container_name}` not found on NAS."
+                )
                 return
-            await client.chat_postEphemeral(channel=channel_id, user=user_id,
-                                            text=f"⏳ Pulling `{image_name}` for `{container_name}`…")
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id, text=f"⏳ Pulling `{image_name}` for `{container_name}`…"
+            )
             # Pull + restart
             update_cmd = (
                 f"/usr/local/bin/docker pull {image_name} 2>&1 | tail -3; "
@@ -8425,32 +8564,54 @@ def _register_integration_handlers(app: Any) -> None:
             )
             try:
                 proc2 = await _asyncio.create_subprocess_exec(
-                    "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=8",
-                    "-o", "BatchMode=yes", "-p", nas_port, f"{nas_user_env}@{nas_host}", update_cmd,
-                    stdout=_asyncio.subprocess.PIPE, stderr=_asyncio.subprocess.PIPE,
+                    "ssh",
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    "-o",
+                    "ConnectTimeout=8",
+                    "-o",
+                    "BatchMode=yes",
+                    "-p",
+                    nas_port,
+                    f"{nas_user_env}@{nas_host}",
+                    update_cmd,
+                    stdout=_asyncio.subprocess.PIPE,
+                    stderr=_asyncio.subprocess.PIPE,
                 )
                 stdout2, _ = await _asyncio.wait_for(proc2.communicate(), timeout=120)
                 output = stdout2.decode().strip()
                 pull_out = output.split("---RESTART---")[0].strip() if "---RESTART---" in output else output
-                restart_out = output.split("---RESTART---")[1].strip() if "---RESTART---" in output else ""
                 updated = "Status: Image is up to date" not in pull_out
                 status_line = "🆕 New image pulled" if updated else "✅ Already up to date"
-                _audit_log(user_id, "nas_container_update",
-                           detail=f"container={container_name} image={image_name} updated={updated}",
-                           result="success", severity="INFO")
+                _audit_log(
+                    user_id,
+                    "nas_container_update",
+                    detail=f"container={container_name} image={image_name} updated={updated}",
+                    result="success",
+                    severity="INFO",
+                )
                 await client.chat_postEphemeral(
-                    channel=channel_id, user=user_id,
-                    text=f"✅ *`{container_name}` updated*\n{status_line} — `{image_name}`\n```{pull_out}```"
+                    channel=channel_id,
+                    user=user_id,
+                    text=f"✅ *`{container_name}` updated*\n{status_line} — `{image_name}`\n```{pull_out}```",
                 )
             except Exception as exc:
-                _audit_log(user_id, "nas_container_update",
-                           detail=f"container={container_name} image={image_name}", result=f"error:{exc}", severity="WARNING")
+                _audit_log(
+                    user_id,
+                    "nas_container_update",
+                    detail=f"container={container_name} image={image_name}",
+                    result=f"error:{exc}",
+                    severity="WARNING",
+                )
                 await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ Update failed: {exc}")
             return
 
         if subcommand == "exec":
-            import os as _os, asyncio as _asyncio
+            import asyncio as _asyncio
+            import os as _os
+
             from audit import audit_log as _audit_log
+
             # Admin-only
             ok, msg = _copilot_owner_check(user_id, command_name="/nas exec")
             if not ok:
@@ -8462,40 +8623,78 @@ def _register_integration_handlers(app: Any) -> None:
             exec_cmd = exec_parts[1] if len(exec_parts) > 1 else ""
             if not exec_container or not exec_cmd:
                 await client.chat_postEphemeral(
-                    channel=channel_id, user=user_id,
-                    text="❌ Usage: `/nas exec <container> <command>`\nExample: `/nas exec grafana grafana-cli version`"
+                    channel=channel_id,
+                    user=user_id,
+                    text="❌ Usage: `/nas exec <container> <command>`\nExample: `/nas exec grafana grafana-cli version`",
                 )
                 return
             # Blocklist — prevent destructive commands
-            _BLOCKED = {"rm", "kill", "dd", "mkfs", "shutdown", "reboot",
-                        "truncate", "shred", "wipefs", "fdisk", "parted",
-                        "chmod", "chown", "passwd", "userdel", "useradd"}
+            _BLOCKED = {
+                "rm",
+                "kill",
+                "dd",
+                "mkfs",
+                "shutdown",
+                "reboot",
+                "truncate",
+                "shred",
+                "wipefs",
+                "fdisk",
+                "parted",
+                "chmod",
+                "chown",
+                "passwd",
+                "userdel",
+                "useradd",
+            }
             _first_token = exec_cmd.strip().split()[0].lstrip("/").lower()
             if _first_token in _BLOCKED:
-                _audit_log(user_id, "nas_container_exec_blocked",
-                           detail=f"container={exec_container} cmd={exec_cmd}", result="blocked", severity="WARNING")
+                _audit_log(
+                    user_id,
+                    "nas_container_exec_blocked",
+                    detail=f"container={exec_container} cmd={exec_cmd}",
+                    result="blocked",
+                    severity="WARNING",
+                )
                 await client.chat_postEphemeral(
-                    channel=channel_id, user=user_id,
-                    text=f"🛑 Command `{_first_token}` is blocked. `/nas exec` only allows read/inspect commands."
+                    channel=channel_id,
+                    user=user_id,
+                    text=f"🛑 Command `{_first_token}` is blocked. `/nas exec` only allows read/inspect commands.",
                 )
                 return
             nas_host = _os.environ.get("NAS_HOST", "192.168.1.8")
             nas_port = _os.environ.get("NAS_SSH_PORT", "24")
             nas_user_env = _os.environ.get("NAS_SSH_USER", "dave")
             nas_cmd = f"/usr/local/bin/docker exec {exec_container} {exec_cmd}"
-            _audit_log(user_id, "nas_container_exec",
-                       detail=f"container={exec_container} cmd={exec_cmd}", severity="INFO")
+            _audit_log(
+                user_id, "nas_container_exec", detail=f"container={exec_container} cmd={exec_cmd}", severity="INFO"
+            )
             try:
                 proc = await _asyncio.create_subprocess_exec(
-                    "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=8",
-                    "-o", "BatchMode=yes", "-p", nas_port, f"{nas_user_env}@{nas_host}", nas_cmd,
-                    stdout=_asyncio.subprocess.PIPE, stderr=_asyncio.subprocess.PIPE,
+                    "ssh",
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    "-o",
+                    "ConnectTimeout=8",
+                    "-o",
+                    "BatchMode=yes",
+                    "-p",
+                    nas_port,
+                    f"{nas_user_env}@{nas_host}",
+                    nas_cmd,
+                    stdout=_asyncio.subprocess.PIPE,
+                    stderr=_asyncio.subprocess.PIPE,
                 )
                 stdout, stderr = await _asyncio.wait_for(proc.communicate(), timeout=30)
                 output = (stdout.decode() + stderr.decode()).strip()
             except Exception as exc:
-                _audit_log(user_id, "nas_container_exec",
-                           detail=f"container={exec_container} cmd={exec_cmd}", result=f"error:{exc}", severity="WARNING")
+                _audit_log(
+                    user_id,
+                    "nas_container_exec",
+                    detail=f"container={exec_container} cmd={exec_cmd}",
+                    result=f"error:{exc}",
+                    severity="WARNING",
+                )
                 await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ SSH error: {exc}")
                 return
             if len(output) > 2800:
@@ -8508,8 +8707,9 @@ def _register_integration_handlers(app: Any) -> None:
             container_name = remainder.strip().split()[0] if remainder.strip() else ""
             if not container_name:
                 await client.chat_postEphemeral(
-                    channel=channel_id, user=user_id,
-                    text="❌ Usage: `/nas restart <container>`\nExample: `/nas restart grafana`"
+                    channel=channel_id,
+                    user=user_id,
+                    text="❌ Usage: `/nas restart <container>`\nExample: `/nas restart grafana`",
                 )
                 return
             # Send confirmation prompt with danger button
@@ -8546,12 +8746,15 @@ def _register_integration_handlers(app: Any) -> None:
                     ],
                 },
             ]
-            await client.chat_postEphemeral(channel=channel_id, user=user_id,
-                                            text=f"Restart `{container_name}`?", blocks=blocks)
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id, text=f"Restart `{container_name}`?", blocks=blocks
+            )
             return
 
         if subcommand == "logs":
-            import os as _os, asyncio as _asyncio
+            import asyncio as _asyncio
+            import os as _os
+
             nas_host = _os.environ.get("NAS_HOST", "192.168.1.8")
             nas_port = _os.environ.get("NAS_SSH_PORT", "24")
             nas_user = _os.environ.get("NAS_SSH_USER", "dave")
@@ -8565,16 +8768,27 @@ def _register_integration_handlers(app: Any) -> None:
                 lines_n = 50
             if not container_name:
                 await client.chat_postEphemeral(
-                    channel=channel_id, user=user_id,
-                    text="❌ Usage: `/nas logs <container> [lines]`\nExample: `/nas logs grafana 100`"
+                    channel=channel_id,
+                    user=user_id,
+                    text="❌ Usage: `/nas logs <container> [lines]`\nExample: `/nas logs grafana 100`",
                 )
                 return
             nas_cmd = f"/usr/local/bin/docker logs --tail {lines_n} {container_name} 2>&1"
             try:
                 proc = await _asyncio.create_subprocess_exec(
-                    "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=8",
-                    "-o", "BatchMode=yes", "-p", nas_port, f"{nas_user}@{nas_host}", nas_cmd,
-                    stdout=_asyncio.subprocess.PIPE, stderr=_asyncio.subprocess.PIPE,
+                    "ssh",
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    "-o",
+                    "ConnectTimeout=8",
+                    "-o",
+                    "BatchMode=yes",
+                    "-p",
+                    nas_port,
+                    f"{nas_user}@{nas_host}",
+                    nas_cmd,
+                    stdout=_asyncio.subprocess.PIPE,
+                    stderr=_asyncio.subprocess.PIPE,
                 )
                 stdout, _ = await _asyncio.wait_for(proc.communicate(), timeout=20)
                 log_output = stdout.decode().strip()
@@ -8582,7 +8796,9 @@ def _register_integration_handlers(app: Any) -> None:
                 await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ SSH error: {exc}")
                 return
             if not log_output:
-                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"ℹ️ No log output for `{container_name}`.")
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id, text=f"ℹ️ No log output for `{container_name}`."
+                )
                 return
             # Truncate to Slack's 3000 char block limit
             if len(log_output) > 2800:
@@ -8618,7 +8834,8 @@ def _register_integration_handlers(app: Any) -> None:
             from host_bridge_shortcuts import ResolvedShortcut, resolve
         except ImportError:
             await client.chat_postEphemeral(
-                channel=channel_id, user=user_id,
+                channel=channel_id,
+                user=user_id,
                 text="❌ host_bridge_shortcuts module unavailable",
             )
             return
@@ -8631,7 +8848,8 @@ def _register_integration_handlers(app: Any) -> None:
 
         if os.getenv("OPENCLAW_HOST_BRIDGE_ENABLED", "false").lower() != "true":
             await client.chat_postEphemeral(
-                channel=channel_id, user=user_id,
+                channel=channel_id,
+                user=user_id,
                 text="🛑 Host bridge disabled. Set `OPENCLAW_HOST_BRIDGE_ENABLED=true` and redeploy.",
             )
             return
@@ -8639,7 +8857,9 @@ def _register_integration_handlers(app: Any) -> None:
         mgr = await _ensure_session_manager()
         if mgr is None:
             await client.chat_postEphemeral(
-                channel=channel_id, user=user_id, text="❌ host_bridge module unavailable",
+                channel=channel_id,
+                user=user_id,
+                text="❌ host_bridge module unavailable",
             )
             return
 
@@ -8654,7 +8874,9 @@ def _register_integration_handlers(app: Any) -> None:
             thread_ts = parent.get("ts") or parent.get("message", {}).get("ts") or ""
         except Exception as exc:  # noqa: BLE001
             await client.chat_postEphemeral(
-                channel=channel_id, user=user_id, text=f"❌ failed to open thread: `{exc}`",
+                channel=channel_id,
+                user=user_id,
+                text=f"❌ failed to open thread: `{exc}`",
             )
             return
 
@@ -8670,7 +8892,8 @@ def _register_integration_handlers(app: Any) -> None:
                 log.warning("/host start_session crashed: %s", exc)
                 try:
                     await client.chat_postMessage(
-                        channel=channel_id, thread_ts=thread_ts,
+                        channel=channel_id,
+                        thread_ts=thread_ts,
                         text=f"❌ session failed to start: `{exc}`",
                     )
                 except Exception:  # noqa: BLE001
@@ -8680,7 +8903,8 @@ def _register_integration_handlers(app: Any) -> None:
             if err or record is None:
                 try:
                     await client.chat_postMessage(
-                        channel=channel_id, thread_ts=thread_ts,
+                        channel=channel_id,
+                        thread_ts=thread_ts,
                         text=f"❌ {err or 'unknown error'}",
                     )
                 except Exception:  # noqa: BLE001
@@ -8689,7 +8913,8 @@ def _register_integration_handlers(app: Any) -> None:
 
             try:
                 await client.chat_postMessage(
-                    channel=channel_id, thread_ts=thread_ts,
+                    channel=channel_id,
+                    thread_ts=thread_ts,
                     text=(
                         f"✅ session `{record.session_id}` open — "
                         f"`/copilot-end {record.session_id}` to close, "
@@ -8799,13 +9024,13 @@ def _register_integration_handlers(app: Any) -> None:
         if sub == "status":
             inc_id = _parse_int(arg1)
             if inc_id is None:
-                await client.chat_postEphemeral(
-                    channel=channel_id, user=user_id, text="Usage: `/incident status <id>`"
-                )
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text="Usage: `/incident status <id>`")
                 return
             inc = incident_store.get_incident(inc_id)
             if not inc:
-                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ Incident #{inc_id} not found.")
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id, text=f"❌ Incident #{inc_id} not found."
+                )
                 return
             await client.chat_postEphemeral(
                 channel=channel_id,
@@ -8828,13 +9053,14 @@ def _register_integration_handlers(app: Any) -> None:
                 return
             events = incident_store.get_timeline(inc_id, limit=20)
             if not events:
-                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"📭 No events for incident #{inc_id}.")
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id, text=f"📭 No events for incident #{inc_id}."
+                )
                 return
             lines = [f"🕒 *Timeline for incident #{inc_id}:*"]
             for ev in events:
                 lines.append(
-                    f"• `{ev.get('created_at', '?')}` *{ev.get('event_type', '?')}* — "
-                    f"{(ev.get('note') or '')[:200]}"
+                    f"• `{ev.get('created_at', '?')}` *{ev.get('event_type', '?')}* — {(ev.get('note') or '')[:200]}"
                 )
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text="\n".join(lines[:25]))
             return
@@ -8848,7 +9074,9 @@ def _register_integration_handlers(app: Any) -> None:
                 return
             existing = incident_store.get_incident(inc_id)
             if not existing:
-                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ Incident #{inc_id} not found.")
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id, text=f"❌ Incident #{inc_id} not found."
+                )
                 return
             try:
                 inc = incident_store.resolve_incident(
@@ -8864,7 +9092,9 @@ def _register_integration_handlers(app: Any) -> None:
                 await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ {exc}")
                 return
             if not inc:
-                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"❌ Incident #{inc_id} not found.")
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id, text=f"❌ Incident #{inc_id} not found."
+                )
                 return
             _incident_actions_cache.pop(inc_id, None)
             await client.chat_postMessage(
@@ -8914,6 +9144,7 @@ def _register_integration_handlers(app: Any) -> None:
 
         try:
             from nas import nas_create_share_link
+
             result = await nas_create_share_link(path)
         except Exception as exc:
             log.warning("/nas-share failed: %s", exc)
@@ -8929,15 +9160,15 @@ def _register_integration_handlers(app: Any) -> None:
         except Exception as e:
             log.warning("Slack send failed in /nas-share: %s", e)
 
-
     @app.command("/adguard")
     async def handle_adguard(ack: Any, command: dict, client: Any) -> None:
         """Show AdGuard Home DNS stats: queries, block rate, top blocked domains."""
         await ack()
         channel_id = command.get("channel_id", "")
-        import os
-        import aiohttp
         import base64 as _b64
+        import os
+
+        import aiohttp
 
         adguard_url = os.environ.get("ADGUARD_URL", "https://adguard.davevoyles.synology.me")
         user = os.environ.get("ADGUARD_USER", "")
@@ -8947,9 +9178,13 @@ def _register_integration_handlers(app: Any) -> None:
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(f"{adguard_url}/control/stats", headers=headers, timeout=aiohttp.ClientTimeout(total=8)) as r:
+                async with session.get(
+                    f"{adguard_url}/control/stats", headers=headers, timeout=aiohttp.ClientTimeout(total=8)
+                ) as r:
                     stats = await r.json()
-                async with session.get(f"{adguard_url}/control/status", headers=headers, timeout=aiohttp.ClientTimeout(total=8)) as r:
+                async with session.get(
+                    f"{adguard_url}/control/status", headers=headers, timeout=aiohttp.ClientTimeout(total=8)
+                ) as r:
                     status = await r.json()
 
             total = stats.get("num_dns_queries", 0)
@@ -8962,10 +9197,12 @@ def _register_integration_handlers(app: Any) -> None:
             version = status.get("version", "?")
 
             top_blocked = stats.get("top_blocked_domains", [])[:5]
-            top_lines = "\n".join(
-                f"  {i+1}. `{list(d.keys())[0]}` — {list(d.values())[0]:,}"
-                for i, d in enumerate(top_blocked)
-            ) or "  _(none)_"
+            top_lines = (
+                "\n".join(
+                    f"  {i + 1}. `{list(d.keys())[0]}` — {list(d.values())[0]:,}" for i, d in enumerate(top_blocked)
+                )
+                or "  _(none)_"
+            )
 
             text = (
                 f"🛡️ *AdGuard Home* ({version}) — Protection: {protection}\n\n"
@@ -8987,12 +9224,12 @@ def _register_integration_handlers(app: Any) -> None:
         except Exception as e:
             log.warning("Slack send failed in /adguard: %s", e)
 
-
     @app.command("/grafana")
     async def handle_grafana(ack: Any, command: dict, client: Any) -> None:
         """Show Grafana status, live dashboards, and alert state."""
         await ack()
         import os
+
         import aiohttp as _aiohttp
 
         channel_id = command.get("channel_id", "")
@@ -9066,20 +9303,20 @@ def _register_integration_handlers(app: Any) -> None:
             f"• <{grafana_url}/dashboards|📋 All Dashboards>"
         )
 
-        text = f"📊 *Grafana*\n\n" + "\n\n".join(sections)
+        text = "📊 *Grafana*\n\n" + "\n\n".join(sections)
         try:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text=text, mrkdwn=True)
         except Exception as e:
             log.warning("Slack send failed in /grafana: %s", e)
-
 
     @app.command("/media")
     async def handle_media(ack: Any, command: dict, client: Any) -> None:
         """Show combined Plex/Tautulli: active streams, recent plays, recently added."""
         await ack()
         import os
-        import aiohttp as _aiohttp
         from datetime import datetime, timezone
+
+        import aiohttp as _aiohttp
 
         channel_id = command.get("channel_id", "")
         user_id = command.get("user_id", "")
@@ -9179,6 +9416,7 @@ def _register_integration_handlers(app: Any) -> None:
         """Show qBittorrent active torrents, speeds, and free space."""
         await ack()
         import os
+
         import aiohttp as _aiohttp
 
         channel_id = command.get("channel_id", "")
@@ -9224,13 +9462,19 @@ def _register_integration_handlers(app: Any) -> None:
             free_gb = xfer.get("free_space_on_disk", 0) / 1e9
 
             state_emoji = {
-                "downloading": "⬇️", "uploading": "⬆️", "stalledDL": "⏸",
-                "stalledUP": "⏸", "pausedDL": "⏹", "pausedUP": "⏹",
-                "queuedDL": "🕐", "queuedUP": "🕐", "checkingDL": "🔍",
-                "error": "❌", "missingFiles": "⚠️",
+                "downloading": "⬇️",
+                "uploading": "⬆️",
+                "stalledDL": "⏸",
+                "stalledUP": "⏸",
+                "pausedDL": "⏹",
+                "pausedUP": "⏹",
+                "queuedDL": "🕐",
+                "queuedUP": "🕐",
+                "checkingDL": "🔍",
+                "error": "❌",
+                "missingFiles": "⚠️",
             }
 
-            active = [t for t in torrents if t.get("state") not in ("pausedDL", "pausedUP", "stalledUP")]
             all_count = len(torrents)
 
             lines = [
@@ -9322,8 +9566,11 @@ def _register_action_handlers(app: Any) -> None:
     @app.action("nas_restart_confirm")
     async def handle_nas_restart_confirm(ack: Any, body: dict[str, Any], client: Any) -> None:
         await ack()
-        import os, asyncio
+        import asyncio
+        import os
+
         from audit import audit_log
+
         user_id = (body.get("user") or {}).get("id", "")
         user_name = (body.get("user") or {}).get("username", user_id)
         channel_id = (body.get("channel") or {}).get("id", user_id)
@@ -9338,31 +9585,57 @@ def _register_action_handlers(app: Any) -> None:
         nas_cmd = f"/usr/local/bin/docker restart {container_name}"
         try:
             proc = await asyncio.create_subprocess_exec(
-                "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=8",
-                "-o", "BatchMode=yes", "-p", nas_port, f"{nas_user}@{nas_host}", nas_cmd,
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                "ssh",
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "ConnectTimeout=8",
+                "-o",
+                "BatchMode=yes",
+                "-p",
+                nas_port,
+                f"{nas_user}@{nas_host}",
+                nas_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
             output = (stdout.decode() + stderr.decode()).strip()
             if proc.returncode == 0:
-                audit_log(user_name, "nas_container_restart",
-                          detail=f"container={container_name} host={nas_host}", result="success", severity="INFO")
+                audit_log(
+                    user_name,
+                    "nas_container_restart",
+                    detail=f"container={container_name} host={nas_host}",
+                    result="success",
+                    severity="INFO",
+                )
                 await client.chat_postEphemeral(
-                    channel=channel_id, user=user_id,
-                    text=f"✅ `{container_name}` restarted successfully on NAS."
+                    channel=channel_id, user=user_id, text=f"✅ `{container_name}` restarted successfully on NAS."
                 )
             else:
-                audit_log(user_name, "nas_container_restart",
-                          detail=f"container={container_name} host={nas_host}", result="failed", severity="WARNING")
+                audit_log(
+                    user_name,
+                    "nas_container_restart",
+                    detail=f"container={container_name} host={nas_host}",
+                    result="failed",
+                    severity="WARNING",
+                )
                 await client.chat_postEphemeral(
-                    channel=channel_id, user=user_id,
-                    text=f"❌ Restart failed for `{container_name}`:\n```{output[:500]}```"
+                    channel=channel_id,
+                    user=user_id,
+                    text=f"❌ Restart failed for `{container_name}`:\n```{output[:500]}```",
                 )
         except Exception as exc:
-            audit_log(user_name, "nas_container_restart",
-                      detail=f"container={container_name} host={nas_host}", result=f"error: {exc}", severity="WARNING")
-            await client.chat_postEphemeral(channel=channel_id, user=user_id,
-                                            text=f"❌ SSH error during restart: {exc}")
+            audit_log(
+                user_name,
+                "nas_container_restart",
+                detail=f"container={container_name} host={nas_host}",
+                result=f"error: {exc}",
+                severity="WARNING",
+            )
+            await client.chat_postEphemeral(
+                channel=channel_id, user=user_id, text=f"❌ SSH error during restart: {exc}"
+            )
 
     @app.action("nas_restart_cancel")
     async def handle_nas_restart_cancel(ack: Any, body: dict[str, Any], client: Any) -> None:
@@ -9371,8 +9644,9 @@ def _register_action_handlers(app: Any) -> None:
         channel_id = (body.get("channel") or {}).get("id", user_id)
         actions = body.get("actions", [{}])
         container_name = (actions[0] if actions else {}).get("value", "")
-        await client.chat_postEphemeral(channel=channel_id, user=user_id,
-                                        text=f"↩️ Restart of `{container_name}` cancelled.")
+        await client.chat_postEphemeral(
+            channel=channel_id, user=user_id, text=f"↩️ Restart of `{container_name}` cancelled."
+        )
 
     # ------------------------------------------------------------------
     # Handler: 🔀 Compare — first step, store Document A and prompt for B
@@ -9678,8 +9952,7 @@ def _register_action_handlers(app: Any) -> None:
             log.warning("incident_action_run: append_event(executed) failed: %s", exc)
 
         reply_text = (
-            f"🚨 *Incident #{incident_id}* — action *{title}* executed by <@{user_id}>\n"
-            f"```\n{str(result)[:1800]}\n```"
+            f"🚨 *Incident #{incident_id}* — action *{title}* executed by <@{user_id}>\n```\n{str(result)[:1800]}\n```"
         )
         try:
             if channel_id and message_ts:
@@ -9703,6 +9976,8 @@ def create_slack_app() -> Any | None:  # type: ignore[return]
         return None
 
     app = AsyncApp(token=SLACK_BOT_TOKEN)
+    global _slack_app_client
+    _slack_app_client = app.client
 
     try:
         from llm.providers import set_fallback_notify_hook
@@ -9790,8 +10065,9 @@ async def create_slack_handler() -> Any | None:  # type: ignore[return]
         import sqlite3
         import time
 
-        from host_bridge import run_hermes_stream
         from slack_sdk.web.async_client import AsyncWebClient
+
+        from host_bridge import run_hermes_stream
 
         db_path = "/Users/davevoyles/.hermes/state.db"
         rows: list[tuple[Any, ...]] = []
@@ -9805,9 +10081,11 @@ async def create_slack_handler() -> Any | None:  # type: ignore[return]
                 ).fetchall()
             finally:
                 conn.close()
-            session_summaries = "\n".join(
-                [f"- {r[0] or 'Untitled'} ({r[1]} messages)" for r in rows]
-            ) if rows else "No sessions this week"
+            session_summaries = (
+                "\n".join([f"- {r[0] or 'Untitled'} ({r[1]} messages)" for r in rows])
+                if rows
+                else "No sessions this week"
+            )
         except Exception as e:
             session_summaries = f"(Could not read sessions: {e})"
 
@@ -9853,7 +10131,8 @@ Please write a brief, friendly weekly recap for me. Keep it under 10 bullet poin
 
     async def _hermes_nightly_upgrade() -> str:
         try:
-            from host_bridge import HERMES_BIN, _enabled as _host_bridge_enabled, run_shell
+            from host_bridge import HERMES_BIN, run_shell
+            from host_bridge import _enabled as _host_bridge_enabled
 
             if not _host_bridge_enabled():
                 return "Host bridge disabled"
@@ -10038,6 +10317,7 @@ async def _start_health_server() -> None:
     try:
         from dashboard.auth import require_action_auth, require_session
         from dashboard.routes import setup_dashboard
+
         setup_dashboard(app, require_action_auth=require_action_auth, require_session=require_session)
         log.info("Dashboard routes registered at /dashboard")
     except Exception as _exc:
@@ -10047,7 +10327,18 @@ async def _start_health_server() -> None:
 
     # Suppress INFO log noise from high-frequency polling endpoints.
     class _QuietAccessLogger(aiohttp.abc.AbstractAccessLogger):
-        _QUIET_PATHS = frozenset({"/health", "/", "/api/agent/sessions", "/api/copilot/sessions", "/api/hermes/status", "/api/hermes/memory-seed", "/api/hermes/skills-seed", "/install-hermes"})
+        _QUIET_PATHS = frozenset(
+            {
+                "/health",
+                "/",
+                "/api/agent/sessions",
+                "/api/copilot/sessions",
+                "/api/hermes/status",
+                "/api/hermes/memory-seed",
+                "/api/hermes/skills-seed",
+                "/install-hermes",
+            }
+        )
 
         def log(self, request: Any, response: Any, time: float) -> None:
             if response.status == 200 and request.path in self._QUIET_PATHS:

@@ -8,6 +8,7 @@ from typing import Any
 try:
     import discord
 except ModuleNotFoundError:  # pragma: no cover - lightweight test environments
+
     class _Color:
         @staticmethod
         def blurple() -> int:

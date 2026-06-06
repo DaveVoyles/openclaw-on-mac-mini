@@ -1,4 +1,5 @@
 """Phase 5 — unit tests for host_bridge_shortcuts."""
+
 from __future__ import annotations
 
 import sys
@@ -22,7 +23,13 @@ from host_bridge_shortcuts import (  # noqa: E402
 class TestRegistry:
     def test_all_expected_shortcuts_present(self) -> None:
         assert set(SHORTCUTS) == {
-            "status", "logs", "restart", "disk", "net", "plex-fix", "git",
+            "status",
+            "logs",
+            "restart",
+            "disk",
+            "net",
+            "plex-fix",
+            "git",
         }
 
     def test_list_shortcuts_sorted(self) -> None:
@@ -93,7 +100,7 @@ class TestResolveHappyPath:
         assert "status" in r.prompt
 
     def test_git_with_multiple_args(self) -> None:
-        r = resolve('git log --oneline -n 5')
+        r = resolve("git log --oneline -n 5")
         assert isinstance(r, ResolvedShortcut)
         assert "log --oneline -n 5" in r.prompt
 

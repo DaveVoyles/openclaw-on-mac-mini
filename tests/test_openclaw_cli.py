@@ -8572,6 +8572,8 @@ class TestCmdTrace:
         assert "Routing suggestion" in out
         assert "/research" in out
         assert "advisory only" in out
+
+
 # =============================================================================
 # === TD-16: Config Loading / Validation Tests ===
 # =============================================================================

@@ -56,7 +56,7 @@ async def execute_agent_ask(
         if on_partial_chunk is None:
             return
         text = str(chunk_text or "")
-        delta = text[len(last_partial):] if last_partial and text.startswith(last_partial) else text
+        delta = text[len(last_partial) :] if last_partial and text.startswith(last_partial) else text
         last_partial = text
         if delta:
             await on_partial_chunk(delta)

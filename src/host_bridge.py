@@ -87,13 +87,13 @@ def _ensure_audit_dirs() -> None:
 
 # Conservative patterns — match before posting any captured output to Slack.
 _SECRET_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"xox[abprs]-[A-Za-z0-9-]{10,}"),               # Slack tokens
-    re.compile(r"ghp_[A-Za-z0-9]{20,}"),                       # GitHub PAT
-    re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),               # fine-grained PAT
-    re.compile(r"AIza[0-9A-Za-z_\-]{30,}"),                    # Google API keys
-    re.compile(r"sk-[A-Za-z0-9]{20,}"),                        # OpenAI-style
-    re.compile(r"AKIA[0-9A-Z]{16}"),                           # AWS access key id
-    re.compile(r"(?i)bearer\s+[A-Za-z0-9._\-]{20,}"),          # Bearer tokens
+    re.compile(r"xox[abprs]-[A-Za-z0-9-]{10,}"),  # Slack tokens
+    re.compile(r"ghp_[A-Za-z0-9]{20,}"),  # GitHub PAT
+    re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),  # fine-grained PAT
+    re.compile(r"AIza[0-9A-Za-z_\-]{30,}"),  # Google API keys
+    re.compile(r"sk-[A-Za-z0-9]{20,}"),  # OpenAI-style
+    re.compile(r"AKIA[0-9A-Z]{16}"),  # AWS access key id
+    re.compile(r"(?i)bearer\s+[A-Za-z0-9._\-]{20,}"),  # Bearer tokens
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |)PRIVATE KEY-----[\s\S]+?-----END [A-Z ]*PRIVATE KEY-----"),
 ]
 
@@ -147,12 +147,12 @@ def _write_transcript(session_id: str, payload: dict[str, Any]) -> str | None:
     try:
         with path.open("w", encoding="utf-8") as fh:
             fh.write(f"# session {session_id}\n")
-            fh.write(f"# prompt: {payload.get('prompt','')!r}\n")
-            fh.write(f"# user:   {payload.get('slack_user_id','?')}\n")
+            fh.write(f"# prompt: {payload.get('prompt', '')!r}\n")
+            fh.write(f"# user:   {payload.get('slack_user_id', '?')}\n")
             fh.write(f"# host:   {USER}@{HOST}\n")
             fh.write(f"# cwd:    {payload.get('workdir', WORKDIR)}\n")
             fh.write(f"# exit:   {payload.get('exit_code')}\n")
-            fh.write(f"# took:   {payload.get('duration_s',0):.2f}s\n")
+            fh.write(f"# took:   {payload.get('duration_s', 0):.2f}s\n")
             fh.write("# ===== STDOUT =====\n")
             fh.write(payload.get("stdout", "") or "")
             fh.write("\n# ===== STDERR =====\n")
@@ -255,7 +255,11 @@ async def run_copilot(
     remote_cmd = _build_remote_cmd(prompt, workdir)
     log.info(
         "host_bridge[%s]: user=%s host=%s timeout=%ss prompt=%r",
-        session_id, slack_user_id, HOST, timeout, prompt[:120],
+        session_id,
+        slack_user_id,
+        HOST,
+        timeout,
+        prompt[:120],
     )
 
     stdout_buf = ""
@@ -273,8 +277,16 @@ async def run_copilot(
             known_hosts=known_hosts,
         ) as conn:
             result = await conn.run(remote_cmd, check=False, timeout=timeout)
-            stdout_buf = (result.stdout or "") if isinstance(result.stdout, str) else (result.stdout.decode("utf-8", "replace") if result.stdout else "")
-            stderr_buf = (result.stderr or "") if isinstance(result.stderr, str) else (result.stderr.decode("utf-8", "replace") if result.stderr else "")
+            stdout_buf = (
+                (result.stdout or "")
+                if isinstance(result.stdout, str)
+                else (result.stdout.decode("utf-8", "replace") if result.stdout else "")
+            )
+            stderr_buf = (
+                (result.stderr or "")
+                if isinstance(result.stderr, str)
+                else (result.stderr.decode("utf-8", "replace") if result.stderr else "")
+            )
             exit_code = result.exit_status if result.exit_status is not None else None
     except Exception as exc:  # broad: surface as error to Slack instead of crashing the bot
         error = f"{type(exc).__name__}: {exc}"
@@ -282,10 +294,10 @@ async def run_copilot(
 
     if len(stdout_buf) > MAX_OUTPUT:
         truncated = True
-        stdout_buf = stdout_buf[:MAX_OUTPUT] + f"\n…[truncated {len(stdout_buf)-MAX_OUTPUT} bytes]"
+        stdout_buf = stdout_buf[:MAX_OUTPUT] + f"\n…[truncated {len(stdout_buf) - MAX_OUTPUT} bytes]"
     if len(stderr_buf) > MAX_OUTPUT:
         truncated = True
-        stderr_buf = stderr_buf[:MAX_OUTPUT] + f"\n…[truncated]"
+        stderr_buf = stderr_buf[:MAX_OUTPUT] + "\n…[truncated]"
 
     stdout_buf = sanitize(strip_ansi(stdout_buf))
     stderr_buf = sanitize(strip_ansi(stderr_buf))
@@ -365,7 +377,9 @@ MAX_SESSIONS_PER_USER = int(_env("OPENCLAW_HOST_BRIDGE_MAX_SESSIONS_PER_USER", "
 IDLE_TIMEOUT_S = int(_env("OPENCLAW_HOST_BRIDGE_IDLE_TIMEOUT_S", "600") or "600")
 OUTPUT_FLUSH_INTERVAL_S = float(_env("OPENCLAW_HOST_BRIDGE_FLUSH_INTERVAL_S", "1.5") or "1.5")
 OUTPUT_CHUNK_BYTES = int(_env("OPENCLAW_HOST_BRIDGE_CHUNK_BYTES", "3500") or "3500")
-SESSION_TURN_TIMEOUT_S = int(_env("OPENCLAW_HOST_BRIDGE_TURN_TIMEOUT_S", "1800") or "1800")  # 30 min hard cap on a single session
+SESSION_TURN_TIMEOUT_S = int(
+    _env("OPENCLAW_HOST_BRIDGE_TURN_TIMEOUT_S", "1800") or "1800"
+)  # 30 min hard cap on a single session
 
 
 # Strip ANSI / terminal control sequences from output before posting to Slack.
@@ -381,11 +395,11 @@ SESSION_TURN_TIMEOUT_S = int(_env("OPENCLAW_HOST_BRIDGE_TURN_TIMEOUT_S", "1800")
 #   ESC [=>]                — SS2/SS3/DECPNM/DECPAM single chars
 #   \r                      — carriage returns from PTY output
 _ANSI_RE = re.compile(
-    r"\x1b\[[0-9;?]*[$A-Za-z~]"       # CSI sequences (including $p parameterized)
-    r"|\x1b[PX_^]\x1b\\"               # DCS / APC / PM / SOS (short ST form)
-    r"|\x1b[PX_^][^\x1b]*\x1b\\"      # DCS / APC / PM / SOS (content + ST)
+    r"\x1b\[[0-9;?]*[$A-Za-z~]"  # CSI sequences (including $p parameterized)
+    r"|\x1b[PX_^]\x1b\\"  # DCS / APC / PM / SOS (short ST form)
+    r"|\x1b[PX_^][^\x1b]*\x1b\\"  # DCS / APC / PM / SOS (content + ST)
     r"|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)"  # OSC (BEL or ST terminated)
-    r"|\x1b[=>NOM\\c]"                  # SS2, SS3, DECPNM, DECPAM, RIS, etc.
+    r"|\x1b[=>NOM\\c]"  # SS2, SS3, DECPNM, DECPAM, RIS, etc.
     r"|\r"
 )
 
@@ -401,11 +415,11 @@ class _LiveSession:
     """In-process handle for an active SSH process. NOT persisted."""
 
     record: SessionRecord
-    conn: Any                          # asyncssh.SSHClientConnection
-    process: Any                       # asyncssh.SSHClientProcess
+    conn: Any  # asyncssh.SSHClientConnection
+    process: Any  # asyncssh.SSHClientProcess
     output_buffer: list[str] = field(default_factory=list)
     last_flush: float = 0.0
-    busy: bool = False                 # True between send_turn and idle-flush
+    busy: bool = False  # True between send_turn and idle-flush
     queue: list[str] = field(default_factory=list)
     reader_task: asyncio.Task[Any] | None = None
     flusher_task: asyncio.Task[Any] | None = None
@@ -470,7 +484,8 @@ class SessionManager:
             return None, "host bridge disabled (OPENCLAW_HOST_BRIDGE_ENABLED!=true)"
 
         active = [
-            r for r in self.registry.list_for_user(slack_user)
+            r
+            for r in self.registry.list_for_user(slack_user)
             if r.status in ("active", "idle") and r.session_id in self._live
         ]
         if len(active) >= MAX_SESSIONS_PER_USER:
@@ -586,7 +601,7 @@ class SessionManager:
         if live.process.stdin is None or live.process.stdin.is_closing():
             return "session stdin closed"
 
-        line = (prompt.rstrip("\n") + "\n")
+        line = prompt.rstrip("\n") + "\n"
         try:
             live.process.stdin.write(line)
         except Exception as exc:  # noqa: BLE001
@@ -668,9 +683,7 @@ class SessionManager:
         async with self._lock:
             self._live.pop(session_id, None)
         await self.registry.update(session_id, status=reason)
-        _write_audit_row(
-            {"ts": time.time(), "event": "session_end", "session_id": session_id, "reason": reason}
-        )
+        _write_audit_row({"ts": time.time(), "event": "session_end", "session_id": session_id, "reason": reason})
         return None
 
     # ------------------------------------------------------------------
@@ -764,7 +777,7 @@ class SessionManager:
         if self._chunk_poster is None:
             return
         for i in range(0, len(text), OUTPUT_CHUNK_BYTES):
-            piece = text[i:i + OUTPUT_CHUNK_BYTES]
+            piece = text[i : i + OUTPUT_CHUNK_BYTES]
             if not piece.strip():
                 continue
             try:
@@ -839,7 +852,11 @@ async def run_copilot_stream(
     start_ts = time.monotonic()
 
     if not _enabled():
-        yield {"type": "error", "error": "host bridge disabled — set OPENCLAW_HOST_BRIDGE_ENABLED=true", "session_id": session_id}
+        yield {
+            "type": "error",
+            "error": "host bridge disabled — set OPENCLAW_HOST_BRIDGE_ENABLED=true",
+            "session_id": session_id,
+        }
         return
 
     if not prompt or not prompt.strip():
@@ -860,7 +877,11 @@ async def run_copilot_stream(
     remote_cmd = _build_remote_cmd(prompt, workdir)
     log.info(
         "host_bridge[%s]: stream user=%s host=%s timeout=%ss prompt=%r",
-        session_id, slack_user_id, HOST, timeout, prompt[:120],
+        session_id,
+        slack_user_id,
+        HOST,
+        timeout,
+        prompt[:120],
     )
 
     stdout_buf: list[str] = []
@@ -898,8 +919,10 @@ async def run_copilot_stream(
                         yield event
 
                 try:
-                    exit_code = await asyncio.wait_for(proc.wait_closed(), timeout=max(5, timeout - (time.monotonic() - start_ts)))
-                    if hasattr(exit_code, 'exit_status'):
+                    exit_code = await asyncio.wait_for(
+                        proc.wait_closed(), timeout=max(5, timeout - (time.monotonic() - start_ts))
+                    )
+                    if hasattr(exit_code, "exit_status"):
                         exit_code = exit_code.exit_status
                 except asyncio.TimeoutError:
                     error = f"command timed out after {timeout}s"
@@ -975,7 +998,11 @@ async def run_hermes_stream(
     start_ts = time.monotonic()
 
     if not _enabled():
-        yield {"type": "error", "error": "host bridge disabled — set OPENCLAW_HOST_BRIDGE_ENABLED=true", "session_id": session_id}
+        yield {
+            "type": "error",
+            "error": "host bridge disabled — set OPENCLAW_HOST_BRIDGE_ENABLED=true",
+            "session_id": session_id,
+        }
         return
 
     if not prompt or not prompt.strip():
@@ -1001,7 +1028,10 @@ async def run_hermes_stream(
 
     log.info(
         "host_bridge[%s]: hermes stream user=%s host=%s prompt=%r",
-        session_id, slack_user_id, HOST, prompt[:120],
+        session_id,
+        slack_user_id,
+        HOST,
+        prompt[:120],
     )
 
     exit_code: int | None = None
@@ -1016,6 +1046,7 @@ async def run_hermes_stream(
             known_hosts=known_hosts,
         ) as conn:
             async with conn.create_process(remote_cmd) as proc:
+
                 async def _drain_stdout():
                     async for raw_line in proc.stdout:
                         line = raw_line if isinstance(raw_line, str) else raw_line.decode("utf-8", "replace")
@@ -1087,23 +1118,35 @@ async def run_shell(
 
     if not _enabled():
         return BridgeResult(
-            session_id=session_id, success=False, exit_code=None,
-            stdout="", stderr="", duration_s=0.0,
+            session_id=session_id,
+            success=False,
+            exit_code=None,
+            stdout="",
+            stderr="",
+            duration_s=0.0,
             error="host bridge disabled — set OPENCLAW_HOST_BRIDGE_ENABLED=true",
         )
 
     if not command or not command.strip():
         return BridgeResult(
-            session_id=session_id, success=False, exit_code=None,
-            stdout="", stderr="", duration_s=0.0,
+            session_id=session_id,
+            success=False,
+            exit_code=None,
+            stdout="",
+            stderr="",
+            duration_s=0.0,
             error="empty command",
         )
 
     key_file = Path(KEY_PATH)
     if not key_file.exists():
         return BridgeResult(
-            session_id=session_id, success=False, exit_code=None,
-            stdout="", stderr="", duration_s=0.0,
+            session_id=session_id,
+            success=False,
+            exit_code=None,
+            stdout="",
+            stderr="",
+            duration_s=0.0,
             error=f"SSH key not found at {KEY_PATH}",
         )
 
@@ -1111,15 +1154,23 @@ async def run_shell(
         import asyncssh  # lazy import — optional at install time
     except ImportError as exc:
         return BridgeResult(
-            session_id=session_id, success=False, exit_code=None,
-            stdout="", stderr="", duration_s=0.0,
+            session_id=session_id,
+            success=False,
+            exit_code=None,
+            stdout="",
+            stderr="",
+            duration_s=0.0,
             error=f"asyncssh not installed: {exc}",
         )
 
     remote_cmd = _build_shell_cmd(command, workdir)
     log.info(
         "host_bridge[%s]: shell user=%s host=%s timeout=%ss cmd=%r",
-        session_id, slack_user_id, HOST, timeout, command[:120],
+        session_id,
+        slack_user_id,
+        HOST,
+        timeout,
+        command[:120],
     )
 
     stdout_buf = ""
@@ -1137,8 +1188,16 @@ async def run_shell(
             known_hosts=known_hosts,
         ) as conn:
             result = await conn.run(remote_cmd, check=False, timeout=timeout)
-            stdout_buf = (result.stdout or "") if isinstance(result.stdout, str) else (result.stdout.decode("utf-8", "replace") if result.stdout else "")
-            stderr_buf = (result.stderr or "") if isinstance(result.stderr, str) else (result.stderr.decode("utf-8", "replace") if result.stderr else "")
+            stdout_buf = (
+                (result.stdout or "")
+                if isinstance(result.stdout, str)
+                else (result.stdout.decode("utf-8", "replace") if result.stdout else "")
+            )
+            stderr_buf = (
+                (result.stderr or "")
+                if isinstance(result.stderr, str)
+                else (result.stderr.decode("utf-8", "replace") if result.stderr else "")
+            )
             exit_code = result.exit_status if result.exit_status is not None else None
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
@@ -1146,7 +1205,7 @@ async def run_shell(
 
     if len(stdout_buf) > MAX_OUTPUT:
         truncated = True
-        stdout_buf = stdout_buf[:MAX_OUTPUT] + f"\n…[truncated {len(stdout_buf)-MAX_OUTPUT} bytes]"
+        stdout_buf = stdout_buf[:MAX_OUTPUT] + f"\n…[truncated {len(stdout_buf) - MAX_OUTPUT} bytes]"
     if len(stderr_buf) > MAX_OUTPUT:
         truncated = True
         stderr_buf = stderr_buf[:MAX_OUTPUT] + "\n…[truncated]"
@@ -1157,18 +1216,32 @@ async def run_shell(
     duration = time.monotonic() - start_ts
     success = (error is None) and (exit_code == 0)
 
-    _write_audit_row({
-        "ts": started_at, "session_id": session_id,
-        "slack_user_id": slack_user_id, "host": HOST, "user": USER,
-        "workdir": workdir, "command": command,
-        "exit_code": exit_code, "duration_s": round(duration, 3),
-        "truncated": truncated, "error": error, "type": "shell",
-    })
+    _write_audit_row(
+        {
+            "ts": started_at,
+            "session_id": session_id,
+            "slack_user_id": slack_user_id,
+            "host": HOST,
+            "user": USER,
+            "workdir": workdir,
+            "command": command,
+            "exit_code": exit_code,
+            "duration_s": round(duration, 3),
+            "truncated": truncated,
+            "error": error,
+            "type": "shell",
+        }
+    )
 
     return BridgeResult(
-        session_id=session_id, success=success, exit_code=exit_code,
-        stdout=stdout_buf, stderr=stderr_buf, duration_s=duration,
-        truncated=truncated, error=error,
+        session_id=session_id,
+        success=success,
+        exit_code=exit_code,
+        stdout=stdout_buf,
+        stderr=stderr_buf,
+        duration_s=duration,
+        truncated=truncated,
+        error=error,
     )
 
 
@@ -1189,7 +1262,11 @@ async def run_shell_stream(
     start_ts = time.monotonic()
 
     if not _enabled():
-        yield {"type": "error", "error": "host bridge disabled — set OPENCLAW_HOST_BRIDGE_ENABLED=true", "session_id": session_id}
+        yield {
+            "type": "error",
+            "error": "host bridge disabled — set OPENCLAW_HOST_BRIDGE_ENABLED=true",
+            "session_id": session_id,
+        }
         return
 
     if not command or not command.strip():
@@ -1210,7 +1287,11 @@ async def run_shell_stream(
     remote_cmd = _build_shell_cmd(command, workdir)
     log.info(
         "host_bridge[%s]: shell stream user=%s host=%s timeout=%ss cmd=%r",
-        session_id, slack_user_id, HOST, timeout, command[:120],
+        session_id,
+        slack_user_id,
+        HOST,
+        timeout,
+        command[:120],
     )
 
     stdout_buf: list[str] = []
@@ -1221,9 +1302,13 @@ async def run_shell_stream(
     try:
         known_hosts = KNOWN_HOSTS if Path(KNOWN_HOSTS).exists() else None
         async with asyncssh.connect(  # type: ignore[attr-defined]
-            HOST, username=USER, client_keys=[str(key_file)], known_hosts=known_hosts,
+            HOST,
+            username=USER,
+            client_keys=[str(key_file)],
+            known_hosts=known_hosts,
         ) as conn:
             async with conn.create_process(remote_cmd) as proc:
+
                 async def _drain_stream(stream, stream_type: str):
                     async for raw_line in stream:
                         line = raw_line if isinstance(raw_line, str) else raw_line.decode("utf-8", "replace")
@@ -1260,18 +1345,30 @@ async def run_shell_stream(
     duration = time.monotonic() - start_ts
     success = (error is None) and (exit_code == 0)
 
-    _write_audit_row({
-        "ts": time.time(), "session_id": session_id,
-        "slack_user_id": slack_user_id, "host": HOST, "user": USER,
-        "workdir": workdir, "command": command,
-        "exit_code": exit_code, "duration_s": round(duration, 3),
-        "error": error, "streamed": True, "type": "shell",
-    })
+    _write_audit_row(
+        {
+            "ts": time.time(),
+            "session_id": session_id,
+            "slack_user_id": slack_user_id,
+            "host": HOST,
+            "user": USER,
+            "workdir": workdir,
+            "command": command,
+            "exit_code": exit_code,
+            "duration_s": round(duration, 3),
+            "error": error,
+            "streamed": True,
+            "type": "shell",
+        }
+    )
 
     yield {
-        "type": "done", "success": success,
+        "type": "done",
+        "success": success,
         "duration_s": round(duration, 2),
-        "exit_code": exit_code, "session_id": session_id, "error": error,
+        "exit_code": exit_code,
+        "session_id": session_id,
+        "error": error,
     }
 
 

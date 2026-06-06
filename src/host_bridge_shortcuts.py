@@ -7,6 +7,7 @@ the per-user concurrency cap.
 
 Pure data + a tiny dispatcher — no Slack imports, no I/O. Safe to unit test.
 """
+
 from __future__ import annotations
 
 import shlex
@@ -191,9 +192,7 @@ def resolve(text: str) -> ResolveResult:
 
     sc = SHORTCUTS.get(name)
     if sc is None:
-        return ShortcutError(
-            f"❌ unknown subcommand `{name}`.\n\n{help_text()}"
-        )
+        return ShortcutError(f"❌ unknown subcommand `{name}`.\n\n{help_text()}")
 
     if sc.requires_arg and not args:
         return ShortcutError(f"❌ `{sc.name}` requires arguments.\nUsage: `{sc.usage}`")

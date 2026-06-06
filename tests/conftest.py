@@ -113,6 +113,7 @@ def _clear_module_caches():
             llm_mod = sys.modules["llm"]
             # Only remove attributes that are in _LAZY_EXPORTS to avoid breaking the module
             from llm import _LAZY_EXPORTS
+
             for attr_name in _LAZY_EXPORTS.keys():
                 llm_mod.__dict__.pop(attr_name, None)
         except Exception:
@@ -176,6 +177,7 @@ def _ensure_event_loop_for_slack_bot():
     is set up before slack_bot is imported for the first time.
     """
     import asyncio
+
     try:
         # Try to get current loop, if it doesn't exist create one
         try:
@@ -286,6 +288,7 @@ def _isolate_metrics_collector():
     """
     try:
         import metrics_collector
+
         # Reset singleton BEFORE test runs
         metrics_collector._collector = None
     except (ImportError, AttributeError):
@@ -296,6 +299,7 @@ def _isolate_metrics_collector():
     # Clean up after test as well
     try:
         import metrics_collector
+
         metrics_collector._collector = None
     except ImportError:
         pass
@@ -314,8 +318,9 @@ def _isolate_trace_context():
     """
     try:
         import trace_context
+
         # Reset context BEFORE test runs
-        if hasattr(trace_context, '_current_trace'):
+        if hasattr(trace_context, "_current_trace"):
             trace_context._current_trace.set(None)
     except (ImportError, AttributeError):
         pass
@@ -325,7 +330,8 @@ def _isolate_trace_context():
     # Reset trace context after test completes as well
     try:
         import trace_context
-        if hasattr(trace_context, '_current_trace'):
+
+        if hasattr(trace_context, "_current_trace"):
             trace_context._current_trace.set(None)
     except ImportError:
         pass

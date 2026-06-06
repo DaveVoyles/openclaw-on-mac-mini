@@ -35,13 +35,13 @@ class SessionRecord:
     slack_user: str
     slack_channel: str
     slack_thread_ts: str
-    started_at: float           # unix epoch seconds
-    last_activity: float        # unix epoch seconds
+    started_at: float  # unix epoch seconds
+    last_activity: float  # unix epoch seconds
     cwd: str
     host_pid: int | None = None
-    status: str = "active"      # active | idle | ended | crashed
+    status: str = "active"  # active | idle | ended | crashed
     transcript_path: str | None = None
-    turns: int = 0              # number of user turns recorded
+    turns: int = 0  # number of user turns recorded
     meta: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
