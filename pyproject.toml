@@ -105,7 +105,6 @@ ignore_missing_imports = true  # Many libraries lack stubs
 [[tool.mypy.overrides]]
 module = [
     "config",
-    "api.workflow_api",
     "gateway"
 ]
 disallow_untyped_defs = true

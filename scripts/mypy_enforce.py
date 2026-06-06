@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Enforce mypy strict mode on approved files."""
+
 import subprocess
 import sys
 
 # Phase 1 strict files (should have 0 errors)
 STRICT_FILES = [
     "src/config.py",
-    "src/api/workflow_api.py",
     "src/gateway.py",
 ]
 
@@ -21,7 +21,9 @@ MONITOR_FILES = [
 def run_mypy(files: list[str], strict: bool = False) -> tuple[int, str, str]:
     """Run mypy on files, return (returncode, stdout, stderr)."""
     cmd = [
-        "python3", "-m", "mypy",
+        "python3",
+        "-m",
+        "mypy",
         "--show-error-codes",
         "--ignore-missing-imports",
         "--follow-imports=silent",
@@ -50,9 +52,8 @@ print(f"  ✅ {len(STRICT_FILES)} strict files pass")
 print("\n📊 MONITOR FILES (report only, not enforced):")
 monitor_rc, monitor_out, monitor_err = run_mypy(MONITOR_FILES, strict=False)
 
-error_count = len([l for l in monitor_out.split("\n") if ": error:" in l])
-warning_count = len([l for l in monitor_out.split("\n") if ": warning:" in l])
+error_count = len([line for line in monitor_out.split("\n") if ": error:" in line])
+warning_count = len([line for line in monitor_out.split("\n") if ": warning:" in line])
 print(f"  Errors: {error_count}, Warnings: {warning_count} (not enforced)")
 
 print("\n✅ Mypy enforcement passed")
-

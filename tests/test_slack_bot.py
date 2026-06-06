@@ -1681,13 +1681,20 @@ class TestAppHome:
         assert view["type"] == "home"
 
     def test_build_home_view_personalized_greeting(self):
-        """Personalized name appears in the header block."""
+        """Personalized name appears in the greeting section."""
         from src.slack_bot import _build_home_view
 
         view = _build_home_view("U_TEST", "Lisa")
-        header_block = next((b for b in view["blocks"] if b.get("type") == "header"), None)
-        assert header_block is not None
-        assert "Lisa" in header_block["text"]["text"]
+        greeting_block = next(
+            (
+                b
+                for b in view["blocks"]
+                if b.get("type") == "section" and b.get("text", {}).get("text", "").startswith("*Hi ")
+            ),
+            None,
+        )
+        assert greeting_block is not None
+        assert "*Hi Lisa.*" in greeting_block["text"]["text"]
 
     def test_build_home_view_has_commands(self):
         """At least the /chat and /help commands appear in the view blocks."""
@@ -1706,8 +1713,12 @@ class TestAppHome:
         user_id = "U_NOHIST_TEST"
         sb._file_history.pop(user_id, None)
         view = _build_home_view(user_id, "Chuck")
-        all_text = " ".join(b.get("text", {}).get("text", "") for b in view["blocks"] if "text" in b)
-        assert "recent files" not in all_text.lower()
+        recent_files_blocks = [
+            b
+            for b in view["blocks"]
+            if b.get("type") == "section" and b.get("text", {}).get("text", "").startswith("*📁 Your recent files*")
+        ]
+        assert recent_files_blocks == []
 
 
 if __name__ == "__main__":

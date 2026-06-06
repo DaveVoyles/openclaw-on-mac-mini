@@ -95,3 +95,4 @@
 - 2026-06-06: Rotated leaked dashboard password + WEBUI_SECRET_KEY, scrubbed plaintext creds, and purged both secrets from full git history via mirror rewrite (verified 0 occurrences in fresh clone).
 - 2026-06-06: Investigated red CI on auth push — confirmed `test` job (ruff) has been failing on every main push for weeks (87 pre-existing repo-wide lint errors); our 6 changed files are lint-clean, so left pre-existing debt untouched per scope.
 - 2026-06-06: Fleet-fixed all 64 pre-existing ruff errors + 3 real latent bugs (BUG-1 live Hermes NameError in Slack handler, BUG-2/3 dashboard API crashes); code-review verified all fixes; cleared the ruff gate that blocked CI for weeks.
+- 2026-06-06: Fleet-greened remaining CI gates — fixed mypy_enforce stale path to deleted workflow_api (+pyproject override), fixed 2 stale home-view test assertions; confirmed smoke/eval/syntax gates already pass. Only format gate (helpers.py user WIP) remains.
