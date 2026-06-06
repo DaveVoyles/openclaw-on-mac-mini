@@ -10,6 +10,8 @@ on:
       - 'pyproject.toml'
       - '.github/workflows/ci.yml'
       - 'scripts/validate_schema.py'
+      - 'scripts/update_slack_manifest.py'
+      - 'scripts/check_slack_command_drift.py'
       - 'config/env_schema.yaml'
       - '.env.example'
   pull_request:
@@ -21,6 +23,8 @@ on:
       - 'pyproject.toml'
       - '.github/workflows/ci.yml'
       - 'scripts/validate_schema.py'
+      - 'scripts/update_slack_manifest.py'
+      - 'scripts/check_slack_command_drift.py'
       - 'config/env_schema.yaml'
       - '.env.example'
   workflow_dispatch:  # Manual trigger — always runs full suite
@@ -52,6 +56,9 @@ jobs:
 
       - name: Check formatting
         run: ruff format src/ tests/ --check
+
+      - name: Check Slack command drift
+        run: python3 scripts/check_slack_command_drift.py
 
       - name: Cache pip dependencies
         uses: actions/cache@v4
