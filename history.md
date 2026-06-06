@@ -99,3 +99,4 @@
 - 2026-06-06: Committed pending Plex work (/plex, /watching dashboard commands + tech-guide doc entries) with ruff formatting, clearing the final CI format gate.
 - 2026-06-06: Fixed CI deploy job's container-restart step (was a silent no-op: rm -f cannot remove a running container) to use docker-compose up -d --force-recreate, so green pushes actually reload code.
 - 2026-06-06: gitignored 2 local working docs (discord-to-slack-plan, NAS-ACCESS) to keep them out of the public repo.
+- 2026-06-06: Registered Hermes + home-ops Slack slash commands (/hermes, /plex, /uptime, etc.) in the app manifest and pushed live via apps.manifest.update; pruned to Slack's 50-command cap and dropped reserved /status.
