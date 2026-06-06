@@ -102,3 +102,4 @@
 - 2026-06-06: Registered Hermes + home-ops Slack slash commands (/hermes, /plex, /uptime, etc.) in the app manifest and pushed live via apps.manifest.update; pruned to Slack's 50-command cap and dropped reserved /status.
 - 2026-06-06: Fixed /hermes 'binary not found' by routing hermes slash commands through the host SSH bridge (run_hermes_stream) instead of an in-container subprocess; verified live. Added a CI slash-command drift check so new commands can't silently go unregistered.
 - 2026-06-06: Fixed Security Scanning CI — isolated Docker config bypasses locked keychain on headless runner (Trivy Docker build); dependency-audit now uses host python+venv instead of unavailable hosted tool cache. Workflow fully green.
+- 2026-06-06: Made /copilot-cancel hard-interrupt in-flight Hermes SSH turns (was cooperative-only) — run_hermes_stream now terminates the remote process promptly via a cancel_event watcher; verified live (~1s interrupt). Added cancel tests.
