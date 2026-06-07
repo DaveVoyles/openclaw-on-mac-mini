@@ -2042,9 +2042,14 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
                         if not line.strip():
                             continue
                         try:
-                            raw_entries.append(json.loads(line))
+                            _e = json.loads(line)
                         except json.JSONDecodeError:
                             continue
+                        # Skip automated dashboard health/status polls (high-noise,
+                        # low-signal); keep genuine agent/user/scheduler activity.
+                        if str(_e.get("slack_user_id", "")).startswith("dashboard"):
+                            continue
+                        raw_entries.append(_e)
                         if len(raw_entries) >= 50:
                             break
                 except OSError:
