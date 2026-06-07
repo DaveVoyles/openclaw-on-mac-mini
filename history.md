@@ -107,3 +107,4 @@
 - 2026-06-06: Rotated the dashboard login password (OPENCLAW_DASHBOARD_PASSWORD in gitignored .env) at the user's request and restarted the container; verified live via POST /api/login (new password → 200 + session cookie, old → 401).
 - 2026-06-06: Hardened .env permissions from world-readable (644) to owner-only (600); diagnosed a dashboard login failure as client-side (case-sensitive username 'Dave' + browser autofill of old password / 60s rate-lock), backend verified working over local and public HTTPS.
 - 2026-06-06: Made the dashboard login username case-insensitive (and whitespace-trimmed) so 'dave', 'Dave', 'DAVE' all authenticate; password stays exact/case-sensitive. Added a regression test; verified live.
+- 2026-06-06: Rotated the dashboard password again (OPENCLAW_DASHBOARD_PASSWORD in gitignored .env) at the user's request; restarted the container and verified live (new password → 200 for any-case username, old → 401).
