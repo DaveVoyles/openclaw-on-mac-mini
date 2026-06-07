@@ -1490,7 +1490,7 @@
             <div id="recent-errors" class="scrollable-list" style="max-height:200px"></div>
           </details>
           <div style="margin-top:0.75rem">
-            <div style="font-size:0.78rem;color:var(--muted);margin-bottom:0.35rem">Message volume · last 24h <span style="color:var(--danger,#f85149)">(errors highlighted in red)</span></div>
+            <div style="font-size:0.78rem;color:var(--muted);margin-bottom:0.35rem"><span id="volume-chart-label">Message volume</span> <span style="color:var(--danger,#f85149)">(errors highlighted in red)</span></div>
             <div id="volume-chart-bars" style="display:flex;gap:2px;align-items:flex-end;height:52px"></div>
           </div>
         </div>
@@ -2147,9 +2147,9 @@
               <select id="run-filter-time" onchange="applyRunFilters()" style="padding:0.25rem 0.45rem;border-radius:6px;background:var(--surface);color:var(--text);border:1px solid var(--border)">
               <option value="1">Last 1h</option>
               <option value="6">Last 6h</option>
-              <option value="24" selected>Last 24h</option>
+              <option value="24">Last 24h</option>
               <option value="168">Last 7d</option>
-              <option value="all">All</option>
+              <option value="all" selected>All</option>
               </select>
             </label>
           </div>
@@ -5036,7 +5036,7 @@
       }
 
       function loadQualityEvals() {
-          fetch('/api/quality-evals?history=12')
+          fetch('/api/quality-evals?refresh=0&hours=2160&history=12')
               .then(r => r.json())
               .then(data => {
                   const latest = data.latest || {};
@@ -5756,7 +5756,7 @@
       }
 
       function loadRunTimeline() {
-          fetch('/api/runs?limit=300&hours=168').then(r => r.json()).then(data => {
+          fetch('/api/runs?limit=300&hours=2160').then(r => r.json()).then(data => {
               _allRuns = data.runs || [];
               renderVolumeChart();
               const statusSel = document.getElementById('run-filter-status');
@@ -5778,22 +5778,60 @@
       function renderVolumeChart() {
           const el = document.getElementById('volume-chart-bars');
           if (!el) return;
+          const labelEl = document.getElementById('volume-chart-label');
           const runs = (_allRuns || []).filter(r => r.timestamp);
           if (runs.length === 0) {
               el.innerHTML = '<span style="color:var(--muted);font-size:0.78rem">No run data yet — chart will populate as messages arrive.</span>';
+              if (labelEl) labelEl.textContent = 'Message volume';
               return;
           }
           const now = Math.floor(Date.now() / 1000);
-          const buckets = Array.from({length: 24}, () => ({total: 0, errors: 0}));
-          runs.forEach(run => {
-              const ageH = (now - run.timestamp) / 3600;
-              if (ageH < 0 || ageH >= 24) return;
-              const idx = 23 - Math.floor(ageH);
-              if (idx >= 0 && idx < 24) {
-                  buckets[idx].total++;
-                  if (run.status === 'error') buckets[idx].errors++;
-              }
-          });
+          const newest = Math.max(...runs.map(r => r.timestamp));
+          const DAY = 86400;
+          const historical = (now - newest) >= 24 * 3600;
+          let buckets, axisLabel, tip, labelText;
+          if (!historical) {
+              // Live view: 24 hourly buckets ending now
+              buckets = Array.from({length: 24}, () => ({total: 0, errors: 0}));
+              runs.forEach(run => {
+                  const ageH = (now - run.timestamp) / 3600;
+                  if (ageH < 0 || ageH >= 24) return;
+                  const idx = 23 - Math.floor(ageH);
+                  if (idx >= 0 && idx < 24) {
+                      buckets[idx].total++;
+                      if (run.status === 'error') buckets[idx].errors++;
+                  }
+              });
+              const hr = i => new Date((now - (23 - i) * 3600) * 1000).getHours();
+              axisLabel = i => (i % 4 === 0 ? hr(i) + 'h' : '');
+              tip = (b, i) => b.total > 0
+                  ? `${b.total} msg${b.total > 1 ? 's' : ''}${b.errors ? ', ' + b.errors + ' err' : ''} @ ${hr(i)}:00`
+                  : `No messages @ ${hr(i)}:00`;
+              labelText = 'Message volume · last 24h';
+          } else {
+              // Historical view: daily buckets spanning the run history (up to 30 days)
+              const startDay = Math.floor(Math.min(...runs.map(r => r.timestamp)) / DAY);
+              const span = Math.min(Math.floor(newest / DAY) - startDay + 1, 30);
+              buckets = Array.from({length: span}, () => ({total: 0, errors: 0}));
+              runs.forEach(run => {
+                  const idx = Math.floor(run.timestamp / DAY) - startDay;
+                  if (idx >= 0 && idx < span) {
+                      buckets[idx].total++;
+                      if (run.status === 'error') buckets[idx].errors++;
+                  }
+              });
+              const dlabel = i => {
+                  const d = new Date((startDay + i) * DAY * 1000);
+                  return (d.getMonth() + 1) + '/' + d.getDate();
+              };
+              const step = span > 12 ? 3 : 2;
+              axisLabel = i => (i % step === 0 ? dlabel(i) : '');
+              tip = (b, i) => b.total > 0
+                  ? `${b.total} run${b.total > 1 ? 's' : ''}${b.errors ? ', ' + b.errors + ' err' : ''} on ${dlabel(i)}`
+                  : `No runs on ${dlabel(i)}`;
+              labelText = `Message volume · by day · ${dlabel(0)}–${dlabel(span - 1)}`;
+          }
+          if (labelEl) labelEl.textContent = labelText;
           const maxTotal = Math.max(...buckets.map(b => b.total), 1);
           el.innerHTML = buckets.map((b, i) => {
               const heightPct = Math.round((b.total / maxTotal) * 100);
@@ -5801,15 +5839,12 @@
               const bg = b.errors > 0
                   ? `linear-gradient(to top, var(--danger,#f85149) ${Math.round(errFrac * 100)}%, var(--spirit-blue) ${Math.round(errFrac * 100)}%)`
                   : 'var(--spirit-blue)';
-              const hLabel = new Date((now - (23 - i) * 3600) * 1000).getHours();
-              const tooltip = b.total > 0
-                  ? `${b.total} msg${b.total > 1 ? 's' : ''}${b.errors ? ', ' + b.errors + ' err' : ''} @ ${hLabel}:00`
-                  : `No messages @ ${hLabel}:00`;
+              const tooltip = tip(b, i);
               return `<div title="${tooltip}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;cursor:default">
                   <div style="width:100%;height:44px;background:var(--border);border-radius:2px;overflow:hidden;display:flex;align-items:flex-end">
                       <div style="width:100%;height:${Math.max(heightPct, b.total > 0 ? 4 : 0)}%;background:${bg};transition:height 0.3s"></div>
                   </div>
-                  <span style="font-size:0.55rem;color:var(--muted)">${i % 4 === 0 ? hLabel + 'h' : ''}</span>
+                  <span style="font-size:0.55rem;color:var(--muted)">${axisLabel(i)}</span>
               </div>`;
           }).join('');
       }
