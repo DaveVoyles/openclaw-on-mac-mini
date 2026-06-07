@@ -4048,6 +4048,20 @@
         return headers;
       }
 
+      // Authenticated fetch helper used by several cards (downloads, uptime,
+      // audit log, NAS status). Returns parsed JSON; throws on non-OK so the
+      // callers' catch blocks can surface a friendly error.
+      async function apiFetch(url, opts = {}) {
+        const authHeaders =
+          typeof _actionAuthHeaders === "function" ? _actionAuthHeaders("dashboard-ui") : {};
+        const headers = Object.assign({}, authHeaders, (opts && opts.headers) || {});
+        const resp = await fetch(url, Object.assign({}, opts, { headers }));
+        if (!resp.ok) {
+          throw new Error("HTTP " + resp.status);
+        }
+        return await resp.json();
+      }
+
       function renderChannelMemoryInspector(data) {
         const summaryEl = document.getElementById('inspector-summary');
         const latestEl = document.getElementById('inspector-latest');
