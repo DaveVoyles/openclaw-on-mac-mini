@@ -120,6 +120,7 @@ Copy this at the bottom of any task summary when done:
 
 ```
 ## ✅ Completion checklist
+- [ ] **Repo is PUBLIC** — no private data introduced (real emails, live Slack/Discord invites, secrets, PII). Run the pre-commit scan in [README.md](README.md) (see "This repository is PUBLIC")
 - [ ] Push succeeded; CI is not in `failure` state (in_progress/queued is fine)
 - [ ] `guide.html` updated if user-facing feature shipped
 - [ ] `dashboard.html` updated if admin/metric feature shipped

@@ -127,3 +127,4 @@
 - 2026-06-07: Made dashboard skill-count and Hermes-model labels dynamic (bound to /api/dashboard + /api/hermes/status); dropped fabricated '90 bundled' label; corrected stale model to live claude-sonnet-4.6; 5906 tests pass, CI green, deployed.
 - 2026-06-07: Dashboard polish — added aria-labels to 25 icon buttons + 8 inputs, :focus-visible + prefers-reduced-motion CSS, and Open Graph/Twitter/description meta tags; README counts audited (all accurate). Deployed.
 - 2026-06-07: Pre-public-release audit — scrubbed personal email + live Slack invite link from help pages, added MIT LICENSE; secrets confirmed clean. Repo now publish-ready (visibility flip left to user).
+- 2026-06-07: Added "repository is PUBLIC — no private data" policy + pre-commit scan to .github/docs/README.md and COMPLETION-RULES.md so future agents avoid committing PII/secrets.
