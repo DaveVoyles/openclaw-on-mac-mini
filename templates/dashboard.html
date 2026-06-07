@@ -744,6 +744,13 @@
         border-radius: 0.25rem;
         white-space: nowrap;
       }
+      .memory-tags {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+        align-items: flex-start;
+        flex-shrink: 0;
+      }
       .memory-date { color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
       .memory-stats-bar {
         display: flex;
@@ -1963,7 +1970,7 @@
           <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.6rem">
             Mission Control and scheduler tasks normalized into one supervision queue.
           </p>
-          <div id="task-status-list"></div>
+          <div id="task-status-list" style="overflow-x:auto"></div>
           <pre id="task-status-detail" style="display:none;margin-top:0.8rem;padding:0.9rem 1rem;background:var(--surface-solid,#0d1117);border:1px solid var(--border,#333);border-radius:8px;white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto"></pre>
         </div>
 
@@ -3945,7 +3952,7 @@
             } else {
               factsEl.innerHTML = data.facts.map(f => {
                 const tags = (f.tags && f.tags.length)
-                  ? f.tags.map(t => `<span class="memory-tag">${esc(t)}</span>`).join(' ')
+                  ? `<span class="memory-tags">${f.tags.map(t => `<span class="memory-tag">${esc(t)}</span>`).join('')}</span>`
                   : '';
                 const dateStr = f.ts ? new Date(f.ts).toLocaleDateString() : '';
                 return `<div class="memory-item"><span class="memory-text">${esc(f.content || '')}</span>${tags}<span class="memory-date">${dateStr}</span></div>`;

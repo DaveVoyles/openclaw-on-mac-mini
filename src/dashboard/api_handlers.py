@@ -2049,14 +2049,42 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
                             break
                 except OSError:
                     continue
+            from datetime import datetime as _dt, timezone as _tz
+
             for entry in raw_entries[:20]:
+                ts = entry.get("ts", "")
+                if isinstance(ts, (int, float)):
+                    try:
+                        ts = _dt.fromtimestamp(ts, _tz.utc).isoformat()
+                    except (OSError, OverflowError, ValueError):
+                        ts = ""
+                # host-bridge shell entries use a different schema (command/exit_code/type)
+                if entry.get("command") is not None or entry.get("type") == "shell":
+                    action = entry.get("action") or entry.get("type") or "shell"
+                    detail = entry.get("command") or entry.get("detail", "") or ""
+                    if entry.get("result"):
+                        result = entry["result"]
+                    elif entry.get("error"):
+                        result = str(entry["error"])
+                    elif entry.get("exit_code") is not None:
+                        result = (
+                            "success"
+                            if entry.get("exit_code") == 0
+                            else f"exit {entry.get('exit_code')}"
+                        )
+                    else:
+                        result = ""
+                else:
+                    action = entry.get("action", "")
+                    detail = entry.get("detail", "") or ""
+                    result = entry.get("result", "")
                 activity.append(
                     {
-                        "timestamp": entry.get("ts", ""),
-                        "user": entry.get("user", "unknown"),
-                        "action": entry.get("action", ""),
-                        "detail": entry.get("detail", "")[:100],
-                        "result": entry.get("result", ""),
+                        "timestamp": ts,
+                        "user": entry.get("user") or entry.get("slack_user_id") or "unknown",
+                        "action": action,
+                        "detail": (detail or "")[:100],
+                        "result": result,
                     }
                 )
     except (OSError, ValueError) as exc:
