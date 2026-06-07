@@ -1,5 +1,5 @@
 # OpenClaw CLI — Testing Guide
-<!-- Updated: 2026-04-18 -->
+<!-- Updated: 2026-06-07 -->
 
 
 Reference for writing, running, and maintaining the CLI test suite.
@@ -249,6 +249,44 @@ Filter by marker:
 ```bash
 .venv/bin/python3 -m pytest tests/ -m "not integration" -q
 ```
+
+---
+
+## Agent quality evaluation
+
+OpenClaw scores agent responses two ways:
+
+**1. Live quality-eval scorecard (production traffic).** Every `/ask` is journaled
+(`error_tracker.journal_ask_outcome`) and `quality_eval_state.build_quality_eval_scorecard`
+scores recent runs across four correctness/safety metrics — channel-leakage prevention,
+follow-up anchor correctness, profile adherence, and table readability / copy-safety. The
+rolled-up scorecard, run timeline, and latency percentiles are visible live on the
+dashboard. Regression coverage for the journaling hook and the journal-backed latency
+stats lives in `tests/test_error_tracker_journal_hook.py`.
+
+**2. Offline replay eval harness (deterministic, CI-safe).** `src/offline_quality_eval.py`
+replays a fixed set of prompt/response fixtures and scores them against tunable thresholds
+with no network or model calls, so it is fully deterministic. It reports coverage,
+source-diversity, evidence-completeness, unsupported-claim and warning rates, and a latency
+bucket, plus per-domain breakdowns, drift detection against an optional baseline, and
+bounded (advisory-only) threshold auto-calibration proposals.
+
+```bash
+# Run the harness directly (machine-readable JSON report; exit 0 = pass)
+PYTHONPATH=src python3 -m offline_quality_eval \
+  --fixtures tests/evals/fixtures/replay_prompts.json
+
+# Compare against a saved baseline to surface drift
+PYTHONPATH=src python3 -m offline_quality_eval \
+  --fixtures tests/evals/fixtures/replay_prompts.json \
+  --baseline path/to/baseline.json --output report.json
+
+# Run as a test
+python3 -m pytest tests/evals/test_offline_quality_eval.py -q
+```
+
+Fixtures live in `tests/evals/fixtures/replay_prompts.json`; add new prompt/response cases
+there to grow coverage without touching the harness.
 
 ---
 
