@@ -482,6 +482,10 @@
         overflow-y: auto;
         display: flex;
         flex-direction: column;
+        /* Opaque solid background so the expanded chat stays readable and does
+           not flicker as the page scrolls behind a backdrop-filter on mobile. */
+        background: var(--surface-solid, #001e4d);
+        backdrop-filter: none;
       }
       #agent-chat-card.chat-expanded #agent-response-wrap {
         flex: 1;
@@ -949,12 +953,12 @@
         </div>
 
         <!-- Mobile jump navigation — hidden on desktop -->
-        <nav id="mobile-jump-nav" aria-label="Jump to section" style="display:none;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;padding:0.5rem 1rem;background:var(--surface,#13141f);border-bottom:1px solid var(--border,#2a2b3d);position:sticky;top:0;z-index:100;scrollbar-width:none">
+        <nav id="mobile-jump-nav" aria-label="Jump to section" style="display:none;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;padding:0.5rem 1rem;background:var(--surface-solid,#001233);border-bottom:1px solid var(--border,#2a2b3d);position:sticky;top:0;z-index:100;scrollbar-width:none">
           <style>#mobile-jump-nav::-webkit-scrollbar{display:none}</style>
           <button onclick="jumpTo('agent-chat-card')" class="jump-pill">💬 Chat</button>
           <button onclick="jumpTo('hermes-status-card')" class="jump-pill">⚕ Hermes</button>
           <button onclick="jumpTo('wol-card')" class="jump-pill">⚡ Wake</button>
-          <button onclick="jumpTo('nas-disk-card')" class="jump-pill">💾 NAS</button>
+          <button onclick="jumpTo('nas-status-card')" class="jump-pill">💾 NAS</button>
           <button onclick="jumpTo('docker-status-card')" class="jump-pill">🐳 Docker</button>
           <button onclick="jumpTo('github-activity-card')" class="jump-pill">🐙 GitHub</button>
           <button onclick="jumpTo('plex-activity-card')" class="jump-pill">🎬 Plex</button>
@@ -968,7 +972,6 @@
           <button onclick="jumpTo('overseerr-card')" class="jump-pill">🎭 Requests</button>
           <button onclick="jumpTo('uptime-kuma-card')" class="jump-pill">📊 Uptime</button>
           <button onclick="jumpTo('tools-links-card')" class="jump-pill">🛠️ Tools</button>
-          <button onclick="jumpTo('nas-browse-card')" class="jump-pill">📁 NAS</button>
           <button onclick="jumpTo('conversations-card')" class="jump-pill">💬 History</button>
           <button onclick="jumpTo('container-logs-card')" class="jump-pill">🐳 Logs</button>
           <button onclick="jumpTo('audit-log-card')" class="jump-pill">📋 Audit</button>
@@ -1085,7 +1088,7 @@
               <div style="font-size:1rem;font-weight:700;color:#10b981;margin-bottom:0.3rem">⚕ Hermes Agent — Preferred Interface</div>
               <div style="font-size:0.82rem;color:var(--muted);line-height:1.5">
                 Hermes is the primary AI agent for this home lab. It runs locally in iTerm2, uses
-                <strong style="color:var(--text)">GitHub Copilot models</strong> (work-paid, no personal cost),
+                <strong style="color:var(--text)">GitHub Copilot models</strong>,
                 and maintains <strong style="color:var(--text)">persistent memory</strong> across sessions.
                 The <code style="background:rgba(0,0,0,0.3);border-radius:3px;padding:0.1em 0.3em">/copilot</code> Slack command routes through Hermes automatically.
               </div>
@@ -1162,11 +1165,8 @@
           </div>
           <!-- Quick Action Buttons -->
           <div id="quick-actions" style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem">
-            <button class="qa-btn" onclick="dashAsk('What is the weather today?')">🌤️ Weather</button>
             <button class="qa-btn" onclick="dashAsk('Give me a brief summary of news headlines today.')">📰 News</button>
-            <button class="qa-btn" onclick="generateWeeklyRecap()">📋 Weekly Recap</button>
             <button class="qa-btn" onclick="dashAsk('What are the latest box office results this weekend?')">🎬 Box Office</button>
-            <button class="qa-btn" onclick="dashAsk('What are the top trending topics right now?')">📈 Trends</button>
             <button class="qa-btn" onclick="dashAsk('Run a health check on all monitored services and summarize results.')">🏥 Health Check</button>
           </div>
           <!-- Chat Input -->
@@ -1676,18 +1676,6 @@
           </div>
         </div>
 
-        <div class="card" id="nas-browse-card" style="margin-bottom:1rem">
-          <div class="card-header d-flex justify-content-between align-items-center" style="cursor:pointer" onclick="toggleNasBrowse()">
-            <span>📁 NAS File Browser</span>
-            <span id="nas-browse-toggle">▶</span>
-          </div>
-          <div id="nas-browse-body" style="display:none">
-            <div class="card-body">
-              <nav aria-label="breadcrumb" id="nas-breadcrumb" class="small mb-2"></nav>
-              <div id="nas-browse-list" class="list-group list-group-flush small"></div>
-            </div>
-          </div>
-        </div>
         <div class="card" id="ontology-card">
           <h2>&#129504; Long-Term Memory (Ontology)</h2>
           <div id="ontology-list">
@@ -4705,56 +4693,6 @@
           });
       }
 
-      let _nasBrowsePath = '/Volumes/Misc';
-      function toggleNasBrowse() {
-          toggleCardCollapse('nas-browse-card');
-      }
-      async function loadNasBrowse(path) {
-          _nasBrowsePath = path;
-          const list = document.getElementById('nas-browse-list');
-          const crumb = document.getElementById('nas-breadcrumb');
-          if (!list || !crumb) return;
-          list.innerHTML = '<div class="text-muted p-2">Loading...</div>';
-          try {
-              const r = await fetch('/api/nas/browse?path=' + encodeURIComponent(path), {
-                  headers: _actionAuthHeaders('dashboard-ui'),
-              });
-              const d = await r.json();
-              if (d.error && (!d.entries || !d.entries.length)) {
-                  list.innerHTML = '<div class="text-danger p-2">' + esc(d.error) + '</div>';
-                  return;
-              }
-              const parts = path.split('/').filter(Boolean);
-              let crumbHtml = '<ol class="breadcrumb mb-0">';
-              let acc = '';
-              for (const p of parts) {
-                  acc += '/' + p;
-                  const pCopy = acc;
-                  crumbHtml += `<li class="breadcrumb-item"><a href="#" onclick='loadNasBrowse(${JSON.stringify(pCopy)});return false'>${esc(p)}</a></li>`;
-              }
-              crumbHtml += '</ol>';
-              crumb.innerHTML = crumbHtml;
-
-              let html = '';
-              if (!['/Volumes', '/Volumes/Misc', '/Users/davevoyles/mnt'].includes(path)) {
-                  const parent = path.substring(0, path.lastIndexOf('/')) || '/Volumes/Misc';
-                  html += `<a href="#" class="list-group-item list-group-item-action py-1" onclick='loadNasBrowse(${JSON.stringify(parent)});return false'>📂 ..</a>`;
-              }
-              for (const e of d.entries || []) {
-                  const icon = e.is_dir ? '📁' : '📄';
-                  const childPath = path.replace(/\/$/, '') + '/' + e.name;
-                  if (e.is_dir) {
-                      html += `<a href="#" class="list-group-item list-group-item-action py-1" onclick='loadNasBrowse(${JSON.stringify(childPath)});return false'>${icon} ${esc(e.name)}</a>`;
-                  } else {
-                      html += `<span class="list-group-item py-1">${icon} ${esc(e.name)} <span class="text-muted">${esc(e.size || '')}</span></span>`;
-                  }
-              }
-              list.innerHTML = html || '<div class="text-muted p-2">Empty directory</div>';
-          } catch (e) {
-              list.innerHTML = '<div class="text-danger p-2">' + esc(e.message || String(e)) + '</div>';
-          }
-      }
-
       // Configuration Status
       function loadConfigStatus() {
           fetch('/api/config-status', { headers: typeof _actionAuthHeaders === 'function' ? _actionAuthHeaders('dashboard-ui') : {} }).then(r => r.json()).then(data => {
@@ -6856,7 +6794,6 @@
         'arr-queue-card': 'arr-queue-body',
         'sabnzbd-card': 'sabnzbd-queue-list',
         'docker-status-card': 'docker-status-body',
-        'nas-browse-card': 'nas-browse-body',
         'hermes-status-card': 'hermes-status-body',
         'hermes-memory-card': 'hermes-memory-body',
         'hermes-sessions-card': 'hermes-sessions-body',
@@ -6869,7 +6806,6 @@
         'arr-queue-card': () => loadArrQueue(),
         'sabnzbd-card': () => loadSabnzbdQueue(),
         'docker-status-card': () => loadDockerStatus(),
-        'nas-browse-card': () => loadNasBrowse(_nasBrowsePath),
         'hermes-memory-card': () => loadHermesMemory(),
         'hermes-sessions-card': () => loadHermesSessions(),
         'hermes-skills-card': () => loadHermesSkills(),
