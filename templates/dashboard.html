@@ -914,7 +914,7 @@
             <div>
               <h1>OpenClaw — Autonomous Multi-LLM Agent Platform</h1>
               <div class="hero-tagline" style="font-size:0.86rem;color:var(--muted);margin-top:3px;line-height:1.45;max-width:64ch">
-                A self-hosted AI agent with persistent memory, 90 tool skills, human-in-the-loop approvals, and automated quality evals — routing each turn to Claude, GitHub Copilot, Gemini, or local Ollama. Running 24/7 on a Mac Mini, native in Slack &amp; Discord.
+                A self-hosted AI agent with persistent memory, 183 tool skills, human-in-the-loop approvals, and automated quality evals — routing each turn to Claude, GitHub Copilot, Gemini, or local Ollama. Running 24/7 on a Mac Mini, native in Slack.
               </div>
               <div style="display:flex;flex-wrap:wrap;gap:0.3rem;margin-top:0.5rem;align-items:center">
                 <span
@@ -1070,7 +1070,7 @@
                 </div>
               </div>
               <div style="border-top:1px solid var(--border);padding-top:0.6rem">
-                <div style="font-weight:600;color:#10b981;margin-bottom:0.35rem">⚕ Hermes Agent <span style="background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:4px;font-size:0.7rem;padding:0.1em 0.4em;font-weight:500">Recommended</span> <small style="color:var(--muted);font-weight:400">persistent memory · GitHub Copilot · 90 skills</small></div>
+                <div style="font-weight:600;color:#10b981;margin-bottom:0.35rem">⚕ Hermes Agent <span style="background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:4px;font-size:0.7rem;padding:0.1em 0.4em;font-weight:500">Recommended</span> <small style="color:var(--muted);font-weight:400">persistent memory · GitHub Copilot · 183 skills</small></div>
                 <div style="display:flex;flex-direction:column;gap:0.3rem">
                   <div><span style="color:var(--muted)">Any machine:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">bash &lt;(curl -fsSL https://openclaw.davevoyles.synology.me/ih)</code></div>
                   <div><span style="color:var(--muted)">On LAN:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">bash &lt;(curl -fsSL http://192.168.1.93:8765/ih)</code></div>
@@ -1093,8 +1093,8 @@
                 The <code style="background:rgba(0,0,0,0.3);border-radius:3px;padding:0.1em 0.3em">/copilot</code> Slack command routes through Hermes automatically.
               </div>
               <div style="margin-top:0.6rem;display:flex;gap:0.5rem;flex-wrap:wrap;font-size:0.78rem">
-                <span style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:0.15em 0.5em">claude-sonnet-4.6</span>
-                <span style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:0.15em 0.5em">90 skills</span>
+                <span style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:0.15em 0.5em">claude-sonnet-4.5</span>
+                <span style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:0.15em 0.5em">183 skills</span>
                 <span style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:0.15em 0.5em">persistent memory</span>
                 <span style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:0.15em 0.5em">NAS access</span>
                 <span style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:0.15em 0.5em">browser automation</span>
@@ -1138,12 +1138,12 @@
             <span style="font-size:0.74rem;color:var(--muted)">request → agent core → model router → guarded action → tools</span>
           </div>
           <p style="font-size:0.85rem;color:var(--muted);line-height:1.5;margin:0 0 0.9rem">
-            A natural-language request from Slack or Discord enters a persistent-memory agent core that plans the work and selects from 90 tool skills. Each turn is routed to the best available model — Claude, GitHub Copilot, Gemini, or local Ollama. Before any state-changing action runs it passes human-in-the-loop approvals and is scored by automated quality evals, then executes against real systems (NAS, browser, shell, GitHub, the media stack).
+            A natural-language request from Slack enters a persistent-memory agent core that plans the work and selects from 183 tool skills. Each turn is routed to the best available model — Claude, GitHub Copilot, Gemini, or local Ollama. Before any state-changing action runs it passes human-in-the-loop approvals and is scored by automated quality evals, then executes against real systems (NAS, browser, shell, GitHub, the media stack).
           </p>
           <div class="arch-row">
-            <div class="arch-node"><div class="an-title">🗣 Interfaces</div><div class="an-sub">Slack · Discord · Web dashboard</div></div>
+            <div class="arch-node"><div class="an-title">🗣 Interfaces</div><div class="an-sub">Slack · Web dashboard</div></div>
             <div class="arch-arrow">→</div>
-            <div class="arch-node"><div class="an-title">🧠 Agent Core</div><div class="an-sub">Planning · persistent memory · 90 skills</div></div>
+            <div class="arch-node"><div class="an-title">🧠 Agent Core</div><div class="an-sub">Planning · persistent memory · 183 skills</div></div>
             <div class="arch-arrow">→</div>
             <div class="arch-node"><div class="an-title">🤖 Model Router</div><div class="an-sub">Claude · Copilot · Gemini · Ollama</div></div>
             <div class="arch-arrow">→</div>
@@ -1158,7 +1158,7 @@
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">
             <div>
               <h2 style="margin:0">💬 Ask OpenClaw</h2>
-              <div style="font-size:0.72rem;color:var(--muted);margin-top:0.2rem">Powered by <strong style="color:#4ade80">⚕ Hermes</strong> · claude-sonnet-4.6 · GitHub Copilot</div>
+              <div style="font-size:0.72rem;color:var(--muted);margin-top:0.2rem">Powered by <strong style="color:#4ade80">⚕ Hermes</strong> · claude-sonnet-4.5 · GitHub Copilot</div>
             </div>
             <button id="chat-expand-btn" onclick="toggleChatExpand()" title="Expand chat to fullscreen"
               style="padding:0.3rem 0.65rem;background:transparent;border:1px solid var(--border,#444);border-radius:6px;color:var(--muted,#8b949e);cursor:pointer;font-size:0.8rem;white-space:nowrap">⛶ Expand</button>
@@ -1233,7 +1233,7 @@
           <div id="hermes-hint" style="display:none;margin-top:0.6rem;padding:0.75rem 1rem;background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.3);border-radius:8px;font-size:0.82rem;line-height:1.6;color:var(--text)">
             <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem;flex-wrap:wrap">
               <strong style="color:#4ade80;font-size:0.9rem">⚕ Hermes Agent</strong>
-              <span style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:10px;background:rgba(74,222,128,0.15);color:#4ade80">claude-sonnet-4.6 · Copilot</span>
+              <span style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:10px;background:rgba(74,222,128,0.15);color:#4ade80">claude-sonnet-4.5 · Copilot</span>
               <span id="hermes-session-badge" style="font-size:0.72rem;color:#86efac"></span>
               <button onclick="newHermesSession()" style="margin-left:auto;font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:12px;color:#4ade80;cursor:pointer">🆕 New session</button>
             </div>
@@ -7437,7 +7437,7 @@
                     }
                     const elapsed = ((Date.now() - startMs) / 1000).toFixed(1);
                     const sessionId = data.session_id || window._hermesSessionId || '';
-                    _setMeta('⚕ Hermes (claude-sonnet-4.6 · Copilot)  •  ' + elapsed + 's' +
+                    _setMeta('⚕ Hermes (claude-sonnet-4.5 · Copilot)  •  ' + elapsed + 's' +
                       (sessionId ? '  •  session ' + sessionId : '') +
                       (data.success ? '' : '  ⚠️ non-zero exit'));
                     break outer;
@@ -7547,47 +7547,6 @@
       }
 
 
-
-      async function generateWeeklyRecap() {
-        const recapBtn = event?.currentTarget || document.querySelector('.qa-btn[onclick*="generateWeeklyRecap"]');
-        const loadingEl = document.getElementById('agent-loading');
-        const wrapEl = document.getElementById('agent-response-wrap');
-        const responseEl = document.getElementById('agent-response');
-        const metaTextEl = document.getElementById('agent-response-meta-text');
-
-        if (recapBtn) { recapBtn.disabled = true; recapBtn.textContent = '⏳ Generating…'; }
-        loadingEl.style.display = 'block';
-        wrapEl.style.display = 'none';
-
-        const startMs = Date.now();
-        try {
-          const res = await fetch('/api/recap/generate', {
-            method: 'POST',
-            headers: _actionAuthHeaders('dashboard-ui'),
-            body: JSON.stringify({ days: 7, style: 'highlights' }),
-          });
-          const data = await res.json();
-          const elapsed = ((Date.now() - startMs) / 1000).toFixed(1);
-          if (!res.ok || data.error) {
-            _chatTextBuf = '❌ Recap failed: ' + (data.error || `HTTP ${res.status}`);
-          } else {
-            _chatTextBuf = data.report || '(no content)';
-          }
-          _chatRawBuf = _chatTextBuf;
-          responseEl.textContent = _chatTextBuf;
-          if (metaTextEl) metaTextEl.textContent = 'Weekly Recap  •  Model: ' + (data.model || 'auto') + '  •  ' + elapsed + 's';
-          wrapEl.style.display = 'block';
-        } catch (err) {
-          _chatTextBuf = '❌ Recap failed: ' + err.message;
-          _chatRawBuf = _chatTextBuf;
-          responseEl.textContent = _chatTextBuf;
-          if (metaTextEl) metaTextEl.textContent = '';
-          wrapEl.style.display = 'block';
-        } finally {
-          if (recapBtn) { recapBtn.disabled = false; recapBtn.textContent = '📋 Weekly Recap'; }
-          loadingEl.style.display = 'none';
-        }
-      }
 
       let _hermesFileTab = 'memory';
 

@@ -45,11 +45,6 @@ services:
       AUDIT_DIR: "/audit"
       MC_TASKS_FILE: "/app/data/tasks.json"
       VAULT_DIR: "/vault"
-      # Channel role IDs — set in .env with real Discord channel IDs
-      DISCORD_CHANNEL_RESEARCH_ID: "${DISCORD_CHANNEL_RESEARCH_ID:-0}"
-      DISCORD_CHANNEL_ANALYTICS_ID: "${DISCORD_CHANNEL_ANALYTICS_ID:-0}"
-      DISCORD_CHANNEL_BOOKMARKS_ID: "${DISCORD_CHANNEL_BOOKMARKS_ID:-0}"
-      DISCORD_CHANNEL_REAL_ESTATE_ID: "${DISCORD_CHANNEL_REAL_ESTATE_ID:-0}"
       ALERT_CHANNEL_ID: "${ALERT_CHANNEL_ID:-0}"
       # NAS maintenance backup settings
       NAS_HOST: "${NAS_HOST:-192.168.1.8}"

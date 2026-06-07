@@ -121,7 +121,7 @@ services:
     labels:
       - "com.openclaw.environment=production"
       - "com.openclaw.version=0.6.0"
-      - "com.openclaw.service=discord-bot"
+      - "com.openclaw.service=slack-bot"
 
 # Named volumes for production data persistence
 volumes:

@@ -55,7 +55,6 @@ def _reload_config(monkeypatch, env_overrides: dict | None = None, yaml_text: st
 class TestConfigDefaults:
     def test_config_loads_defaults(self, monkeypatch, tmp_path):
         cfg = _reload_config(monkeypatch, tmp_path=tmp_path)
-        assert hasattr(cfg, "discord_token")
         assert hasattr(cfg, "llm_model")
         assert hasattr(cfg, "bot_name")
         assert hasattr(cfg, "version")

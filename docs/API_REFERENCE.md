@@ -196,7 +196,7 @@ url = "https://v1.basketball.api-sports.io/games"
   - Enterprise: Custom
 - **Skills Using It:**
   - `search_web()` in `skills/search_skills.py` (primary provider)
-  - `/websearch` Discord command
+  - `/websearch` Slack command
   - `/research` autonomous research workflow
 - **Configuration:**
   ```bash
@@ -367,7 +367,7 @@ url = "https://v1.basketball.api-sports.io/games"
 - **Cost:** Free (self-hosted)
 - **Skills Using It:**
   - `request_media()` in `src/overseerr.py`
-  - `/request` Discord command
+  - `/request` Slack command
   - Auto-approve system for media requests
 - **Configuration:**
   ```bash

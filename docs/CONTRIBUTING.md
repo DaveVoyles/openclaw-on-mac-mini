@@ -29,7 +29,7 @@ Guidelines for adding features, skills, and commands to OpenClaw.
 git clone https://github.com/davevoyles/openclaw.git
 cd openclaw
 cp .env.example .env
-# Fill in required values: DISCORD_BOT_TOKEN, DISCORD_GUILD_ID, ALLOWED_USER_IDS, GOOGLE_API_KEY
+# Fill in required values: SLACK_BOT_TOKEN, SLACK_APP_TOKEN, ALLOWED_USER_IDS, GOOGLE_API_KEY
 ```
 
 ### 2. Set up a virtual environment

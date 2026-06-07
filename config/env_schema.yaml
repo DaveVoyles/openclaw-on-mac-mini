@@ -14,27 +14,16 @@ schema_version: "1.0"
 
 variables:
 
-  # ── Bot Core / Discord ─────────────────────────────────────────────────────
-  DISCORD_BOT_TOKEN:
-    required: true
-    type: string
-    description: "Discord bot token from Developer Portal (Bot → Token → Copy)"
-    sensitive: true
-
-  DISCORD_GUILD_ID:
-    required: true
-    type: string
-    description: "Discord server (guild) ID — enables slash command registration"
-
+  # ── Bot Core ───────────────────────────────────────────────────────────────
   ALLOWED_USER_IDS:
     required: false
     type: string
-    description: "Comma-separated Discord user IDs allowed to use privileged commands"
+    description: "Comma-separated user IDs allowed to use privileged commands"
 
   ALERT_CHANNEL_ID:
     required: false
     type: string
-    description: "Discord channel ID for autonomous push notifications (morning briefing, alerts)"
+    description: "Channel ID for autonomous push notifications (morning briefing, alerts)"
 
   WEBHOOK_SECRET:
     required: false
@@ -59,26 +48,6 @@ variables:
     type: bool
     default: "true"
     description: "Require auth for API action endpoints"
-
-  DISCORD_CHANNEL_RESEARCH_ID:
-    required: false
-    type: string
-    description: "Channel ID routed to research workflow (prevents context bleed)"
-
-  DISCORD_CHANNEL_ANALYTICS_ID:
-    required: false
-    type: string
-    description: "Channel ID routed to analytics workflow"
-
-  DISCORD_CHANNEL_BOOKMARKS_ID:
-    required: false
-    type: string
-    description: "Channel ID routed to bookmarks workflow"
-
-  DISCORD_CHANNEL_REAL_ESTATE_ID:
-    required: false
-    type: string
-    description: "Channel ID routed to real-estate workflow"
 
   # ── LLM Providers ─────────────────────────────────────────────────────────
   GOOGLE_API_KEY:

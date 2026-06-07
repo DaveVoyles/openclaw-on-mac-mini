@@ -79,14 +79,12 @@ class TestValidateEnv:
         assert "FOO" in result.stdout
 
     def test_strict_all_present_exits_0(self, tmp_path: Path) -> None:
-        """--strict: all required vars present (incl. schema-required) → exit 0."""
-        # The script also loads config/env_schema.yaml which marks DISCORD_BOT_TOKEN
-        # and DISCORD_GUILD_ID as required, so both must be in .env too.
+        """--strict: all required vars present → exit 0."""
         result = run_validate_env(
             "--strict",
             tmp_path=tmp_path,
             example_content="# REQUIRED\nFOO=\n# REQUIRED\nBAR=\n",
-            env_content="FOO=hello\nBAR=world\nDISCORD_BOT_TOKEN=tok\nDISCORD_GUILD_ID=123\n",
+            env_content="FOO=hello\nBAR=world\n",
         )
         assert result.returncode == 0
 

@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "openclaw"
 version = "2026.4.16"
-description = "Autonomous AI Discord bot for home automation, media management, and system monitoring"
+description = "Autonomous AI Slack bot for home automation, media management, and system monitoring"
 license = "MIT"
 authors = [
     { name = "Dave Voyles" },
 ]
-keywords = ["discord", "bot", "ai", "home-automation", "media-server"]
+keywords = ["slack", "bot", "ai", "home-automation", "media-server"]
 requires-python = ">=3.12"
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -76,10 +76,6 @@ ignore = ["E501", "E402"]  # E501: line length handled by formatter; E402: defer
 "src/bot.py" = [
     "F401",  # bot.py is a backward-compat re-export hub; many imports are accessed as bot.* in tests
     "I001",  # Import sorting is complex due to re-export grouping
-]
-"src/discord_events.py" = [
-    "F401",  # discord_events.py re-exports symbols that tests patch via discord_events_mod.*
-    "I001",  # Import sorting suppressed alongside F401
 ]
 "src/openclaw_cli.py" = [
     "F401",  # openclaw_cli.py is a re-export facade; many imports are accessed as openclaw_cli.* in tests

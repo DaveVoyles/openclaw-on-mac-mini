@@ -31,7 +31,7 @@ Agents working on this codebase should read this file to understand what is avai
 
 | Service                     | Link                           | Description                                                 | Why We Use It                                                                             | Env Var(s)                                                  |
 | --------------------------- | ------------------------------ | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| **Slack**                   | https://api.slack.com          | Slash commands + Socket Mode bot — **sole** OpenClaw interface | `/copilot <prompt>` opens a threaded session that streams a Copilot CLI process running on the Mac Mini via SSH PTY; `/host <subcommand>` dispatches vetted quick-action prompts (status, logs, restart, plex-fix, etc.); `/incident` declares and tracks incidents. Owner-gated. See `src/slack_bot.py`, `src/host_bridge.py`, `src/host_bridge_shortcuts.py`. Discord was removed in May 2026. | `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, `SLACK_SIGNING_SECRET`, `OPENCLAW_HOST_BRIDGE_ALLOWED_USERS`, `SLACK_NOTIFY_USER_ID` |
+| **Slack**                   | https://api.slack.com          | Slash commands + Socket Mode bot — **sole** OpenClaw interface | `/copilot <prompt>` opens a threaded session that streams a Copilot CLI process running on the Mac Mini via SSH PTY; `/host <subcommand>` dispatches vetted quick-action prompts (status, logs, restart, plex-fix, etc.); `/incident` declares and tracks incidents. Owner-gated. See `src/slack_bot.py`, `src/host_bridge.py`, `src/host_bridge_shortcuts.py`. | `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, `SLACK_SIGNING_SECRET`, `OPENCLAW_HOST_BRIDGE_ALLOWED_USERS`, `SLACK_NOTIFY_USER_ID` |
 | **Gmail**                   | https://mail.google.com        | SMTP/IMAP email via Google App Password                     | Read and send personal email without managing full OAuth for email                        | `GMAIL_USER`, `GMAIL_APP_PASSWORD`                          |
 | **Outlook / Microsoft 365** | https://outlook.com            | SMTP/IMAP email via App Password                            | Read and send Outlook email accounts                                                      | `OUTLOOK_USER`, `OUTLOOK_APP_PASSWORD`                      |
 | **AgentMail**               | https://agentmail.to           | API-driven transactional email for AI agents                | Programmatic email sending purpose-built for agent workflows                              | `AGENTMAIL_API_KEY`, `AGENTMAIL_INBOX`                      |
@@ -103,7 +103,7 @@ Agents working on this codebase should read this file to understand what is avai
 | **Tailscale**       | https://tailscale.com                  | WireGuard-based mesh VPN                | Zero-config secure remote access to all home-lab devices without opening firewall ports    | Tailscale binary (auto-detected)                                                     |
 | **Google Calendar** | https://developers.google.com/calendar | Google Calendar REST API                | Read and create calendar events from agent commands                                        | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REFRESH_TOKEN` |
 | **Google OAuth2**   | https://console.cloud.google.com       | Google OAuth consent & token management | Provides tokens for Calendar and Gmail access; managed via `scripts/google_oauth_setup.py` | Same as above                                                                        |
-| **GitHub API**      | https://api.github.com                 | GitHub REST API v3                      | List PRs/issues and poll watched repos for the `/github` Discord cog; background DM alerts on new activity | `GITHUB_TOKEN`, `GITHUB_DEFAULT_REPOS` |
+| **GitHub API**      | https://api.github.com                 | GitHub REST API v3                      | List PRs/issues and poll watched repos for the `/github` Slack command; background DM alerts on new activity | `GITHUB_TOKEN`, `GITHUB_DEFAULT_REPOS` |
 | **Cloudflare**      | https://speed.cloudflare.com           | Speed test endpoint                     | Measures WAN download throughput via `/__down?bytes=10000000`                              | _(public URL, no key)_                                                               |
 
 ---
@@ -126,8 +126,8 @@ Agents working on this codebase should read this file to understand what is avai
 
 | Item              | Details                                                                             |
 | ----------------- | ----------------------------------------------------------------------------------- |
-| **Purpose**       | Read, edit, and create Word (.docx) and Excel (.xlsx) documents via Discord         |
-| **Module**        | `src/document_skills.py` (skill logic) + `src/cogs/doc_cog.py` (Discord commands)  |
+| **Purpose**       | Read, edit, and create Word (.docx) and Excel (.xlsx) documents via Slack         |
+| **Module**        | `src/document_skills.py` (skill logic) + `src/cogs/doc_cog.py` (command handlers)  |
 | **Dependencies**  | `python-docx` (Word support), `openpyxl` (Excel support) — listed in `requirements.txt` |
 | **Commands**      | `/doc read`, `/doc edit`, `/doc create`, `/sheet read`, `/sheet edit`, `/sheet create` |
 | **Env Vars**      | _(none required)_                                                                   |
@@ -176,9 +176,7 @@ OLLAMA_URL / OLLAMA_MODEL
 OPENAI_API_KEY         (optional)
 ANTHROPIC_API_KEY      (optional)
 
-# Bot & Auth
-DISCORD_BOT_TOKEN
-DISCORD_GUILD_ID
+# Auth
 ALLOWED_USER_IDS
 
 # API Gateway
@@ -192,7 +190,7 @@ SERPER_API_KEY               # Serper Google SERP (direct tool, not in cascade)
 WEATHER_DEFAULT_LOCATION     # default city for /weather (e.g. "Philadelphia")
 
 # Proactive Notifications
-ALERT_CHANNEL_ID             # Discord channel ID for morning briefings (optional)
+ALERT_CHANNEL_ID             # Channel ID for morning briefings (optional)
 
 # Research / Deep Reasoning
 THINKING_MODEL               # Gemini model for /research synthesis (default: gemini-2.5-flash)
@@ -237,10 +235,10 @@ MC_TASKS_FILE          # path to tasks.json inside container (default /app/data/
 VAULT_DIR              # Mount point inside container (default: /vault)
 
 # Channel Roles (per-channel prompt overrides)
-DISCORD_CHANNEL_RESEARCH_ID    # Discord channel ID for #research (optional)
-DISCORD_CHANNEL_ANALYTICS_ID   # Discord channel ID for #analytics (optional)
-DISCORD_CHANNEL_BOOKMARKS_ID   # Discord channel ID for #bookmarks (optional)
-DISCORD_CHANNEL_REAL_ESTATE_ID # Discord channel ID for #real-estate (optional)
+CHANNEL_RESEARCH_ID    # Channel ID for #research (optional)
+CHANNEL_ANALYTICS_ID   # Channel ID for #analytics (optional)
+CHANNEL_BOOKMARKS_ID   # Channel ID for #bookmarks (optional)
+CHANNEL_REAL_ESTATE_ID # Channel ID for #real-estate (optional)
 
 # Budget
 GEMINI_PRICE_INPUT_PER_M

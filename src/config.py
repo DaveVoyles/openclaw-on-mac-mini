@@ -7,7 +7,6 @@ Single source of truth for all config values. Loads from:
 
 Usage:
     from config import cfg
-    log.debug("Discord token configured: %s", "***" if cfg.discord_token else "missing")
     log.debug("LLM model: %s", cfg.llm_model)
 """
 
@@ -70,9 +69,6 @@ DB_TIMEOUT_DEFAULT: int = 10  # seconds; prevent indefinite SQLite lock waits
 class _Config:
     """Read-only config namespace. Env vars override YAML defaults."""
 
-    # -- Discord ---------------------------------------------------------------
-    discord_token: str = os.getenv("DISCORD_BOT_TOKEN", "")
-    discord_guild_id: str = os.getenv("DISCORD_GUILD_ID", "")
     allowed_user_ids: list[int] = [
         int(uid.strip()) for uid in os.getenv("ALLOWED_USER_IDS", "").split(",") if uid.strip()
     ]
@@ -310,8 +306,6 @@ class _Config:
         issues: list[str] = []
 
         # --- Required ---
-        if not self.discord_token:
-            issues.append("❌ DISCORD_BOT_TOKEN not set — bot cannot start")
         if not self.google_api_key:
             issues.append("⚠️ GOOGLE_API_KEY not set — Gemini LLM unavailable")
 
@@ -369,7 +363,6 @@ class _Config:
                 }
             )
 
-        _add("Discord Bot Token", bool(self.discord_token))
         _add("Google API Key (Gemini)", bool(self.google_api_key))
         _add("Perplexity API Key", bool(self.perplexity_api_key), "Web search fallback to Tavily/DDG")
         _add("Firecrawl API Key", bool(self.firecrawl_api_key), "Web scraping")

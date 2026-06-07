@@ -106,7 +106,7 @@ The agent earns its keep on a homelab, which is what keeps the engineering hones
 | **Secondary** | Dashboard | [openclaw.davevoyles.synology.me/dashboard](https://openclaw.davevoyles.synology.me/dashboard) | Live evals, run timeline, controls, transcripts |
 | **Also available** | Web Chat | [chat.davevoyles.synology.me](https://chat.davevoyles.synology.me) | Browser-based conversations |
 
-> Discord has been removed. Slack is the main messaging interface.
+> Slack is the primary messaging interface.
 
 ## Key Slack commands
 
