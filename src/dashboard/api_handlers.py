@@ -4420,7 +4420,11 @@ async def api_hermes_status_handler(request: web.Request) -> web.Response:
         skills_path = hermes_home / "skills"
         custom_skill_count = len(list(skills_path.iterdir())) if skills_path.exists() else 0
         result["skill_count"] = custom_skill_count
-        result["skill_count_label"] = f"{custom_skill_count} custom + 90 bundled"
+        # Only the measured custom-skill count is reported; the Copilot CLI's
+        # bundled skill set isn't programmatically enumerable from here, so we
+        # avoid hardcoding a fabricated "+ N bundled" figure that can drift.
+        label_noun = "custom skill" if custom_skill_count == 1 else "custom skills"
+        result["skill_count_label"] = f"{custom_skill_count} {label_noun}"
 
         state_db = hermes_home / "state.db"
         result["state_db_exists"] = state_db.exists()
