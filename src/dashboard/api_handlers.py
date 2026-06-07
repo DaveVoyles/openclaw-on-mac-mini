@@ -2049,7 +2049,8 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
                             break
                 except OSError:
                     continue
-            from datetime import datetime as _dt, timezone as _tz
+            from datetime import datetime as _dt
+            from datetime import timezone as _tz
 
             for entry in raw_entries[:20]:
                 ts = entry.get("ts", "")
