@@ -29,17 +29,16 @@ This repo is published on GitHub at `DaveVoyles/openclaw-on-mac-mini`. **Every f
 
 **Quick pre-commit scan:**
 
+Run the automated scanner (also enforced on every push/PR by `.github/workflows/privacy-scan.yml`):
+
 ```bash
-# 1. Real personal email or live Slack/Discord invite links — must be EMPTY
-git grep -nIE 'dnvoyles@gmail\.com|join\.slack\.com/t/[^ "<]+|discord\.gg/[A-Za-z0-9]+' -- ':!*.md' || echo "clean"
-
-# 2. Token-like strings, excluding known placeholders/test fixtures — review any hits
-git grep -nIE 'xoxb-[A-Za-z0-9-]{10,}|ghp_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}' \
-  | grep -viE 'YOUR|xxxx|example|test_host_bridge|placeholder' || echo "clean"
-
-# 3. Confirm .env is NOT tracked — output must be empty (note: git ls-files always exits 0)
-[ -z "$(git ls-files .env)" ] && echo ".env not tracked (good)" || echo "DANGER: .env is tracked"
+make scan-private          # or: python3 scripts/scan_private_data.py
 ```
+
+It flags the owner's personal email, live Slack workspace invites, real secret
+tokens, and tracked credential files — while ignoring placeholders, test
+fixtures, and acceptable homelab data (LAN IPs, personal paths). Exit code 1
+means private data was found.
 
 ## Shared versus repo-specific
 

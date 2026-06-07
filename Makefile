@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: test test-cli test-verbose lint lint-fix format type-check build clean deploy deploy-cli verify-deploy ship ship-server ship-cli e2e e2e-macbook slack-manifest slack-manifest-push slack-manifest-check install-watcher smoke smoke-verbose ci validate-env help
+.PHONY: test test-cli test-verbose lint lint-fix format type-check build clean deploy deploy-cli verify-deploy ship ship-server ship-cli e2e e2e-macbook slack-manifest slack-manifest-push slack-manifest-check install-watcher smoke smoke-verbose ci validate-env scan-private help
 
 help:  ## Show available targets and descriptions
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -61,6 +61,9 @@ ci:  ## Full local CI equivalent (lint + smoke + typecheck)
 
 validate-env:  ## Validate .env against .env.example
 	python3 scripts/validate_env.py
+
+scan-private:  ## Scan tracked files for private/personal data (public-repo guard)
+	python3 scripts/scan_private_data.py
 
 build:  ## Build Docker image
 	@echo "🐳 Building Docker image..."

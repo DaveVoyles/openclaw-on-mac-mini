@@ -1,0 +1,34 @@
+name: Privacy Scan
+
+# Guards the public repository against committed private/personal data:
+# the owner's personal email, live Slack workspace invites, real secret
+# tokens, or tracked credential files. Runs on EVERY push and PR with no
+# path filter — private data can land in any file type (templates, docs,
+# config, data files), so the scan is intentionally unfiltered.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan-private-data:
+    name: Scan for private/personal data
+    runs-on: [self-hosted, macOS, ARM64, openclaw]
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Scan tracked files
+        run: python3 scripts/scan_private_data.py --verbose

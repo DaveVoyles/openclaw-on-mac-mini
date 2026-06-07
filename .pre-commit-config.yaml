@@ -37,6 +37,16 @@ repos:
         args: [-c, pyproject.toml, -r, src/]
         additional_dependencies: ["bandit[toml]"]
 
+  # Private/personal data guard (public-repo policy — see .github/docs/README.md)
+  - repo: local
+    hooks:
+      - id: scan-private-data
+        name: Scan for private/personal data
+        entry: python3 scripts/scan_private_data.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
