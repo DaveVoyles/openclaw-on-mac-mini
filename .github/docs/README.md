@@ -9,7 +9,7 @@ This repo is published on GitHub at `DaveVoyles/openclaw-on-mac-mini`. **Every f
 
 **Before every commit or push, confirm you are NOT introducing:**
 
-- Real personal emails — use `you@example.com` in docs/examples (never `you@example.com` or any real address)
+- Real personal emails — use `you@example.com` in docs/examples (never a real personal address such as the repo owner's Gmail)
 - Live workspace/chat invite links — Slack `join.slack.com/t/.../shared_invite/...`, Discord invites, etc. Replace with "ask the owner for a current invite link"
 - Real credentials, tokens, or keys — use placeholders only (`xoxb-YOUR-BOT-TOKEN`, `sk-...`, `ghp_...`). See the shared Security and Credential Policy
 - Real phone numbers, home addresses, or other non-public PII

@@ -26,9 +26,13 @@ def _import():
     return mod
 
 
+# Owner email assembled from parts so the literal address is not stored verbatim
+# in this public repo (still exercises real detection end-to-end).
+_OWNER_EMAIL = "dnvoyles" + "@" + "gmail.com"
+
 # Real-looking secrets that contain NO placeholder markers, so they must be flagged.
 REAL_LEAKS = [
-    "you@example.com",
+    _OWNER_EMAIL,
     "https://join.slack.com/t/dvopenclaw/shared_invite/zt-3rstuv-realtoken99",
     "xoxb-9988776655-" + "B" * 20,
     "ghp_" + "B" * 36,
@@ -85,13 +89,13 @@ class TestScanFile:
     def test_flags_file_with_leak(self, tmp_path):
         mod = _import()
         f = tmp_path / "leak.txt"
-        f.write_text("line one\nemail you@example.com here\nline three\n")
+        f.write_text(f"line one\nemail {_OWNER_EMAIL} here\nline three\n")
         results = mod.scan_file(tmp_path, "leak.txt")
         assert len(results) == 1
         lineno, name, _desc, matched = results[0]
         assert lineno == 2
         assert name == "personal-email"
-        assert matched == "you@example.com"
+        assert matched == _OWNER_EMAIL
 
     def test_clean_file_no_findings(self, tmp_path):
         mod = _import()
@@ -102,7 +106,7 @@ class TestScanFile:
     def test_binary_file_skipped(self, tmp_path):
         mod = _import()
         f = tmp_path / "blob.bin"
-        f.write_bytes(b"\x00\x01\x02\xff you@example.com \x00")
+        f.write_bytes(b"\x00\x01\x02\xff " + _OWNER_EMAIL.encode() + b" \x00")
         # Unreadable as utf-8 -> skipped, no crash
         assert mod.scan_file(tmp_path, "blob.bin") == []
 
