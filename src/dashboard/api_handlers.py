@@ -3260,6 +3260,7 @@ async def _execute_agent_ask(
     on_partial_chunk: callable | None = None,
 ) -> dict[str, object]:
     from ask_orchestrator import run_ask_stream
+    from error_tracker import journal_ask_outcome
     from llm import chat_stream as llm_chat_stream
     from quality_helpers import (
         _build_ask_recovery_block,
@@ -3268,6 +3269,7 @@ async def _execute_agent_ask(
         _with_requested_item_target,
     )
 
+    _ask_t0 = time.monotonic()
     latest_history = list(history)
     last_partial = ""
 
@@ -3346,6 +3348,15 @@ async def _execute_agent_ask(
         tokens = int(tokens_raw or 0)
     except (TypeError, ValueError):
         tokens = 0
+
+    journal_ask_outcome(
+        question=prompt,
+        response_text=response_text,
+        model_used=model_used,
+        final_meta=final_meta,
+        success=bool(response_text),
+        latency_ms=int((time.monotonic() - _ask_t0) * 1000),
+    )
 
     return {
         "response": response_text,

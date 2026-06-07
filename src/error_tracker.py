@@ -69,6 +69,41 @@ def record_outcome(
         log.debug("Failed to write error journal: %s", e)
 
 
+def journal_ask_outcome(
+    *,
+    question: str = "",
+    response_text: str = "",
+    model_used: str = "unknown",
+    final_meta: dict | None = None,
+    success: bool = True,
+    latency_ms: int = 0,
+    error_msg: str = "",
+) -> None:
+    """Best-effort journaling of a completed /ask outcome.
+
+    Maps the executor's ``final_meta`` onto :func:`record_outcome`. Wrapped so it
+    never raises into the response path — telemetry must not break a user answer.
+    """
+    try:
+        meta = final_meta if isinstance(final_meta, dict) else {}
+        routing_notes = meta.get("routing_notes")
+        routing_notes = [str(n) for n in routing_notes] if isinstance(routing_notes, list) else []
+        tools_called = meta.get("tools_called")
+        tools_called = [str(t) for t in tools_called] if isinstance(tools_called, list) else []
+        record_outcome(
+            question=question or "",
+            model_used=model_used or "unknown",
+            success=success,
+            error_msg=error_msg,
+            latency_ms=int(latency_ms or 0),
+            routing_notes=routing_notes,
+            tools_called=tools_called,
+            response_preview=response_text or "",
+        )
+    except Exception:  # broad: telemetry must never break the response path
+        log.debug("journal_ask_outcome failed", exc_info=True)
+
+
 def get_recent_outcomes(hours: int = 24, limit: int = 100) -> list[dict]:
     """Read recent outcomes from the journal."""
     if not JOURNAL_FILE.exists():
