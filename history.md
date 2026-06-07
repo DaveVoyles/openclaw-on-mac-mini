@@ -129,3 +129,4 @@
 - 2026-06-07: Pre-public-release audit — scrubbed personal email + live Slack invite link from help pages, added MIT LICENSE; secrets confirmed clean. Repo now publish-ready (visibility flip left to user).
 - 2026-06-07: Added "repository is PUBLIC — no private data" policy + pre-commit scan to .github/docs/README.md and COMPLETION-RULES.md so future agents avoid committing PII/secrets.
 - 2026-06-07: Added automated privacy scan (scripts/scan_private_data.py + privacy-scan.yml CI workflow + pre-commit hook + 27 tests) that fails any push/PR introducing the owner personal email, live Slack invites, real secrets, or tracked credential files.
+- 2026-06-07: Final pre-public sign-off — verified no secrets/tokens/.env in full git history (clean); only residue in old commits is the owner personal Gmail (semi-public, low risk) + an already-EXPIRED Slack invite. GO to make public; visibility flip deliberately left to user (irreversible action).
