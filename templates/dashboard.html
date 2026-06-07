@@ -1685,7 +1685,7 @@
         </div>
 
         <!-- Top cards -->
-        <div class="grid">
+        <div class="grid" id="main-grid">
           <!-- System Alerts Panel — shown at top when alerts exist -->
           <div id="system-alerts-panel" style="display:none;margin-bottom:1rem;padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:10px;grid-column:1 / -1">
             <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">
@@ -8036,6 +8036,57 @@
               anchor.parentNode.insertBefore(det,anchor.nextSibling);
               console.log('[showcase] promoted '+moved+' agent cards into featured section');
             }catch(e){console.error('[showcase] promote failed',e);}
+          }
+          if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',run);}else{run();}
+        })();
+      </script>
+
+      <!-- 🗂 Interview showcase: tiered card grouping (System & Ops + Homelab & Media), client-side, additive + reversible -->
+      <script>
+        (function groupDashboardCards(){
+          function mkSection(id, title, sub, open){
+            var det=document.createElement('details');
+            det.id=id; det.className='cat-section'; det.open=open;
+            det.innerHTML='<summary class="cat-summary"><span class="cat-title">'+title+'</span><span class="cat-sub">'+sub+'</span><span class="cat-chev">\u25BE</span></summary>';
+            var body=document.createElement('div'); body.className='grid cat-grid';
+            det.appendChild(body); det._body=body;
+            return det;
+          }
+          function categorize(card){
+            var id=(card.id||'').toLowerCase();
+            var hEl=card.querySelector('h2,h3');
+            var h=(hEl?hEl.textContent:'').toLowerCase();
+            var hay=id+' '+h;
+            var media=['plex','sonarr','radarr','lidarr','overseerr','sabnzbd','download','media request','upcoming episode','watchlist','tautulli','nas-',' nas','calendar'];
+            for(var i=0;i<media.length;i++){ if(hay.indexOf(media[i])>=0) return 'media'; }
+            return 'ops';
+          }
+          function run(){
+            try{
+              if(document.getElementById('cat-system-ops')) return;
+              var keep={'architecture-card':1,'agent-chat-card':1};
+              var cands=[];
+              Array.prototype.slice.call(document.querySelectorAll('.card')).forEach(function(card){
+                if(keep[card.id]) return;
+                if(card.closest('.cat-section')) return;            // already in featured/new section
+                if(card.parentElement&&card.parentElement.closest('.card')) return; // nested inside another card
+                cands.push(card);
+              });
+              if(!cands.length) return;
+              var ops=mkSection('cat-system-ops','\uD83D\uDDA5\uFE0F System & Ops','infra \u00b7 monitoring \u00b7 containers \u00b7 config \u00b7 spending',true);
+              var media=mkSection('cat-homelab-media','\uD83C\uDFAC Homelab & Media','plex \u00b7 sonarr/radarr \u00b7 downloads \u00b7 NAS \u00b7 requests',false);
+              var nOps=0,nMedia=0;
+              cands.forEach(function(card){
+                if(categorize(card)==='media'){ media._body.appendChild(card); nMedia++; }
+                else { ops._body.appendChild(card); nOps++; }
+              });
+              var ref=document.getElementById('cat-agent-featured')||document.getElementById('agent-chat-card');
+              if(ref&&ref.parentNode){
+                ref.parentNode.insertBefore(ops, ref.nextSibling);
+                ops.parentNode.insertBefore(media, ops.nextSibling);
+              }
+              console.log('[showcase] grouped cards \u2014 ops:'+nOps+' media:'+nMedia);
+            }catch(e){console.error('[showcase] grouping failed',e);}
           }
           if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',run);}else{run();}
         })();

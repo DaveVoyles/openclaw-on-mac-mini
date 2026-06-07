@@ -115,3 +115,4 @@
 - 2026-06-06: Fixed 3 dashboard bugs — Task Status table overflow (overflow-x:auto), Memory Browser tags now stack vertically, Recent Activity columns now populate (normalized host_bridge shell-audit schema + epoch→ISO timestamps).
 - 2026-06-06: Fixed dashboard 'apiFetch is not defined' bug — defined the missing authenticated fetch helper, restoring Downloads, Uptime, Audit Log, and NAS Status cards.
 - 2026-06-06: Filtered automated per-minute dashboard health polls (tmutil/tailscale) out of the Recent Activity feed for a high-signal agent-activity view.
+- 2026-06-06: Wave B — added client-side tiered card grouping (collapsible '🖥️ System & Ops' open + '🎬 Homelab & Media' collapsed), categorizing 45 non-featured cards by id/heading keyword; additive, reversible, defensive (try/catch + re-run guard).
