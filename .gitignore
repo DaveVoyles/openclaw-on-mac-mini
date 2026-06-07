@@ -33,8 +33,9 @@ data/dream/index.json
 data/dream/dream-log.md
 data/dream/archive.md
 data/dream/episodes/
-# Keep templates tracked
-!data/dream/MEMORY.md
+# Personal memory file — contains private data, must never be tracked (public repo)
+data/dream/MEMORY.md
+# Keep generic procedures template tracked
 !data/dream/procedures.md
 
 # ClawHub local state
@@ -61,7 +62,10 @@ data/backups/
 data/exports/
 data/chromadb/
 data/health_history.db
+data/health-history.json
 data/onboarding_seen.json
+# Personal vault notes/research — never track (public repo)
+data/vault/
 .hypothesis/
 
 # Session export files
