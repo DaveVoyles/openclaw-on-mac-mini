@@ -982,31 +982,40 @@
           </div>
         </div>
 
-        <!-- Quick Stats Strip -->
+        <!-- Quick Stats Strip — agent metrics lead, then system, then media -->
         <div id="quick-stats-strip" style="display:flex;flex-wrap:wrap;gap:0.5rem;padding:0.5rem 0;margin-bottom:0.5rem">
-          <div class="stat-pill" id="stat-plex" onclick="document.getElementById('plex-activity-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Plex">
-            <span class="stat-icon">🎬</span><span id="stat-plex-val">—</span>
+          <div class="stat-pill" id="stat-skills" onclick="document.getElementById('cat-agent-featured')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Loaded agent skills">
+            <span class="stat-icon">🧰</span><span id="stat-skills-val">—</span>
           </div>
-          <div class="stat-pill" id="stat-arr" onclick="document.getElementById('arr-queue-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Downloads">
-            <span class="stat-icon">📥</span><span id="stat-arr-val">—</span>
+          <div class="stat-pill" id="stat-model" onclick="document.getElementById('model-usage-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Primary model">
+            <span class="stat-icon">🧠</span><span id="stat-model-val">—</span>
           </div>
-          <div class="stat-pill" id="stat-disk" onclick="document.getElementById('system-health-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Health">
-            <span class="stat-icon">💾</span><span id="stat-disk-val">—</span>
+          <div class="stat-pill" id="stat-commands" onclick="document.getElementById('cat-agent-featured')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Slack commands">
+            <span class="stat-icon">⌨️</span><span id="stat-commands-val">—</span>
           </div>
           <div class="stat-pill" id="stat-hermes" onclick="document.getElementById('hermes-sessions-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Hermes">
             <span class="stat-icon">⚕</span><span id="stat-hermes-val">—</span>
           </div>
-          <div class="stat-pill" id="stat-sabnzbd" onclick="document.getElementById('sabnzbd-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Downloads">
-            <span class="stat-icon">📥</span><span id="stat-sabnzbd-val">—</span>
-          </div>
-          <div class="stat-pill" id="stat-qbt" onclick="document.getElementById('sabnzbd-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Downloads">
-            <span class="stat-icon">🌊</span><span id="stat-qbt-val">—</span>
+          <div class="stat-pill" id="stat-disk" onclick="document.getElementById('system-health-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Health">
+            <span class="stat-icon">💾</span><span id="stat-disk-val">—</span>
           </div>
           <div class="stat-pill" id="stat-nas" onclick="document.getElementById('nas-status-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="NAS disk usage">
             <span class="stat-icon">🖥️</span><span id="stat-nas-val">—</span>
           </div>
           <div class="stat-pill" id="stat-uptime" onclick="document.getElementById('uptime-kuma-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Uptime Kuma">
             <span class="stat-icon">📊</span><span id="stat-uptime-val">—</span>
+          </div>
+          <div class="stat-pill" id="stat-plex" onclick="document.getElementById('plex-activity-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Plex">
+            <span class="stat-icon">🎬</span><span id="stat-plex-val">—</span>
+          </div>
+          <div class="stat-pill" id="stat-arr" onclick="document.getElementById('arr-queue-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Downloads">
+            <span class="stat-icon">📥</span><span id="stat-arr-val">—</span>
+          </div>
+          <div class="stat-pill" id="stat-sabnzbd" onclick="document.getElementById('sabnzbd-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Downloads">
+            <span class="stat-icon">📥</span><span id="stat-sabnzbd-val">—</span>
+          </div>
+          <div class="stat-pill" id="stat-qbt" onclick="document.getElementById('sabnzbd-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Downloads">
+            <span class="stat-icon">🌊</span><span id="stat-qbt-val">—</span>
           </div>
         </div>
  
@@ -2716,6 +2725,18 @@
         document.getElementById("uptime-badge").textContent =
           "\u23f1 " + formatUptime(d.uptime_seconds);
         document.getElementById("link-github").href = d.github_repo;
+
+        // Agent metric pills lead the quick-stats strip (skills, model, commands)
+        try {
+          const skEl = document.getElementById("stat-skills-val");
+          if (skEl) skEl.textContent = (d.skill_count || 0) + " skills";
+          const mdEl = document.getElementById("stat-model-val");
+          if (mdEl && d.model) mdEl.textContent = d.model;
+          const cmEl = document.getElementById("stat-commands-val");
+          if (cmEl) cmEl.textContent = cmdCount + " cmds";
+        } catch (e) {
+          /* non-fatal: pills are additive */
+        }
 
         // Spending
         const sp = d.spending;
