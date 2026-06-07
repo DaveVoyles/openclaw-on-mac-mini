@@ -901,13 +901,23 @@
           <div class="header-title">
             <div class="logo"></div>
             <div>
-              <h1>Dave's OpenClaw on a Mac Mini</h1>
-              <span
-                id="subtitle"
-                class="badge badge-blue"
-                style="margin-top: 2px"
-              ></span>
-              <span class="badge" style="background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);margin-top:2px;margin-left:4px">⚕ Hermes + Copilot active</span>
+              <h1>OpenClaw — Autonomous Multi-LLM Agent Platform</h1>
+              <div class="hero-tagline" style="font-size:0.86rem;color:var(--muted);margin-top:3px;line-height:1.45;max-width:64ch">
+                A self-hosted AI agent with persistent memory, 90 tool skills, human-in-the-loop approvals, and automated quality evals — routing each turn to Claude, GitHub Copilot, Gemini, or local Ollama. Running 24/7 on a Mac Mini, native in Slack &amp; Discord.
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:0.3rem;margin-top:0.5rem;align-items:center">
+                <span
+                  id="subtitle"
+                  class="badge badge-blue"
+                  style="margin-top: 2px"
+                ></span>
+                <span class="badge" style="background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3)">⚕ Hermes + Copilot active</span>
+                <span class="badge" style="background:rgba(104,172,229,0.12);color:var(--spirit-blue);border:1px solid rgba(104,172,229,0.3)">🤖 Multi-model router</span>
+                <span class="badge" style="background:rgba(241,196,0,0.12);color:var(--gold);border:1px solid rgba(241,196,0,0.3)">🛡 Human-in-the-loop</span>
+                <span class="badge" style="background:rgba(104,172,229,0.12);color:var(--spirit-blue);border:1px solid rgba(104,172,229,0.3)">📊 Quality evals</span>
+                <span class="badge" style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.25)">🧠 Persistent memory</span>
+                <span class="badge" style="background:rgba(255,255,255,0.06);color:var(--muted);border:1px solid var(--border)">✅ 5,890+ tests · CI/CD</span>
+              </div>
             </div>
           </div>
           <div class="header-right">
@@ -1083,6 +1093,36 @@
           <span>🌉 Bridge: <span id="st-bridge" class="status-dot">…</span></span>
           <span>🎭 Patreon: <span id="st-patreon" class="status-dot">…</span></span>
           <span id="st-approvals-wrap" style="display:none">🛡️ <span id="st-approvals-count" style="color:var(--danger,#f85149);font-weight:700">0</span> pending approval(s)</span>
+        </div>
+
+        <!-- 🏗 Architecture overview (interview showcase) -->
+        <style>
+          #architecture-card .arch-row{display:flex;align-items:stretch;gap:0.4rem;flex-wrap:wrap;justify-content:center}
+          #architecture-card .arch-node{flex:1 1 150px;min-width:140px;max-width:215px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0.6rem 0.7rem;text-align:center}
+          #architecture-card .arch-node .an-title{font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:0.25rem}
+          #architecture-card .arch-node .an-sub{font-size:0.72rem;color:var(--muted);line-height:1.35}
+          #architecture-card .arch-arrow{display:flex;align-items:center;color:var(--spirit-blue);font-size:1.1rem;font-weight:700}
+          @media (max-width:720px){#architecture-card .arch-arrow{transform:rotate(90deg);width:100%;justify-content:center;height:0.9rem}}
+        </style>
+        <div class="card" id="architecture-card" style="margin-bottom:0.9rem">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.45rem">
+            <h2 style="margin:0;font-size:1.05rem">🏗 Architecture &amp; how it works</h2>
+            <span style="font-size:0.74rem;color:var(--muted)">request → agent core → model router → guarded action → tools</span>
+          </div>
+          <p style="font-size:0.85rem;color:var(--muted);line-height:1.5;margin:0 0 0.9rem">
+            A natural-language request from Slack or Discord enters a persistent-memory agent core that plans the work and selects from 90 tool skills. Each turn is routed to the best available model — Claude, GitHub Copilot, Gemini, or local Ollama. Before any state-changing action runs it passes human-in-the-loop approvals and is scored by automated quality evals, then executes against real systems (NAS, browser, shell, GitHub, the media stack).
+          </p>
+          <div class="arch-row">
+            <div class="arch-node"><div class="an-title">🗣 Interfaces</div><div class="an-sub">Slack · Discord · Web dashboard</div></div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-node"><div class="an-title">🧠 Agent Core</div><div class="an-sub">Planning · persistent memory · 90 skills</div></div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-node"><div class="an-title">🤖 Model Router</div><div class="an-sub">Claude · Copilot · Gemini · Ollama</div></div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-node"><div class="an-title">🛡 Guarded Action</div><div class="an-sub">Human approvals · quality evals</div></div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-node"><div class="an-title">🛠 Tools &amp; Systems</div><div class="an-sub">NAS · browser · shell · GitHub · *arr</div></div>
+          </div>
         </div>
 
         <!-- 💬 Ask OpenClaw Agent (Dashboard Chat) -->
@@ -1623,7 +1663,7 @@
             </div>
           </div>
         </div>
-        <div class="card">
+        <div class="card" id="ontology-card">
           <h2>&#129504; Long-Term Memory (Ontology)</h2>
           <div id="ontology-list">
             <div style="color: var(--muted); font-style: italic">
@@ -1896,7 +1936,7 @@
         </div>
 
         <!-- Model Usage Chart -->
-        <div class="card">
+        <div class="card" id="model-usage-card">
           <h2>🤖 Model Usage (7 days)</h2>
           <div id="model-usage"></div>
           <div id="model-token-summary" style="margin-top:0.6rem;padding-top:0.5rem;border-top:1px solid var(--border)"></div>
@@ -1909,7 +1949,7 @@
           <div id="schedules-list"></div>
         </div>
 
-        <div class="card">
+        <div class="card" id="active-plans-card">
           <h2>🗺️ Active Plans</h2>
           <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.6rem">
             Live agent-loop plans with progress, linked sessions, and task drilldowns.
@@ -1918,7 +1958,7 @@
           <pre id="plan-detail" style="display:none;margin-top:0.8rem;padding:0.9rem 1rem;background:var(--surface-solid,#0d1117);border:1px solid var(--border,#333);border-radius:8px;white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto"></pre>
         </div>
 
-        <div class="card">
+        <div class="card" id="task-status-card">
           <h2>📋 Unified Task Status</h2>
           <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.6rem">
             Mission Control and scheduler tasks normalized into one supervision queue.
@@ -2021,7 +2061,7 @@
         </div>
 
         <!-- Approvals Control Plane -->
-        <div class="card">
+        <div class="card" id="approvals-card">
           <h2>🛡️ Approvals Control Plane <span id="approvals-pending-badge" style="display:none;background:var(--danger,#f85149);color:#fff;border-radius:12px;font-size:0.65rem;padding:0.1rem 0.5rem;font-weight:700;vertical-align:middle;margin-left:0.35rem">0</span></h2>
           <h3 style="margin:0.3rem 0 0.6rem 0;font-size:0.9rem;color:var(--muted)">Pending</h3>
           <div class="scrollable-list" style="max-height:220px">
@@ -2059,7 +2099,7 @@
         </div>
 
         <!-- Run History Timeline -->
-        <div class="card">
+        <div class="card" id="run-history-card">
           <h2>🧭 Run History Timeline</h2>
           <div class="muted-text" style="font-size:0.75rem;margin-top:-0.2rem;margin-bottom:0.5rem">
             Workflow Lanes
@@ -6184,7 +6224,10 @@
 
       function jumpTo(cardId) {
         const el = document.getElementById(cardId);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (!el) return;
+        const d = el.closest('details');
+        if (d && !d.open) d.open = true;
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
 
       function setQuickPrompt(text) {
@@ -7944,6 +7987,39 @@
         }
       }
     </script>
+      <!-- 🤖 Interview showcase: featured Agent Engineering section (built client-side, additive + reversible) -->
+      <style>
+        .cat-section{margin:0 0 1rem;border:1px solid var(--border);border-radius:12px;background:rgba(104,172,229,0.04);overflow:hidden}
+        .cat-section>.cat-summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:0.6rem;padding:0.7rem 1rem;background:linear-gradient(135deg,rgba(104,172,229,0.10),rgba(0,45,114,0.12));border-bottom:1px solid var(--border);flex-wrap:wrap}
+        .cat-section>.cat-summary::-webkit-details-marker{display:none}
+        .cat-summary .cat-title{font-size:1rem;font-weight:700;color:var(--text)}
+        .cat-summary .cat-sub{font-size:0.74rem;color:var(--muted)}
+        .cat-summary .cat-chev{margin-left:auto;color:var(--spirit-blue);transition:transform .2s}
+        .cat-section[open]>.cat-summary .cat-chev{transform:rotate(180deg)}
+        .cat-section>.cat-grid{padding:1rem}
+      </style>
+      <script>
+        (function promoteAgentCards(){
+          function run(){
+            try{
+              var anchor=document.getElementById('agent-chat-card');
+              if(!anchor||document.getElementById('cat-agent-featured'))return;
+              var order=['hermes-status-card','quality-eval-card','approvals-card','run-history-card','model-usage-card','ontology-card','hermes-memory-card','hermes-skills-card','active-plans-card','task-status-card','hermes-sessions-card','memory-browser-card'];
+              var det=document.createElement('details');
+              det.id='cat-agent-featured';det.className='cat-section';det.open=true;
+              det.innerHTML='<summary class="cat-summary"><span class="cat-title">\uD83E\uDD16 Agent Engineering</span><span class="cat-sub">memory \u00b7 skills \u00b7 evals \u00b7 approvals \u00b7 orchestration \u00b7 observability</span><span class="cat-chev">\u25BE</span></summary>';
+              var body=document.createElement('div');body.className='grid cat-grid';
+              var moved=0;
+              order.forEach(function(id){var el=document.getElementById(id);if(el){body.appendChild(el);moved++;}});
+              det.appendChild(body);
+              anchor.parentNode.insertBefore(det,anchor.nextSibling);
+              console.log('[showcase] promoted '+moved+' agent cards into featured section');
+            }catch(e){console.error('[showcase] promote failed',e);}
+          }
+          if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',run);}else{run();}
+        })();
+      </script>
+
       <!-- Scroll to top FAB -->
       <button id="scroll-top-btn" onclick="window.scrollTo({top:0,behavior:'smooth'})"
         style="display:none;position:fixed;bottom:5rem;right:1rem;z-index:900;width:42px;height:42px;border-radius:50%;background:rgba(124,58,237,0.85);border:none;color:#fff;font-size:1.1rem;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.3);backdrop-filter:blur(4px)"
