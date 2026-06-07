@@ -164,3 +164,29 @@ Recommended activation: `?showcase=1` **plus** a small header toggle.
 - **Visual confirmation pending from user** on the live page.
 
 **Not done (deferred, optional):** collapsing Homelab/Media into its own collapsed-by-default section; agent-first quick-stats strip with live metrics; README screenshots. Awaiting user feedback before further reorg.
+
+---
+
+## Status update (autonomous session, 2026-06-06)
+
+### ✅ Completed & verified live (CI green)
+- **A1** Task Status overflow → `overflow-x:auto` (scrolls inside card).
+- **A2** Memory Browser tags → stack vertically (`.memory-tags` flex column).
+- **A3** Recent Activity → normalized `host_bridge` shell schema (action/detail/result
+  + epoch→ISO), then **filtered** automated per-minute dashboard health polls
+  (`slack_user_id="dashboard"`) for a high-signal agent feed.
+- **Bonus (user-reported live):** defined the missing `apiFetch` helper — fixed
+  Downloads (SABnzbd/qBittorrent), Uptime, Audit Log, and NAS Status cards in one shot.
+
+Commits: 4702979, 367b3c9, 85ad611 (Wave A + ruff), 571d4e5 (apiFetch), 504cef1 (activity filter). All pushed; CI passing.
+
+### ⏸ Deferred — Wave B (tiered grouping) & Wave C (agent stat strip)
+**Reason:** Both are client-built DOM reorganizations that the plan itself flags as
+**not headlessly verifiable** — they need a human eyeball on the live page. Investigation
+showed the dashboard DOM is **irregular**: some cards are standalone block elements with
+inline `margin-bottom` (e.g. `interfaces-card`, `wol-card`, `tailscale-card`) while others
+are children of the single `.grid` (line 1688). Reorganizing ~80 heterogeneous cards
+without visual confirmation risks breaking a currently-working, interview-ready page.
+
+**Decision:** Hold Wave B/C until the user can review the live page after Wave A. The
+proven `promoteAgentCards` pattern (line 8023) is ready to extend once verification is possible.
