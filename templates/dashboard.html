@@ -10,6 +10,15 @@
     <meta name="apple-mobile-web-app-title" content="OpenClaw">
     <meta name="theme-color" content="#0d0e1a">
     <title>OpenClaw Dashboard</title>
+    <meta name="description" content="OpenClaw — a self-hosted, autonomous multi-LLM agent platform with persistent memory, human-in-the-loop approvals, and automated quality evals. Routes each turn to Claude, GitHub Copilot, Gemini, or local Ollama. Runs 24/7 on a Mac Mini, native in Slack." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="OpenClaw" />
+    <meta property="og:title" content="OpenClaw — Autonomous Multi-LLM Agent Platform" />
+    <meta property="og:description" content="Self-hosted AI agent with persistent memory, human-in-the-loop approvals, and automated quality evals — routing each turn to Claude, GitHub Copilot, Gemini, or local Ollama." />
+    <meta property="og:url" content="https://openclaw.davevoyles.synology.me/" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="OpenClaw — Autonomous Multi-LLM Agent Platform" />
+    <meta name="twitter:description" content="Self-hosted AI agent with persistent memory, human-in-the-loop approvals, and automated quality evals across Claude, Copilot, Gemini, and local Ollama." />
     <script>
       (() => {
         try {
@@ -25,6 +34,21 @@
       })();
     </script>
     <style>
+      /* Keyboard accessibility: visible focus ring for keyboard users only */
+      :focus-visible {
+        outline: 2px solid var(--spirit-blue, #68ace5);
+        outline-offset: 2px;
+        border-radius: 4px;
+      }
+      /* Respect users who prefer reduced motion: disable non-essential animation */
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation-duration: 0.001ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.001ms !important;
+          scroll-behavior: auto !important;
+        }
+      }
       :root {
         /* JHU Primary */
         --heritage-blue: #002d72;
@@ -937,6 +961,7 @@
                 id="global-search"
                 class="dashboard-search-input"
                 type="search"
+                aria-label="Search dashboard cards, Hermes sessions, and changelog"
                 placeholder="🔍 Search cards, Hermes sessions, changelog…"
                 autocomplete="off"
               />
@@ -981,7 +1006,7 @@
           <span style="font-size:0.82rem">📱 Install OpenClaw as an app for quick access</span>
           <div style="display:flex;gap:0.5rem">
             <button id="pwa-install-btn" style="padding:0.3rem 0.7rem;background:rgba(124,58,237,0.3);border:1px solid rgba(124,58,237,0.5);border-radius:6px;color:#a78bfa;font-size:0.8rem;cursor:pointer">Install</button>
-            <button onclick="document.getElementById('pwa-install-banner').style.display='none';localStorage.setItem('pwa_dismissed','1')" style="padding:0.3rem 0.5rem;background:none;border:none;color:var(--muted);font-size:0.9rem;cursor:pointer">✕</button>
+            <button aria-label="Dismiss install banner" onclick="document.getElementById('pwa-install-banner').style.display='none';localStorage.setItem('pwa_dismissed','1')" style="padding:0.3rem 0.5rem;background:none;border:none;color:var(--muted);font-size:0.9rem;cursor:pointer" title="Dismiss install banner">✕</button>
           </div>
         </div>
 
@@ -1064,8 +1089,8 @@
               <div>
                 <div style="font-weight:600;color:var(--text);margin-bottom:0.35rem">🐙 OpenClaw CLI</div>
                 <div style="display:flex;flex-direction:column;gap:0.3rem">
-                  <div><span style="color:var(--muted)">On LAN:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">curl -fsSL http://192.168.1.93:8765/install | bash</code><button onclick="copyText('curl -fsSL http://192.168.1.93:8765/install | bash',this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button></div>
-                  <div><span style="color:var(--muted)">Remote:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">curl -fsSL https://openclaw.davevoyles.synology.me/install | bash</code><button onclick="copyText('curl -fsSL https://openclaw.davevoyles.synology.me/install | bash',this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button></div>
+                  <div><span style="color:var(--muted)">On LAN:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">curl -fsSL http://192.168.1.93:8765/install | bash</code><button aria-label="Copy to clipboard" onclick="copyText('curl -fsSL http://192.168.1.93:8765/install | bash',this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button></div>
+                  <div><span style="color:var(--muted)">Remote:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">curl -fsSL https://openclaw.davevoyles.synology.me/install | bash</code><button aria-label="Copy to clipboard" onclick="copyText('curl -fsSL https://openclaw.davevoyles.synology.me/install | bash',this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button></div>
                   <div><span style="color:var(--muted)">Then:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">source ~/.zshrc</code><span style="color:var(--muted)"> &rarr; </span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">OpenClaw</code></div>
                 </div>
               </div>
@@ -1102,7 +1127,7 @@
             </div>
             <div style="display:flex;flex-direction:column;gap:0.4rem;font-size:0.8rem;min-width:200px">
               <div style="color:var(--muted);font-weight:600;margin-bottom:0.1rem">Install on any Mac:</div>
-              <code style="display:block;background:rgba(0,0,0,0.4);border:1px solid rgba(16,185,129,0.2);border-radius:6px;padding:0.45rem 0.7rem;color:#9ecbff;font-size:0.78rem;word-break:break-all">bash &lt;(curl -fsSL https://openclaw.davevoyles.synology.me/ih)</code><button onclick="copyText('bash <(curl -fsSL https://openclaw.davevoyles.synology.me/ih)',this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button>
+              <code style="display:block;background:rgba(0,0,0,0.4);border:1px solid rgba(16,185,129,0.2);border-radius:6px;padding:0.45rem 0.7rem;color:#9ecbff;font-size:0.78rem;word-break:break-all">bash &lt;(curl -fsSL https://openclaw.davevoyles.synology.me/ih)</code><button aria-label="Copy to clipboard" onclick="copyText('bash <(curl -fsSL https://openclaw.davevoyles.synology.me/ih)',this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button>
               <div style="color:var(--muted);font-size:0.75rem">Then: <code style="color:#9ecbff">source ~/.zshrc &amp;&amp; hermes</code></div>
               <div style="margin-top:0.3rem;display:flex;gap:0.4rem;flex-wrap:wrap">
                 <a href="https://github.com/NousResearch/hermes-agent" target="_blank" style="font-size:0.75rem;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:4px;padding:0.2em 0.5em">📄 Docs</a>
@@ -1175,7 +1200,7 @@
               <option value="">📚 Load saved prompt…</option>
             </select>
             <button onclick="saveCurrentPrompt()" style="font-size:0.75rem;padding:0.2rem 0.5rem;background:rgba(255,158,27,0.1);border:1px solid rgba(255,158,27,0.25);border-radius:6px;color:var(--orange);cursor:pointer" title="Save current input as a named prompt">💾 Save</button>
-            <button onclick="deleteSelectedPrompt()" style="font-size:0.75rem;padding:0.2rem 0.5rem;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--muted);cursor:pointer" title="Delete selected prompt">🗑</button>
+            <button aria-label="Delete selected prompt" onclick="deleteSelectedPrompt()" style="font-size:0.75rem;padding:0.2rem 0.5rem;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--muted);cursor:pointer" title="Delete selected prompt">🗑</button>
           </div>
           <div id="chat-input-row" style="display:flex;gap:0.5rem;align-items:flex-start">
             <div style="flex:1;display:flex;flex-direction:column;gap:0.45rem">
@@ -1378,7 +1403,7 @@
             <h2 style="margin:0">🌐 Tailscale Network</h2>
             <div style="display:flex;gap:0.5rem;align-items:center">
               <span id="tailscale-last-updated" class="live-badge"></span>
-              <button onclick="loadTailscaleStatus()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">↻</button>
+              <button aria-label="Refresh Tailscale status" onclick="loadTailscaleStatus()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer" title="Refresh Tailscale status">↻</button>
             </div>
           </div>
           <div id="tailscale-devices-list" style="margin-top:0.75rem;display:flex;flex-direction:column;gap:0.3rem">
@@ -1464,7 +1489,7 @@
               <li>Click the <strong>EditThisCookie</strong> icon → <strong>Export</strong></li>
               <li>Copy the exported JSON</li>
               <li>Save to <code style="background:var(--surface);padding:0.2rem 0.4rem;border-radius:4px">~/Downloads/cookies.txt</code></li>
-              <li>Run: <code style="background:var(--surface);padding:0.2rem 0.4rem;border-radius:4px;display:block;margin:0.5rem 0">docker cp ~/Downloads/cookies.txt monstervision:/app/cookies/cookies.txt</code><button onclick="copyText('docker cp ~/Downloads/cookies.txt monstervision:/app/cookies/cookies.txt',this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button></li>
+              <li>Run: <code style="background:var(--surface);padding:0.2rem 0.4rem;border-radius:4px;display:block;margin:0.5rem 0">docker cp ~/Downloads/cookies.txt monstervision:/app/cookies/cookies.txt</code><button aria-label="Copy to clipboard" onclick="copyText('docker cp ~/Downloads/cookies.txt monstervision:/app/cookies/cookies.txt',this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button></li>
               <li>Downloads will resume automatically within <strong>30 minutes</strong></li>
             </ol>
             <div style="margin-top:1.5rem;padding:1rem;background:rgba(241,196,0,0.1);border-left:3px solid var(--gold);border-radius:4px">
@@ -1580,8 +1605,8 @@
           </div>
           <div style="margin-top:0.85rem;padding:0.65rem 0.8rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:0.8rem;line-height:1.5">
             <strong style="color:var(--text)">📡 Download webhooks</strong><br>
-            Sonarr: <code style="background:rgba(255,255,255,0.06);padding:0.1rem 0.35rem;border-radius:4px">https://openclaw.davevoyles.synology.me/api/webhooks/sonarr</code><button onclick="copyText('https://openclaw.davevoyles.synology.me/api/webhooks/sonarr',this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button><br>
-            Radarr: <code style="background:rgba(255,255,255,0.06);padding:0.1rem 0.35rem;border-radius:4px">https://openclaw.davevoyles.synology.me/api/webhooks/radarr</code><button onclick="copyText('https://openclaw.davevoyles.synology.me/api/webhooks/radarr',this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button>
+            Sonarr: <code style="background:rgba(255,255,255,0.06);padding:0.1rem 0.35rem;border-radius:4px">https://openclaw.davevoyles.synology.me/api/webhooks/sonarr</code><button aria-label="Copy to clipboard" onclick="copyText('https://openclaw.davevoyles.synology.me/api/webhooks/sonarr',this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button><br>
+            Radarr: <code style="background:rgba(255,255,255,0.06);padding:0.1rem 0.35rem;border-radius:4px">https://openclaw.davevoyles.synology.me/api/webhooks/radarr</code><button aria-label="Copy to clipboard" onclick="copyText('https://openclaw.davevoyles.synology.me/api/webhooks/radarr',this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button>
           </div>
           </details>
         </div>
@@ -1622,7 +1647,7 @@
               <label style="font-size:0.75rem;color:var(--muted);display:flex;align-items:center;gap:0.3rem">
                 <input type="checkbox" id="logs-autorefresh" onchange="toggleLogsAutoRefresh()"> Live
               </label>
-              <button onclick="loadContainerLogs()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">↻</button>
+              <button aria-label="Refresh container logs" onclick="loadContainerLogs()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer" title="Refresh container logs">↻</button>
             </div>
           </div>
           <pre id="container-logs-output" style="margin-top:0.75rem;background:#0d1117;color:#7ee787;font-size:0.72rem;line-height:1.4;padding:0.75rem;border-radius:6px;max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all">Loading…</pre>
@@ -1709,7 +1734,7 @@
               <div style="display:flex;gap:0.5rem;align-items:center">
                 <span id="uptime-overall-badge" style="font-size:0.75rem;padding:0.2rem 0.5rem;border-radius:10px"></span>
                 <span id="uptime-last-updated" class="live-badge"></span>
-                <button onclick="loadUptimeStatus()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">↻</button>
+                <button aria-label="Refresh uptime status" onclick="loadUptimeStatus()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer" title="Refresh uptime status">↻</button>
               </div>
             </div>
             <div id="uptime-services-list" style="margin-top:0.75rem;display:flex;flex-direction:column;gap:0.25rem">
@@ -1987,7 +2012,7 @@
             <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
               <span id="hermes-upgrade-status" style="font-size:0.75rem;color:var(--muted)"></span>
               <button id="hermes-upgrade-btn" class="btn btn-sm" onclick="upgradeHermes()" title="Upgrade Hermes">⬆︎ Update Hermes</button>
-              <button class="btn btn-sm" onclick="refreshHermesStatus()" title="Refresh">↻</button>
+              <button aria-label="Refresh Hermes status" class="btn btn-sm" onclick="refreshHermesStatus()" title="Refresh">↻</button>
             </div>
           </div>
           <div class="card-body" id="hermes-status-body">
@@ -2031,7 +2056,7 @@
             <div id="session-transcript-panel" style="display:none;margin-top:0.75rem;border-top:1px solid var(--border);padding-top:0.75rem">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
                 <div id="transcript-session-title" style="font-weight:600;font-size:0.85rem"></div>
-                <button onclick="document.getElementById('session-transcript-panel').style.display='none'" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem">✕</button>
+                <button aria-label="Close transcript panel" onclick="document.getElementById('session-transcript-panel').style.display='none'" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem" title="Close transcript panel">✕</button>
               </div>
               <div id="transcript-messages" style="max-height:400px;overflow-y:auto;display:flex;flex-direction:column;gap:0.5rem"></div>
             </div>
@@ -2054,7 +2079,7 @@
         <div class="card">
           <h2 style="display:flex;align-items:center;gap:0.5rem">
             🐙 Copilot Sessions
-            <button onclick="refreshCopilotSessions()" title="Refresh" style="font-size:0.75rem;padding:0.15rem 0.45rem;background:transparent;border:1px solid var(--border,#444);border-radius:4px;color:var(--muted);cursor:pointer;margin-left:auto">⟳</button>
+            <button aria-label="Refresh Copilot sessions" onclick="refreshCopilotSessions()" title="Refresh" style="font-size:0.75rem;padding:0.15rem 0.45rem;background:transparent;border:1px solid var(--border,#444);border-radius:4px;color:var(--muted);cursor:pointer;margin-left:auto">⟳</button>
           </h2>
           <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.6rem">
             Active Copilot CLI sessions started via Slack or the dashboard.
@@ -2258,7 +2283,7 @@
             <div style="display:flex;gap:0.5rem;align-items:center">
               <span id="plex-last-updated" class="live-badge"></span>
               <span id="plex-stream-count" style="font-size:0.75rem;color:var(--muted)"></span>
-              <button onclick="loadPlexActivity()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">↻</button>
+              <button aria-label="Refresh Plex activity" onclick="loadPlexActivity()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer" title="Refresh Plex activity">↻</button>
             </div>
           </div>
           <div id="plex-activity-body" style="margin-top:0.75rem">
@@ -2276,7 +2301,7 @@
               <span id="arr-last-updated" class="live-badge"></span>
               <span id="arr-queue-summary" style="font-size:0.75rem;color:var(--muted)">Loading…</span>
               <span id="arr-missing-count" style="font-size:0.75rem;color:var(--muted)"></span>
-              <button onclick="loadArrQueue()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">↻</button>
+              <button aria-label="Refresh download queue" onclick="loadArrQueue()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer" title="Refresh download queue">↻</button>
             </div>
           </div>
           <div id="arr-queue-body" style="margin-top:0.75rem">
@@ -2293,7 +2318,7 @@
               <span id="sabnzbd-status-badge" style="font-size:0.75rem;padding:0.2rem 0.5rem;border-radius:10px;background:rgba(255,255,255,0.05);color:var(--muted)">…</span>
               <span id="sabnzbd-speed-badge" style="font-size:0.75rem;padding:0.2rem 0.5rem;border-radius:10px;background:rgba(255,255,255,0.05);color:var(--mint-green)"></span>
               <span id="sabnzbd-last-updated" class="live-badge"></span>
-              <button onclick="loadSabnzbdQueue()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">↻</button>
+              <button aria-label="Refresh SABnzbd queue" onclick="loadSabnzbdQueue()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer" title="Refresh SABnzbd queue">↻</button>
             </div>
           </div>
           <div id="sabnzbd-queue-list" style="margin-top:0.75rem">
@@ -2305,13 +2330,13 @@
         <div class="card" id="overseerr-card" style="margin-bottom:1rem">
           <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem">
             <h2 style="margin:0">🎟️ Media Requests</h2>
-            <button onclick="loadOverseerrRequests()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">↻</button>
+            <button aria-label="Refresh Overseerr requests" onclick="loadOverseerrRequests()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer" title="Refresh Overseerr requests">↻</button>
           </div>
           <div id="overseerr-setup-note" style="display:none;margin-top:0.75rem;padding:0.5rem;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:6px;font-size:0.82rem">
             🔑 <strong>Setup needed:</strong> Go to <code>Overseerr → Settings → General</code> and copy the API Key, then update <code>OVERSEERR_API_KEY</code> in <code>.env</code> and restart the container.
           </div>
           <div style="display:flex;gap:0.5rem;margin-top:0.75rem">
-            <input id="overseerr-search-input" type="text" placeholder="Search movies &amp; TV shows…"
+            <input id="overseerr-search-input" type="text" aria-label="Search movies and TV shows" placeholder="Search movies &amp; TV shows…"
               style="flex:1;padding:0.4rem 0.7rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.82rem"
               onkeydown="if(event.key==='Enter')searchOverseerr()">
             <button onclick="searchOverseerr()" style="padding:0.4rem 0.8rem;background:rgba(124,58,237,0.2);border:1px solid rgba(124,58,237,0.4);border-radius:6px;color:#a78bfa;font-size:0.82rem;cursor:pointer">Search</button>
@@ -2328,7 +2353,7 @@
             <h2 style="margin:0">📅 Upcoming Episodes</h2>
             <div style="display:flex;gap:0.5rem;align-items:center">
               <span id="sonarr-cal-last-updated" class="live-badge"></span>
-              <button onclick="loadSonarrCalendar()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">↻</button>
+              <button aria-label="Refresh Sonarr calendar" onclick="loadSonarrCalendar()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer" title="Refresh Sonarr calendar">↻</button>
             </div>
           </div>
           <div id="sonarr-calendar-list" style="margin-top:0.75rem;display:flex;flex-direction:column;gap:0.3rem">
@@ -2341,7 +2366,7 @@
             <h2 style="margin:0">🎬 Radarr Watchlist</h2>
             <div style="display:flex;gap:0.5rem;align-items:center">
               <span id="radarr-watchlist-count" style="font-size:0.75rem;color:var(--muted)"></span>
-              <button onclick="loadRadarrWatchlist()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">↻</button>
+              <button aria-label="Refresh Radarr watchlist" onclick="loadRadarrWatchlist()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer" title="Refresh Radarr watchlist">↻</button>
             </div>
           </div>
           <div class="card-body" id="radarr-watchlist-body" style="margin-top:0.75rem">
@@ -2357,7 +2382,7 @@
           </div>
 
           <div class="section-subheading">&#128221; Facts (<span id="fact-count">0</span>)</div>
-          <input type="text" id="fact-search" placeholder="Search facts&hellip;" class="search-box" />
+          <input type="text" id="fact-search" aria-label="Search facts" placeholder="Search facts&hellip;" class="search-box" />
           <div id="facts-list" class="scrollable-list"></div>
 
           <details style="margin-top:0.75rem">
@@ -2376,11 +2401,11 @@
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:0.6rem">
             <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.78rem;color:var(--muted)">
               Slack Channel ID (required)
-              <input id="inspector-channel-id" type="text" placeholder="C0123ABC456" style="min-width:220px;padding:0.38rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)" />
+              <input id="inspector-channel-id" type="text" aria-label="Slack channel ID" placeholder="C0123ABC456" style="min-width:220px;padding:0.38rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)" />
             </label>
             <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.78rem;color:var(--muted)">
               Thread ts (optional)
-              <input id="inspector-thread-id" type="text" placeholder="1234567890.123456" style="min-width:220px;padding:0.38rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)" />
+              <input id="inspector-thread-id" type="text" aria-label="Slack thread ID" placeholder="1234567890.123456" style="min-width:220px;padding:0.38rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)" />
             </label>
           </div>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.6rem">
@@ -2398,7 +2423,7 @@
         <!-- Research History -->
         <div class="card">
           <h2>📊 Research History</h2>
-          <input type="text" class="search-box" id="research-search" placeholder="🔍 Search reports..." />
+          <input type="text" class="search-box" id="research-search" aria-label="Search research reports" placeholder="🔍 Search reports..." />
           <div id="research-list" class="scrollable-list"></div>
         </div>
 
@@ -2496,6 +2521,7 @@
             type="text"
             class="search-box"
             id="skill-search"
+            aria-label="Search skills"
             placeholder="&#128269; Search skills..."
           />
           <div id="skills-categories"></div>
@@ -2544,6 +2570,7 @@
             type="text"
             class="search-box"
             id="cmd-search"
+            aria-label="Search commands"
             placeholder="&#128269; Search commands..."
             oninput="filterCmds()"
           />
@@ -3773,7 +3800,7 @@
           div.innerHTML = `
             <div class="health-status-dot ${statusClass}"></div>
             <span class="health-name" style="cursor:help">${esc(c.name)}</span>
-            <button onclick="dockerAction('restart','${esc(c.name)}')"
+            <button aria-label="Restart container" onclick="dockerAction('restart','${esc(c.name)}')"
               title="Restart container"
               style="margin-left:auto;padding:1px 6px;font-size:0.65rem;background:transparent;border:1px solid var(--border,#444);border-radius:4px;color:var(--muted,#888);cursor:pointer;opacity:0.6;line-height:1.4"
               onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">↺</button>
@@ -5112,7 +5139,7 @@
                           <td style="white-space:nowrap">
                             <button onclick="editTask('${taskId}')" style="background:rgba(104,172,229,0.2);color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.75rem;margin-right:0.25rem" title="Edit task">Edit</button>
                             <button onclick="toggleTask('${taskId}')" style="background:rgba(241,196,0,0.2);color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.75rem;margin-right:0.25rem" title="Toggle task">${toggleLabel}</button>
-                            <button onclick="deleteTask('${taskId}')" style="background:var(--danger,#f85149);color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.75rem" title="Delete task">✕</button>
+                            <button aria-label="Delete task" onclick="deleteTask('${taskId}')" style="background:var(--danger,#f85149);color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.75rem" title="Delete task">✕</button>
                           </td>
                       </tr>`;
                   }).join('') + '</tbody></table>';
@@ -5391,7 +5418,7 @@
                 <td style="display:flex;gap:0.3rem">
                   <button onclick="copilotSessionAction('cancel','${sid}')" title="Ctrl-C current turn"
                     style="font-size:0.72rem;padding:0.1rem 0.35rem;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:var(--orange);border-radius:4px;cursor:pointer">⏸</button>
-                  <button onclick="copilotSessionAction('end','${sid}')" title="End session"
+                  <button aria-label="End Copilot session" onclick="copilotSessionAction('end','${sid}')" title="End session"
                     style="font-size:0.72rem;padding:0.1rem 0.35rem;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;border-radius:4px;cursor:pointer">✕</button>
                 </td></tr>`;
             }).join('') + '</tbody></table>';
@@ -7191,7 +7218,7 @@
             const id = 'cb' + (++_cbCount);
             return `<div style="position:relative;margin:0.4rem 0">` +
               `<pre id="${id}" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:0.75rem 1rem;overflow-x:auto;font-size:0.8rem;margin:0"><code>${esc(rawCode)}</code></pre>` +
-              `<button onclick="copyCodeBlock('${id}')" style="position:absolute;top:0.35rem;right:0.35rem;font-size:0.65rem;padding:0.15rem 0.4rem;background:#21262d;border:1px solid #30363d;border-radius:4px;color:#8b949e;cursor:pointer">📋</button>` +
+              `<button aria-label="Copy code to clipboard" onclick="copyCodeBlock('${id}')" style="position:absolute;top:0.35rem;right:0.35rem;font-size:0.65rem;padding:0.15rem 0.4rem;background:#21262d;border:1px solid #30363d;border-radius:4px;color:#8b949e;cursor:pointer" title="Copy code to clipboard">📋</button>` +
               `</div>`;
           }
           let s = esc(p);
@@ -7971,7 +7998,7 @@
             const color = c.badge === 'up' ? '#4ade80' : (c.badge === 'down' ? '#f87171' : '#f59e0b');
             const isRunning = (c.status || '').toLowerCase().includes('up') || c.state === 'running' || c.badge === 'up';
             const actionBtn = isRunning
-              ? `<button onclick="dockerAction('restart','${esc(c.name || '')}')" style="font-size:0.7rem;padding:0.15rem 0.45rem;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:4px;color:#f59e0b;cursor:pointer" title="Restart">🔄</button>`
+              ? `<button aria-label="Restart container" onclick="dockerAction('restart','${esc(c.name || '')}')" style="font-size:0.7rem;padding:0.15rem 0.45rem;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:4px;color:#f59e0b;cursor:pointer" title="Restart">🔄</button>`
               : `<button onclick="dockerAction('start','${esc(c.name || '')}')" style="font-size:0.7rem;padding:0.15rem 0.45rem;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);border-radius:4px;color:#4ade80;cursor:pointer" title="Start">▶</button>`;
             return `<div style="padding:0.55rem 0.65rem;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:6px;display:flex;flex-direction:column;gap:0.28rem">
               <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem">
