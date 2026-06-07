@@ -2068,11 +2068,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
                     elif entry.get("error"):
                         result = str(entry["error"])
                     elif entry.get("exit_code") is not None:
-                        result = (
-                            "success"
-                            if entry.get("exit_code") == 0
-                            else f"exit {entry.get('exit_code')}"
-                        )
+                        result = "success" if entry.get("exit_code") == 0 else f"exit {entry.get('exit_code')}"
                     else:
                         result = ""
                 else:
