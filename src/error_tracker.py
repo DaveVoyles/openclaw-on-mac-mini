@@ -100,6 +100,14 @@ def journal_ask_outcome(
             tools_called=tools_called,
             response_preview=response_text or "",
         )
+        # Feed aggregate response-time stats (p50/p95/p99) from the same hook.
+        if latency_ms and success:
+            try:
+                from spending import record_response_time
+
+                record_response_time(float(latency_ms), model_used or "unknown")
+            except Exception:  # broad: telemetry must never break the response path
+                log.debug("record_response_time failed", exc_info=True)
     except Exception:  # broad: telemetry must never break the response path
         log.debug("journal_ask_outcome failed", exc_info=True)
 
@@ -128,6 +136,62 @@ def get_recent_outcomes(hours: int = 24, limit: int = 100) -> list[dict]:
         log.debug("Failed to read error journal: %s", e)
 
     return entries[-limit:]
+
+
+def get_latency_stats(hours: int = 2160, limit: int = 1000) -> dict:
+    """Compute response-latency percentiles from the journal.
+
+    Journal-backed (persists across restarts), unlike the in-memory
+    ``spending.get_response_stats`` deque. Returns count + p50/p95/p99 in ms
+    plus a per-model breakdown, for the dashboard agent-capability metrics.
+    """
+    entries = get_recent_outcomes(hours=hours, limit=limit)
+    times = sorted(
+        float(e.get("latency_ms") or 0)
+        for e in entries
+        if isinstance(e.get("latency_ms"), (int, float)) and e.get("latency_ms")
+    )
+    if not times:
+        return {
+            "count": 0,
+            "avg_ms": 0,
+            "p50_ms": 0,
+            "p95_ms": 0,
+            "p99_ms": 0,
+            "last_10": [],
+            "by_model": {},
+        }
+
+    n = len(times)
+    by_model: dict[str, list[float]] = {}
+    for e in entries:
+        v = e.get("latency_ms")
+        if isinstance(v, (int, float)) and v:
+            by_model.setdefault(str(e.get("model_used") or "unknown"), []).append(float(v))
+    model_summary = {}
+    for model, vals in by_model.items():
+        vs = sorted(vals)
+        mn = len(vs)
+        model_summary[model] = {
+            "count": mn,
+            "avg_ms": round(sum(vs) / mn),
+            "p95_ms": round(vs[int(mn * 0.95)]) if mn >= 20 else round(vs[-1]),
+        }
+
+    last_10 = [
+        round(float(e.get("latency_ms")))
+        for e in entries[-10:]
+        if isinstance(e.get("latency_ms"), (int, float)) and e.get("latency_ms")
+    ]
+    return {
+        "count": n,
+        "avg_ms": round(sum(times) / n),
+        "p50_ms": round(times[n // 2]),
+        "p95_ms": round(times[int(n * 0.95)]) if n >= 20 else round(times[-1]),
+        "p99_ms": round(times[int(n * 0.99)]) if n >= 100 else round(times[-1]),
+        "last_10": last_10,
+        "by_model": model_summary,
+    }
 
 
 def get_error_stats(hours: int = 24) -> dict:

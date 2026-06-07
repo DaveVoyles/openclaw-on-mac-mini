@@ -113,6 +113,16 @@ def _get_quality_retry_count() -> int:
         return 0
 
 
+def _get_latency_stats() -> dict:
+    """Return journal-backed response-latency percentiles, guarded."""
+    try:
+        from error_tracker import get_latency_stats
+
+        return get_latency_stats()
+    except Exception:  # broad: dashboard payload must not break on telemetry
+        return {"count": 0, "avg_ms": 0, "p50_ms": 0, "p95_ms": 0, "p99_ms": 0, "by_model": {}}
+
+
 def _content_extraction_check() -> dict[str, str]:
     """Report which content-extraction fallback is currently available."""
     extractor = "unavailable"
@@ -2181,6 +2191,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
         "activity": activity,
         "model_usage": model_usage,
         "response_stats": get_response_stats(),
+        "latency_stats": _get_latency_stats(),
         "agent_sessions": recent_sessions,
         "active_plans": _list_serialized_plans(limit=5, sessions=control_plane_sessions),
         "task_statuses": _list_unified_task_statuses(limit=10, sessions=control_plane_sessions),
@@ -2631,8 +2642,15 @@ async def api_errors_handler(request):
 
 
 async def api_response_stats_handler(request):
-    """Return response-time statistics for /ask queries."""
-    return web.json_response(get_response_stats())
+    """Return response-time statistics for /ask queries.
+
+    Journal-backed (persists across restarts, historical depth); falls back to
+    the in-memory deque only if the journal has no latency samples yet.
+    """
+    stats = _get_latency_stats()
+    if not stats.get("count"):
+        stats = get_response_stats()
+    return web.json_response(stats)
 
 
 async def api_dream_health_handler(request):

@@ -993,6 +993,15 @@
           <div class="stat-pill" id="stat-commands" onclick="document.getElementById('cat-agent-featured')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Slack commands">
             <span class="stat-icon">⌨️</span><span id="stat-commands-val">—</span>
           </div>
+          <div class="stat-pill" id="stat-evals" onclick="document.getElementById('quality-eval-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Quality-eval pass rate (live scorecard)">
+            <span class="stat-icon">✅</span><span id="stat-evals-val">—</span>
+          </div>
+          <div class="stat-pill" id="stat-latency" onclick="document.getElementById('run-history-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Response latency p95 (journal)">
+            <span class="stat-icon">⚡</span><span id="stat-latency-val">—</span>
+          </div>
+          <div class="stat-pill" id="stat-runs" onclick="document.getElementById('run-history-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Journaled agent runs">
+            <span class="stat-icon">📈</span><span id="stat-runs-val">—</span>
+          </div>
           <div class="stat-pill" id="stat-hermes" onclick="document.getElementById('hermes-sessions-card')?.scrollIntoView({behavior:'smooth'})" style="cursor:pointer" title="Jump to Hermes">
             <span class="stat-icon">⚕</span><span id="stat-hermes-val">—</span>
           </div>
@@ -2734,6 +2743,14 @@
           if (mdEl && d.model) mdEl.textContent = d.model;
           const cmEl = document.getElementById("stat-commands-val");
           if (cmEl) cmEl.textContent = cmdCount + " cmds";
+          const ls = d.latency_stats || {};
+          const latEl = document.getElementById("stat-latency-val");
+          if (latEl) {
+            const p95 = ls.p95_ms || 0;
+            latEl.textContent = p95 ? "p95 " + (p95 / 1000).toFixed(1) + "s" : "p95 —";
+          }
+          const runsEl = document.getElementById("stat-runs-val");
+          if (runsEl) runsEl.textContent = (ls.count || 0) + " runs";
         } catch (e) {
           /* non-fatal: pills are additive */
         }
@@ -5042,6 +5059,11 @@
                   const latest = data.latest || {};
                   const summary = latest.summary || {};
                   const rate = Number(summary.rate || 0);
+                  const evalsPill = document.getElementById('stat-evals-val');
+                  if (evalsPill) {
+                    const sampleN = Number(latest.sample_size || 0);
+                    evalsPill.textContent = sampleN > 0 ? (rate * 100).toFixed(0) + '% evals' : '— evals';
+                  }
                   const body = document.getElementById('quality-eval-metrics-body');
                   const trendEl = document.getElementById('quality-eval-trend');
                   const summaryEl = document.getElementById('quality-eval-summary');
