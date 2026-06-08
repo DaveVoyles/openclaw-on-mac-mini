@@ -2,7 +2,7 @@
 # Install with: pip install -r requirements-test.txt
 
 pytest==9.0.2
-pytest-asyncio==1.3.0
+pytest-asyncio==1.4.0
 pytest-cov==7.1.0
 pytest-timeout==2.4.0
 pytest-xdist==3.8.0  # For parallel testing (-n, --dist)
