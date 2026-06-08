@@ -56,7 +56,7 @@ memory-profiler~=0.61.0
 psutil~=6.1.0
 
 # Charts rendered as PNG attachments for Slack
-matplotlib~=3.8
+matplotlib~=3.10
 
 # Cloud + API integrations
 requests~=2.31.0                 # for code paths where httpx is not suitable
