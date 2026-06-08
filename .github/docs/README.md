@@ -71,6 +71,7 @@ Keep these files local to this repo:
 | `docs/OPERATIONS-RUNBOOK.md` | Incident response or operational procedures |
 | `docs/TROUBLESHOOTING.md` | Diagnosing unexpected behavior |
 | [NAS-ACCESS.md](NAS-ACCESS.md) | Any task involving NAS files, ROMs, share links, or SSH to the NAS |
+| [2026-06-07-public-release-handoff.md](2026-06-07-public-release-handoff.md) | Context on the public release, PII scrub, privacy scanner, and git-history rewrite (read if picking up that work) |
 
 ## Update rules
 
