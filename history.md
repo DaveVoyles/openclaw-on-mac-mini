@@ -134,3 +134,4 @@
 - 2026-06-07: Repo made PUBLIC. Deleted 7 deprecated feature/discord-* branches (remote + local); dependabot branches auto-removed when their PRs were closed. Remote now has a single clean main branch.
 - 2026-06-07: Added .github/docs/2026-06-07-public-release-handoff.md (linked from docs README) documenting the public release, PII scrub, privacy scanner, git-history rewrite, branch cleanup, rollback bundle location, and next steps for the next agent.
 - 2026-06-07: Consolidated agent-facing docs (safe declutter) — archived 17 historical wave plans, rewrote stale .github/agents/README (337→34 lines), added single-audience banners/cross-links to the 4 entrypoints, and added AGENT-GUIDE/AGENT-EXTENSION-GUIDE to the routing index. Zero content loss.
+- 2026-06-09: Swapped local Ollama model from gemma4:e4b to qwen3:14b across .env, .env.example, src/config.py, and src/llm/providers.py; pulled model (9.3 GB); all 5007 tests pass.
