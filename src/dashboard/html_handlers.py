@@ -52,6 +52,7 @@ def _inject_template_vars(html_text: str) -> str:
     hermes_model = os.getenv("HERMES_MODEL", "claude-sonnet-4.6")
     try:
         import yaml
+
         config_path = Path(os.path.expanduser("~/.hermes/config.yaml"))
         if config_path.exists():
             hcfg = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
@@ -62,8 +63,7 @@ def _inject_template_vars(html_text: str) -> str:
         pass
 
     return (
-        html_text
-        .replace("{{OLLAMA_MODEL}}", html.escape(cfg.ollama_model))
+        html_text.replace("{{OLLAMA_MODEL}}", html.escape(cfg.ollama_model))
         .replace("{{PRIMARY_MODEL}}", html.escape(cfg.llm_model))
         .replace("{{OPENAI_MODEL}}", html.escape(openai_model))
         .replace("{{HERMES_MODEL}}", html.escape(hermes_model))

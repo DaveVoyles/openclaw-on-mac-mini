@@ -3388,6 +3388,7 @@ def _get_hermes_model() -> str:
 
     try:
         import yaml
+
         config_path = Path(os.path.expanduser("~/.hermes/config.yaml"))
         if config_path.exists():
             cfg = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
