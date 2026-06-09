@@ -51,7 +51,7 @@ For documentation ownership, lifecycle rules, and artifact handling, see
 | Dashboard/docs consistency for future CLI waves | Ongoing | `docs/DASHBOARD_SURFACES.md`, `docs/CLI_ARCHITECTURE.md`, `docs/CLI_QUICKSTART.md` | Keep docs/dashboard sync as a required lane for future CLI wave work |
 | CLI tech-debt follow-up planning | Audit-driven | `docs/tech_debt.md` | Use the shipped April 2026 audit as current context; start a new TD wave here only when new debt is confirmed or a new audit is warranted |
 | Discord follow-up work | Removed | `docs/archive/Discord_Improvements.md` | Discord was removed in May 2026. Historical waves are archived; no future Discord work planned. |
-| New interfaces: Open WebUI, Dashboard v2, Slack | In progress | `.github/docs/2026-04-18-new-interfaces-plan.md` | Implementation wave active; see plan file for port map, file list, and wave status |
+| New interfaces: Open WebUI, Dashboard v2, Slack | In progress | `.github/docs/archive/2026-04-18-new-interfaces-plan.md` | Implementation wave active; see plan file for port map, file list, and wave status |
 
 ---
 
@@ -227,14 +227,14 @@ Use this shape when adding a new initiative:
 
 - **Status:** in progress
 - **Owner area:** infra, cross-cutting
-- **Supporting doc:** `.github/docs/2026-04-18-new-interfaces-plan.md`
+- **Supporting doc:** `.github/docs/archive/2026-04-18-new-interfaces-plan.md`
 - **Why now:** OpenClaw currently surfaces through Slack and the CLI only. Adding an OpenAI-compatible API enables Open WebUI (browser chat) and any other OpenAI-compatible client. The community dashboard v2 (tugcantopaloglu) adds rich monitoring without any source changes. Slack integration (Socket Mode) brings conversational access without a public URL.
 - **Port map:**
   - `8765` — OpenClaw server + new `/v1/` OpenAI-compatible API
   - `3000` — Open WebUI browser chat
   - `7000` — Dashboard v2 monitoring UI
   - (none) — Slack via Socket Mode WebSocket
-- **Next step:** Implementation wave in progress; see `.github/docs/2026-04-18-new-interfaces-plan.md` for wave status.
+- **Next step:** Implementation wave in progress; see `.github/docs/archive/2026-04-18-new-interfaces-plan.md` for wave status.
 
 ---
 

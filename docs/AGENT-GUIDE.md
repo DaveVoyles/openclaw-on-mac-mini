@@ -2,6 +2,10 @@
 <!-- Updated: 2026-06-04 -->
 
 
+> **Audience: agents — architecture orientation.** You normally reach this page
+> from the agent entrypoint ([`.github/docs/README.md`](../.github/docs/README.md)).
+> It is the single 30-second architecture overview; load it before touching code.
+
 **Read this first.** 30-second orientation before touching anything.
 
 > **Planning rule:** for future improvements or the next CLI UX wave, read [`docs/PRODUCT-ROADMAP.md`](PRODUCT-ROADMAP.md) first and use scoped docs only for implementation detail.

@@ -2,6 +2,10 @@
 <!-- Updated: 2026-04-18 -->
 
 
+> **Audience: human contributors.** This is the people-facing onboarding page.
+> AI agents should start at [`.github/docs/README.md`](../.github/docs/README.md)
+> instead (it routes to [`AGENT-GUIDE.md`](AGENT-GUIDE.md) for architecture).
+
 Use this page as the contributor entrypoint. It tells you **what to read first**, **where to make your first change**, and **which workflow doc to follow next**.
 
 > **Planning future work?** Use [`docs/PRODUCT-ROADMAP.md`](PRODUCT-ROADMAP.md) as the canonical roadmap. The next CLI UX wave should be started there, then expanded in scoped docs only if needed.

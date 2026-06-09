@@ -9,6 +9,9 @@ title: OpenClaw - Autonomous AI Agent
 
 > **Autonomous AI agent with Slack interface — Production-ready infrastructure**
 
+<!-- Audience: external visitors — this is the public GitHub Pages landing page.
+     Contributors: see docs/START-HERE.md. AI agents: see .github/docs/README.md. -->
+
 [![CI](https://github.com/DaveVoyles/openclaw-on-mac-mini/actions/workflows/ci.yml/badge.svg)](https://github.com/DaveVoyles/openclaw-on-mac-mini/actions/workflows/ci.yml)
 [![Security](https://github.com/DaveVoyles/openclaw-on-mac-mini/actions/workflows/security.yml/badge.svg)](https://github.com/DaveVoyles/openclaw-on-mac-mini/actions/workflows/security.yml)
 [![codecov](https://codecov.io/gh/DaveVoyles/openclaw-on-mac-mini/branch/main/graph/badge.svg)](https://codecov.io/gh/DaveVoyles/openclaw-on-mac-mini)

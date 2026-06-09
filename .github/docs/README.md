@@ -3,6 +3,13 @@
 This directory is the repo-specific extension point for the shared Copilot bootstrap files.
 Read this file first, then load only the linked docs relevant to your current task.
 
+> **Audience: agents — this is THE agent entrypoint.** Start here, then load
+> [`docs/AGENT-GUIDE.md`](../../docs/AGENT-GUIDE.md) for the 30-second architecture
+> orientation. Don't load the other "start here" pages — they target different
+> audiences: [`docs/START-HERE.md`](../../docs/START-HERE.md) is for human
+> contributors, [`docs/index.md`](../../docs/index.md) is the external GitHub
+> Pages landing.
+
 ## ⚠️ This repository is PUBLIC — never commit private data
 
 This repo is published on GitHub at `DaveVoyles/openclaw-on-mac-mini`. **Every file you commit is world-readable.** Treat all tracked content as public.
@@ -64,6 +71,8 @@ Keep these files local to this repo:
 
 | Doc | When to load |
 |---|---|
+| `docs/AGENT-GUIDE.md` | First orientation for most tasks — 30-second architecture, critical gotchas, key files |
+| `docs/AGENT-EXTENSION-GUIDE.md` | Adding skills, commands, providers, dashboard endpoints, background loops, plugins, schedules, or persistence |
 | `docs/ARCHITECTURE.md` | Understanding system structure or adding new components |
 | `docs/LLM-ROUTING.md` | Working on model selection, routing, or provider fallback |
 | `docs/CLI_ARCHITECTURE.md` | Working on the standalone CLI (`src/openclaw_cli*.py`) |
