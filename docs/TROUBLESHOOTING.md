@@ -206,7 +206,7 @@ reliable correlation handle.
    ```
 3. **Model not pulled?**
    ```bash
-   ollama pull gemma4:e4b
+   ollama pull qwen3:8b
    ```
 
 ### Symptom: Ollama responds but quality is poor
@@ -276,12 +276,7 @@ LLM_RPH_LIMIT=500       # Calls per hour
 ```env
 LOCAL_LLM_ENABLED=true
 OLLAMA_URL=http://host.docker.internal:11434
-OLLAMA_MODEL=gemma4:e4b
-```
-
----
-
-## Scheduled Tasks Not Running
+OLLAMA_MODEL=qwen3:8b
 
 1. **Check task list**: Use `/tasks` or check `data/tasks.json`
 2. **Check scheduler logs**:
@@ -561,11 +556,11 @@ curl -s http://localhost:8765/health | python -m json.tool
 2. **Check the model is pulled:**
    ```bash
    ollama list
-   # Should show gemma4:e4b or your configured model
-   ollama pull gemma4:e4b
+   # Should show qwen3:8b or your configured model
+   ollama pull qwen3:8b
    ```
 
-3. **Check memory usage**: Large models need significant RAM. `gemma4:e4b` requires ~10 GB. If the host is low on memory, Ollama may timeout during inference.
+3. **Check memory usage**: Large models need significant RAM. `qwen3:8b` requires ~5.2 GB. If the host is low on memory, Ollama may timeout during inference. On a 16 GB Mac mini with OrbStack, cap OrbStack to 4 GB (`orb config set memory_mib 4096`).
    ```bash
    # Check available memory
    vm_stat | head -5    # macOS

@@ -80,8 +80,8 @@ PROVIDER_FALLBACK_CHAIN: list[str] = [
     p.strip() for p in os.getenv("PROVIDER_FALLBACK_CHAIN", "copilot,openai,anthropic").split(",") if p.strip()
 ]
 
-_OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-_OLLAMA_DEFAULT_MODEL = os.getenv("OLLAMA_DEFAULT_MODEL", "qwen3:14b")
+_OLLAMA_BASE_URL = os.getenv("OLLAMA_URL", os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"))
+_OLLAMA_DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", os.getenv("OLLAMA_DEFAULT_MODEL", "qwen3:8b"))
 
 # Populated by chat_openai / chat_anthropic before they return; read by call_provider.
 _last_usage: dict = {"input_tokens": 0, "output_tokens": 0, "retry_count": 0}

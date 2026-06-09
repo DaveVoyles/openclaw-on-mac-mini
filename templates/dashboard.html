@@ -1118,7 +1118,7 @@
                 The <code style="background:rgba(0,0,0,0.3);border-radius:3px;padding:0.1em 0.3em">/copilot</code> Slack command routes through Hermes automatically.
               </div>
               <div style="margin-top:0.6rem;display:flex;gap:0.5rem;flex-wrap:wrap;font-size:0.78rem">
-                <span style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:0.15em 0.5em"><span class="dyn-hermes-model">claude-sonnet-4.6</span></span>
+                <span style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:0.15em 0.5em"><span class="dyn-hermes-model">{{HERMES_MODEL}}</span></span>
                 <span style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:0.15em 0.5em"><span class="dyn-skill-count">183</span> skills</span>
                 <span style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:0.15em 0.5em">persistent memory</span>
                 <span style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:0.15em 0.5em">NAS access</span>
@@ -1183,7 +1183,7 @@
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">
             <div>
               <h2 style="margin:0">💬 Ask OpenClaw</h2>
-              <div style="font-size:0.72rem;color:var(--muted);margin-top:0.2rem">Powered by <strong style="color:#4ade80">⚕ Hermes</strong> · <span class="dyn-hermes-model">claude-sonnet-4.6</span> · GitHub Copilot</div>
+              <div style="font-size:0.72rem;color:var(--muted);margin-top:0.2rem">Powered by <strong style="color:#4ade80">⚕ Hermes</strong> · <span class="dyn-hermes-model">{{HERMES_MODEL}}</span> · GitHub Copilot</div>
             </div>
             <button id="chat-expand-btn" onclick="toggleChatExpand()" title="Expand chat to fullscreen"
               style="padding:0.3rem 0.65rem;background:transparent;border:1px solid var(--border,#444);border-radius:6px;color:var(--muted,#8b949e);cursor:pointer;font-size:0.8rem;white-space:nowrap">⛶ Expand</button>
@@ -1213,7 +1213,7 @@
               <select id="agent-model" style="padding:0.4rem 0.5rem;background:var(--surface-solid,#1a1b2e);border:1px solid var(--border,#333);border-radius:6px;color:var(--text,#e8e8e8);font-size:0.8rem;cursor:pointer" onchange="onAgentModelChange()">
                 <option value="hermes" selected>⚕ Hermes</option>
                 <option value="copilot-cli">🐙 Copilot CLI</option>
-                <option value="local">🏠 Local (Gemma — offline)</option>
+                <option value="local">🏠 Local ({{OLLAMA_MODEL}})</option>
               </select>
               <!-- Working-directory picker: shown only when Copilot CLI is selected -->
               <select id="copilot-workdir-select" style="display:none;padding:0.4rem 0.5rem;background:var(--surface-solid,#1a1b2e);border:1px solid rgba(255,158,27,0.4);border-radius:6px;color:var(--orange,#f59e0b);font-size:0.78rem;cursor:pointer" title="Working directory for Copilot CLI">
@@ -1258,7 +1258,7 @@
           <div id="hermes-hint" style="display:none;margin-top:0.6rem;padding:0.75rem 1rem;background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.3);border-radius:8px;font-size:0.82rem;line-height:1.6;color:var(--text)">
             <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem;flex-wrap:wrap">
               <strong style="color:#4ade80;font-size:0.9rem">⚕ Hermes Agent</strong>
-              <span style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:10px;background:rgba(74,222,128,0.15);color:#4ade80"><span class="dyn-hermes-model">claude-sonnet-4.6</span> · Copilot</span>
+              <span style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:10px;background:rgba(74,222,128,0.15);color:#4ade80"><span class="dyn-hermes-model">{{HERMES_MODEL}}</span> · Copilot</span>
               <span id="hermes-session-badge" style="font-size:0.72rem;color:#86efac"></span>
               <button onclick="newHermesSession()" style="margin-left:auto;font-size:0.75rem;padding:0.2rem 0.55rem;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:12px;color:#4ade80;cursor:pointer">🆕 New session</button>
             </div>
@@ -1609,16 +1609,6 @@
             Radarr: <code style="background:rgba(255,255,255,0.06);padding:0.1rem 0.35rem;border-radius:4px">https://openclaw.davevoyles.synology.me/api/webhooks/radarr</code><button aria-label="Copy to clipboard" onclick="copyText('https://openclaw.davevoyles.synology.me/api/webhooks/radarr',this)" style="font-size:0.75rem;padding:0.1rem 0.35rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--muted);cursor:pointer;vertical-align:middle;margin-left:0.35rem" title="Copy">📋</button>
           </div>
           </details>
-        </div>
-
-        <!-- Container Health Matrix -->
-        <div class="card">
-          <h2>&#128373; Container Health Status</h2>
-          <div id="container-grid" class="health-grid">
-            <div style="color: var(--muted); font-style: italic">
-              Loading container status...
-            </div>
-          </div>
         </div>
 
         <div class="card" id="docker-status-card" style="margin-bottom:1rem">
@@ -2891,6 +2881,9 @@
         document.getElementById("sys-model").textContent = d.model;
         document.getElementById("sys-local-model").textContent =
           d.local_model || "Disabled";
+        // Keep the Local dropdown option label in sync with the live model name
+        const localOpt = document.querySelector('#agent-model option[value="local"]');
+        if (localOpt && d.local_model) localOpt.textContent = '🏠 Local (' + d.local_model + ')';
         document.getElementById("sys-search-provider").textContent =
           d.search_provider || "DuckDuckGo";
         const fcTier = document.getElementById("sys-firecrawl-tier");
@@ -2985,7 +2978,7 @@
                 const max = entries[0][1];
                 el.innerHTML = entries.map(([model, count]) => {
                     const pct = Math.round(count / max * 100);
-                    const color = model.includes('gemma') || model.includes('ollama') ? '#4caf50' :
+                    const color = model.includes('gemma') || model.includes('qwen') || model.includes('ollama') ? '#4caf50' :
                                   model.includes('gemini') ? '#2196f3' :
                                   model.includes('openai') || model.includes('gpt') ? '#ff9800' :
                                   model.includes('claude') || model.includes('anthropic') ? '#9c27b0' : '#607d8b';
@@ -3784,50 +3777,9 @@
       }
 
       function renderContainers(containers) {
-        const cg = document.getElementById("container-grid");
-        if (!containers || containers.length === 0) {
-          cg.innerHTML =
-            '<div style="color:var(--muted);font-style:italic">No containers found.</div>';
-          return;
-        }
-        cg.innerHTML = "";
-        containers.forEach((c) => {
-          const div = document.createElement("div");
-          div.className = "health-item";
-          const statusClass = c.is_up
-            ? "health-status-up"
-            : "health-status-down";
-          div.innerHTML = `
-            <div class="health-status-dot ${statusClass}"></div>
-            <span class="health-name" style="cursor:help">${esc(c.name)}</span>
-            <button aria-label="Restart container" onclick="dockerAction('restart','${esc(c.name)}')"
-              title="Restart container"
-              style="margin-left:auto;padding:1px 6px;font-size:0.65rem;background:transparent;border:1px solid var(--border,#444);border-radius:4px;color:var(--muted,#888);cursor:pointer;opacity:0.6;line-height:1.4"
-              onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">↺</button>
-          `;
-          div.addEventListener('mouseenter', function(e) {
-            let popup = document.getElementById('container-tooltip');
-            if (!popup) {
-              popup = document.createElement('div');
-              popup.id = 'container-tooltip';
-              popup.style.cssText = 'position:fixed;z-index:9999;max-width:300px;padding:10px 14px;background:#1a1b2e;border:1px solid #555;border-radius:8px;font-size:0.82rem;line-height:1.5;color:#e8e8e8;box-shadow:0 6px 20px rgba(0,0,0,0.7);pointer-events:none;transition:opacity 0.15s;backdrop-filter:none';
-              document.body.appendChild(popup);
-            }
-            popup.innerHTML = `<strong>${esc(c.name)}</strong><br><span style="color:${c.is_up ? 'var(--mint-green,#4caf50)' : 'var(--danger,#f44336)'}">${esc(c.status)}</span>`;
-            popup.style.opacity = '1';
-            const rect = this.getBoundingClientRect();
-            popup.style.left = rect.left + 'px';
-            popup.style.top = (rect.bottom + 6) + 'px';
-          });
-          div.addEventListener('mouseleave', function() {
-            const popup = document.getElementById('container-tooltip');
-            if (popup) popup.style.opacity = '0';
-          });
-          cg.appendChild(div);
-        });
-        // populate logs-container-select
+        // Populate logs-container-select with names from dashboard payload (includes NAS containers)
         const sel = document.getElementById('logs-container-select');
-        if (sel) {
+        if (sel && containers && containers.length > 0) {
           const prev = sel.value;
           sel.innerHTML = containers.map(c => `<option value="${esc(c.name)}"${c.name===prev?' selected':''}>${esc(c.name)}</option>`).join('');
           if (!sel.value && containers[0]?.name) sel.value = containers[0].name;
@@ -3835,19 +3787,22 @@
       }
 
       function renderStats(stats) {
-        const cg = document.getElementById("container-grid");
-        // Enhance existing grid items with stats if they match
-        const items = cg.querySelectorAll(".health-item");
-        items.forEach((item) => {
-          const name = item.querySelector(".health-name").textContent;
-          const stat = stats.find((s) => s.name === name);
+        // Inject CPU/mem from dashboard stats into docker-status-grid items (if already rendered)
+        if (!stats || !stats.length) return;
+        const grid = document.getElementById('docker-status-grid');
+        if (!grid) return;
+        grid.querySelectorAll('[data-container-name]').forEach(item => {
+          const name = item.dataset.containerName;
+          const stat = stats.find(s => s.name === name);
           if (stat) {
-            const statsUI = document.createElement("div");
-            statsUI.style.fontSize = "0.7rem";
-            statsUI.style.color = "var(--muted)";
-            statsUI.style.marginLeft = "auto";
-            statsUI.innerHTML = `${stat.cpu} <span style="opacity:0.5;margin:0 2px">|</span> ${stat.mem.split("/")[0].trim()}`;
-            item.appendChild(statsUI);
+            const existing = item.querySelector('.container-stats');
+            if (!existing) {
+              const statsEl = document.createElement('div');
+              statsEl.className = 'container-stats';
+              statsEl.style.cssText = 'font-size:0.68rem;color:var(--muted)';
+              statsEl.textContent = `CPU ${stat.cpu} · ${stat.mem.split('/')[0].trim()}`;
+              item.appendChild(statsEl);
+            }
           }
         });
       }

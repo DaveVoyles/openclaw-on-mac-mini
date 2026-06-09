@@ -513,7 +513,7 @@ curl "http://192.168.1.93:8181/api/v2?apikey=YOUR_KEY&cmd=get_activity"
 1. Install Ollama: https://ollama.ai/download
 2. Pull the model:
    ```bash
-   ollama pull gemma4:e4b
+   ollama pull qwen3:8b
    ```
 3. Start Ollama (auto-starts on macOS/Windows)
 4. Verify it's running:
@@ -524,7 +524,7 @@ curl "http://192.168.1.93:8181/api/v2?apikey=YOUR_KEY&cmd=get_activity"
 **Configure `.env`:**
 ```bash
 OLLAMA_URL=http://host.docker.internal:11434
-OLLAMA_MODEL=gemma4:e4b
+OLLAMA_MODEL=qwen3:8b
 LOCAL_LLM_ENABLED=true
 DEFAULT_MODEL_PREFERENCE=auto
 ```
@@ -532,7 +532,7 @@ DEFAULT_MODEL_PREFERENCE=auto
 **Test:**
 ```bash
 curl http://localhost:11434/api/generate -d '{
-  "model": "gemma4:e4b",
+  "model": "qwen3:8b",
   "prompt": "Why is the sky blue?",
   "stream": false
 }'
@@ -1050,8 +1050,8 @@ docker compose logs -f openclaw | grep -E "socket|connected|error"
 3. Check model is pulled:
    ```bash
    ollama list
-   # Should show gemma4:e4b
-   ollama pull gemma4:e4b
+   # Should show qwen3:8b
+   ollama pull qwen3:8b
    ```
 4. Docker uses `host.docker.internal`, not `localhost`:
    ```bash

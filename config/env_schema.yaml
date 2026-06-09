@@ -125,7 +125,7 @@ variables:
   OLLAMA_MODEL:
     required: false
     type: string
-    default: "gemma4:e4b"
+    default: "qwen3:8b"
     description: "Ollama model for conversational (non-tool) queries"
 
   LOCAL_LLM_ENABLED:

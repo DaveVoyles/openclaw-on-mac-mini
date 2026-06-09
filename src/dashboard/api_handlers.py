@@ -3593,17 +3593,20 @@ async def api_v1_models_handler(request: web.Request) -> web.Response:
             {"error": {"message": "Invalid API key", "type": "invalid_request_error", "code": "invalid_api_key"}},
             status=401,
         )
+    from llm import LOCAL_LLM_ENABLED, OLLAMA_MODEL  # local import — avoids circular dep at module load
     created = 1700000000
-    data = [
-        {
+    data = []
+    for m in _OAI_MODELS:
+        label = m["label"]
+        if m["id"] == "local":
+            label = f"Local ({OLLAMA_MODEL})" if LOCAL_LLM_ENABLED else "Local (Ollama — disabled)"
+        data.append({
             "id": m["id"],
             "object": "model",
             "created": created,
             "owned_by": "openclaw",
-            "name": m["label"],
-        }
-        for m in _OAI_MODELS
-    ]
+            "name": label,
+        })
     return web.json_response({"object": "list", "data": data})
 
 

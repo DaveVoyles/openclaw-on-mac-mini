@@ -3381,10 +3381,29 @@ def _is_vague_question(text: str, has_files: bool = False) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _get_hermes_model() -> str:
+    """Read the active Hermes model from ~/.hermes/config.yaml, fallback to env or default."""
+    import os
+    from pathlib import Path
+
+    try:
+        import yaml
+        config_path = Path(os.path.expanduser("~/.hermes/config.yaml"))
+        if config_path.exists():
+            cfg = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+            model_cfg = cfg.get("model", {}) if isinstance(cfg, dict) else {}
+            if isinstance(model_cfg, dict):
+                return model_cfg.get("default") or os.getenv("HERMES_MODEL", "claude-sonnet-4.6")
+    except Exception:
+        pass
+    return os.getenv("HERMES_MODEL", "claude-sonnet-4.6")
+
+
 def _build_home_view(user_id: str, name: str) -> dict:
     """Build a Slack Block Kit Home tab view for the given user."""
     greeting_name = name if name and name != "there" else "there"
-    intro_text = f"*Hi {greeting_name}.* OpenClaw is your personal AI on Mac Mini M4 · Hermes · claude-sonnet-4.6"
+    hermes_model = _get_hermes_model()
+    intro_text = f"*Hi {greeting_name}.* OpenClaw is your personal AI on Mac Mini M4 · Hermes · {hermes_model}"
 
     command_sections = [
         (

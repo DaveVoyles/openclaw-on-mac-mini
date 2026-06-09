@@ -527,7 +527,7 @@ url = "https://v1.basketball.api-sports.io/games"
 - **Configuration:**
   ```bash
   OLLAMA_URL=http://host.docker.internal:11434
-  OLLAMA_MODEL=gemma4:e4b
+  OLLAMA_MODEL=qwen3:8b
   LOCAL_LLM_ENABLED=true
   DEFAULT_MODEL_PREFERENCE=auto  # auto | local | gemini | openai | anthropic | copilot
   ROUTING_PROFILE=copilot-first  # copilot-first | balanced | gemini-first | cost-saver
@@ -536,9 +536,9 @@ url = "https://v1.basketball.api-sports.io/games"
 - **Documentation:** https://ollama.ai/docs
 
 **Model Details:**
-- `gemma4:e4b` — 9.6 GB, multimodal (text/image/audio)
+- `qwen3:8b` — 5.2 GB, text generation
 - Tool calling supported via native function calling
-- Runs on Mac Mini M4 Pro (64GB RAM)
+- Runs on Mac Mini M4 Pro (16 GB RAM); OrbStack capped at 4 GB to leave headroom
 
 ---
 

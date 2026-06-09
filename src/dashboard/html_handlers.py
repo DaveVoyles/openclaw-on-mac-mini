@@ -33,22 +33,60 @@ def _inject_api_token(html_text: str, token: str) -> str:
     return html_text.replace(_TOKEN_INJECTION_MARKER, snippet, 1)
 
 
+def _inject_template_vars(html_text: str) -> str:
+    """Replace {{VAR}} placeholders with live config values.
+
+    Supported placeholders:
+        {{OLLAMA_MODEL}}   — the configured local Ollama model name
+        {{PRIMARY_MODEL}}  — the primary cloud LLM model name (Gemini)
+        {{OPENAI_MODEL}}   — the OpenAI/GitHub Models model name
+        {{HERMES_MODEL}}   — the active Hermes model from ~/.hermes/config.yaml
+    """
+    import os
+    from pathlib import Path
+
+    from config import cfg  # local import to avoid circular dep at module load
+
+    openai_model = os.getenv("OPENAI_MODEL", "gpt-4o")
+
+    hermes_model = os.getenv("HERMES_MODEL", "claude-sonnet-4.6")
+    try:
+        import yaml
+        config_path = Path(os.path.expanduser("~/.hermes/config.yaml"))
+        if config_path.exists():
+            hcfg = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+            model_cfg = hcfg.get("model", {}) if isinstance(hcfg, dict) else {}
+            if isinstance(model_cfg, dict) and model_cfg.get("default"):
+                hermes_model = model_cfg["default"]
+    except Exception:
+        pass
+
+    return (
+        html_text
+        .replace("{{OLLAMA_MODEL}}", html.escape(cfg.ollama_model))
+        .replace("{{PRIMARY_MODEL}}", html.escape(cfg.llm_model))
+        .replace("{{OPENAI_MODEL}}", html.escape(openai_model))
+        .replace("{{HERMES_MODEL}}", html.escape(hermes_model))
+    )
+
+
 async def dashboard_handler(request: web.Request) -> web.Response:
     """Serve the dashboard HTML page, injecting the API action token when configured."""
     from config import cfg  # local import to avoid circular dep at module load
 
     body = _inject_api_token(DASHBOARD_HTML, cfg.dashboard_api_token)
+    body = _inject_template_vars(body)
     return web.Response(text=body, content_type="text/html")
 
 
 async def guide_handler(request: web.Request) -> web.Response:
     """Serve the guide / tutorial HTML page."""
-    return web.Response(text=GUIDE_HTML, content_type="text/html")
+    return web.Response(text=_inject_template_vars(GUIDE_HTML), content_type="text/html")
 
 
 async def terminal_handler(request: web.Request) -> web.Response:
     """Serve the terminal CLI cheat sheet page."""
-    return web.Response(text=TERMINAL_HTML, content_type="text/html")
+    return web.Response(text=_inject_template_vars(TERMINAL_HTML), content_type="text/html")
 
 
 async def onboarding_handler(request: web.Request) -> web.Response:

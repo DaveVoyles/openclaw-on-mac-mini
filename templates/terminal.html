@@ -508,15 +508,15 @@
         <div class="card">
           <h3>Interactive</h3>
           <table>
-            <tr><td><code>ai</code></td><td class="muted">ollama run gemma4:e4b — interactive chat</td></tr>
+            <tr><td><code>ai</code></td><td class="muted">ollama run {{OLLAMA_MODEL}} — interactive chat</td></tr>
             <tr><td><code>ai-list</code></td><td class="muted">ollama list — show installed models</td></tr>
           </table>
         </div>
         <div class="card" style="grid-column: 1 / -1">
           <h3>Pipe output to AI</h3>
           <table>
-            <tr><td><code>docker logs openclaw 2&gt;&amp;1 | tail -30 | ollama run gemma4:e4b &quot;what's wrong?&quot;</code></td><td class="muted">Debug logs</td></tr>
-            <tr><td><code>cat error.log | ollama run gemma4:e4b &quot;summarise&quot;</code></td><td class="muted">Summarise a log file</td></tr>
+            <tr><td><code>docker logs openclaw 2&gt;&amp;1 | tail -30 | ollama run {{OLLAMA_MODEL}} &quot;what's wrong?&quot;</code></td><td class="muted">Debug logs</td></tr>
+            <tr><td><code>cat error.log | ollama run {{OLLAMA_MODEL}} &quot;summarise&quot;</code></td><td class="muted">Summarise a log file</td></tr>
           </table>
         </div>
       </div>

@@ -244,7 +244,7 @@ Financial planning guide for OpenClaw's external API usage.
 
 #### Ollama (Local LLM)
 - **Infrastructure:** Free (self-hosted on Mac Mini)
-- **Model:** gemma4:e4b (9.6 GB)
+- **Model:** qwen3:8b (5.2 GB)
 - **Cost:** $0 (unlimited inference)
 - **Electricity:** Included in Mac Mini operational cost
 
